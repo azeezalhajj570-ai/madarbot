@@ -2234,7 +2234,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
                 </div>
               ) : null}
-              <Note>This task type queues a worker job immediately. It does not create a saved automation assignment.</Note>
             </>
           ) : isBulkMessageTask ? (
             <>
@@ -2365,11 +2364,10 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       ×
                     </button>
                   </span>
-                )) : <Note>No specific members selected. Leave empty to target the full eligible group.</Note>}
+                )) : null}
               </div>
               <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
-              <Note>This task type queues a worker job immediately. It does not create a saved automation assignment.</Note>
             </>
           ) : (
             <>
@@ -2444,7 +2442,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       ) : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {loading ? <Note>Loading tasks...</Note> : null}
-        {!loading && tasks.length === 0 ? <Note>No tasks configured for this group yet.</Note> : null}
         {!loading ? tasks.map((task) => (
           <div
             key={task.assignment_id}
