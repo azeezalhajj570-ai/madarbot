@@ -1,0 +1,17 @@
+services:
+  migrate:
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+
+  bot:
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+
+  miniapp_agents:
+    volumes:
+      - ./apps/miniapp-agents:/app
+      - /app/node_modules

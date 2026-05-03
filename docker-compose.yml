@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: combot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d combot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m bot.main
+    env_file: .env
+    environment:
+      BOT_APP_KIND: agents
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
+      REDIS_URL: redis://redis:6379/0
+      DEFAULT_LANGUAGE: ar
+      AIROGRAM_LOG_LEVEL: WARNING
+      LOG_RAW_UPDATES: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  agent_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: dramatiq bot.agents.worker
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
+      REDIS_URL: redis://redis:6379/0
+      DEFAULT_LANGUAGE: ar
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
+      REDIS_URL: redis://redis:6379/0
+      DEFAULT_LANGUAGE: ar
+    ports:
+      - "8000:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  miniapp_agents:
+    build:
+      context: .
+      dockerfile: apps/miniapp-agents/Dockerfile
+    ports:
+      - "5175:80"
+    environment:
+      VITE_API_URL: http://backend:8000
+
+volumes:
+  pg_data:
+  redis_data:
