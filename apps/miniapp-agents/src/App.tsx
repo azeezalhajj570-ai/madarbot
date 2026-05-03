@@ -338,28 +338,29 @@ function NotificationSheet({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 'min(480px, 100%)',
-          maxHeight: '85vh', overflow: 'auto',
+          maxHeight: '85vh', display: 'flex', flexDirection: 'column',
           background: 'var(--miniapp-surface)',
           border: '1px solid var(--miniapp-border-soft)',
-          borderRadius: 20, padding: 24,
-          display: 'grid', gap: 16,
+          borderRadius: 20,
           boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>Notifications</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark seen</Button>
-            <Button tone="secondary" onClick={onClose}>Close</Button>
+        <div style={{ padding: '24px 24px 0 24px', display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>Notifications</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark seen</Button>
+              <Button tone="secondary" onClick={onClose}>Close</Button>
+            </div>
           </div>
+          {status ? <Note>{status}</Note> : null}
+          <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
+          {loading ? <Note>Loading notifications...</Note> : null}
+          {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
         </div>
-        {status ? <Note>{status}</Note> : null}
-        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
-          {loading ? 'Loading...' : 'Refresh'}
-        </Button>
-        {loading ? <Note>Loading notifications...</Note> : null}
-        {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ overflow: 'auto', padding: 24, display: 'grid', gap: 16 }}>
           {visibleNotifications.map((notification) => {
             const tone = notificationTone(notification.kind)
             const chips = notificationChips(notification)
