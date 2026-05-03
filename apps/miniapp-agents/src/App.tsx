@@ -49,6 +49,13 @@ const BULK_MESSAGE_TASK_META: TaskCatalogItem = {
   description: 'Queue a worker job that sends a controlled bulk message through this linked agent.',
   executor_types: ['agent'],
 }
+const SCRAPE_TASK_KEY = 'scraper_full_group'
+const SCRAPE_TASK_META: TaskCatalogItem = {
+  key: SCRAPE_TASK_KEY,
+  title: 'Database Scraper',
+  description: 'Queue a background sync job that scrapes members and messages from a database-indexed group.',
+  executor_types: ['agent'],
+}
 
 interface SubscriptionStatusInfo {
   status: 'active' | 'inactive'
@@ -1364,15 +1371,7 @@ export default function App() {
                 </>
               ) : null}
               {route.page === 'tasks' ? (
-                <>
-                  <AccountTasksPage account={selectedAccount} onSaved={setStatus} />
-                  {subscription?.plan === 'business' ? (
-                    <AccountScrapingPage
-                      account={selectedAccount}
-                      onSaved={(msg) => setStatus(msg)}
-                    />
-                  ) : null}
-                </>
+                <AccountTasksPage account={selectedAccount} onSaved={setStatus} />
               ) : null}
               {route.page === 'groups' ? (
                 <>
@@ -2335,6 +2334,13 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
+  const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
+  const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
+  const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
+  const [scrapeMemberLimit, setScrapeMemberLimit] = useState(String(SCRAPE_LIMIT_MAX))
+  const [scrapeMessageLimit, setScrapeMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
+  const [scrapeMaxAgeDays, setScrapeMaxAgeDays] = useState('30')
+  const [loadingScrapeGroups, setLoadingScrapeGroups] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -2378,10 +2384,27 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   }, [account.id, groupQuery])
 
   useEffect(() => {
+    const normalized = scrapeGroupQuery.trim()
+    if (!normalized || taskKey !== SCRAPE_TASK_KEY) {
+      setScrapeGroups([])
+      setLoadingScrapeGroups(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      setLoadingScrapeGroups(true)
+      void agentsApi.fetchAgentGroups(account.id, normalized)
+        .then((payload) => setScrapeGroups(payload))
+        .catch(() => setScrapeGroups([]))
+        .finally(() => setLoadingScrapeGroups(false))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [account.id, scrapeGroupQuery, taskKey])
+
+  useEffect(() => {
     if (!catalog.length) {
       return
     }
-    if (![...catalog, BULK_MESSAGE_TASK_META].some((item) => item.key === taskKey)) {
+    if (![...catalog, BULK_MESSAGE_TASK_META, SCRAPE_TASK_META].some((item) => item.key === taskKey)) {
       setTaskKey(catalog[0].key)
     }
   }, [catalog, taskKey])
@@ -2408,6 +2431,12 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkMemberResults([])
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
+    setScrapeGroupQuery('')
+    setScrapeSelectedGroup(null)
+    setScrapeGroups([])
+    setScrapeMemberLimit(String(SCRAPE_LIMIT_MAX))
+    setScrapeMessageLimit(String(SCRAPE_LIMIT_MAX))
+    setScrapeMaxAgeDays('30')
   }
 
   function openCreateForm() {
@@ -2501,6 +2530,33 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey])
 
   async function saveTask() {
+    if (taskKey === SCRAPE_TASK_KEY) {
+      if (!scrapeSelectedGroup?.tg_group_id) {
+        setStatus('Choose a group first')
+        return
+      }
+      const targetGroupId = Number(scrapeSelectedGroup.tg_group_id)
+      setIsSaving(true)
+      try {
+        await agentsApi.createAgentJob(account.id, SCRAPE_TASK_KEY, {
+          tg_group_id: targetGroupId,
+          scrape_members: true,
+          scrape_messages: true,
+          member_limit: clampScrapeLimit(scrapeMemberLimit),
+          message_limit: clampScrapeLimit(scrapeMessageLimit),
+          max_age_days: Math.max(1, Number(scrapeMaxAgeDays) || 30),
+        })
+        closeForm()
+        setStatus(null)
+        onSaved(`Scraping job queued for ${scrapeSelectedGroup.title || targetGroupId}.`)
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Failed to queue scrape job')
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
+
     if (taskKey === BULK_MESSAGE_TASK_KEY) {
       if (!bulkSourceGroup?.tg_group_id) {
         setStatus('Source group is required for bulk message')
@@ -2614,9 +2670,10 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     }
   }
 
-  const extendedCatalog = useMemo(() => (catalog.length ? [...catalog, BULK_MESSAGE_TASK_META] : []), [catalog])
+  const extendedCatalog = useMemo(() => (catalog.length ? [...catalog, BULK_MESSAGE_TASK_META, SCRAPE_TASK_META] : []), [catalog])
   const selectedTaskMeta = extendedCatalog.find((item) => item.key === taskKey) ?? null
   const isBulkMessageTask = taskKey === BULK_MESSAGE_TASK_KEY
+  const isScrapeTask = taskKey === SCRAPE_TASK_KEY
 
   return (
     <Card title="Tasks" subtitle="Select a task type and save it against this account group.">
@@ -2630,7 +2687,39 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
             ))}
           </SelectField>
           {selectedTaskMeta?.description ? <Note>{selectedTaskMeta.description}</Note> : null}
-          {isBulkMessageTask ? (
+          {isScrapeTask ? (
+            <>
+              <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
+              {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
+              {!loadingScrapeGroups && scrapeGroups.length ? (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {scrapeGroups.map((group, index) => (
+                    <LinkRow
+                      key={`${group.tg_group_id ?? index}-${group.title ?? index}`}
+                      active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
+                      onClick={() => {
+                        setScrapeSelectedGroup(group)
+                        setScrapeGroupQuery(group.title || '')
+                      }}
+                    >
+                      <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
+                      <div style={{ color: '#655d52', marginTop: 4 }}>
+                        {group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}
+                      </div>
+                    </LinkRow>
+                  ))}
+                </div>
+              ) : null}
+              {scrapeSelectedGroup ? (
+                <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+                  <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
+                  <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
+                  <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
+                </div>
+              ) : null}
+              <Note>This task type queues a worker job immediately. It does not create a saved automation assignment.</Note>
+            </>
+          ) : isBulkMessageTask ? (
             <>
               <GroupDestinationField
                 label="Source group"
@@ -2832,7 +2921,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
             </>
           )}
           <FormActions
-            submitLabel={isBulkMessageTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
+            submitLabel={isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
             onSubmit={() => void saveTask()}
             onCancel={closeForm}
           />
@@ -2879,123 +2968,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           onConfirm={() => void deleteTask()}
           onCancel={() => setDeleteTarget(null)}
         />
-      ) : null}
-    </Card>
-  )
-}
-
-function AccountScrapingPage({
-  account,
-  onSaved,
-}: {
-  account: Agent
-  onSaved: (message: string) => void
-}) {
-  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
-  const [selectedGroup, setSelectedGroup] = useState<AgentManagedGroup | null>(null)
-  const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
-  const [loadingGroups, setLoadingGroups] = useState(false)
-  const [isScraping, setIsScraping] = useState(false)
-  const [memberLimit, setMemberLimit] = useState(String(SCRAPE_LIMIT_MAX))
-  const [messageLimit, setMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
-  const [maxAgeDays, setMaxAgeDays] = useState('30')
-
-  function resetScrapeForm() {
-    setQuery('')
-    setSelectedGroup(null)
-    setMemberLimit(String(SCRAPE_LIMIT_MAX))
-    setMessageLimit(String(SCRAPE_LIMIT_MAX))
-    setMaxAgeDays('30')
-    setGroups([])
-  }
-
-  useEffect(() => {
-    const normalized = query.trim()
-    if (!normalized) {
-      setGroups([])
-      setLoadingGroups(false)
-      return
-    }
-
-    const timer = setTimeout(() => {
-      setLoadingGroups(true)
-      void agentsApi.fetchAgentGroups(account.id, normalized)
-        .then((payload) => {
-          setGroups(payload)
-          setStatus(payload.length ? null : 'No matching groups found in the database.')
-        })
-        .catch((error) => setStatus(error instanceof Error ? error.message : 'Failed to search groups'))
-        .finally(() => setLoadingGroups(false))
-    }, 400)
-
-    return () => clearTimeout(timer)
-  }, [account.id, query])
-
-  async function scrapeMembers() {
-    if (!selectedGroup?.tg_group_id) {
-      setStatus('Choose a group first')
-      return
-    }
-    const targetGroup = selectedGroup
-    const targetGroupId = Number(targetGroup.tg_group_id)
-    const queuedMessage = `Scraping job queued for ${targetGroup.title || targetGroup.tg_group_id}. The worker will process it and notify you when it finishes.`
-    setIsScraping(true)
-    try {
-      await agentsApi.createAgentJob(account.id, 'scraper_full_group', {
-        tg_group_id: targetGroupId,
-        scrape_members: true,
-        scrape_messages: true,
-        member_limit: clampScrapeLimit(memberLimit),
-        message_limit: clampScrapeLimit(messageLimit),
-        max_age_days: Math.max(1, Number(maxAgeDays) || 30),
-      })
-      resetScrapeForm()
-      setStatus(null)
-      onSaved(queuedMessage)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to scrape group members')
-    } finally {
-      setIsScraping(false)
-    }
-  }
-
-  return (
-    <Card title="Database Scraper" subtitle="Queue background sync jobs for database-indexed groups.">
-      {status ? <Note>{status}</Note> : null}
-      <InputField label="Find group to scrape" value={query} onChange={setQuery} placeholder="Type group title or ID" />
-      
-      <div style={{ display: 'grid', gap: 8, marginTop: query.trim() ? 12 : 0 }}>
-        {loadingGroups ? (
-          <Note>Searching database...</Note>
-        ) : (
-          groups.map((group, index) => (
-            <LinkRow
-              key={`${group.tg_group_id ?? index}-${group.title ?? index}`}
-              active={selectedGroup?.tg_group_id === group.tg_group_id}
-              onClick={() => {
-                setSelectedGroup(group)
-                setQuery(group.title || '')
-              }}
-            >
-              <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
-              <div style={{ color: '#655d52', marginTop: 4 }}>
-                {group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}
-              </div>
-            </LinkRow>
-          ))
-        )}
-      </div>
-
-      {selectedGroup ? (
-        <div style={{ display: 'grid', gap: 12, marginTop: 20 }}>
-          <InputField label="Max members to scrape" value={memberLimit} onChange={setMemberLimit} type="number" />
-          <InputField label="Max messages to scrape" value={messageLimit} onChange={setMessageLimit} type="number" />
-          <InputField label="Max message age in days" value={maxAgeDays} onChange={setMaxAgeDays} type="number" />
-          <Button onClick={() => void scrapeMembers()} disabled={isScraping}>
-            {isScraping ? 'Queueing...' : 'Start background sync'}
-          </Button>
-        </div>
       ) : null}
     </Card>
   )
