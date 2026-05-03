@@ -2196,8 +2196,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   return (
     <Card title="Tasks" subtitle="Select a task type and save it against this account group.">
       {status ? <Note>{status}</Note> : null}
-      {!isFormOpen ? <Button onClick={openCreateForm} disabled={loading || !catalog.length}>New task</Button> : null}
-      {isFormOpen && catalog.length ? (
+      {!isFormOpen ? <Button onClick={openCreateForm}>New task</Button> : null}
+      {isFormOpen ? (
         <div style={{ display: 'grid', gap: 12 }}>
           <SelectField label="Task type" value={taskKey} onChange={setTaskKey}>
             {extendedCatalog.map((item) => (
@@ -2441,7 +2441,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
         </div>
       ) : null}
       <div style={{ display: 'grid', gap: 8 }}>
-        {loading ? <Note>Loading tasks...</Note> : null}
         {!loading ? tasks.map((task) => (
           <div
             key={task.assignment_id}
