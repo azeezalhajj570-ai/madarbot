@@ -1374,10 +1374,7 @@ export default function App() {
                 <AccountTasksPage account={selectedAccount} onSaved={setStatus} />
               ) : null}
               {route.page === 'groups' ? (
-                <>
-                  <AccountGroupsPage account={selectedAccount} />
-                  <AccountLeadsPage account={selectedAccount} />
-                </>
+                <AccountLeadsPage account={selectedAccount} />
               ) : null}
             </>
           ) : (
@@ -1694,484 +1691,6 @@ function WizardPasswordStep({
         <Button tone="secondary" onClick={onCancel}>Cancel</Button>
       </div>
     </>
-  )
-}
-
-function AccountGroupsPage({ account }: { account: Agent }) {
-  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
-  const [query, setQuery] = useState('')
-  const [selectedGroup, setSelectedGroup] = useState<AgentManagedGroup | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [isMembersOpen, setIsMembersOpen] = useState(false)
-
-  async function refresh() {
-    const normalized = query.trim()
-    if (!normalized) return
-    setLoading(true)
-    try {
-      const payload = await agentsApi.fetchAgentGroups(account.id, normalized)
-      setGroups(payload)
-      setStatus(payload.length ? null : 'No matching groups found in the database.')
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to search groups')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    const normalized = query.trim()
-    if (!normalized) {
-      setGroups([])
-      setLoading(false)
-      return
-    }
-
-    const timer = setTimeout(() => {
-      void refresh()
-    }, 400)
-
-    return () => clearTimeout(timer)
-  }, [account.id, query])
-
-  useEffect(() => {
-    if (!selectedGroup?.tg_group_id) {
-      return
-    }
-    const refreshed = groups.find((group) => group.tg_group_id === selectedGroup.tg_group_id) ?? null
-    if (refreshed) {
-      setSelectedGroup(refreshed)
-    }
-  }, [groups, selectedGroup])
-
-  return (
-    <Card title="Search Workspace" subtitle="Search for groups that have been synced to the database.">
-      {status && !groups.length ? <Note>{status}</Note> : null}
-      <InputField label="Search groups" value={query} onChange={setQuery} placeholder="Type group title or ID" />
-      <div style={{ display: 'grid', gap: 8, marginTop: query.trim() ? 12 : 0 }}>
-        {loading ? (
-          <Note>Searching database...</Note>
-        ) : (
-          groups.map((group, index) => (
-            <LinkRow
-              key={`${group.tg_group_id ?? index}-${group.title ?? index}`}
-              active={selectedGroup?.tg_group_id === group.tg_group_id}
-              onClick={() => setSelectedGroup(group)}
-            >
-              <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
-              <div style={{ color: '#655d52', marginTop: 4 }}>
-                {group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0} · messages {group.messages_count ?? 0}
-              </div>
-            </LinkRow>
-          ))
-        )}
-      </div>
-      {selectedGroup ? (
-        <div style={{ marginTop: 20 }}>
-          <Card title="Group info" subtitle="Details for the selected visible group.">
-            <Note>Group name: {selectedGroup.title || 'Unknown group'}</Note>
-            <Note>TG group ID: {selectedGroup.tg_group_id ?? 'Unavailable'}</Note>
-            <Button onClick={() => setIsMembersOpen(true)}>Members ({selectedGroup.member_count ?? 'unknown'})</Button>
-            <Note>Messages: {selectedGroup.messages_count ?? 0}</Note>
-          </Card>
-        </div>
-      ) : null}
-      {selectedGroup && isMembersOpen ? (
-        <GroupMembersModal
-          accountId={account.id}
-          group={selectedGroup}
-          onTotalChange={(total) => {
-            setGroups((current) => current.map((entry) => (
-              entry.tg_group_id === selectedGroup.tg_group_id ? { ...entry, member_count: total } : entry
-            )))
-            setSelectedGroup((current) => (current ? { ...current, member_count: total } : current))
-          }}
-          onClose={() => setIsMembersOpen(false)}
-        />
-      ) : null}
-    </Card>
-  )
-}
-
-function GroupMembersModal({
-  accountId,
-  group,
-  onTotalChange,
-  onClose,
-}: {
-  accountId: number
-  group: AgentManagedGroup
-  onTotalChange: (total: number) => void
-  onClose: () => void
-}) {
-  const [query, setQuery] = useState('')
-  const [members, setMembers] = useState<AgentGroupMember[]>([])
-  const [selectedMembers, setSelectedMembers] = useState<AgentGroupMember[]>([])
-  const [status, setStatus] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [selectedMember, setSelectedMember] = useState<AgentGroupMember | null>(null)
-  const pageSize = 10
-  const [total, setTotal] = useState(group.member_count ?? 0)
-
-  useEffect(() => {
-    if (!group.tg_group_id) {
-      setMembers([])
-      setStatus('Group id unavailable')
-      return
-    }
-
-    void agentsApi.fetchAgentGroupMembers(accountId, group.tg_group_id, query, page, pageSize)
-      .then((payload) => {
-        setMembers(payload.members)
-        setTotal(payload.total)
-        onTotalChange(payload.total)
-        setStatus(payload.members.length ? null : 'No members found in the database')
-      })
-      .catch((error) => {
-        setMembers([])
-        setTotal(0)
-        setStatus(error instanceof Error ? error.message : 'Failed to load group members')
-      })
-  }, [accountId, group.tg_group_id, onTotalChange, page, pageSize, query])
-
-  useEffect(() => {
-    setPage(1)
-  }, [query])
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
-  function toggleMember(member: AgentGroupMember) {
-    setSelectedMembers((current) => {
-      const exists = current.some((m) => m.user_id === member.user_id)
-      if (exists) {
-        return current.filter((m) => m.user_id !== member.user_id)
-      }
-      return [...current, member]
-    })
-  }
-
-  function selectAllOnPage() {
-    setSelectedMembers((current) => {
-      const newSelection = [...current]
-      members.forEach((m) => {
-        if (!newSelection.some((s) => s.user_id === m.user_id)) {
-          newSelection.push(m)
-        }
-      })
-      return newSelection
-    })
-  }
-
-  async function saveSelectedAsContacts() {
-    if (!selectedMembers.length) return
-    setStatus(`Queuing ${selectedMembers.length} contact saves...`)
-    let success = 0
-    let failed = 0
-    
-    for (const member of selectedMembers) {
-      try {
-        await agentsApi.createAgentJob(accountId, 'add_contact', {
-          user_id: member.user_id,
-          username: member.username,
-          first_name: member.full_name?.split(' ')[0] || 'User',
-          last_name: member.full_name?.split(' ').slice(1).join(' ') || '',
-          tg_group_id: group.tg_group_id,
-          group_title: group.title || 'Group',
-          sequence: new Date().getTime() % 10000,
-        })
-        success++
-      } catch (error) {
-        failed++
-      }
-    }
-    
-    setSelectedMembers([])
-    setStatus(`Contact save jobs queued: ${success} successful, ${failed} failed. Check notifications for details.`)
-  }
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(32, 25, 16, 0.55)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          width: 'min(560px, 100%)',
-          maxHeight: '85vh',
-          overflow: 'auto',
-          background: 'var(--miniapp-surface)',
-          border: '1px solid var(--miniapp-border-soft)',
-          borderRadius: 20,
-          padding: 20,
-          display: 'grid',
-          gap: 12,
-          boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <div>
-            <strong>{group.title || 'Group members'}</strong>
-            <div style={{ color: '#655d52', marginTop: 4 }}>
-              Members {total || group.member_count || 0} · Page {page} / {totalPages}
-            </div>
-          </div>
-          <Button tone="secondary" onClick={onClose}>Close</Button>
-        </div>
-        <InputField label="Search members" value={query} onChange={setQuery} placeholder="Name or username" />
-        
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button tone="secondary" onClick={selectAllOnPage} disabled={!members.length}>
-            Select all on page
-          </Button>
-          {selectedMembers.length > 0 ? (
-            <>
-              <Button tone="secondary" onClick={() => setSelectedMembers([])}>
-                Clear selection ({selectedMembers.length})
-              </Button>
-              <Button onClick={() => void saveSelectedAsContacts()}>
-                Save selected to contacts
-              </Button>
-            </>
-          ) : null}
-        </div>
-
-        {status ? <Note>{status}</Note> : null}
-
-        <div style={{ display: 'grid', gap: 8 }}>
-          {members.map((member) => {
-            const isSelected = selectedMembers.some((m) => m.user_id === member.user_id)
-            return (
-              <div
-                key={member.user_id}
-                onClick={() => toggleMember(member)}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr',
-                  gap: 14,
-                  padding: 14,
-                  border: isSelected ? '1px solid var(--miniapp-sage)' : '1px solid var(--miniapp-border-soft)',
-                  borderRadius: 12,
-                  background: isSelected ? 'rgba(102, 115, 95, 0.05)' : 'var(--miniapp-bg)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ 
-                    width: 20, 
-                    height: 20, 
-                    borderRadius: 6, 
-                    border: '2px solid var(--miniapp-border-soft)',
-                    background: isSelected ? 'var(--miniapp-sage)' : 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontSize: 14,
-                  }}>
-                    {isSelected ? '✓' : ''}
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'grid', gap: 4 }}>
-                    <strong>{member.full_name || 'No name stored'}</strong>
-                    <div style={{ color: '#655d52' }}>User ID: {member.user_id}</div>
-                    <div style={{ color: '#655d52' }}>Username: {member.username ? `@${member.username}` : 'Unavailable'}</div>
-                    <div style={{ color: '#655d52' }}>Role: {member.role || 'member'}</div>
-                    <div style={{ color: '#655d52' }}>Messages: {member.message_count ?? 0}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
-                    <Button tone="secondary" onClick={() => setSelectedMember(member)}>
-                      View messages
-                    </Button>
-                    <Button
-                      tone="secondary"
-                      onClick={async () => {
-                        try {
-                          await agentsApi.createAgentJob(accountId, 'add_contact', {
-                            user_id: member.user_id,
-                            username: member.username,
-                            first_name: member.full_name?.split(' ')[0] || 'User',
-                            last_name: member.full_name?.split(' ').slice(1).join(' ') || '',
-                            tg_group_id: group.tg_group_id,
-                            group_title: group.title || 'Group',
-                            sequence: new Date().getTime() % 10000,
-                          })
-                          alert('Save contact job queued.')
-                        } catch (error) {
-                          alert(error instanceof Error ? error.message : 'Failed to queue contact save')
-                        }
-                      }}
-                    >
-                      Save contact
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Note>Loaded {members.length} of {total}</Note>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button tone="secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>
-              Previous
-            </Button>
-            <Button tone="secondary" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages}>
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
-      {selectedMember && group.tg_group_id ? (
-        <MemberMessagesModal
-          accountId={accountId}
-          tgGroupId={group.tg_group_id}
-          member={selectedMember}
-          onClose={() => setSelectedMember(null)}
-        />
-      ) : null}
-    </div>
-  )
-}
-
-function MemberMessagesModal({
-  accountId,
-  tgGroupId,
-  member,
-  onClose,
-}: {
-  accountId: number
-  tgGroupId: number
-  member: AgentGroupMember
-  onClose: () => void
-}) {
-  const [messages, setMessages] = useState<AgentGroupMemberMessage[]>([])
-  const [status, setStatus] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(1)
-  const pageSize = 25
-  const [total, setTotal] = useState(0)
-
-  useEffect(() => {
-    setLoading(true)
-    void agentsApi.fetchAgentGroupMemberMessages(accountId, tgGroupId, member.user_id, page, pageSize)
-      .then((payload) => {
-        setMessages(payload.messages)
-        setTotal(payload.total)
-        setStatus(payload.messages.length ? null : 'No stored messages found for this member.')
-      })
-      .catch((error) => {
-        setMessages([])
-        setTotal(0)
-        setStatus(error instanceof Error ? error.message : 'Failed to load member messages')
-      })
-      .finally(() => setLoading(false))
-  }, [accountId, member.user_id, page, tgGroupId])
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(32, 25, 16, 0.55)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-        zIndex: 1001,
-      }}
-    >
-      <div
-        style={{
-          width: 'min(680px, 100%)',
-          maxHeight: '85vh',
-          overflow: 'auto',
-          background: 'var(--miniapp-surface)',
-          border: '1px solid var(--miniapp-border-soft)',
-          borderRadius: 20,
-          padding: 20,
-          display: 'grid',
-          gap: 12,
-          boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <div>
-            <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
-            <div style={{ color: '#655d52', marginTop: 4 }}>
-              User ID {member.user_id} · {member.username ? `@${member.username}` : 'No username'} · Page {page} / {totalPages}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              tone="secondary"
-              onClick={async () => {
-                try {
-                  await agentsApi.createAgentJob(accountId, 'add_contact', {
-                    user_id: member.user_id,
-                    username: member.username,
-                    first_name: member.full_name?.split(' ')[0] || 'User',
-                    last_name: member.full_name?.split(' ').slice(1).join(' ') || '',
-                    tg_group_id: tgGroupId,
-                    group_title: 'Group', // We don't have the full group object here, but ID is enough for cache priming
-                    sequence: new Date().getTime() % 10000,
-                  })
-                  alert('Save contact job queued.')
-                } catch (error) {
-                  alert(error instanceof Error ? error.message : 'Failed to queue contact save')
-                }
-              }}
-            >
-              Save contact
-            </Button>
-            <Button tone="secondary" onClick={onClose}>Close</Button>
-          </div>
-        </div>
-        {loading ? <Note>Loading messages...</Note> : null}
-        {status ? <Note>{status}</Note> : null}
-        <div style={{ display: 'grid', gap: 8 }}>
-          {messages.map((message) => (
-            <div
-              key={message.message_id}
-              style={{
-                display: 'grid',
-                gap: 6,
-                padding: 14,
-                border: '1px solid var(--miniapp-border-soft)',
-                borderRadius: 12,
-                background: 'var(--miniapp-bg)',
-              }}
-            >
-              <div style={{ color: '#655d52', fontSize: 12.5 }}>
-                Message #{message.message_id} · {message.message_type || 'text'} · {message.date ? new Date(message.date).toLocaleString() : 'Unknown time'}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{message.text || '[No message text captured]'}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Note>Loaded {messages.length} of {total}</Note>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button tone="secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading}>
-              Previous
-            </Button>
-            <Button tone="secondary" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages || loading}>
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -2978,18 +2497,17 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   const [leadPage, setLeadPage] = useState<AgentLeadPage | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
-  const [editingLead, setEditingLead] = useState<AgentLead | null>(null)
-  const [editNotes, setEditNotes] = useState('')
-  const [editLeadStatus, setEditLeadStatus] = useState('')
-  const leadStatuses = ['new', 'contacted', 'interested', 'converted', 'junk', 'dismissed']
+  const [contactingLead, setContactingLead] = useState<AgentLead | null>(null)
+  const [contactMessage, setContactMessage] = useState('')
+  const [contactMode, setContactMode] = useState<'private' | 'public'>('private')
+  const [includeOriginal, setIncludeOriginal] = useState(true)
+  const [isSending, setIsSending] = useState(false)
 
   async function refresh() {
     setLoading(true)
     try {
       const result = await agentsApi.fetchAgentLeads(account.id, {
-        status: statusFilter === 'all' ? undefined : statusFilter,
         page,
         page_size: 25,
       })
@@ -3005,61 +2523,71 @@ function AccountLeadsPage({ account }: { account: Agent }) {
 
   useEffect(() => {
     void refresh()
-  }, [account.id, statusFilter, page])
+  }, [account.id, page])
 
-  async function updateLead(lead: AgentLead, newStatus: string) {
+  async function dismissLead(lead: AgentLead) {
     try {
-      await agentsApi.updateAgentLead(account.id, lead.id, { status: newStatus })
+      await agentsApi.updateAgentLead(account.id, lead.id, { status: 'dismissed' })
       void refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to update lead')
+      setStatus(error instanceof Error ? error.message : 'Failed to dismiss lead')
     }
   }
 
-  async function saveLeadEdits() {
-    if (!editingLead) return
+  function openContact(lead: AgentLead) {
+    setContactingLead(lead)
+    setContactMessage('')
+    setContactMode('private')
+    setIncludeOriginal(true)
+  }
+
+  function closeContact() {
+    setContactingLead(null)
+    setContactMessage('')
+  }
+
+  async function sendContact() {
+    if (!contactingLead) return
+    const msg = contactMessage.trim()
+    if (!msg) {
+      setStatus('Message text is required')
+      return
+    }
+    setIsSending(true)
     try {
-      await agentsApi.updateAgentLead(account.id, editingLead.id, {
-        status: editLeadStatus || undefined,
-        notes: editNotes,
+      const notes = `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\nOriginal message: "${contactingLead.message_text}"` : ''}`
+      await agentsApi.updateAgentLead(account.id, contactingLead.id, {
+        status: 'contacted',
+        notes,
       })
-      setEditingLead(null)
-      setEditNotes('')
-      setEditLeadStatus('')
+      await agentsApi.createAgentJob(account.id, 'send_lead_message', {
+        tg_user_id: contactingLead.tg_user_id,
+        message: msg,
+        mode: contactMode,
+        include_original: includeOriginal,
+        original_text: includeOriginal ? contactingLead.message_text : null,
+        source_group_tg_id: contactingLead.source_group_tg_id,
+        source_message_id: contactingLead.source_message_id,
+      })
+      closeContact()
+      setStatus(null)
       void refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save lead')
-    }
-  }
-
-  async function deleteLead(leadId: number) {
-    try {
-      await agentsApi.deleteAgentLead(account.id, leadId)
-      void refresh()
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to delete lead')
+      setStatus(error instanceof Error ? error.message : 'Failed to contact lead')
+    } finally {
+      setIsSending(false)
     }
   }
 
   const totalPages = leadPage?.total_pages ?? 1
 
   return (
-    <Card title="Leads" subtitle="Track and manage captured leads with full CRM lifecycle.">
+    <Card title="Leads" subtitle="Capture, contact, and manage your leads.">
       {status ? <Note>{status}</Note> : null}
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <SelectField label="Filter by status" value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1) }}>
-          <option value="all">All statuses</option>
-          {leadStatuses.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </SelectField>
-        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
-      </div>
-
-      {loading ? <Note>Loading leads...</Note> : null}
+      <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
+        {loading ? 'Loading...' : 'Refresh'}
+      </Button>
       {!loading && leads.length === 0 ? <Note>No leads found.</Note> : null}
-
       <div style={{ display: 'grid', gap: 8 }}>
         {leads.map((lead) => {
           const tone = _statusTone(lead.status)
@@ -3076,7 +2604,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <strong>{lead.first_name || lead.username || `User ${lead.tg_user_id}`}</strong>
                   {lead.username ? <span style={{ color: '#655d52', marginLeft: 8 }}>@{lead.username}</span> : null}
                 </div>
@@ -3088,6 +2616,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                   fontSize: 11,
                   fontWeight: 700,
                   textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
                 }}>
                   {lead.status}
                 </span>
@@ -3102,36 +2631,16 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                 {lead.lead_label ? <span>Label: {lead.lead_label}</span> : null}
                 {lead.captured_at ? <span>{new Date(lead.captured_at).toLocaleDateString()}</span> : null}
               </div>
-              {lead.notes ? (
-                <div style={{ fontSize: 12, color: '#655d52', fontStyle: 'italic' }}>
-                  Note: {lead.notes.length > 100 ? lead.notes.slice(0, 100) + '...' : lead.notes}
+              {lead.status !== 'dismissed' ? (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <Button onClick={() => openContact(lead)}>Contact</Button>
+                  <Button tone="secondary" onClick={() => void dismissLead(lead)}>Dismiss</Button>
                 </div>
               ) : null}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {leadStatuses.filter((s) => s !== lead.status).map((s) => (
-                  <Button
-                    key={s}
-                    tone="secondary"
-                    onClick={() => void updateLead(lead, s)}
-                  >
-                    {s === 'contacted' ? 'Mark Contacted' :
-                     s === 'interested' ? 'Mark Interested' :
-                     s === 'converted' ? 'Mark Converted' :
-                     s === 'junk' ? 'Mark Junk' :
-                     s === 'dismissed' ? 'Dismiss' :
-                     `Set ${s}`}
-                  </Button>
-                ))}
-                <Button tone="secondary" onClick={() => { setEditingLead(lead); setEditNotes(lead.notes || ''); setEditLeadStatus(lead.status) }}>
-                  Edit
-                </Button>
-                <Button tone="danger" onClick={() => deleteLead(lead.id)}>Delete</Button>
-              </div>
             </div>
           )
         })}
       </div>
-
       {totalPages > 1 ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
           <Button tone="secondary" onClick={() => setPage((c) => Math.max(1, c - 1))} disabled={page <= 1}>
@@ -3143,49 +2652,58 @@ function AccountLeadsPage({ account }: { account: Agent }) {
           </Button>
         </div>
       ) : null}
-
-      {editingLead ? (
+      {contactingLead ? (
         <div
           style={{
-            position: 'fixed',
-            inset: 0,
+            position: 'fixed', inset: 0,
             background: 'rgba(32, 25, 16, 0.55)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
-            zIndex: 1000,
+            display: 'grid', placeItems: 'center',
+            padding: 16, zIndex: 1100,
           }}
+          onClick={closeContact}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              width: 'min(420px, 100%)',
+              width: 'min(480px, 100%)',
+              maxHeight: '85vh', overflow: 'auto',
               background: 'var(--miniapp-surface)',
               border: '1px solid var(--miniapp-border-soft)',
-              borderRadius: 20,
-              padding: 20,
-              display: 'grid',
-              gap: 12,
+              borderRadius: 20, padding: 24,
+              display: 'grid', gap: 16,
               boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
             }}
           >
-            <div style={{ fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>
-              Edit Lead
-            </div>
-            <SelectField label="Status" value={editLeadStatus} onChange={setEditLeadStatus}>
-              {leadStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </SelectField>
+            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>
+              Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
+            </h2>
             <TextAreaField
-              label="Notes"
-              value={editNotes}
-              onChange={setEditNotes}
-              rows={4}
-              placeholder="Add notes about this lead..."
+              label="Message"
+              value={contactMessage}
+              onChange={setContactMessage}
+              rows={5}
+              placeholder="Type your message to this lead..."
             />
+            <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public')}>
+              <option value="private">Private (direct message)</option>
+              <option value="public">Public (in group)</option>
+            </SelectField>
+            {contactingLead.message_text ? (
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={includeOriginal}
+                  onChange={(e) => setIncludeOriginal(e.target.checked)}
+                  style={{ accentColor: 'var(--miniapp-coral)' }}
+                />
+                Forward original message
+              </label>
+            ) : null}
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => void saveLeadEdits()}>Save</Button>
-              <Button tone="secondary" onClick={() => setEditingLead(null)}>Cancel</Button>
+              <Button onClick={() => void sendContact()} disabled={isSending || !contactMessage.trim()}>
+                {isSending ? 'Sending...' : 'Send'}
+              </Button>
+              <Button tone="secondary" onClick={closeContact}>Cancel</Button>
             </div>
           </div>
         </div>
