@@ -708,9 +708,7 @@ function GroupAutocompleteField({
             </LinkRow>
           )) : <Note>No matching groups found.</Note>}
         </div>
-      ) : (
-        <Note>Search to find visible groups.</Note>
-      )}
+      ) : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {selectedGroups.length ? selectedGroups.map((group) => (
           <span
@@ -2205,7 +2203,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
               <option key={item.key} value={item.key}>{item.title}</option>
             ))}
           </SelectField>
-          {selectedTaskMeta?.description ? <Note>{selectedTaskMeta.description}</Note> : null}
           {isScrapeTask ? (
             <>
               <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
@@ -2400,9 +2397,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   setTaskGroupsQuery('')
                 }}
                 onRemove={(tgGroupId) => setTaskGroups((current) => current.filter((group) => group.tg_group_id !== tgGroupId))}
-                placeholder="Search visible groups"
               />
-              <Note>Executor is fixed to this linked agent account.</Note>
               {taskKey === 'notify_destination' ? (
                 <>
                   <SelectField label="Destination type" value={taskDestinationMode} onChange={(value) => setTaskDestinationMode(value as TaskDestinationMode)}>
