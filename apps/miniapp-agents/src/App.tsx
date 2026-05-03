@@ -265,6 +265,147 @@ function SubscriptionSheet({
   )
 }
 
+function NotificationSheet({
+  open,
+  account,
+  onUnseenCountChange,
+  onClose,
+}: {
+  open: boolean
+  account: Agent | null
+  onUnseenCountChange: (count: number) => void
+  onClose: () => void
+}) {
+  const [notifications, setNotifications] = useState<AgentNotification[]>([])
+  const [status, setStatus] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [isMarkingSeen, setIsMarkingSeen] = useState(false)
+
+  async function refresh() {
+    if (!account) return
+    setLoading(true)
+    try {
+      const payload = await agentsApi.fetchAgentNotifications(account.id, 100)
+      setNotifications(payload.items)
+      onUnseenCountChange(payload.unseen_count)
+      setStatus(null)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load notifications')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (open && account) {
+      void refresh()
+    }
+  }, [open, account?.id])
+
+  async function markAllSeen() {
+    if (!account) return
+    setIsMarkingSeen(true)
+    try {
+      await agentsApi.markAgentNotificationsSeen(account.id)
+      await refresh()
+    } finally {
+      setIsMarkingSeen(false)
+    }
+  }
+
+  if (!open) return null
+
+  const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(32, 25, 16, 0.55)',
+        display: 'grid', placeItems: 'center',
+        padding: 16, zIndex: 1100,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 'min(480px, 100%)',
+          maxHeight: '85vh', overflow: 'auto',
+          background: 'var(--miniapp-surface)',
+          border: '1px solid var(--miniapp-border-soft)',
+          borderRadius: 20, padding: 24,
+          display: 'grid', gap: 16,
+          boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>Notifications</h2>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark seen</Button>
+            <Button tone="secondary" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+        {status ? <Note>{status}</Note> : null}
+        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
+          {loading ? 'Loading...' : 'Refresh'}
+        </Button>
+        {loading ? <Note>Loading notifications...</Note> : null}
+        {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
+        <div style={{ display: 'grid', gap: 8 }}>
+          {visibleNotifications.map((notification) => {
+            const tone = notificationTone(notification.kind)
+            const chips = notificationChips(notification)
+            return (
+              <div
+                key={notification.id}
+                style={{
+                  display: 'grid', gap: 10, padding: 14,
+                  border: `1px solid ${tone.border}`, borderRadius: 14,
+                  background: tone.background,
+                }}
+              >
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '4px 8px', borderRadius: 999, background: tone.badge,
+                      color: tone.accent, fontSize: 11, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap',
+                    }}>
+                      {notificationKindLabel(notification.kind)}
+                    </span>
+                    <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
+                  </div>
+                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(notification.created_at)}</div>
+                </div>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <strong style={{ fontSize: 15 }}>{notification.title}</strong>
+                  <div style={{ color: '#655d52', lineHeight: 1.45 }}>{notification.body}</div>
+                </div>
+                {chips.length ? (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {chips.map((chip) => (
+                      <span key={chip} style={{
+                        display: 'inline-flex', alignItems: 'center',
+                        padding: '5px 9px', borderRadius: 999,
+                        background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
+                        color: '#655d52', fontSize: 12,
+                      }}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function parseAgentsRoute(pathname: string, basePath: string) {
   const normalizedBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath
   const stripped = pathname.startsWith(normalizedBase) ? pathname.slice(normalizedBase.length) : pathname
@@ -898,6 +1039,7 @@ export default function App() {
   const [unseenNotifications, setUnseenNotifications] = useState(0)
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null)
   const [showSubscription, setShowSubscription] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const effectiveGroupId = session.selectedGroupId ?? session.groups[0]?.id ?? null
 
   useEffect(() => {
@@ -1095,7 +1237,38 @@ export default function App() {
   }, [selectedAccount, subscription])
 
   return (
-    <AppShell title="MadarAppBot" subtitle={headerSubtitle}>
+    <AppShell title="MadarAppBot" subtitle={headerSubtitle} actions={
+      <button
+        type="button"
+        onClick={() => setShowNotifications(true)}
+        style={{
+          position: 'relative',
+          width: 36, height: 36, borderRadius: 10,
+          border: '1px solid var(--miniapp-border-soft)',
+          background: 'var(--miniapp-surface)',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: unseenNotifications ? 'var(--miniapp-coral)' : 'var(--miniapp-text-muted)',
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        {unseenNotifications > 0 && (
+          <span style={{
+            position: 'absolute', top: -4, right: -4,
+            minWidth: 18, height: 18, borderRadius: 9,
+            background: 'var(--miniapp-coral)', color: '#fff',
+            fontSize: 10, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 4px',
+          }}>
+            {unseenNotifications > 99 ? '99+' : unseenNotifications}
+          </span>
+        )}
+      </button>
+    }>
       <Grid>
         {status ? <DismissibleStatus message={status} onClose={() => setStatus(null)} /> : null}
         {session.error ? <Note tone="warning">{session.error}</Note> : null}
@@ -1185,10 +1358,6 @@ export default function App() {
               {route.page === 'dashboard' ? (
                 <>
                   <AccountAnalyticsPage account={selectedAccount} />
-                  <AccountNotificationsPage
-                    account={selectedAccount}
-                    onUnseenCountChange={setUnseenNotifications}
-                  />
                   {subscription?.plan === 'business' ? (
                     <GroupAnalysisPage account={selectedAccount} />
                   ) : null}
@@ -1228,6 +1397,12 @@ export default function App() {
           setSubscription(info)
           void refresh()
         }}
+      />
+      <NotificationSheet
+        open={showNotifications}
+        account={selectedAccount}
+        onUnseenCountChange={setUnseenNotifications}
+        onClose={() => setShowNotifications(false)}
       />
       {deleteTarget ? (
         <ConfirmModal

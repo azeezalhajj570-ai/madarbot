@@ -175,24 +175,6 @@ export function AppShell({
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'var(--miniapp-sage-dim)',
-                border: '1px solid var(--miniapp-sage-border)',
-                borderRadius: 20,
-                padding: '5px 12px',
-                fontSize: 11,
-                color: 'var(--miniapp-sage)',
-                fontFamily: 'var(--miniapp-mono)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span style={{ width: 6, height: 6, background: 'var(--miniapp-sage)', borderRadius: '50%' }} />
-              online
-            </div>
             {actions}
           </div>
         </header>
