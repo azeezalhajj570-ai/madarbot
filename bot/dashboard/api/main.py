@@ -24,6 +24,7 @@ from bot.dashboard.api.routers.subscription import router as subscription_router
 from bot.dashboard.api.routers.group_subscriptions import router as group_subscription_router
 from bot.dashboard.api.routers.auth_boundary import router as auth_boundary_router
 from bot.dashboard.api.routers.internal import router as internal_router
+from bot.dashboard.api.routers.mcp_tokens import router as mcp_tokens_router
 from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine, get_session
@@ -126,6 +127,7 @@ app.include_router(subscription_router)
 app.include_router(group_subscription_router)
 app.include_router(internal_router)
 app.include_router(internal_router, prefix="/api/internal")
+app.include_router(mcp_tokens_router)
 
 
 @app.get("/")

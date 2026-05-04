@@ -51,7 +51,16 @@ class PromotionService:
         )
         existing_redemption = (await self.session.execute(history_stmt)).scalar_one_or_none()
         if existing_redemption:
-            raise PromotionError("You have already redeemed this promotion code.")
+            # If the redemption still has an active subscription, return it as success
+            if existing_redemption.subscription_request_id:
+                sub_stmt = select(SubscriptionRequest).where(
+                    SubscriptionRequest.id == existing_redemption.subscription_request_id,
+                    SubscriptionRequest.status == SubscriptionStatus.APPROVED.value,
+                )
+                existing_sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
+                if existing_sub and (existing_sub.expires_at is None or existing_sub.expires_at > now):
+                    return existing_sub
+            # Subscription expired or missing — allow re-redeeming
             
         # 4. Find active approved subscription for user
         sub_stmt = select(SubscriptionRequest).where(
@@ -63,16 +72,19 @@ class PromotionService:
         duration = timedelta(days=promo.duration_days)
         
         if subscription:
-            # If lifetime subscription exists, do not shorten it or do anything.
+            # If lifetime subscription exists, do not shorten it.
             if subscription.expires_at is None:
-                # Still record the redemption but don't change expiration
-                pass
+                subscription.plan = promo.plan
+                subscription.promo_code_id = promo.id
             else:
                 # Extend from max(existing expires_at, now)
                 start_from = max(subscription.expires_at, now)
                 subscription.expires_at = start_from + duration
                 subscription.promo_code_id = promo.id
                 subscription.plan = promo.plan
+            # Ensure bot_kind is set for existing subscriptions
+            if not subscription.bot_kind:
+                subscription.bot_kind = bot_kind or promo.bot_kind
         else:
             # No active subscription, create a new approved one
             subscription = SubscriptionRequest(
@@ -87,13 +99,16 @@ class PromotionService:
             self.session.add(subscription)
             await self.session.flush()
 
-        # 5. Create PromotionCodeRedemption
-        redemption = PromotionCodeRedemption(
-            promo_code_id=promo.id,
-            tg_user_id=tg_user_id,
-            subscription_request_id=subscription.id,
-        )
-        self.session.add(redemption)
+        # 5. Record redemption (or update existing to avoid unique constraint violation)
+        if existing_redemption:
+            existing_redemption.subscription_request_id = subscription.id
+        else:
+            redemption = PromotionCodeRedemption(
+                promo_code_id=promo.id,
+                tg_user_id=tg_user_id,
+                subscription_request_id=subscription.id,
+            )
+            self.session.add(redemption)
         
         # 6. Increment used_count
         promo.used_count += 1

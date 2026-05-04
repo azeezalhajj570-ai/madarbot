@@ -41,6 +41,43 @@ const LINK_ACCOUNT_STEPS: WizardStep[] = ['code', 'password', 'finish']
 const PHONE_INPUT_PATTERN = /^[+\d\s().-]+$/
 const REGULAR_PHONE_PATTERN = /^\+[1-9]\d{7,14}$/
 const PHONE_NUMBER_FORMAT_MESSAGE = 'Enter a valid phone number in international format, for example +15551234567'
+
+const COUNTRY_CODES = [
+  { dial: '966', label: 'SA', name: 'Saudi Arabia' },
+  { dial: '971', label: 'AE', name: 'UAE' },
+  { dial: '974', label: 'QA', name: 'Qatar' },
+  { dial: '973', label: 'BH', name: 'Bahrain' },
+  { dial: '965', label: 'KW', name: 'Kuwait' },
+  { dial: '968', label: 'OM', name: 'Oman' },
+  { dial: '967', label: 'YE', name: 'Yemen' },
+  { dial: '962', label: 'JO', name: 'Jordan' },
+  { dial: '20', label: 'EG', name: 'Egypt' },
+  { dial: '212', label: 'MA', name: 'Morocco' },
+  { dial: '213', label: 'DZ', name: 'Algeria' },
+  { dial: '216', label: 'TN', name: 'Tunisia' },
+  { dial: '1', label: 'US', name: 'United States' },
+  { dial: '44', label: 'GB', name: 'United Kingdom' },
+  { dial: '49', label: 'DE', name: 'Germany' },
+  { dial: '33', label: 'FR', name: 'France' },
+  { dial: '7', label: 'RU', name: 'Russia' },
+  { dial: '86', label: 'CN', name: 'China' },
+  { dial: '91', label: 'IN', name: 'India' },
+  { dial: '81', label: 'JP', name: 'Japan' },
+  { dial: '90', label: 'TR', name: 'Turkey' },
+  { dial: '972', label: 'IL', name: 'Israel' },
+  { dial: '961', label: 'LB', name: 'Lebanon' },
+  { dial: '964', label: 'IQ', name: 'Iraq' },
+  { dial: '963', label: 'SY', name: 'Syria' },
+  { dial: '92', label: 'PK', name: 'Pakistan' },
+  { dial: '93', label: 'AF', name: 'Afghanistan' },
+  { dial: '218', label: 'LY', name: 'Libya' },
+  { dial: '249', label: 'SD', name: 'Sudan' },
+  { dial: '234', label: 'NG', name: 'Nigeria' },
+  { dial: '254', label: 'KE', name: 'Kenya' },
+  { dial: '251', label: 'ET', name: 'Ethiopia' },
+  { dial: '381', label: 'RS', name: 'Serbia' },
+  { dial: '998', label: 'UZ', name: 'Uzbekistan' },
+]
 const SCRAPE_LIMIT_MAX = 50000
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 const BULK_MESSAGE_TASK_META: TaskCatalogItem = {
@@ -87,9 +124,11 @@ function Badge({ children, tone = 'neutral' }: { children: React.ReactNode; tone
 function SubscriptionForm({
   status,
   onRedeemed,
+  onRedeemComplete,
 }: {
   status: SubscriptionStatusInfo | null
   onRedeemed: (info: SubscriptionStatusInfo) => void
+  onRedeemComplete?: () => void
 }) {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -104,15 +143,31 @@ function SubscriptionForm({
     setSuccess(null)
     try {
       const result = await agentsApi.redeemPromoCode(code)
-      setSuccess(result.message)
-      setCode('')
-      onRedeemed({
-        status: result.status as 'active' | 'inactive',
+      const info: SubscriptionStatusInfo = {
+        status: 'active',
         plan: result.plan as 'pro' | 'business' | null,
         expires_at: result.expires_at,
-      })
+      }
+      setSuccess(result.message)
+      setCode('')
+      onRedeemed(info)
+      onRedeemComplete?.()
     } catch (err: any) {
-      setError(err.message || 'Failed to redeem code')
+      const msg = err.message || 'Failed to redeem code'
+
+      if (msg.includes('already redeemed') || msg.includes('already promoted')) {
+        setSuccess('Promotion already active.')
+        setError(null)
+        try {
+          const freshStatus = await agentsApi.fetchSubscriptionStatus()
+          onRedeemed(freshStatus)
+          onRedeemComplete?.()
+        } catch {
+          setError('Failed to refresh subscription status')
+        }
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
@@ -144,6 +199,20 @@ function SubscriptionForm({
   const isActive = status?.status === 'active'
   const expiryDate = status?.expires_at ? new Date(status.expires_at) : null
   const isLifetime = isActive && !expiryDate
+  const [cancelling, setCancelling] = useState(false)
+
+  async function handleCancel() {
+    if (!isActive || cancelling) return
+    setCancelling(true)
+    try {
+      await agentsApi.cancelSubscription()
+      onRedeemed({ status: 'inactive', plan: null, expires_at: null })
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel subscription')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
@@ -164,6 +233,23 @@ function SubscriptionForm({
             Redeem a promotion code to unlock agent features.
           </div>
         )}
+        {isActive && (
+          <div style={{ marginTop: 4 }}>
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              disabled={cancelling}
+              style={{
+                border: 'none', background: 'transparent', cursor: cancelling ? 'default' : 'pointer',
+                color: 'var(--miniapp-clay)', fontSize: 12, fontWeight: 600, padding: 0,
+                fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline',
+                opacity: cancelling ? 0.5 : 1,
+              }}
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel subscription'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gap: 12 }}>
@@ -180,44 +266,49 @@ function SubscriptionForm({
         </Button>
       </div>
 
-      {!isActive && (
-        <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+      <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+        {isActive && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Upgrade or extend your plan:</div>
+        )}
+        {!isActive && (
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Or pay with Stripe:</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {[
-              { plan: 'pro', label: 'Pro', price: '$29', desc: '/month', days: 30 },
-              { plan: 'business', label: 'Business', price: '$79', desc: '/month', days: 30 },
-            ].map((p) => (
-              <button
-                key={p.plan}
-                onClick={() => void handleStripeCheckout(p.plan as 'pro' | 'business')}
-                disabled={checkoutPlan !== null}
-                style={{
-                  padding: '12px', borderRadius: 12, border: '1px solid var(--miniapp-border)',
-                  background: 'var(--miniapp-bg)', textAlign: 'center', cursor: checkoutPlan ? 'wait' : 'pointer', color: 'var(--miniapp-text)',
-                  opacity: checkoutPlan && checkoutPlan !== p.plan ? 0.65 : 1,
-                }}
-              >
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{p.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--miniapp-primary)', margin: '4px 0' }}>
-                  {checkoutPlan === p.plan ? 'Opening...' : p.price}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{p.desc}</div>
-              </button>
-            ))}
-          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {[
+            { plan: 'pro', label: 'Pro', price: '$29', desc: '/month', days: 30 },
+            { plan: 'business', label: 'Business', price: '$79', desc: '/month', days: 30 },
+          ].map((p) => (
+            <button
+              key={p.plan}
+              onClick={() => void handleStripeCheckout(p.plan as 'pro' | 'business')}
+              disabled={checkoutPlan !== null}
+              style={{
+                padding: '12px', borderRadius: 12, border: '1px solid var(--miniapp-border)',
+                background: 'var(--miniapp-bg)', textAlign: 'center', cursor: checkoutPlan ? 'wait' : 'pointer', color: 'var(--miniapp-text)',
+                opacity: checkoutPlan && checkoutPlan !== p.plan ? 0.65 : 1,
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{p.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--miniapp-primary)', margin: '4px 0' }}>
+                {checkoutPlan === p.plan ? 'Opening...' : p.price}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{p.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!isActive && (
+        <div style={{ fontSize: 13, color: 'var(--miniapp-text-secondary)', display: 'grid', gap: 8 }}>
+          <strong>Subscribing gives you access to:</strong>
+          <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>
+            <li>Linking multiple Telegram accounts as agents</li>
+            <li>Running background member scraping jobs</li>
+            <li>Automated broadcasts and member messaging</li>
+            <li>Real-time agent notifications</li>
+          </ul>
         </div>
       )}
-
-      <div style={{ fontSize: 13, color: 'var(--miniapp-text-secondary)', display: 'grid', gap: 8 }}>
-        <strong>Subscribing gives you access to:</strong>
-        <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>
-          <li>Linking multiple Telegram accounts as agents</li>
-          <li>Running background member scraping jobs</li>
-          <li>Automated broadcasts and member messaging</li>
-          <li>Real-time agent notifications</li>
-        </ul>
-      </div>
     </div>
   )
 }
@@ -266,7 +357,7 @@ function SubscriptionSheet({
           <Button tone="secondary" onClick={onClose}>Close</Button>
         </div>
 
-        <SubscriptionForm status={status} onRedeemed={onRedeemed} />
+        <SubscriptionForm status={status} onRedeemed={onRedeemed} onRedeemComplete={onClose} />
       </div>
     </div>
   )
@@ -1046,6 +1137,7 @@ export default function App() {
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null)
   const [showSubscription, setShowSubscription] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [subscriptionExpanded, setSubscriptionExpanded] = useState(false)
   const effectiveGroupId = session.selectedGroupId ?? session.groups[0]?.id ?? null
 
   useEffect(() => {
@@ -1083,6 +1175,14 @@ export default function App() {
     }
     void refresh()
   }, [session.loading, session.identity?.user.id, effectiveGroupId])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('paid') === '1') {
+      void refresh()
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   function navigate(nextPath: string) {
     const target = `${basePath.replace(/\/$/, '')}${nextPath}`
@@ -1305,17 +1405,35 @@ export default function App() {
         ) : null}
         {appReady && isAuthenticated && !isWizardInProgress && route.page === 'settings' ? (
           <>
-            {subscription?.status !== 'active' ? (
-              <Card title="Subscription Required" subtitle="Activate your access to use agent features.">
-                <SubscriptionForm
-                  status={subscription}
-                  onRedeemed={(info) => {
-                    setSubscription(info)
-                    void refresh()
+            <Card
+              title="Subscription"
+              subtitle={`${subscription?.status === 'active' ? `${subscription?.plan === 'business' ? 'Business' : 'Pro'} · Active` : 'No active subscription'}`}
+            >
+              <div style={{ display: 'grid', gap: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setSubscriptionExpanded(!subscriptionExpanded)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                    padding: 0, border: 'none', background: 'transparent', cursor: 'pointer',
+                    color: 'var(--miniapp-text-muted)', fontSize: 12, fontFamily: 'var(--miniapp-sans)', fontWeight: 600,
                   }}
-                />
-              </Card>
-            ) : (
+                >
+                  <span>{subscriptionExpanded ? 'Hide details' : 'Show details'}</span>
+                  <span style={{ transform: subscriptionExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', fontSize: 14 }}>▾</span>
+                </button>
+                {subscriptionExpanded && (
+                  <div style={{ marginTop: 12 }}>
+                    <SubscriptionForm
+                      key={subscription?.status}
+                      status={subscription}
+                      onRedeemed={(info) => setSubscription(info)}
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
+            {subscription?.status === 'active' ? (
               <>
                 <Card title="Linked accounts" subtitle="Manage your linked Telegram agents and their authentication status.">
                   <div style={{ display: 'grid', gap: 8 }}>
@@ -1355,7 +1473,8 @@ export default function App() {
                   )}
                 </Card>
               </>
-            )}
+            ) : null}
+            {subscription?.status === 'active' ? <MCPTokensCard /> : null}
           </>
         ) : null}
         {appReady && isAuthenticated && !isWizardInProgress && route.page !== 'settings' ? (
@@ -1388,10 +1507,7 @@ export default function App() {
         open={showSubscription}
         onClose={() => setShowSubscription(false)}
         status={subscription}
-        onRedeemed={(info) => {
-          setSubscription(info)
-          void refresh()
-        }}
+        onRedeemed={(info) => setSubscription(info)}
       />
       <NotificationSheet
         open={showNotifications}
@@ -1421,6 +1537,167 @@ function CreateAccountPanel({
   disabled?: boolean
 }) {
   return <Button onClick={onOpen} disabled={disabled}>Link new account</Button>
+}
+
+function MCPTokensCard() {
+  const [tokens, setTokens] = useState<agentsApi.MCPTokenData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [name, setName] = useState('')
+  const [expiryDays, setExpiryDays] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createdToken, setCreatedToken] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function loadTokens() {
+    setLoading(true)
+    try {
+      setTokens(await agentsApi.listMCPTokens())
+    } catch { /* ignore */ }
+    setLoading(false)
+  }
+
+  useEffect(() => { void loadTokens() }, [])
+
+  async function handleCreate() {
+    if (!name.trim()) return
+    setCreating(true)
+    setError(null)
+    setCreatedToken(null)
+    try {
+      const result = await agentsApi.createMCPToken(name.trim(), expiryDays ? Number(expiryDays) : undefined)
+      setCreatedToken(result.token)
+      setName('')
+      setExpiryDays('')
+      await loadTokens()
+    } catch (err: any) {
+      setError(err.message || 'Failed to create token')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handleRevoke(id: number) {
+    try {
+      await agentsApi.revokeMCPToken(id)
+      await loadTokens()
+    } catch { /* ignore */ }
+  }
+
+  async function copyToken(token: string) {
+    try {
+      await navigator.clipboard.writeText(token)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = token
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+  }
+
+  const statusBadge = (s: string) => {
+    if (s === 'active') return <Badge tone="success">Active</Badge>
+    if (s === 'expired') return <Badge tone="warning">Expired</Badge>
+    return <Badge tone="neutral">Revoked</Badge>
+  }
+
+  return (
+    <Card title="MCP Tokens" subtitle="API tokens for external MCP access">
+      <div style={{ display: 'grid', gap: 12 }}>
+        {loading ? (
+          <Note>Loading tokens...</Note>
+        ) : tokens.length === 0 ? (
+          <Note>No tokens yet.</Note>
+        ) : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {tokens.map((t) => (
+              <div
+                key={t.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', border: '1px solid var(--miniapp-border-soft)',
+                  borderRadius: 12, background: 'var(--miniapp-surface)',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
+                  <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginTop: 2 }}>
+                    <code style={{ fontFamily: 'var(--miniapp-mono)', fontSize: 11 }}>{t.prefix}...</code>
+                    {' · '}created {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {statusBadge(t.status)}
+                  {t.status === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRevoke(t.id)}
+                      style={{
+                        border: 'none', background: 'transparent', cursor: 'pointer',
+                        color: 'var(--miniapp-clay)', fontSize: 12, fontWeight: 600,
+                        padding: '4px 8px', borderRadius: 6, fontFamily: 'var(--miniapp-sans)',
+                      }}
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {createdToken && (
+          <div style={{
+            padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-sage-border)',
+            background: 'var(--miniapp-sage-dim)', display: 'grid', gap: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-sage)' }}>Token created — copy it now (will not be shown again)</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+              <input
+                readOnly
+                value={createdToken}
+                style={{
+                  flex: 1, background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)',
+                  borderRadius: 8, padding: '8px 10px', fontFamily: 'var(--miniapp-mono)', fontSize: 12,
+                  color: 'var(--miniapp-text-primary)', outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void copyToken(createdToken)}
+                style={{
+                  padding: '8px 14px', borderRadius: 8, border: '1px solid var(--miniapp-sage-border)',
+                  background: 'var(--miniapp-surface)', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                  color: 'var(--miniapp-sage)', fontFamily: 'var(--miniapp-sans)', whiteSpace: 'nowrap',
+                }}
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showCreate ? (
+          <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12 }}>
+            <InputField label="Token name" value={name} onChange={setName} placeholder="My API token" />
+            <InputField label="Expires in (days, optional)" value={expiryDays} onChange={(v) => setExpiryDays(v.replace(/\D/g, ''))} placeholder="Leave empty for no expiry" />
+            {error && <Note tone="warning">{error}</Note>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => void handleCreate()} disabled={creating || !name.trim()}>
+                {creating ? 'Creating...' : 'Create token'}
+              </Button>
+              <Button tone="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
+            </div>
+          </div>
+        ) : (
+          <Button onClick={() => { setShowCreate(true); setCreatedToken(null); setError(null) }}>Create token</Button>
+        )}
+      </div>
+    </Card>
+  )
 }
 
 function RegistrationWizard({
@@ -1493,14 +1770,143 @@ function PhoneEntryStep({
   isLinking: boolean
   onCancel: () => void
 }) {
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--miniapp-bg)',
+    border: '1px solid var(--miniapp-border-soft)',
+    borderRadius: 'var(--miniapp-radius-sm)',
+    padding: '11px 12px',
+    fontFamily: 'var(--miniapp-sans)',
+    fontSize: 13,
+    color: 'var(--miniapp-text-primary)',
+    outline: 'none',
+    boxSizing: 'border-box',
+  }
+
+  const dialMatch = COUNTRY_CODES.find((c) => phoneNumber.replace(/\D/g, '').startsWith(c.dial))
+  const [countryIndex, setCountryIndex] = useState(() =>
+    dialMatch ? COUNTRY_CODES.indexOf(dialMatch) : 0,
+  )
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const selected = COUNTRY_CODES[countryIndex]
+  const digits = phoneNumber.replace(/\D/g, '')
+  const nationalDigits = digits.startsWith(selected.dial) ? digits.slice(selected.dial.length) : digits
+
+  function formatNational(d: string) {
+    const parts: string[] = []
+    for (let i = 0; i < d.length; i += 3) {
+      parts.push(d.slice(i, i + 3))
+    }
+    return parts.join(' ')
+  }
+
+  function handleNationalChange(raw: string) {
+    const d = raw.replace(/\D/g, '')
+    onPhoneNumberChange(`+${selected.dial}${d}`)
+  }
+
+  function selectCountry(idx: number) {
+    setCountryIndex(idx)
+    setOpen(false)
+    setSearch('')
+    const c = COUNTRY_CODES[idx]
+    const currentDigits = phoneNumber.replace(/\D/g, '')
+    const national = currentDigits.startsWith(selected.dial) ? currentDigits.slice(selected.dial.length) : currentDigits
+    onPhoneNumberChange(`+${c.dial}${national}`)
+  }
+
+  const filtered = COUNTRY_CODES.filter(
+    (c) =>
+      c.dial.includes(search) ||
+      c.label.toLowerCase().includes(search.toLowerCase()) ||
+      c.name.toLowerCase().includes(search.toLowerCase()),
+  )
+
   return (
     <>
-      <InputField label="Phone number" value={phoneNumber} onChange={onPhoneNumberChange} placeholder="+966501234567" />
-      <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: -8, marginBottom: 8 }}>
-        Enter your Telegram account phone number in international format
-      </div>
+      <label style={{ display: 'grid', gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
+          Phone number
+        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              style={{
+                ...inputStyle,
+                display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+                padding: '11px 10px', whiteSpace: 'nowrap', minWidth: 0,
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>+{selected.dial}</span>
+              <span style={{ fontSize: 9, color: 'var(--miniapp-text-muted)', lineHeight: 1 }}>▾</span>
+            </button>
+            {open && (
+              <div
+                style={{
+                  position: 'absolute', top: '100%', left: 0, zIndex: 20, minWidth: 220,
+                  background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
+                  borderRadius: 10, boxShadow: 'var(--miniapp-shadow-lg)', maxHeight: 220, overflow: 'auto',
+                  marginTop: 4,
+                  display: 'grid', gridTemplateRows: 'auto 1fr',
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search country..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ ...inputStyle, border: 'none', borderBottom: '1px solid var(--miniapp-border-soft)', borderRadius: 0, padding: '10px 12px' }}
+                  autoFocus
+                />
+                <div style={{ overflow: 'auto' }}>
+                  {filtered.length ? filtered.map((c) => (
+                    <button
+                      key={c.dial}
+                      type="button"
+                      onClick={() => selectCountry(COUNTRY_CODES.indexOf(c))}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px',
+                        border: 'none', background: c.dial === selected.dial ? 'var(--miniapp-coral-dim)' : 'transparent',
+                        cursor: 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', textAlign: 'left',
+                        fontFamily: 'var(--miniapp-sans)',
+                      }}
+                    >
+                      <span style={{ minWidth: 28, fontWeight: 600 }}>{c.label}</span>
+                      <span style={{ color: 'var(--miniapp-text-muted)', fontFamily: 'var(--miniapp-mono)', fontSize: 12 }}>+{c.dial}</span>
+                      <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                    </button>
+                  )) : (
+                    <div style={{ padding: '10px 12px', color: 'var(--miniapp-text-muted)', fontSize: 12 }}>No matches</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={formatNational(nationalDigits)}
+              placeholder={'_ _ _  _ _ _  _ _ _'}
+              onChange={(e) => handleNationalChange(e.target.value)}
+              style={{
+                ...inputStyle,
+                fontFamily: 'var(--miniapp-mono)',
+                letterSpacing: '1px',
+              }}
+            />
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: -4, marginBottom: 8 }}>
+          Enter your Telegram account phone number
+        </div>
+      </label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button onClick={onLink} disabled={isLinking || !phoneNumber.trim()}>
+        <Button onClick={onLink} disabled={isLinking || !phoneNumber.replace(/\D/g, '')}>
           {isLinking ? 'Linking...' : 'Link Account'}
         </Button>
         <Button tone="secondary" onClick={onCancel}>Cancel</Button>
@@ -1590,6 +1996,61 @@ function wizardStepMilestoneLabel(step: WizardStep) {
   }
 }
 
+function SecretInputField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <label style={{ display: 'grid', gap: 6 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{label}</span>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch' }}>
+        <input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          style={{
+            width: '100%',
+            background: 'var(--miniapp-bg)',
+            border: '1px solid var(--miniapp-border-soft)',
+            borderRadius: 'var(--miniapp-radius-sm)',
+            padding: '11px 44px 11px 12px',
+            fontFamily: 'var(--miniapp-mono)',
+            fontSize: 13,
+            color: 'var(--miniapp-text-primary)',
+            outline: 'none',
+            boxSizing: 'border-box',
+            letterSpacing: '0.5px',
+          }}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setVisible(!visible)}
+          style={{
+            position: 'absolute', right: 0, top: 0, bottom: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 38, border: 'none', background: 'transparent',
+            cursor: 'pointer', color: 'var(--miniapp-text-muted)',
+            fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+            padding: 0,
+          }}
+        >
+          {visible ? 'Hide' : 'Show'}
+        </button>
+      </div>
+    </label>
+  )
+}
+
 function WizardCodeStep({
   account,
   onSaved,
@@ -1608,7 +2069,7 @@ function WizardCodeStep({
 
   return (
     <>
-      <InputField label="Login code" value={code} onChange={setCode} placeholder="Enter the code sent to Telegram" />
+      <SecretInputField label="Login code" value={code} onChange={setCode} placeholder="Enter the code sent to Telegram" />
       {error ? <Note tone="warning">{error}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Button
@@ -1646,6 +2107,7 @@ function WizardPasswordStep({
   onSaved,
   onRefresh,
   onStepChange,
+  onCancel,
 }: {
   account: Agent
   onSaved: (message: string) => void
@@ -1658,7 +2120,7 @@ function WizardPasswordStep({
 
   return (
     <>
-      <InputField label="Password / 2FA" value={password} onChange={setPassword} placeholder="Enter your Telegram 2FA password" />
+      <SecretInputField label="Password / 2FA" value={password} onChange={setPassword} placeholder="Enter your Telegram 2FA password" />
       {error ? <Note tone="warning">{error}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button

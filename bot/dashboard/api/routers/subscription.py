@@ -12,6 +12,7 @@ from bot.config import get_settings
 from bot.db.models import SubscriptionRequest, SubscriptionStatus
 from bot.db.session import get_session
 from bot.services.promotion_service import PromotionError, PromotionService
+from bot.services.subscription_service import SubscriptionService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import get_identity
@@ -165,6 +166,22 @@ async def webapp_agents_stripe_checkout(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     return {"url": checkout.url, "session_id": checkout.id}
+
+
+@router.post("/api/agents/subscription/cancel", dependencies=[Depends(require_agents_boundary)])
+@router.post("/webapp/agents/subscription/cancel", dependencies=[Depends(require_agents_boundary)])
+async def webapp_cancel_subscription(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    cancelled = await SubscriptionService(session).cancel_subscription(
+        tg_user_id=identity.user_id,
+        responder_id=identity.user_id,
+        bot_kind="agents",
+    )
+    if not cancelled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found")
+    return {"status": "ok", "message": "Subscription cancelled"}
 
 
 __all__ = ["router"]

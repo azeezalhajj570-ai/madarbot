@@ -17,6 +17,7 @@ from bot.db.models.faq import (
     UnansweredQuestionStatus,
 )
 from bot.db.models.group import Group, GroupAdminRole, GroupMember, GroupSetting, PluginEnabled
+from bot.db.models.mcp_token import MCPToken
 from bot.db.models.group_access import (
     GroupExpiryAction,
     GroupPaymentMode,
@@ -98,6 +99,7 @@ __all__ = [
     "GroupSummarySettings",
     "JoinRequestApproval",
     "Lead",
+    "MCPToken",
     "MembershipAuditLog",
     "Message",
     "ModerationEvent",

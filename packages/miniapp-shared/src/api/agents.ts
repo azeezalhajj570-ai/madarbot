@@ -186,6 +186,32 @@ export async function createSubscriptionCheckout(plan: 'pro' | 'business', succe
   })
 }
 
+export async function cancelSubscription() {
+  return apiClient.post<{ status: string; message: string }>(`${AGENTS_API_PREFIX}/subscription/cancel`)
+}
+
+export async function createMCPToken(name: string, expiresInDays?: number) {
+  return apiClient.post<{ token: string; token_data: MCPTokenData }>(`/api/mcp/tokens`, { name, expires_in_days: expiresInDays })
+}
+
+export async function listMCPTokens() {
+  return apiClient.get<MCPTokenData[]>(`/api/mcp/tokens`)
+}
+
+export async function revokeMCPToken(tokenId: number) {
+  return apiClient.delete<{ status: string; token_data: MCPTokenData }>(`/api/mcp/tokens/${tokenId}`)
+}
+
+export interface MCPTokenData {
+  id: number
+  name: string
+  prefix: string
+  status: 'active' | 'expired' | 'revoked'
+  expires_at: string | null
+  created_at: string | null
+  revoked_at: string | null
+}
+
 export async function updateAgentSafety(agentId: number, payload: {
   max_actions_per_hour?: number
   min_delay_seconds?: number

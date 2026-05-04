@@ -144,7 +144,9 @@ async def test_redeem_fails_for_duplicate_redemption(db_session) -> None:
     await db_session.commit()
     
     service = PromotionService(db_session)
-    await service.redeem_code(tg_user_id=uid, code="ONCE")
+    first = await service.redeem_code(tg_user_id=uid, code="ONCE")
+    second = await service.redeem_code(tg_user_id=uid, code="ONCE")
     
-    with pytest.raises(PromotionError, match="already redeemed"):
-        await service.redeem_code(tg_user_id=uid, code="ONCE")
+    # Idempotent — second call returns the same active subscription instead of error
+    assert second.id == first.id
+    assert second.status == 'approved'
