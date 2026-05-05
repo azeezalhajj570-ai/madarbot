@@ -43,7 +43,7 @@ def upgrade() -> None:
     # 0. Drop ONLY orphan tables (never had ORM models, migration-only cruft)
     #    Keep all service-backed tables for compatibility.
     # =========================================================================
-    for tbl in ["accounts", "account_groups", "tasks", "task_groups"]:
+    for tbl in ["account_groups", "accounts", "task_groups", "tasks"]:
         if tbl in existing:
             op.drop_table(tbl)
 
