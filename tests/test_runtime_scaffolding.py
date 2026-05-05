@@ -117,6 +117,54 @@ async def test_run_bot_wires_runtime_dependencies_without_bootstrap_when_disable
 
 
 @pytest.mark.asyncio
+async def test_run_bot_starts_agent_listener_in_agents_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = SimpleNamespace(
+        log_level="INFO",
+        aiogram_log_level="warning",
+        sentry_dsn="",
+        run_schema_bootstrap=False,
+        bot_app_kind="agents",
+        resolve_bot_token=Mock(return_value="123456:TESTTOKEN"),
+        redis_url="redis://redis:6379/0",
+        telegram_request_timeout=15,
+        log_raw_updates=False,
+        telegram_polling_timeout=33,
+    )
+    fake_redis = SimpleNamespace(aclose=AsyncMock())
+    fake_bot = SimpleNamespace(delete_webhook=AsyncMock())
+    fake_dispatcher = SimpleNamespace(
+        update=SimpleNamespace(outer_middleware=Mock()),
+        include_router=Mock(),
+        start_polling=AsyncMock(),
+        storage=SimpleNamespace(close=AsyncMock()),
+    )
+    fake_listener = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+    monkeypatch.setattr("bot.main.get_settings", lambda: settings)
+    monkeypatch.setattr("bot.main.configure_logging", Mock())
+    monkeypatch.setattr("bot.main.AiohttpSession", Mock(return_value=object()))
+    monkeypatch.setattr("bot.main.Bot", Mock(return_value=fake_bot))
+    monkeypatch.setattr("bot.main.Redis.from_url", Mock(return_value=fake_redis))
+    monkeypatch.setattr("bot.main.RedisStorage", Mock(return_value=object()))
+    monkeypatch.setattr("bot.main.Dispatcher", Mock(return_value=fake_dispatcher))
+    monkeypatch.setattr("bot.main.EventBus", Mock(return_value=object()))
+    monkeypatch.setattr("bot.main.MenuEngine", Mock(return_value=object()))
+    monkeypatch.setattr("bot.main.PluginManager", Mock(return_value=SimpleNamespace(load_all=AsyncMock())))
+    monkeypatch.setattr("bot.main.build_router", Mock(return_value=object()))
+    monkeypatch.setattr("bot.main._configure_chat_menu_button", AsyncMock())
+    monkeypatch.setattr("bot.main._configure_bot_commands", AsyncMock())
+    monkeypatch.setattr("bot.main.AgentListenerManager", Mock(return_value=fake_listener))
+
+    await run_bot()
+
+    settings.resolve_bot_token.assert_called_once_with("agents")
+    fake_listener.start.assert_awaited_once()
+    fake_listener.stop.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_agent_job_executor_persists_job_payload_and_awaits_async_dispatch(
     db_session,
 ) -> None:

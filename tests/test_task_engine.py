@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.runtime import AgentTaskRuntime, GroupMemberBroadcastRuntime, ScraperRuntime
-from bot.agents.worker import execute_agent_job
+from bot.agents.worker import _execute_agent_job_impl, execute_agent_job
 from bot.automation.agent_task_store import AgentTaskStore
 from bot.automation.conditions import ConditionEvaluator
 from bot.automation.engine import TaskEngine
@@ -686,6 +686,119 @@ async def test_execute_agent_job_marks_failed_when_agent_session_is_unavailable(
         stored = (await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
     assert stored.status == "failed"
     assert stored.job_payload["last_error"] == "Telegram client auth is not configured"
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_job_marks_successful_automation_task_completed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = Agent(
+        id=18103,
+        group_id=1907,
+        telegram_user_id=18103,
+        external_account_id="agent-worker-success",
+        status="active",
+        auth_state="active",
+        session_string="session-success",
+        details={},
+    )
+    job = AgentJob(
+        id=2907,
+        agent_id=agent.id,
+        job_type="automation_task",
+        job_payload={
+            "task_key": "reply_message",
+            "assignment_id": "assignment-worker-success",
+            "task_config": {"message_template": "ok"},
+            "event": {
+                "name": "message.received",
+                "group_id": agent.group_id,
+                "user_id": 1907,
+                "payload": {"chat_id": -1001907, "message_id": 44, "text": "hello"},
+            },
+        },
+        status="pending",
+    )
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.disconnected = False
+
+        async def disconnect(self) -> None:
+            self.disconnected = True
+
+    fake_client = FakeClient()
+
+    class FakeSessionManager:
+        async def get_client(self, agent_id: int):
+            assert agent_id == agent.id
+            return fake_client
+
+    class FakeAgentTaskRuntime:
+        def __init__(self, *, registry) -> None:
+            self.registry = registry
+
+        async def execute(self, *, client, agent, job, session) -> bool:
+            assert client is fake_client
+            return True
+
+    class FakeResult:
+        def __init__(self, item) -> None:
+            self.item = item
+
+        def scalar_one_or_none(self):
+            return self.item
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.commits = 0
+
+        async def execute(self, stmt):
+            entity = stmt.column_descriptions[0].get("entity")
+            if entity is AgentJob:
+                return FakeResult(job)
+            if entity is Agent:
+                return FakeResult(agent)
+            return FakeResult(None)
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+    class FakeSessionContext:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        async def __aenter__(self) -> FakeSession:
+            return self.session
+
+        async def __aexit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+    class FakeSessionFactory:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        def __call__(self) -> FakeSessionContext:
+            return FakeSessionContext(self.session)
+
+    fake_session = FakeSession()
+    notifications: list[tuple[int, str]] = []
+
+    async def fake_create_job_notification(session, job, *, status: str, result=None, error=None) -> None:
+        notifications.append((job.id, status))
+
+    monkeypatch.setattr("bot.agents.worker.SessionLocal", FakeSessionFactory(fake_session))
+    monkeypatch.setattr("bot.agents.worker.SessionManager", FakeSessionManager)
+    monkeypatch.setattr("bot.agents.worker.AgentTaskRuntime", FakeAgentTaskRuntime)
+    monkeypatch.setattr("bot.agents.worker._create_job_notification", fake_create_job_notification)
+
+    await _execute_agent_job_impl(agent.id, job.id)
+
+    assert job.status == "completed"
+    assert job.job_payload.get("last_error") is None
+    assert fake_session.commits == 2
+    assert fake_client.disconnected is True
+    assert notifications == [(job.id, "completed")]
 
 
 @pytest.mark.asyncio
