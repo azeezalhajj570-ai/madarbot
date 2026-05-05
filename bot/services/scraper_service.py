@@ -53,7 +53,8 @@ class ScraperService:
                 return []
 
         try:
-            results = []
+            from bot.services.group_service import canonical_tg_group_id as _canonical
+            groups: dict[int, dict[str, Any]] = {}
             async for dialog in managed_client.iter_dialogs():
                 if not dialog.is_group and not dialog.is_channel:
                     continue
@@ -63,28 +64,30 @@ class ScraperService:
                 username = getattr(entity, "username", None)
                 group_type = "channel" if getattr(entity, "broadcast", False) else "supergroup" if getattr(entity, "megagroup", False) else "group"
                 member_count = getattr(entity, "participants_count", None) or getattr(entity, "user_count", None)
+                canonical_id = _canonical(int(dialog.id))
 
                 raw_data = {
                     "id": getattr(entity, "id", None),
                     "access_hash": getattr(entity, "access_hash", None),
                 }
 
-                group = await entity_resolver.get_or_create_scraped_group(
-                    tg_group_id=int(dialog.id),
-                    last_agent_id=agent_id,
-                    title=str(title) if title else None,
-                    username=str(username) if username else None,
-                    group_type=group_type,
-                    member_count=int(member_count) if member_count else None,
-                    raw_data=raw_data,
-                    commit=False,
-                    session=self.session,
-                )
-                results.append(group)
+                groups[canonical_id] = {
+                    "tg_group_id": canonical_id,
+                    "last_agent_id": agent_id,
+                    "title": str(title) if title else None,
+                    "username": str(username) if username else None,
+                    "group_type": group_type,
+                    "member_count": int(member_count) if member_count else None,
+                    "raw_data": raw_data,
+                }
 
-            await self.session.commit()
-            logger.info("agent_groups_synced", agent_id=agent_id, count=len(results))
-            return results
+            if groups:
+                await bulk_upsert.bulk_upsert_scraped_groups(list(groups.values()), self.session)
+                await self.session.commit()
+
+            logger.info("agent_groups_synced", agent_id=agent_id, count=len(groups))
+            result_rows = list(groups.values())
+            return result_rows
         except Exception as exc:
             await self.session.rollback()
             logger.exception("sync_agent_groups_failed", agent_id=agent_id, error=str(exc))
