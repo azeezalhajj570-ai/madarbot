@@ -103,7 +103,7 @@ async def run_bot() -> None:
     plugin_manager = PluginManager()
     await plugin_manager.load_all(dispatcher, event_bus)
     agent_listener_manager: AgentListenerManager | None = None
-    if settings.bot_app_kind in ("admin", "agents"):
+    if settings.bot_app_kind == "admin":
         agent_listener_manager = AgentListenerManager(bot=bot)
         await agent_listener_manager.start()
 

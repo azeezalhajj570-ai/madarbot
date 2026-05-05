@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import ScrapedConversation
 from bot.services.group_service import canonical_tg_group_id
-from bot.services.scrapers import bulk_upsert as _bulk_upsert
 
 logger = structlog.get_logger(__name__)
 
@@ -40,8 +40,7 @@ async def build_conversations_from_scrape(
         else:
             standalone.append(row)
 
-    conv_rows: list[dict[str, Any]] = []
-
+    created = 0
     for root_id, messages in thread_map.items():
         root_msg = root_map[root_id]
         participants = set()
@@ -58,21 +57,41 @@ async def build_conversations_from_scrape(
         if not title:
             title = f"Conversation #{root_id}"
 
+        conv_result = (
+            await session.execute(
+                select(ScrapedConversation).where(
+                    ScrapedConversation.scraped_group_id == scraped_group_id,
+                    ScrapedConversation.root_message_id == int(root_id),
+                ).order_by(ScrapedConversation.id.desc()).limit(1)
+            )
+        )
+        conv = conv_result.scalars().first()
+
         sender_name = root_msg.get("sender_first_name") or root_msg.get("sender_username") or ""
-        conv_rows.append({
-            "scraped_group_id": scraped_group_id,
-            "tg_group_id": canonical_id,
-            "root_message_id": int(root_id),
-            "root_message_text": root_msg.get("message_text"),
-            "root_sender_user_id": root_msg.get("sender_user_id"),
-            "root_sender_name": sender_name,
-            "title": title,
-            "participant_count": len(participants),
-            "message_count": len(messages),
-            "first_message_at": first_date,
-            "last_message_at": last_date,
-            "is_topic": bool(root_msg.get("reply_to_top_id")),
-        })
+        if conv is None:
+            session.add(ScrapedConversation(
+                scraped_group_id=scraped_group_id,
+                tg_group_id=canonical_id,
+                root_message_id=int(root_id),
+                root_message_text=root_msg.get("message_text"),
+                root_sender_user_id=root_msg.get("sender_user_id"),
+                root_sender_name=sender_name,
+                title=title,
+                participant_count=len(participants),
+                message_count=len(messages),
+                first_message_at=first_date,
+                last_message_at=last_date,
+                is_topic=bool(root_msg.get("reply_to_top_id")),
+            ))
+            created += 1
+        else:
+            conv.message_count = len(messages)
+            conv.participant_count = len(participants)
+            conv.last_message_at = last_date
+            if sender_name and not conv.root_sender_name:
+                conv.root_sender_name = sender_name
+            if not conv.title or conv.title.startswith("Conversation #"):
+                conv.title = title
 
     if standalone:
         standalone.sort(key=lambda m: m.get("message_date") or datetime.min)
@@ -88,25 +107,23 @@ async def build_conversations_from_scrape(
                 if curr_date and last_date and (curr_date - last_date) <= timedelta(minutes=CONVERSATION_IDLE_MINUTES) and same_sender:
                     current_group.append(msg)
                 else:
-                    conv_rows.extend(_build_time_group_rows(scraped_group_id, canonical_id, current_group))
+                    created += await _save_time_group(session, scraped_group_id, canonical_id, current_group)
                     current_group = [msg]
         if current_group:
-            conv_rows.extend(_build_time_group_rows(scraped_group_id, canonical_id, current_group))
+            created += await _save_time_group(session, scraped_group_id, canonical_id, current_group)
 
-    if conv_rows:
-        await _bulk_upsert.bulk_upsert_scraped_conversations(conv_rows, session)
-        await session.commit()
-
-    return len(conv_rows)
+    await session.commit()
+    return created
 
 
-def _build_time_group_rows(
+async def _save_time_group(
+    session: AsyncSession,
     scraped_group_id: int,
     tg_group_id: int,
     messages: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+) -> int:
     if not messages:
-        return []
+        return 0
     first = messages[0]
     participants = set()
     for m in messages:
@@ -115,16 +132,17 @@ def _build_time_group_rows(
             participants.add(int(uid))
     dates = [m.get("message_date") for m in messages if m.get("message_date")]
     title = (first.get("message_text") or "")[:200] or f"Discussion ({len(messages)} messages)"
-    return [{
-        "scraped_group_id": scraped_group_id,
-        "tg_group_id": tg_group_id,
-        "root_message_id": first.get("message_id"),
-        "root_message_text": first.get("message_text"),
-        "root_sender_user_id": first.get("sender_user_id"),
-        "root_sender_name": first.get("sender_first_name") or first.get("sender_username") or "",
-        "title": title,
-        "participant_count": len(participants),
-        "message_count": len(messages),
-        "first_message_at": min(dates) if dates else None,
-        "last_message_at": max(dates) if dates else None,
-    }]
+    session.add(ScrapedConversation(
+        scraped_group_id=scraped_group_id,
+        tg_group_id=tg_group_id,
+        root_message_id=first.get("message_id"),
+        root_message_text=first.get("message_text"),
+        root_sender_user_id=first.get("sender_user_id"),
+        root_sender_name=first.get("sender_first_name") or first.get("sender_username") or "",
+        title=title,
+        participant_count=len(participants),
+        message_count=len(messages),
+        first_message_at=min(dates) if dates else None,
+        last_message_at=max(dates) if dates else None,
+    ))
+    return 1

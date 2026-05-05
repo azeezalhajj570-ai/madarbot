@@ -99,35 +99,22 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
         event_payload = dict((payload.get("event") or {}).get("payload") or {})
         keyword = str((payload.get("conditions") or {}).get("text_contains") or "").strip()
         destination = str((payload.get("task_config") or {}).get("destination") or "").strip()
-        source_chat_title = str(event_payload.get("group_title") or "").strip()
-        source_chat_id = event_payload.get("chat_id")
+        group_title = str(event_payload.get("group_title") or "").strip()
         notification_payload = {
             "job_type": job.job_type,
             "task_key": task_key,
             "task_label": _task_label(task_key).title(),
             "keyword": keyword,
             "destination": destination,
-            "group_title": source_chat_title,
-            "chat_id": source_chat_id,
+            "group_title": group_title,
         }
-
-        action_verbs = {
-            "reply_message": "Replied",
-            "lead_capture": "Captured lead",
-            "notify_destination": "Sent notification",
-            "welcome_flow": "Welcomed",
-            "escalation_alert": "Escalated",
-        }
-        action_verb = action_verbs.get(task_key, _task_label(task_key).title())
-
         if status == "completed":
-            if source_chat_title:
-                body = f"{action_verb} in {source_chat_title}"
-            elif keyword:
-                body = f"{action_verb} for \"{_trim_message(keyword, 40)}\""
-            else:
-                body = f"{action_verb}"
-            return ("task_completed", action_verb, body, notification_payload)
+            body = f"{_task_label(task_key).title()} executed."
+            if keyword:
+                body = f"{_task_label(task_key).title()} ran for \"{_trim_message(keyword, 40)}\"."
+            elif group_title:
+                body = f"{_task_label(task_key).title()} executed for {group_title}."
+            return ("task_completed", "Task executed", body, notification_payload)
         if status == "failed":
             return (
                 "task_failed",
@@ -290,17 +277,8 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     return
                 handled = False
                 if job.job_type == "automation_task":
-                    try:
-                        handled = await asyncio.wait_for(
-                            runtime.execute(client=client, agent=agent, job=job, session=session),
-                            timeout=30,
-                        )
-                    except asyncio.TimeoutError:
-                        bound_logger.warning("agent_task_timeout", agent_id=agent_id, job_id=job_id)
-                        await _set_job_state(session, job_id, "failed", error="Task execution timed out after 30 seconds")
-                        handled = False
+                    handled = await runtime.execute(client=client, agent=agent, job=job, session=session)
                     if handled:
-                        await _set_job_state(session, job.id, "completed")
                         await _create_job_notification(session, job, status="completed")
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
@@ -380,6 +358,6 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     bound_logger.info("agent_job_succeeded")
 
 
-@dramatiq.actor(queue_name="agent_madarbot", max_retries=3, min_backoff=5000)
+@dramatiq.actor(queue_name="agent", max_retries=3, min_backoff=5000)
 def execute_agent_job(agent_id: int, job_id: int) -> None:
     asyncio.run(_execute_agent_job_impl(agent_id, job_id))

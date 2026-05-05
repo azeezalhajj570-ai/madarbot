@@ -103,7 +103,6 @@ class ScrapedConversation(Base):
     __table_args__ = (
         Index("ix_scraped_conv_group_id", "scraped_group_id"),
         Index("ix_scraped_conv_last_message", "last_message_at"),
-        Index("ix_scraped_conv_group_root", "scraped_group_id", "root_message_id", unique=True),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
