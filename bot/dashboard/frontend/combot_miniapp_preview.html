@@ -1,0 +1,2256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ComBot · Anthropic Design</title>
+
+  <!-- Type system: editorial serif + neutral sans + mono for meta/status text. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ---------- Design tokens ---------- */
+    :root {
+      --bg: #f5f0e8;
+      --bg-warm: #ede8df;
+      --bg-deep: #e5dfd4;
+      --surface: #faf7f2;
+      --border: #ddd6c9;
+      --border-soft: #e8e2d8;
+      --coral: #c96442;
+      --coral-light: #f0d5c8;
+      --coral-dim: rgba(201,100,66,0.10);
+      --sage: #5a7a5a;
+      --sage-dim: rgba(90,122,90,0.12);
+      --sage-border: rgba(90,122,90,0.22);
+      --clay: #9c4a35;
+      --clay-dim: rgba(156,74,53,0.10);
+      --clay-border: rgba(156,74,53,0.22);
+      --slate: #4a6080;
+      --slate-dim: rgba(74,96,128,0.10);
+      --slate-border: rgba(74,96,128,0.22);
+      --ochre: #8a6b2a;
+      --ochre-dim: rgba(138,107,42,0.10);
+      --ochre-border: rgba(138,107,42,0.22);
+      --amber: #b07d3a;
+      --mauve: #7a5a78;
+      --mauve-dim: rgba(122,90,120,0.10);
+      --text-primary: #1a1612;
+      --text-secondary: #5a5248;
+      --text-muted: #7d746a;
+      --text-faint: #b8b0a4;
+      --serif: 'Lora', Georgia, serif;
+      --sans: 'DM Sans', system-ui, sans-serif;
+      --mono: 'DM Mono', monospace;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --shadow-sm: 0 1px 3px rgba(60,40,20,0.07), 0 1px 2px rgba(60,40,20,0.05);
+      --shadow-lg: 0 12px 40px rgba(60,40,20,0.12), 0 4px 12px rgba(60,40,20,0.06);
+    }
+
+    /* ---------- Reset ---------- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Soft grain overlay to match the warm textured aesthetic. */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.028;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-size: 128px 128px;
+    }
+
+    /* ---------- Top header ---------- */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(245,240,232,0.92);
+      backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid var(--border-soft);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .header-logo {
+      width: 36px;
+      height: 36px;
+      background: var(--coral);
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(201,100,66,0.30);
+    }
+
+    .header-logo svg {
+      width: 18px;
+      height: 18px;
+      stroke: #fff;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .brand-name {
+      font-family: var(--serif);
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: var(--mono);
+    }
+
+    .status-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--sage-dim);
+      border: 1px solid var(--sage-border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 11px;
+      color: var(--sage);
+      font-family: var(--mono);
+    }
+
+    .pulse {
+      width: 6px;
+      height: 6px;
+      background: var(--sage);
+      border-radius: 50%;
+      animation: breathe 2.5s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.75); }
+    }
+
+    /* ---------- Tabs ---------- */
+    .tab-bar {
+      padding: 12px 20px 0;
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    .tab {
+      position: relative;
+      padding: 8px 14px 11px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+      transition: color .2s;
+      background: none;
+      border: none;
+      font-family: var(--sans);
+    }
+
+    .tab::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 14px;
+      right: 14px;
+      height: 2px;
+      background: var(--coral);
+      border-radius: 2px 2px 0 0;
+      transform: scaleX(0);
+      transition: transform .22s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .tab.active { color: var(--coral); }
+    .tab.active::after { transform: scaleX(1); }
+
+    /* ---------- Main area ---------- */
+    .main {
+      padding: 20px 20px 110px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Each page is a single panel toggled by JS. */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    @keyframes riseIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate { animation: riseIn .45s cubic-bezier(.22,1,.36,1) both; }
+    .d1 { animation-delay: .04s; }
+    .d2 { animation-delay: .09s; }
+    .d3 { animation-delay: .14s; }
+
+    /* ---------- Generic helpers ---------- */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .section-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .link-btn {
+      font-size: 12.5px;
+      color: var(--coral);
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .card,
+    .task-card,
+    .task-creator,
+    .notify-top-card {
+      position: relative;
+      z-index: 5;
+    }
+
+    .notify-composer {
+      position: relative;
+      z-index: 1;
+    }
+
+    .notify-templates {
+      position: relative;
+      z-index: 1;
+    }
+
+    .notify-top-card,
+    .notify-composer,
+    .notify-templates,
+    .mod-setup-card {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    /* The notify summary card must allow the autocomplete menu to escape,
+       otherwise the dropdown gets clipped under the next card. */
+    .notify-top-card {
+      overflow: visible;
+    }
+
+    /* Keep the selector row itself open for absolutely positioned menus. */
+    .notify-group-field {
+      position: relative;
+      overflow: visible;
+    }
+
+    .card-body { padding: 16px; }
+
+    /* ---------- Overview ---------- */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      padding: 16px 14px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stat-icon-wrap {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon-wrap svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .stat-num {
+      font-family: var(--serif);
+      font-size: 26px;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .stat-trend {
+      font-size: 10.5px;
+      font-family: var(--mono);
+    }
+
+    .feed-row {
+      display: flex;
+      gap: 12px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      transition: background .15s;
+      align-items: flex-start;
+    }
+
+    .feed-row:last-child { border-bottom: none; }
+    .feed-row:hover { background: var(--bg-warm); }
+
+    .feed-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .feed-icon svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .feed-content { flex: 1; min-width: 0; }
+    .feed-text { font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+    .feed-text strong { color: var(--text-primary); font-weight: 600; }
+    .feed-time { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-top: 3px; }
+
+    .action-row {
+      display: flex;
+      gap: 7px;
+    }
+
+    .action-row .btn { flex: 1; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all .15s;
+      white-space: nowrap;
+      background: none;
+      font-family: var(--sans);
+    }
+
+    .btn-primary {
+      background: var(--coral);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(201,100,66,.28);
+    }
+
+    .btn-outline {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+
+    .btn-danger {
+      background: var(--clay-dim);
+      border-color: var(--clay-border);
+      color: var(--clay);
+    }
+
+    .btn-warning {
+      background: var(--ochre-dim);
+      border-color: var(--ochre-border);
+      color: var(--ochre);
+    }
+
+    /* ---------- Moderation queue ---------- */
+    .queue-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: background .15s;
+      position: relative;
+    }
+
+    .queue-item:last-child { border-bottom: none; }
+    .queue-item:hover { background: var(--bg-warm); }
+
+    .severity-bar {
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 2px 2px 0;
+    }
+
+    .sev-high { background: var(--clay); }
+    .sev-medium { background: var(--ochre); }
+    .sev-low { background: var(--slate); }
+
+    .q-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .q-avatar svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .q-body { flex: 1; min-width: 0; }
+
+    .q-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .q-name {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .q-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    .q-msg {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.5;
+    }
+
+    .q-tags { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+
+    .chip {
+      font-size: 10.5px;
+      font-family: var(--mono);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .chip-red { background: var(--clay-dim); color: var(--clay); border: 1px solid var(--clay-border); }
+    .chip-amber { background: var(--ochre-dim); color: var(--ochre); border: 1px solid var(--ochre-border); }
+    .chip-blue { background: var(--slate-dim); color: var(--slate); border: 1px solid var(--slate-border); }
+
+    /* ---------- Moderation setup accordion ---------- */
+    .accordion-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-primary);
+      text-align: left;
+    }
+
+    .accordion-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .accordion-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .accordion-summary { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+    .accordion-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+    .summary-chip {
+      font-size: 10.5px;
+      font-family: var(--mono);
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-soft);
+      color: var(--text-secondary);
+      background: var(--bg);
+    }
+
+    .accordion-chevron {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+      color: var(--text-muted);
+      transition: transform .18s ease;
+      font-size: 14px;
+    }
+
+    .accordion-trigger.open .accordion-chevron {
+      transform: rotate(90deg);
+      color: var(--coral);
+    }
+
+    .accordion-panel {
+      display: none;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .accordion-panel.open { display: block; }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .switch-row:last-child { border-bottom: none; }
+    .switch-copy { display: flex; flex-direction: column; gap: 3px; }
+    .switch-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .switch-sub { font-size: 11.5px; color: var(--text-muted); }
+
+    .mini-switch {
+      width: 44px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-deep);
+      position: relative;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .mini-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+      transition: all .15s ease;
+    }
+
+    .mini-switch.active {
+      background: var(--coral-light);
+      border-color: rgba(201,100,66,.3);
+    }
+
+    .mini-switch.active::after {
+      left: 21px;
+      background: var(--coral);
+    }
+
+    .inline-status {
+      font-size: 11px;
+      color: var(--sage);
+      font-family: var(--mono);
+      margin-top: 10px;
+      min-height: 14px;
+    }
+
+    /* ---------- Inputs ---------- */
+    .compose-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .compose-section:last-child { border-bottom: none; }
+
+    .compose-field-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .task-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .task-field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .task-field.full { grid-column: 1 / -1; }
+
+    .task-field label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      font-weight: 600;
+    }
+
+    .task-input,
+    .task-select,
+    .compose-textarea,
+    .notify-textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .task-input:focus,
+    .task-select:focus,
+    .compose-textarea:focus,
+    .notify-textarea:focus {
+      border-color: var(--coral);
+      box-shadow: 0 0 0 3px var(--coral-dim);
+    }
+
+    .compose-textarea {
+      resize: none;
+      min-height: 110px;
+    }
+
+    .task-helper {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 10px;
+    }
+
+    .char-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    /* ---------- Autocomplete ---------- */
+        .autocomplete-wrap { position: relative; }
+
+    .autocomplete-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      z-index: 350;
+      display: none;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .autocomplete-menu.open { display: block; }
+
+    .autocomplete-item {
+      padding: 10px 12px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: var(--bg-warm); }
+
+    .autocomplete-meta {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      flex-shrink: 0;
+    }
+
+    .picker-selected {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      min-height: 30px;
+      align-content: flex-start;
+    }
+
+    .picker-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--coral-dim);
+      border: 1px solid rgba(201,100,66,.25);
+      color: var(--coral);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .picker-pill button {
+      border: none;
+      background: none;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .picker-placeholder {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      padding: 7px 0 0;
+    }
+
+    /* ---------- Tasks ---------- */
+    .task-creator {
+      display: none;
+      margin-bottom: 14px;
+    }
+
+    .task-creator.open { display: block; }
+
+    .tasks-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .task-top {
+      padding: 15px 16px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .task-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .task-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .task-meta { flex: 1; }
+    .task-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; font-family: var(--serif); }
+    .task-group { font-size: 11.5px; color: var(--text-muted); font-family: var(--mono); }
+
+    .badge {
+      font-size: 10px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-family: var(--mono);
+    }
+
+    .badge-running { background: var(--slate-dim); color: var(--slate); border: 1px solid var(--slate-border); }
+    .badge-done { background: var(--sage-dim); color: var(--sage); border: 1px solid var(--sage-border); }
+    .badge-pending { background: var(--ochre-dim); color: var(--ochre); border: 1px solid var(--ochre-border); }
+
+    .task-progress {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .progress-track {
+      height: 5px;
+      background: var(--bg-deep);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1.2s cubic-bezier(.4,0,.2,1);
+    }
+
+    .fill-coral { background: linear-gradient(90deg, #c47055, var(--coral)); }
+    .fill-sage { background: linear-gradient(90deg, #4a6a4a, var(--sage)); }
+    .fill-ochre { background: linear-gradient(90deg, #7a5a22, var(--amber)); }
+
+    .progress-stats { display: flex; }
+    .p-stat { flex: 1; text-align: center; }
+    .p-stat-val { font-size: 16px; font-weight: 600; font-family: var(--serif); line-height: 1; }
+    .p-stat-lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: .4px; }
+
+    .task-actions {
+      padding: 11px 14px;
+      display: flex;
+      gap: 7px;
+    }
+
+    /* ---------- Notify page ---------- */
+    .notify-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Summary card above the composer. */
+    .notify-top-main {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: linear-gradient(180deg, rgba(201,100,66,0.06), rgba(201,100,66,0.01));
+    }
+
+    .notify-top-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .notify-top-copy { min-width: 0; }
+    .notify-title { font-family: var(--serif); font-size: 20px; line-height: 1.05; margin-bottom: 6px; }
+    .notify-subtitle { font-size: 12px; color: var(--text-muted); line-height: 1.55; max-width: 44ch; }
+
+    .notify-count-badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--coral-dim);
+      border: 1px solid rgba(201,100,66,.2);
+      color: var(--coral);
+      font-size: 11px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+
+    .notify-top-meta {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 14px;
+    }
+
+    .notify-audience-card,
+    .notify-reach-card,
+    .notify-live-card {
+      padding: 11px 12px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+    }
+
+    .notify-audience-label,
+    .notify-reach-label,
+    .notify-live-label,
+    .notify-footer-label,
+    .notify-selector-title,
+    .notify-message-title,
+    .notify-templates-title {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .notify-audience-pills,
+    .group-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .notify-audience-pill,
+    .group-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .group-chip {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--bg);
+      border-color: var(--border);
+    }
+
+    .group-chip.selected {
+      background: var(--coral-dim);
+      border-color: rgba(201,100,66,.3);
+      color: var(--coral);
+    }
+
+    .notify-reach-card {
+      min-width: 120px;
+      text-align: right;
+      background: var(--surface);
+    }
+
+    .notify-reach-value {
+      font-family: var(--serif);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .notify-selector {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: visible;
+    }
+
+    .notify-group-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .notify-group-field,
+    .notify-selection-card {
+      background: var(--bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .notify-selection-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .notify-selector-head,
+    .notify-message-head,
+    .notify-templates-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .notify-selector-meta,
+    .notify-message-status,
+    .notify-templates-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    /* Composer card: head, body, footer. */
+    .notify-composer { overflow: hidden; }
+
+    .notify-message-head,
+    .notify-templates-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .notify-message-body { padding: 16px; }
+
+    .notify-textarea {
+      min-height: 180px;
+      border-radius: 14px;
+      padding: 14px 15px;
+      font-size: 14px;
+      line-height: 1.65;
+      resize: none;
+    }
+
+    .notify-live-card {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .notify-live-text {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      min-height: 19px;
+    }
+
+    .notify-footer {
+      padding: 13px 16px;
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(245,240,232,0.55);
+    }
+
+    .notify-footer-copy { min-width: 0; }
+
+    .notify-footer-text {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    .notify-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Template list is intentionally lighter than the composer. */
+    .template-featured {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      background: rgba(90,122,90,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .template-featured-copy { min-width: 0; }
+    .template-featured-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+    .template-featured-desc,
+    .compact-template-desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+
+    .compact-template-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .compact-template-row:last-child { border-bottom: none; }
+    .compact-template-row:hover { background: var(--bg-warm); }
+    .compact-template-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+
+    /* ---------- Toasts ---------- */
+    .toast-stack {
+      position: fixed;
+      right: 16px;
+      top: 82px;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      min-width: 220px;
+      max-width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      box-shadow: var(--shadow-lg);
+      padding: 12px 14px;
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: all .2s ease;
+    }
+
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { border-color: var(--sage-border); }
+    .toast.info { border-color: var(--slate-border); }
+    .toast-title { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px; }
+    .toast-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+
+    /* ---------- Bottom sheet ---------- */
+    .sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(30,20,10,.4);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+
+    .sheet-overlay.open { opacity: 1; pointer-events: all; }
+
+    .sheet {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      border: 1px solid var(--border-soft);
+      border-bottom: none;
+      padding: 8px 20px 40px;
+      width: 100%;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(24px);
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    .sheet-overlay.open .sheet { transform: translateY(0); }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 8px auto 20px;
+    }
+
+    .sheet-title {
+      font-family: var(--serif);
+      font-size: 19px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .sheet-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-bottom: 18px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 13px;
+      gap: 12px;
+    }
+
+    .info-label { color: var(--text-muted); }
+    .info-value { font-weight: 500; font-family: var(--mono); font-size: 12.5px; text-align: right; }
+
+    .sheet-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .sheet-btn {
+      padding: 13px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .sheet-btn.ban { background: var(--clay-dim); border-color: var(--clay-border); color: var(--clay); }
+    .sheet-btn.mute { background: var(--ochre-dim); border-color: var(--ochre-border); color: var(--ochre); }
+    .sheet-btn.warn { background: var(--mauve-dim); border-color: rgba(122,90,120,.22); color: var(--mauve); }
+    .sheet-btn.dismiss { background: var(--bg-warm); border-color: var(--border); color: var(--text-secondary); grid-column: 1 / -1; }
+
+    /* ---------- Bottom nav ---------- */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(245,240,232,.94);
+      backdrop-filter: blur(28px) saturate(180%);
+      border-top: 1px solid var(--border-soft);
+      display: flex;
+      padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .nav-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 0;
+      cursor: pointer;
+    }
+
+    .nav-icon-wrap {
+      width: 44px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      position: relative;
+      color: var(--text-muted);
+    }
+
+    .nav-icon-wrap svg {
+      width: 19px;
+      height: 19px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .nav-tab.active .nav-icon-wrap { background: var(--coral-light); color: var(--coral); }
+    .nav-tab:not(.active) .nav-icon-wrap { opacity: .4; }
+
+    .nav-badge {
+      position: absolute;
+      top: -4px;
+      right: -2px;
+      background: var(--clay);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      font-family: var(--mono);
+      padding: 1.5px 5px;
+      border-radius: 20px;
+      border: 2px solid var(--bg);
+      min-width: 18px;
+      text-align: center;
+    }
+
+    .nav-lbl { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+    .nav-tab.active .nav-lbl { color: var(--coral); }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .task-grid { grid-template-columns: 1fr; }
+      .notify-top-meta { grid-template-columns: 1fr; }
+      .notify-group-grid { grid-template-columns: 1fr; }
+      .notify-footer { flex-direction: column; align-items: stretch; }
+      .notify-footer-actions { justify-content: space-between; }
+      .notify-top-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <!-- App header -->
+  <div class="header">
+    <div class="header-brand">
+      <div class="header-logo">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="8" width="18" height="13" rx="3"></rect>
+          <path d="M8 8V6a4 4 0 0 1 8 0v2"></path>
+          <circle cx="9" cy="14" r="1.5" fill="white" stroke="none"></circle>
+          <circle cx="15" cy="14" r="1.5" fill="white" stroke="none"></circle>
+          <path d="M9 18h6"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">ComBot</div>
+        <div class="brand-sub">@your_group_bot</div>
+      </div>
+    </div>
+    <div class="status-chip"><div class="pulse"></div>Live</div>
+  </div>
+
+  <!-- Top tab bar -->
+  <div class="tab-bar">
+    <button class="tab active" onclick="switchTab('home', this)">Overview</button>
+    <button class="tab" onclick="switchTab('mod', this)">Moderation</button>
+    <button class="tab" onclick="switchTab('tasks', this)">Tasks</button>
+    <button class="tab" onclick="switchTab('notify', this)">Notify</button>
+  </div>
+
+  <div class="main">
+    <!-- ================= HOME ================= -->
+    <div class="page active" id="page-home">
+      <div class="stats-grid animate d1">
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--clay-dim);color:var(--clay)">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div class="stat-num" style="color:var(--clay)">12</div>
+          <div class="stat-lbl">Flagged</div>
+          <div class="stat-trend" style="color:var(--clay)">↑ 3 today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--slate-dim);color:var(--slate)">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </div>
+          <div class="stat-num" style="color:var(--slate)">4</div>
+          <div class="stat-lbl">Tasks</div>
+          <div class="stat-trend" style="color:var(--slate)">2 running</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-wrap" style="background:var(--sage-dim);color:var(--sage)">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <div class="stat-num" style="color:var(--sage)">3.2k</div>
+          <div class="stat-lbl">Members</div>
+          <div class="stat-trend" style="color:var(--sage)">↑ 18 today</div>
+        </div>
+      </div>
+
+      <div class="animate d2">
+        <div class="section-row" style="margin-bottom:10px;">
+          <div class="section-label">Recent Activity</div>
+          <div class="link-btn">View all</div>
+        </div>
+        <div class="card">
+          <div class="feed-row">
+            <div class="feed-icon" style="background:var(--clay-dim);color:var(--clay)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></div>
+            <div class="feed-content"><div class="feed-text"><strong>@spam_user99</strong> was banned — spam link detected</div><div class="feed-time">2 min ago · #TechGroup</div></div>
+          </div>
+          <div class="feed-row">
+            <div class="feed-icon" style="background:var(--sage-dim);color:var(--sage)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+            <div class="feed-content"><div class="feed-text"><strong>Reply Task</strong> completed · 47 messages sent</div><div class="feed-time">14 min ago</div></div>
+          </div>
+          <div class="feed-row">
+            <div class="feed-icon" style="background:var(--slate-dim);color:var(--slate)"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></div>
+            <div class="feed-content"><div class="feed-text"><strong>Notification</strong> sent to 3 groups · 1,240 reached</div><div class="feed-time">1 hr ago</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate d3" style="margin-top:16px;">
+        <div class="section-label" style="margin-bottom:10px;">Quick Actions</div>
+        <div class="card card-body action-row">
+          <button class="btn btn-danger" onclick="switchNav('mod')">Review queue</button>
+          <button class="btn btn-outline" onclick="switchNav('tasks')">Run task</button>
+          <button class="btn btn-primary" onclick="switchNav('notify')">Notify</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODERATION ================= -->
+    <div class="page" id="page-mod">
+      <div class="animate d1">
+        <div class="section-row" style="margin-bottom:10px;">
+          <div class="section-label">Flagged Queue · 12</div>
+          <div class="link-btn">Filter</div>
+        </div>
+        <div class="card">
+          <div class="queue-item" onclick="openSheet('@spam_user99','Sent 4 identical promo links within 2 min','Spam','2 min ago','#TechGroup','HIGH')">
+            <div class="severity-bar sev-high"></div>
+            <div class="q-avatar" style="background:var(--clay-dim);color:var(--clay)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></div>
+            <div class="q-body"><div class="q-top"><div class="q-name">@spam_user99</div><div class="q-time">2m</div></div><div class="q-msg">Sent 4 identical promo links within 2 min</div><div class="q-tags"><span class="chip chip-red">SPAM</span><span class="chip chip-blue">#TechGroup</span></div></div>
+          </div>
+          <div class="queue-item" onclick="openSheet('@angry_user','Repeated offensive language targeting a member','Offensive','8 min ago','#SaudiInvest','MEDIUM')">
+            <div class="severity-bar sev-medium"></div>
+            <div class="q-avatar" style="background:var(--ochre-dim);color:var(--ochre)"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+            <div class="q-body"><div class="q-top"><div class="q-name">@angry_user</div><div class="q-time">8m</div></div><div class="q-msg">Repeated offensive language targeting a member</div><div class="q-tags"><span class="chip chip-amber">OFFENSIVE</span><span class="chip chip-blue">#SaudiInvest</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="animate d2" style="margin-top:16px;">
+        <div class="section-row" style="margin-bottom:10px;">
+          <div class="section-label">Moderation Setup</div>
+        </div>
+        <div class="mod-setup-card">
+          <button class="accordion-trigger" id="mod-setup-trigger" onclick="toggleModerationSetup()">
+            <div class="accordion-copy">
+              <div class="accordion-title">Group moderation settings</div>
+              <div class="accordion-summary" id="mod-setup-summary">SaudiInvest · anti-spam on · anti-links on · auto-remove off · warn 3 · mute 5</div>
+            </div>
+            <div class="accordion-meta">
+              <span class="summary-chip">Configured</span>
+              <span class="accordion-chevron">›</span>
+            </div>
+          </button>
+          <div class="accordion-panel" id="mod-setup-panel">
+            <div class="compose-section">
+              <div class="compose-field-label">Group Setup</div>
+              <div class="task-grid">
+                                <div class="task-field full autocomplete-wrap">
+                  <label for="mod-group-input">Group</label>
+                  <input id="mod-group-input" class="task-input" type="text" placeholder="Search group" oninput="filterSingleGroupPicker('mod-group-input','mod-group-menu', updateModerationSummary)" onfocus="filterSingleGroupPicker('mod-group-input','mod-group-menu', updateModerationSummary)" />
+                  <div id="mod-group-menu" class="autocomplete-menu"></div>
+                </div>
+                <div class="task-field">
+                  <label for="warn-limit-input">Warn remove limit</label>
+                  <input id="warn-limit-input" class="task-input" type="number" min="1" value="3" oninput="updateModerationSummary()" />
+                </div>
+                <div class="task-field">
+                  <label for="mute-limit-input">Spam mute limit</label>
+                  <input id="mute-limit-input" class="task-input" type="number" min="1" value="5" oninput="updateModerationSummary()" />
+                </div>
+              </div>
+              <div class="switch-row">
+                <div class="switch-copy"><div class="switch-title">Anti-spam</div><div class="switch-sub">Detect repeated messages and link bursts</div></div>
+                <button class="mini-switch active" type="button" id="switch-antispam" onclick="toggleMiniSwitch(this); updateModerationSummary()"></button>
+              </div>
+              <div class="switch-row">
+                <div class="switch-copy"><div class="switch-title">Anti-links</div><div class="switch-sub">Block unknown invite and promo links</div></div>
+                <button class="mini-switch active" type="button" id="switch-links" onclick="toggleMiniSwitch(this); updateModerationSummary()"></button>
+              </div>
+              <div class="switch-row">
+                <div class="switch-copy"><div class="switch-title">Auto remove on limit</div><div class="switch-sub">Remove members automatically after max warnings</div></div>
+                <button class="mini-switch" type="button" id="switch-remove" onclick="toggleMiniSwitch(this); updateModerationSummary()"></button>
+              </div>
+              <div class="inline-status" id="mod-setup-status"></div>
+              <div class="task-actions" style="padding:14px 0 0;">
+                <button class="btn btn-primary" style="flex:1" onclick="saveModerationSetup()">Save setup</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= TASKS ================= -->
+    <div class="page" id="page-tasks">
+      <div class="section-row animate d1" style="margin-bottom:10px;">
+        <div class="section-label">Active Tasks</div>
+        <div class="link-btn" onclick="toggleTaskCreator(true)">+ New task</div>
+      </div>
+
+      <div class="task-creator animate d1" id="task-creator">
+        <div class="compose-section">
+          <div class="compose-field-label">Create Task</div>
+          <div class="task-grid">
+            <div class="task-field">
+              <label for="task-type-input">Task type</label>
+              <select id="task-type-input" class="task-select" onchange="handleTaskTypeChange()">
+                <option value="reply_message">Reply message</option>
+                <option value="notify_destination">Notify destination</option>
+              </select>
+            </div>
+            <div class="task-field">
+              <label for="task-executor-input">Executor</label>
+              <select id="task-executor-input" class="task-select" onchange="handleTaskTypeChange()">
+                <option value="bot">Bot</option>
+                <option value="agent">Agent</option>
+              </select>
+            </div>
+            <div class="task-field full">
+              <label for="task-keyword-input">Keyword</label>
+              <input id="task-keyword-input" class="task-input" type="text" placeholder="urgent" />
+            </div>
+            <div class="task-field full">
+              <label for="task-template-input">Message template</label>
+              <textarea id="task-template-input" class="compose-textarea" rows="4" placeholder="We will reply shortly."></textarea>
+            </div>
+            <div class="task-field full" id="task-destination-field" style="display:none;">
+              <label for="task-destination-input">Destination</label>
+              <input id="task-destination-input" class="task-input" type="text" placeholder="@leads_channel" />
+            </div>
+            <div class="task-field" id="task-delivery-field" style="display:none;">
+              <label for="task-delivery-input">Delivery mode</label>
+              <select id="task-delivery-input" class="task-select">
+                <option value="text">Text</option>
+                <option value="forward">Forward</option>
+              </select>
+            </div>
+            <div class="task-field" id="task-delete-field" style="display:none;">
+              <label for="task-delete-input">Delete after (sec)</label>
+              <input id="task-delete-input" class="task-input" type="number" min="0" placeholder="Optional" />
+            </div>
+            <div class="task-field full" id="task-suggested-field" style="display:none;">
+              <label for="task-suggested-input">Suggested reply</label>
+              <textarea id="task-suggested-input" class="compose-textarea" rows="3" placeholder="Thanks for your message. We will get back to you shortly."></textarea>
+            </div>
+            <div class="task-field" id="task-agent-field" style="display:none;">
+              <label for="task-agent-input">Agent</label>
+              <select id="task-agent-input" class="task-select">
+                <option value="Agent 01">Agent 01</option>
+                <option value="Agent 02">Agent 02</option>
+                <option value="Agent 03">Agent 03</option>
+              </select>
+            </div>
+                        <div class="task-field autocomplete-wrap" id="task-source-group-field" style="display:none;">
+              <label for="task-source-group-input">Source group</label>
+              <input id="task-source-group-input" class="task-input" type="text" placeholder="Search source group" oninput="filterSingleGroupPicker('task-source-group-input','task-source-group-menu')" onfocus="filterSingleGroupPicker('task-source-group-input','task-source-group-menu')" />
+              <div id="task-source-group-menu" class="autocomplete-menu"></div>
+            </div>
+          </div>
+          <div class="task-helper">Use a keyword trigger and message template. Destination, agent, and delivery options appear only when needed.</div>
+          <div class="task-actions" style="padding:14px 0 0;">
+            <button class="btn btn-primary" style="flex:1" onclick="createTask()">Create task</button>
+            <button class="btn btn-outline" style="flex:1" onclick="toggleTaskCreator(false)">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tasks-list" id="tasks-list">
+        <div class="task-card animate d1">
+          <div class="task-top">
+            <div class="task-icon" style="background:var(--slate-dim);color:var(--slate)"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
+            <div class="task-meta"><div class="task-name">Auto-Reply Campaign</div><div class="task-group">@SaudiInvestGroup · 1,240 members</div></div>
+            <span class="badge badge-running">RUNNING</span>
+          </div>
+          <div class="task-progress">
+            <div class="progress-track"><div class="progress-fill fill-coral" style="width:67%"></div></div>
+            <div class="progress-stats">
+              <div class="p-stat"><div class="p-stat-val" style="color:var(--coral)">67%</div><div class="p-stat-lbl">Progress</div></div>
+              <div class="p-stat"><div class="p-stat-val">312</div><div class="p-stat-lbl">Replied</div></div>
+              <div class="p-stat"><div class="p-stat-val">154</div><div class="p-stat-lbl">Remaining</div></div>
+            </div>
+          </div>
+          <div class="task-actions"><button class="btn btn-warning" style="flex:1" onclick="pauseTask(this)">Pause</button><button class="btn btn-outline" style="flex:1" onclick="advanceTask(this)">Advance</button><button class="btn btn-danger" style="flex:1" onclick="stopTask(this)">Stop</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= NOTIFY ================= -->
+    <div class="page" id="page-notify">
+      <div class="section-label animate d1" style="margin-bottom:10px;">Compose Message</div>
+      <div class="notify-shell animate d1">
+        <!-- Summary / audience card -->
+        <div class="notify-top-card">
+          <div class="notify-top-main">
+            <div class="notify-top-row">
+              <div class="notify-top-copy">
+                <div class="notify-title">Broadcast to your groups</div>
+                <div class="notify-subtitle">Choose recipients first, confirm the audience size, then write the message with a cleaner send flow.</div>
+              </div>
+              <div class="notify-count-badge" id="compose-selected-count">2 selected</div>
+            </div>
+            <div class="notify-top-meta">
+              <div class="notify-audience-card">
+                <div class="notify-audience-label">Audience summary</div>
+                <div class="notify-audience-pills" id="compose-target-list">
+                  <span class="notify-audience-pill">SaudiInvest</span>
+                  <span class="notify-audience-pill">DevChat</span>
+                </div>
+              </div>
+              <div class="notify-reach-card">
+                <div class="notify-reach-label">Estimated reach</div>
+                <div class="notify-reach-value" id="compose-member-count">2,130</div>
+              </div>
+            </div>
+          </div>
+          <div class="notify-selector">
+            <div class="notify-selector-head">
+              <div class="notify-selector-title">Target groups</div>
+              <div class="notify-selector-meta">Search, add, then review</div>
+            </div>
+            <div class="notify-group-grid">
+              <div class="notify-group-field autocomplete-wrap">
+                <div class="notify-selection-label">Find groups</div>
+                <input id="notify-group-input" class="task-input" type="text" placeholder="Search and add groups" oninput="filterMultiGroupPicker('notify-group-input','notify-group-menu')" onfocus="filterMultiGroupPicker('notify-group-input','notify-group-menu')" />
+                <div id="notify-group-menu" class="autocomplete-menu"></div>
+              </div>
+              <div class="notify-selection-card">
+                <div class="notify-selection-label">Selected</div>
+                <div class="picker-selected" id="notify-selected-groups"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="notify-composer">
+          <div class="notify-message-head">
+            <div class="notify-message-title">Message</div>
+            <div class="notify-message-status" id="notify-message-status">Draft</div>
+          </div>
+          <div class="notify-message-body">
+            <textarea class="notify-textarea" id="msg-area" placeholder="Write your announcement here…" oninput="updateCount(this); updateComposePreview()" maxlength="4096"></textarea>
+            <div class="notify-live-card">
+              <div class="notify-live-label">Live preview</div>
+              <div class="notify-live-text" id="compose-live-preview">No preview text yet</div>
+            </div>
+          </div>
+          <div class="notify-footer">
+            <div class="notify-footer-copy">
+              <div class="notify-footer-label">Delivery</div>
+              <div class="notify-footer-text">Sending to the selected groups above. Use a template below to speed up drafting.</div>
+            </div>
+            <div class="notify-footer-actions">
+              <div class="char-count" id="char-count">0 / 4096</div>
+              <button class="btn btn-primary" id="send-btn" onclick="sendMsg()">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template list intentionally sits after the composer so it does not overpower it. -->
+        <div class="notify-templates animate d2">
+          <div class="notify-templates-head">
+            <div class="notify-templates-title">Templates</div>
+            <div class="notify-templates-meta">3 ready</div>
+          </div>
+          <div class="template-featured" onclick="useTemplate('Important update for all members. Please check the pinned message for full details.')">
+            <div class="template-featured-copy">
+              <div class="template-featured-title">Recommended now</div>
+              <div class="template-featured-desc">A compact announcement format that works well for broad cross-group updates.</div>
+            </div>
+            <button class="btn btn-outline" type="button">Use</button>
+          </div>
+          <div class="compact-template-row" onclick="useTemplate('Important update for all members. Please check the pinned message for full details.')">
+            <div>
+              <div class="compact-template-name">Important Update</div>
+              <div class="compact-template-desc">General announcement</div>
+            </div>
+            <div class="link-btn">Use</div>
+          </div>
+          <div class="compact-template-row" onclick="useTemplate('Reminder: Please follow community rules. Repeated violations will result in a mute or ban.')">
+            <div>
+              <div class="compact-template-name">Rules Reminder</div>
+              <div class="compact-template-desc">Community guidelines warning</div>
+            </div>
+            <div class="link-btn">Use</div>
+          </div>
+          <div class="compact-template-row" onclick="useTemplate('Welcome to all new members! Feel free to introduce yourself and join the conversation.')">
+            <div>
+              <div class="compact-template-name">Welcome Message</div>
+              <div class="compact-template-desc">Warm onboarding announcement</div>
+            </div>
+            <div class="link-btn">Use</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast stack for lightweight feedback. -->
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <!-- Bottom navigation is the primary mobile navigation pattern. -->
+  <div class="bottom-nav">
+    <div class="nav-tab active" id="nav-home" onclick="switchNav('home')">
+      <div class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></div>
+      <div class="nav-lbl">Home</div>
+    </div>
+    <div class="nav-tab" id="nav-mod" onclick="switchNav('mod')">
+      <div class="nav-icon-wrap"><span class="nav-badge">12</span><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
+      <div class="nav-lbl">Moderation</div>
+    </div>
+    <div class="nav-tab" id="nav-tasks" onclick="switchNav('tasks')">
+      <div class="nav-icon-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div>
+      <div class="nav-lbl">Tasks</div>
+    </div>
+    <div class="nav-tab" id="nav-notify" onclick="switchNav('notify')">
+      <div class="nav-icon-wrap"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></div>
+      <div class="nav-lbl">Notify</div>
+    </div>
+  </div>
+
+  <!-- Bottom sheet used by moderation queue items. -->
+  <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" id="sheet-name">—</div>
+      <div class="sheet-subtitle" id="sheet-sub">—</div>
+      <div id="sheet-info"></div>
+      <div class="sheet-actions">
+        <button class="sheet-btn ban" onclick="doAction()">Ban</button>
+        <button class="sheet-btn mute" onclick="doAction()">Mute</button>
+        <button class="sheet-btn warn" onclick="doAction()">Warn</button>
+        <button class="sheet-btn dismiss" onclick="closeSheet()">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --------- Static option data ---------
+    // Centralizing option arrays keeps UI generators and filters simple.
+    const GROUP_OPTIONS = ['SaudiInvest', 'DevChat', 'TechGroup', 'MarketTalk', 'FounderCircle', 'VIP Alerts'];
+    const navOrder = ['home', 'mod', 'tasks', 'notify'];
+    const tabEls = document.querySelectorAll('.tab');
+
+    // --------- Navigation ---------
+    // Switches both the visible page and the matching active tab/nav state.
+    function switchTab(name, el) {
+      tabEls.forEach((tab) => tab.classList.remove('active'));
+
+      if (el) {
+        el.classList.add('active');
+      } else {
+        const fallbackTab = tabEls[navOrder.indexOf(name)];
+        if (fallbackTab) fallbackTab.classList.add('active');
+      }
+
+      document.querySelectorAll('.page').forEach((page) => page.classList.remove('active'));
+      const nextPage = document.getElementById('page-' + name);
+      if (nextPage) nextPage.classList.add('active');
+
+      document.querySelectorAll('.nav-tab').forEach((nav) => nav.classList.remove('active'));
+      const nextNav = document.getElementById('nav-' + name);
+      if (nextNav) nextNav.classList.add('active');
+    }
+
+    // Convenience wrapper used by the bottom nav buttons.
+    function switchNav(name) {
+      switchTab(name, tabEls[navOrder.indexOf(name)] || null);
+    }
+
+    // --------- Toast feedback ---------
+    // Toasts are intentionally lightweight and auto-dismiss quickly.
+    function showToast(title, body, tone = 'info') {
+      const stack = document.getElementById('toast-stack');
+      const toast = document.createElement('div');
+      toast.className = `toast ${tone}`;
+      toast.innerHTML = `<div class="toast-title">${title}</div><div class="toast-body">${body}</div>`;
+      stack.appendChild(toast);
+
+      requestAnimationFrame(() => toast.classList.add('show'));
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 220);
+      }, 2400);
+    }
+
+    // --------- Moderation bottom sheet ---------
+    // Populates the sheet with row details from the selected moderation item.
+    function openSheet(username, msg, type, time, group, risk) {
+      document.getElementById('sheet-name').textContent = username;
+      document.getElementById('sheet-sub').textContent = `${group} · ${time}`;
+
+      const riskColor = risk === 'HIGH'
+        ? 'var(--clay)'
+        : risk === 'MEDIUM'
+          ? 'var(--ochre)'
+          : 'var(--slate)';
+
+      document.getElementById('sheet-info').innerHTML = `
+        <div class="info-row"><span class="info-label">Reason</span><span class="info-value">${type}</span></div>
+        <div class="info-row"><span class="info-label">Risk level</span><span class="info-value" style="color:${riskColor}">${risk}</span></div>
+        <div class="info-row"><span class="info-label">Message</span><span class="info-value" style="max-width:55%;color:var(--text-secondary)">${msg}</span></div>
+        <div class="info-row"><span class="info-label">Time</span><span class="info-value">${time}</span></div>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+    }
+
+    // Closes the sheet only when clicking the overlay or calling it directly.
+    function closeSheet(event) {
+      const overlay = document.getElementById('sheet-overlay');
+      if (!event || event.target === overlay) {
+        overlay.classList.remove('open');
+      }
+    }
+
+    // Shared stub action for the moderation sheet buttons in the preview.
+    function doAction() {
+      showToast('Moderation action', 'Action saved for this flagged account.', 'success');
+      closeSheet();
+    }
+
+    // --------- Generic small controls ---------
+    function toggleMiniSwitch(el) {
+      el.classList.toggle('active');
+    }
+
+    // --------- Autocomplete ---------
+    // Renders a simple autocomplete dropdown for group selection fields.
+        function populateSingleAutocomplete(menuId, values, targetInputId, onSelectName = null) {
+      const menu = document.getElementById(menuId);
+      menu.innerHTML = values
+        .map((value) => `<div class="autocomplete-item" onclick="selectSingleGroupValue('${targetInputId}','${menuId}','${value.replace(/'/g, '&#39;')}', ${onSelectName ? `'${onSelectName}'` : 'null'})"><span>${value}</span><span class="autocomplete-meta">single</span></div>`)
+        .join('');
+      menu.classList.toggle('open', values.length > 0);
+    }
+
+    function filterSingleGroupPicker(inputId, menuId, onSelect = null) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const query = input.value.trim().toLowerCase();
+      const values = GROUP_OPTIONS.filter((group) => group.toLowerCase().includes(query)).slice(0, 6);
+      populateSingleAutocomplete(menuId, values, inputId, onSelect ? onSelect.name : null);
+    }
+
+    function selectSingleGroupValue(inputId, menuId, value, onSelectName = null) {
+      const input = document.getElementById(inputId);
+      const menu = document.getElementById(menuId);
+      if (input) input.value = value;
+      if (menu) menu.classList.remove('open');
+      if (onSelectName && typeof window[onSelectName] === 'function') {
+        window[onSelectName]();
+      }
+    }
+
+    function populateMultiAutocomplete(menuId, values) {
+      const menu = document.getElementById(menuId);
+      const selected = getSelectedNotifyGroups();
+      menu.innerHTML = values
+        .map((value) => {
+          const picked = selected.includes(value);
+          return `<div class="autocomplete-item" onclick="toggleNotifyGroupSelection('${value.replace(/'/g, '&#39;')}')"><span>${value}</span><span class="autocomplete-meta">${picked ? 'selected' : 'add'}</span></div>`;
+        })
+        .join('');
+      menu.classList.toggle('open', values.length > 0);
+    }
+
+    function filterMultiGroupPicker(inputId, menuId) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const query = input.value.trim().toLowerCase();
+      const values = GROUP_OPTIONS.filter((group) => group.toLowerCase().includes(query)).slice(0, 8);
+      populateMultiAutocomplete(menuId, values);
+    }
+
+    // Clicking outside any autocomplete wrapper closes all open menus.
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.autocomplete-wrap')) {
+        document.querySelectorAll('.autocomplete-menu').forEach((menu) => menu.classList.remove('open'));
+      }
+    });
+
+    // --------- Character counting ---------
+    function updateCount(el) {
+      document.getElementById('char-count').textContent = `${el.value.length} / 4096`;
+    }
+
+    // --------- Notify page ---------
+    // Updates selected audience pills, selected count, and estimated reach.
+        function getSelectedNotifyGroups() {
+      const holder = document.getElementById('notify-selected-groups');
+      return holder ? JSON.parse(holder.dataset.selected || '[]') : [];
+    }
+
+    function setSelectedNotifyGroups(values) {
+      const holder = document.getElementById('notify-selected-groups');
+      if (!holder) return;
+      holder.dataset.selected = JSON.stringify(values);
+    }
+
+    function renderNotifySelectedGroups() {
+      const holder = document.getElementById('notify-selected-groups');
+      const selected = getSelectedNotifyGroups();
+      if (!holder) return;
+      holder.innerHTML = selected.length
+        ? selected.map((group) => `<span class="picker-pill">${group}<button type="button" onclick="removeNotifyGroup('${group.replace(/'/g, '&#39;')}')">×</button></span>`).join('')
+        : '<div class="picker-placeholder">No groups selected yet.</div>';
+    }
+
+    function toggleNotifyGroupSelection(group) {
+      const selected = getSelectedNotifyGroups();
+      const next = selected.includes(group)
+        ? selected.filter((item) => item !== group)
+        : [...selected, group];
+      setSelectedNotifyGroups(next);
+      renderNotifySelectedGroups();
+      updateComposeAudience();
+      filterMultiGroupPicker('notify-group-input', 'notify-group-menu');
+      document.getElementById('notify-group-input').focus();
+      showToast('Groups updated', `${next.length} group${next.length === 1 ? '' : 's'} selected.`, 'info');
+    }
+
+    function removeNotifyGroup(group) {
+      const selected = getSelectedNotifyGroups().filter((item) => item !== group);
+      setSelectedNotifyGroups(selected);
+      renderNotifySelectedGroups();
+      updateComposeAudience();
+      filterMultiGroupPicker('notify-group-input', 'notify-group-menu');
+    }
+
+    function updateComposeAudience() {
+      const selected = getSelectedNotifyGroups();
+      const targetList = document.getElementById('compose-target-list');
+      const countBadge = document.getElementById('compose-selected-count');
+      const memberCount = document.getElementById('compose-member-count');
+
+      const estimates = {
+        SaudiInvest: 1240,
+        DevChat: 890,
+        TechGroup: 620,
+        MarketTalk: 450,
+        FounderCircle: 120,
+        'VIP Alerts': 95,
+      };
+
+      const total = selected.reduce((sum, group) => sum + (estimates[group] || 0), 0);
+      countBadge.textContent = `${selected.length} selected`;
+      memberCount.textContent = total.toLocaleString();
+      targetList.innerHTML = selected.length
+        ? selected.map((group) => `<span class="notify-audience-pill">${group}</span>`).join('')
+        : '<span class="notify-audience-pill">No groups selected</span>';
+    }
+
+    // Reflects chip selection changes and shows a lightweight audience toast.
+        function toggleChip() {
+      // Group chips were replaced by autocomplete pickers on group fields.
+    }
+
+    // Keeps the live preview and draft status in sync with textarea content.
+    function updateComposePreview() {
+      const text = document.getElementById('msg-area').value.trim();
+      const preview = document.getElementById('compose-live-preview');
+      const status = document.getElementById('notify-message-status');
+
+      preview.textContent = text
+        ? `${text.slice(0, 140)}${text.length > 140 ? '…' : ''}`
+        : 'No preview text yet';
+
+      status.textContent = text ? 'Ready to send' : 'Draft';
+    }
+
+    // Applies a template directly into the message textarea.
+    function useTemplate(text) {
+      const ta = document.getElementById('msg-area');
+      ta.value = text;
+      updateCount(ta);
+      updateComposePreview();
+      ta.focus();
+    }
+
+    // Submit action for the notify composer.
+    // This is preview-only behavior, so it clears the form and shows feedback.
+    function sendMsg() {
+      const msg = document.getElementById('msg-area').value.trim();
+      const selected = getSelectedNotifyGroups();
+      if (!msg || !selected.length) return;
+
+      const btn = document.getElementById('send-btn');
+      btn.textContent = 'Sent';
+      btn.style.background = 'var(--sage)';
+
+      showToast('New notification', 'Announcement queued and delivered to selected groups.', 'success');
+
+      setTimeout(() => {
+        btn.textContent = 'Send';
+        btn.style.background = '';
+      }, 2200);
+
+      document.getElementById('msg-area').value = '';
+      document.getElementById('char-count').textContent = '0 / 4096';
+      updateComposePreview();
+    }
+
+    // --------- Task creator + task cards ---------
+    function toggleTaskCreator(forceOpen) {
+      const creator = document.getElementById('task-creator');
+      const shouldOpen = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : !creator.classList.contains('open');
+      creator.classList.toggle('open', shouldOpen);
+    }
+
+    // Returns the visual style bundle for a task state.
+    function getTaskStyle(status) {
+      if (status === 'done') {
+        return { badge: 'badge-done', label: 'DONE', fill: 'fill-sage', accent: 'var(--sage)' };
+      }
+      if (status === 'pending') {
+        return { badge: 'badge-pending', label: 'PENDING', fill: 'fill-ochre', accent: 'var(--amber)' };
+      }
+      return { badge: 'badge-running', label: 'RUNNING', fill: 'fill-coral', accent: 'var(--coral)' };
+    }
+
+    // Shows/hides task fields based on task type and executor.
+    function handleTaskTypeChange() {
+      const type = document.getElementById('task-type-input').value;
+      const executor = document.getElementById('task-executor-input').value;
+      const isNotify = type === 'notify_destination';
+      const isAgent = executor === 'agent';
+
+      document.getElementById('task-destination-field').style.display = isNotify ? '' : 'none';
+      document.getElementById('task-delivery-field').style.display = isNotify && !isAgent ? '' : 'none';
+      document.getElementById('task-delete-field').style.display = isNotify && !isAgent ? '' : 'none';
+      document.getElementById('task-suggested-field').style.display = isNotify && isAgent ? '' : 'none';
+      document.getElementById('task-agent-field').style.display = isAgent ? '' : 'none';
+      document.getElementById('task-source-group-field').style.display = isAgent ? '' : 'none';
+
+      const template = document.getElementById('task-template-input');
+      if (isNotify && isAgent) {
+        template.placeholder = 'Review this message and decide whether to send the suggested private reply.';
+      } else if (isNotify) {
+        template.placeholder = 'Notify: {text}';
+      } else {
+        template.placeholder = 'We will reply shortly.';
+      }
+    }
+
+    // Creates a new preview task card from the form state.
+    function createTask() {
+      const taskType = document.getElementById('task-type-input').value;
+      const executor = document.getElementById('task-executor-input').value;
+      const keyword = document.getElementById('task-keyword-input').value.trim();
+      const template = document.getElementById('task-template-input').value.trim();
+      const destination = document.getElementById('task-destination-input').value.trim();
+      const deliveryMode = document.getElementById('task-delivery-input').value;
+      const deleteAfter = document.getElementById('task-delete-input').value.trim();
+      const suggestedReply = document.getElementById('task-suggested-input').value.trim();
+      const agent = document.getElementById('task-agent-input').value;
+      const sourceGroup = document.getElementById('task-source-group-input').value.trim();
+
+      // Agent notify tasks can omit the template because the agent instruction can be implicit.
+      const requiresTemplate = !(taskType === 'notify_destination' && executor === 'agent');
+      if (!keyword || (requiresTemplate && !template)) {
+        showToast('Task not saved', 'Keyword and required template fields must be completed.', 'info');
+        return;
+      }
+
+      const name = taskType === 'notify_destination' ? 'Notification Task' : 'Reply Task';
+      const metaParts = [executor === 'agent' ? agent : 'Bot'];
+      if (executor === 'agent') metaParts.push(sourceGroup || 'No group');
+      const group = metaParts.join(' · ');
+
+      // Preview cards use a simple synthetic progress model.
+      const status = 'running';
+      const progress = 25;
+      const completed = 80;
+      const styles = getTaskStyle(status);
+      const remaining = Math.max(0, Math.round(completed * ((100 - progress) / Math.max(progress || 1, 1))));
+      const list = document.getElementById('tasks-list');
+      const card = document.createElement('div');
+      card.className = 'task-card animate';
+
+      // Summary text is assembled from whichever fields are relevant to this task type.
+      const summaryBits = [keyword];
+      if (taskType === 'notify_destination' && destination) summaryBits.push(destination);
+      if (template) summaryBits.push(template);
+      if (taskType === 'notify_destination' && executor === 'agent' && suggestedReply) summaryBits.push(suggestedReply);
+      if (taskType === 'notify_destination' && executor !== 'agent' && deliveryMode) summaryBits.push(deliveryMode);
+      if (taskType === 'notify_destination' && executor !== 'agent' && deleteAfter) summaryBits.push(`${deleteAfter}s`);
+      const taskSummary = summaryBits.join(' · ');
+
+      card.innerHTML = `
+        <div class="task-top">
+          <div class="task-icon" style="background:var(--slate-dim);color:var(--slate)"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
+          <div class="task-meta"><div class="task-name">${name}</div><div class="task-group">${group}</div></div>
+          <span class="badge ${styles.badge}">${styles.label}</span>
+        </div>
+        <div class="task-progress">
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">${taskSummary}</div>
+          <div class="progress-track"><div class="progress-fill ${styles.fill}" style="width:${progress}%"></div></div>
+          <div class="progress-stats">
+            <div class="p-stat"><div class="p-stat-val" style="color:${styles.accent}">${progress}%</div><div class="p-stat-lbl">Progress</div></div>
+            <div class="p-stat"><div class="p-stat-val">${completed}</div><div class="p-stat-lbl">Completed</div></div>
+            <div class="p-stat"><div class="p-stat-val">${remaining}</div><div class="p-stat-lbl">Remaining</div></div>
+          </div>
+        </div>
+        <div class="task-actions"><button class="btn btn-warning" style="flex:1" onclick="pauseTask(this)">Pause</button><button class="btn btn-outline" style="flex:1" onclick="advanceTask(this)">Advance</button><button class="btn btn-danger" style="flex:1" onclick="deleteTask(this)">Delete</button></div>
+      `;
+
+      list.prepend(card);
+
+      // Clear the mutable text fields after successful creation.
+      document.getElementById('task-keyword-input').value = '';
+      document.getElementById('task-template-input').value = '';
+      document.getElementById('task-destination-input').value = '';
+      document.getElementById('task-delete-input').value = '';
+      document.getElementById('task-suggested-input').value = '';
+
+      showToast('Task saved', `${name} created successfully.`, 'success');
+      toggleTaskCreator(false);
+    }
+
+    // Utility to climb from any task action button back to the task card.
+    function getTaskCard(button) {
+      return button.closest('.task-card');
+    }
+
+    // Updates the visual state of an existing task card.
+    function setTaskState(card, status, forcedProgress) {
+      const styles = getTaskStyle(status);
+      const badge = card.querySelector('.badge');
+      const fill = card.querySelector('.progress-fill');
+      const progressVal = card.querySelector('.p-stat:first-child .p-stat-val');
+      const completedVal = card.querySelector('.p-stat:nth-child(2) .p-stat-val');
+      const remainingVal = card.querySelector('.p-stat:nth-child(3) .p-stat-val');
+
+      let progress = typeof forcedProgress === 'number'
+        ? forcedProgress
+        : Number((fill.style.width || '0').replace('%', ''));
+
+      // Pending tasks still show a tiny visible progress bar so the card does not look broken.
+      if (status === 'pending' && progress === 0) progress = 10;
+
+      fill.className = `progress-fill ${styles.fill}`;
+      fill.style.width = `${progress}%`;
+      progressVal.textContent = `${progress}%`;
+      progressVal.style.color = styles.accent;
+      badge.className = `badge ${styles.badge}`;
+      badge.textContent = styles.label;
+
+      const completed = Number(completedVal.textContent || 0);
+      const remaining = Math.max(0, Math.round(completed * ((100 - progress) / Math.max(progress || 1, 1))));
+      remainingVal.textContent = remaining;
+    }
+
+    function pauseTask(button) {
+      setTaskState(getTaskCard(button), 'pending');
+    }
+
+    function stopTask(button) {
+      setTaskState(getTaskCard(button), 'done', 100);
+    }
+
+    function deleteTask(button) {
+      getTaskCard(button).remove();
+    }
+
+    function advanceTask(button) {
+      const card = getTaskCard(button);
+      const progressEl = card.querySelector('.progress-fill');
+      const current = Number((progressEl.style.width || '0').replace('%', ''));
+      const next = Math.min(100, current + 15);
+
+      if (next >= 100) {
+        setTaskState(card, 'done', 100);
+      } else {
+        setTaskState(card, 'running', next);
+      }
+    }
+
+    // --------- Moderation setup accordion ---------
+    function toggleModerationSetup(forceOpen) {
+      const trigger = document.getElementById('mod-setup-trigger');
+      const panel = document.getElementById('mod-setup-panel');
+      const shouldOpen = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : !panel.classList.contains('open');
+
+      trigger.classList.toggle('open', shouldOpen);
+      panel.classList.toggle('open', shouldOpen);
+    }
+
+    // Rebuilds the compact accordion summary from the editable controls.
+    function updateModerationSummary() {
+      const group = document.getElementById('mod-group-input').value.trim() || 'SaudiInvest';
+      const warnLimit = document.getElementById('warn-limit-input').value || '3';
+      const muteLimit = document.getElementById('mute-limit-input').value || '5';
+      const antiSpam = document.getElementById('switch-antispam').classList.contains('active') ? 'anti-spam on' : 'anti-spam off';
+      const antiLinks = document.getElementById('switch-links').classList.contains('active') ? 'anti-links on' : 'anti-links off';
+      const autoRemove = document.getElementById('switch-remove').classList.contains('active') ? 'auto-remove on' : 'auto-remove off';
+
+      document.getElementById('mod-setup-summary').textContent = `${group} · ${antiSpam} · ${antiLinks} · ${autoRemove} · warn ${warnLimit} · mute ${muteLimit}`;
+    }
+
+    // Simulates a successful moderation save and collapses the accordion again.
+    function saveModerationSetup() {
+      const group = document.getElementById('mod-group-input').value.trim() || 'Current group';
+      document.getElementById('mod-setup-status').textContent = 'Saved';
+      updateModerationSummary();
+      toggleModerationSetup(false);
+      showToast('Moderation saved', `Settings updated for ${group}.`, 'success');
+    }
+
+    // --------- Bootstrapping ---------
+    // Seed UI state so the preview looks correct on first render.
+        filterSingleGroupPicker('task-source-group-input', 'task-source-group-menu');
+    filterSingleGroupPicker('mod-group-input', 'mod-group-menu', updateModerationSummary);
+    setSelectedNotifyGroups(['SaudiInvest', 'DevChat']);
+    renderNotifySelectedGroups();
+    filterMultiGroupPicker('notify-group-input', 'notify-group-menu');
+    updateModerationSummary();
+    toggleModerationSetup(false);
+    handleTaskTypeChange();
+    updateComposeAudience();
+    updateComposePreview();
+
+    // Lightweight self-checks for the preview build.
+    console.assert(document.getElementById('page-notify'), 'Notify page should exist');
+    console.assert(document.querySelector('.notify-top-card'), 'Notify summary card should render');
+    console.assert(document.querySelector('.notify-composer'), 'Notify composer should render');
+    console.assert(document.querySelector('.notify-templates'), 'Notify template card should render');
+    console.assert(document.querySelector('.task-card'), 'Default task card should render');
+  </script>
+</body>
+</html>
