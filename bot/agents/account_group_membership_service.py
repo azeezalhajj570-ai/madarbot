@@ -267,7 +267,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         canonical_id = canonical_tg_group_id(int(tg_group_id))
         normalized_query = str(query or "").strip()
         normalized_page = max(1, int(page))
-        normalized_page_size = max(1, min(int(page_size), 50))
+        normalized_page_size = max(1, min(int(page_size), 50000))
 
         if not await self._has_scraper_tables():
             return {
@@ -382,7 +382,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
 
         canonical_id = canonical_tg_group_id(int(tg_group_id))
         normalized_page = max(1, int(page))
-        normalized_page_size = max(1, min(int(page_size), 100))
+        normalized_page_size = max(1, min(int(page_size), 50000))
 
         if not await self._has_scraper_tables():
             return {
