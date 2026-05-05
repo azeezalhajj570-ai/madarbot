@@ -358,6 +358,6 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     bound_logger.info("agent_job_succeeded")
 
 
-@dramatiq.actor(queue_name="agent", max_retries=3, min_backoff=5000)
+@dramatiq.actor(queue_name="agent_madarbot", max_retries=3, min_backoff=5000)
 def execute_agent_job(agent_id: int, job_id: int) -> None:
     asyncio.run(_execute_agent_job_impl(agent_id, job_id))

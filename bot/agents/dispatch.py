@@ -24,7 +24,7 @@ async def dispatch_agent_job(job_id: int) -> None:
         try:
             redis_broker.enqueue(
                 Message(
-                    queue_name="agent",
+                    queue_name="agent_madarbot",
                     actor_name="execute_agent_job",
                     args=(job.agent_id, job.id),
                     kwargs={},
