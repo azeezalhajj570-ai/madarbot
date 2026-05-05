@@ -279,6 +279,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 if job.job_type == "automation_task":
                     handled = await runtime.execute(client=client, agent=agent, job=job, session=session)
                     if handled:
+                        await _set_job_state(session, job.id, "completed")
                         await _create_job_notification(session, job, status="completed")
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
