@@ -2321,6 +2321,9 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [scrapeMessageLimit, setScrapeMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
   const [scrapeMaxAgeDays, setScrapeMaxAgeDays] = useState('30')
   const [loadingScrapeGroups, setLoadingScrapeGroups] = useState(false)
+  const [leadAckTemplate, setLeadAckTemplate] = useState('')
+  const [leadLabel, setLeadLabel] = useState('')
+  const [leadAskContact, setLeadAskContact] = useState(false)
 
   async function refresh() {
     setLoading(true)
@@ -2417,6 +2420,9 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setScrapeMemberLimit(String(SCRAPE_LIMIT_MAX))
     setScrapeMessageLimit(String(SCRAPE_LIMIT_MAX))
     setScrapeMaxAgeDays('30')
+    setLeadAckTemplate('')
+    setLeadLabel('')
+    setLeadAskContact(false)
   }
 
   function openCreateForm() {
@@ -2455,6 +2461,9 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkMemberResults([])
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
+    setLeadAckTemplate(task.task_key === 'lead_capture' ? String(task.config.ack_template || '') : '')
+    setLeadLabel(task.task_key === 'lead_capture' ? String(task.config.lead_label || '') : '')
+    setLeadAskContact(task.task_key === 'lead_capture' ? Boolean(task.config.ask_contact) : false)
     setIsFormOpen(true)
   }
 
@@ -2580,6 +2589,49 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       return
     }
 
+    if (taskKey === 'lead_capture') {
+      if (!leadAckTemplate.trim()) {
+        setStatus('Acknowledgment template is required for lead capture')
+        return
+      }
+      const config: Record<string, unknown> = {
+        ack_template: leadAckTemplate.trim(),
+      }
+      if (leadLabel.trim()) {
+        config.lead_label = leadLabel.trim()
+      }
+      if (leadAskContact) {
+        config.ask_contact = true
+      }
+      const payload = {
+        task_key: taskKey,
+        executor_type: 'agent',
+        enabled: true,
+        conditions: { text_contains: taskKeyword.trim() },
+        config,
+        agent_id: account.id,
+        group_tg_ids: taskGroups.map((group) => group.tg_group_id),
+        group_titles: taskGroups.map((group) => group.title),
+      }
+      setIsSaving(true)
+      try {
+        if (editingTask) {
+          await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
+          onSaved('Task updated')
+        } else {
+          await agentsApi.createGroupTask(account.group_id || 196, payload)
+          onSaved('Task created')
+        }
+        closeForm()
+        await refresh()
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Failed to save task')
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
+
     if (!taskKeyword.trim()) {
       setStatus('Task keyword is required')
       return
@@ -2654,6 +2706,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const selectedTaskMeta = extendedCatalog.find((item) => item.key === taskKey) ?? null
   const isBulkMessageTask = taskKey === BULK_MESSAGE_TASK_KEY
   const isScrapeTask = taskKey === SCRAPE_TASK_KEY
+  const isLeadCaptureTask = taskKey === 'lead_capture'
 
   return (
     <Card title="Tasks" subtitle="Select a task type and save it against this account group.">
@@ -2830,6 +2883,39 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
               </div>
               <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+            </>
+          ) : isLeadCaptureTask ? (
+            <>
+              <TextAreaField
+                label="Acknowledgment template"
+                value={leadAckTemplate}
+                onChange={setLeadAckTemplate}
+                rows={4}
+                placeholder="تم استلام طلبك، وسيتواصل معك الفريق قريباً."
+              />
+              <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={leadAskContact}
+                  onChange={(event) => setLeadAskContact(event.target.checked)}
+                  style={{ accentColor: 'var(--miniapp-accent)' }}
+                />
+                Ask for contact details
+              </label>
+              <InputField label="Keyword condition (optional)" value={taskKeyword} onChange={setTaskKeyword} placeholder="support" />
+              <GroupAutocompleteField
+                label="Select groups"
+                query={taskGroupsQuery}
+                onQueryChange={setTaskGroupsQuery}
+                groups={groups}
+                selectedGroups={taskGroups}
+                onAdd={(group) => {
+                  setTaskGroups((current) => current.some((entry) => entry.tg_group_id === group.tg_group_id) ? current : [...current, group])
+                  setTaskGroupsQuery('')
+                }}
+                onRemove={(tgGroupId) => setTaskGroups((current) => current.filter((group) => group.tg_group_id !== tgGroupId))}
+              />
             </>
           ) : (
             <>
