@@ -126,11 +126,17 @@ async def welcome_flow_handler(config: dict[str, Any], event: TaskEvent) -> dict
 
 
 async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict[str, Any]:
+    metadata = {
+        "lead_label": str(config.get("lead_label") or "general"),
+        "capture_type": "lead_capture",
+        "message_text": str(event.payload.get("text") or ""),
+    }
     template = str(config.get("ack_template") or "").strip()
     if not template:
         return {
             "status": "skipped",
             "reason": "missing_ack_template",
+            "metadata": metadata,
         }
 
     text = _render_template(template, event)
@@ -139,11 +145,7 @@ async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict
     return {
         "text": text,
         "reply_to_message_id": event.payload.get("message_id"),
-        "metadata": {
-            "lead_label": str(config.get("lead_label") or "general"),
-            "capture_type": "lead_capture",
-            "message_text": str(event.payload.get("text") or ""),
-        },
+        "metadata": metadata,
         **({"delete_after_seconds": int(config.get("delete_after_seconds") or 0)} if int(config.get("delete_after_seconds") or 0) > 0 else {}),
     }
 

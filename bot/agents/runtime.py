@@ -583,6 +583,8 @@ class AgentTaskRuntime:
                     assignment_id=assignment_id,
                     reason=result.get("reason"),
                 )
+                if task_key == "lead_capture":
+                    await self._capture_lead(agent=agent, session=session, event=event, result=result)
                 if self.activity_service and assignment_id:
                     await self.activity_service.record_activity(
                         assignment_id=str(assignment_id),
