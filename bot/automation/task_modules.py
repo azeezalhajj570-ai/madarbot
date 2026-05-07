@@ -128,7 +128,12 @@ async def welcome_flow_handler(config: dict[str, Any], event: TaskEvent) -> dict
 async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict[str, Any]:
     template = str(config.get("ack_template") or "").strip()
     if not template:
-        raise ValueError("ack_template is required")
+        return {
+            "status": "skipped",
+            "reason": "missing_ack_template",
+            "assignment_id": event.assignment_id,
+            "task_key": "lead_capture",
+        }
 
     text = _render_template(template, event)
     if bool(config.get("ask_contact")):

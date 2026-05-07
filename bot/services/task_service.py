@@ -213,6 +213,14 @@ class TaskService:
         normalized_results: list[dict[str, Any]] = []
         for result in results:
             output = result.output
+            if output.get("status") == "skipped":
+                logger.warning(
+                    "task_skipped",
+                    assignment_id=result.assignment.assignment_id,
+                    task_key=result.assignment.task_key,
+                    reason=output.get("reason"),
+                )
+                continue
             approval_request = output.get("approval_request")
             if isinstance(approval_request, dict):
                 if payload.get("bot") is None:

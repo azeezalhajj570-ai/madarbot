@@ -575,6 +575,22 @@ class AgentTaskRuntime:
             if not isinstance(result, dict):
                 return True
 
+            if result.get("status") == "skipped":
+                logger.warning(
+                    "agent_task_skipped",
+                    agent_id=agent.id,
+                    task_key=task_key,
+                    assignment_id=assignment_id,
+                    reason=result.get("reason"),
+                )
+                if self.activity_service and assignment_id:
+                    await self.activity_service.record_activity(
+                        assignment_id=str(assignment_id),
+                        status="skipped",
+                        error=str(result.get("reason") or "unknown"),
+                    )
+                return True
+
             if task_key == "lead_capture":
                 await self._capture_lead(agent=agent, session=session, event=event, result=result)
 
