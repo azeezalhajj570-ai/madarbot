@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: combot
-    ports:
-      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +15,6 @@ services:
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -104,9 +100,11 @@ services:
       dockerfile: Dockerfile.backend
     env_file: .env
     environment:
+      BOT_APP_KIND: agents
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
       REDIS_URL: redis://redis:6379/0
       DEFAULT_LANGUAGE: ar
+    restart: unless-stopped
     ports:
       - "8000:8080"
     depends_on:
