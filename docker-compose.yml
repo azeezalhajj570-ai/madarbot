@@ -44,7 +44,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m bot.main
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$TELEGRAM_API_ID" ] || [ -z "$$TELEGRAM_API_HASH" ]; then
+          echo "ERROR: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in .env" >&2
+          exit 1
+        fi
+        exec python -m bot.main
     env_file: .env
     environment:
       BOT_APP_KIND: agents
@@ -67,7 +75,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: dramatiq bot.agents.worker
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$TELEGRAM_API_ID" ] || [ -z "$$TELEGRAM_API_HASH" ]; then
+          echo "ERROR: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in .env" >&2
+          exit 1
+        fi
+        exec dramatiq bot.agents.worker
     env_file: .env
     depends_on:
       redis:
