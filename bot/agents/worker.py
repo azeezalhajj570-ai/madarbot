@@ -105,7 +105,9 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
             "mode": mode,
         }
         if status == "completed":
-            if mode == "group":
+            if mode == "forward":
+                body = "Original message forwarded."
+            elif mode == "group":
                 body = "Lead message sent in group."
             else:
                 body = f"Contact sent to user {tg_user_id}."
@@ -266,13 +268,24 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
     if not tg_user_id:
         raise ValueError("tg_user_id is required")
     message = str(payload.get("message") or "").strip()
-    if not message:
-        raise ValueError("message is required")
     mode = str(payload.get("mode") or "private")
-    include_original = bool(payload.get("include_original"))
-    original_text = str(payload.get("original_text") or "").strip()
     source_group_tg_id = int(payload.get("source_group_tg_id") or 0)
     source_message_id = int(payload.get("source_message_id") or 0)
+
+    if mode == "forward":
+        if not source_group_tg_id or not source_message_id:
+            raise ValueError("source_group_tg_id and source_message_id are required for forward mode")
+        sent = await client.forward_messages(
+            entity=source_group_tg_id,
+            messages=source_message_id,
+            from_peer=source_group_tg_id,
+        )
+        return {"sent": True, "forwarded": True, "message_ids": sent if isinstance(sent, list) else [sent.id], "chat_id": source_group_tg_id, "mode": "forward"}
+
+    if not message:
+        raise ValueError("message is required")
+    include_original = bool(payload.get("include_original"))
+    original_text = str(payload.get("original_text") or "").strip()
 
     full_text = message
     if include_original and original_text:

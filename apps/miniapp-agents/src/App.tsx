@@ -3040,7 +3040,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   const [page, setPage] = useState(1)
   const [contactingLead, setContactingLead] = useState<AgentLead | null>(null)
   const [contactMessage, setContactMessage] = useState('')
-  const [contactMode, setContactMode] = useState<'private' | 'public'>('private')
+  const [contactMode, setContactMode] = useState<'private' | 'public' | 'forward'>('private')
   const [includeOriginal, setIncludeOriginal] = useState(true)
   const [isSending, setIsSending] = useState(false)
 
@@ -3088,14 +3088,21 @@ function AccountLeadsPage({ account }: { account: Agent }) {
 
   async function sendContact() {
     if (!contactingLead) return
-    const msg = contactMessage.trim()
-    if (!msg) {
+    const isForward = contactMode === 'forward'
+    const msg = isForward ? '' : contactMessage.trim()
+    if (!isForward && !msg) {
       setStatus('Message text is required')
+      return
+    }
+    if (isForward && !contactingLead.source_message_id) {
+      setStatus('No original message to forward')
       return
     }
     setIsSending(true)
     try {
-      const notes = `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\n${contactingLead.message_text}` : ''}`
+      const notes = isForward
+        ? `Original message forwarded`
+        : `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\n${contactingLead.message_text}` : ''}`
       await agentsApi.updateAgentLead(account.id, contactingLead.id, {
         status: 'contacted',
         notes,
@@ -3104,8 +3111,8 @@ function AccountLeadsPage({ account }: { account: Agent }) {
         tg_user_id: contactingLead.tg_user_id,
         message: msg,
         mode: contactMode,
-        include_original: includeOriginal,
-        original_text: includeOriginal ? contactingLead.message_text : null,
+        include_original: isForward ? false : includeOriginal,
+        original_text: !isForward && includeOriginal ? contactingLead.message_text : null,
         source_group_tg_id: contactingLead.source_group_tg_id,
         source_message_id: contactingLead.source_message_id,
       })
@@ -3217,31 +3224,41 @@ function AccountLeadsPage({ account }: { account: Agent }) {
             <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>
               Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
             </h2>
-            <TextAreaField
-              label="Message"
-              value={contactMessage}
-              onChange={setContactMessage}
-              rows={5}
-              placeholder="Type your message to this lead..."
-            />
-            <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public')}>
+            {contactMode === 'forward' ? (
+              <Note>This will forward the lead's original message using Telegram's native forward to the source group.</Note>
+            ) : (
+              <>
+                <TextAreaField
+                  label="Message"
+                  value={contactMessage}
+                  onChange={setContactMessage}
+                  rows={5}
+                  placeholder="Type your message to this lead..."
+                />
+                {contactingLead.message_text ? (
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={includeOriginal}
+                      onChange={(e) => setIncludeOriginal(e.target.checked)}
+                      style={{ accentColor: 'var(--miniapp-coral)' }}
+                    />
+                    Include original message
+                  </label>
+                ) : null}
+              </>
+            )}
+            <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
               <option value="private">Private (direct message)</option>
               <option value="public">Public (in group)</option>
+              <option value="forward">Forward original message</option>
             </SelectField>
-            {contactingLead.message_text ? (
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={includeOriginal}
-                  onChange={(e) => setIncludeOriginal(e.target.checked)}
-                  style={{ accentColor: 'var(--miniapp-coral)' }}
-                />
-                Forward original message
-              </label>
-            ) : null}
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => void sendContact()} disabled={isSending || !contactMessage.trim()}>
-                {isSending ? 'Sending...' : 'Send'}
+              <Button
+                onClick={() => void sendContact()}
+                disabled={isSending || (contactMode !== 'forward' && !contactMessage.trim()) || (contactMode === 'forward' && !contactingLead.source_message_id)}
+              >
+                {isSending ? 'Sending...' : contactMode === 'forward' ? 'Forward' : 'Send'}
               </Button>
               <Button tone="secondary" onClick={closeContact}>Cancel</Button>
             </div>
