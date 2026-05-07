@@ -94,6 +94,26 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
             return ("contact_save_failed", "Failed to save contact", f"Could not save {full_name} ({user_id}) to contacts: {error}", notification_payload)
         return None
 
+    if job.job_type == "send_lead_message":
+        tg_user_id = str(payload.get("tg_user_id") or "unknown")
+        msg_text = str(payload.get("message") or "").strip()
+        mode = str(payload.get("mode") or "private")
+        notification_payload = {
+            "job_type": job.job_type,
+            "tg_user_id": tg_user_id,
+            "message": _trim_message(msg_text, 80) if msg_text else "",
+            "mode": mode,
+        }
+        if status == "completed":
+            if mode == "group":
+                body = "Lead message sent in group."
+            else:
+                body = f"Contact sent to user {tg_user_id}."
+            return ("lead_message_sent", "Lead contacted", body, notification_payload)
+        if status == "failed":
+            return ("lead_message_failed", "Failed to contact lead", _trim_message(error or "Could not send lead message."), notification_payload)
+        return None
+
     if job.job_type == "automation_task":
         task_key = str(payload.get("task_key") or "automation_task")
         event_payload = dict((payload.get("event") or {}).get("payload") or {})
@@ -240,6 +260,35 @@ async def _set_job_state(
         return None
 
 
+async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
+    payload = dict(job.job_payload or {})
+    tg_user_id = int(payload.get("tg_user_id") or 0)
+    if not tg_user_id:
+        raise ValueError("tg_user_id is required")
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        raise ValueError("message is required")
+    mode = str(payload.get("mode") or "private")
+    include_original = bool(payload.get("include_original"))
+    original_text = str(payload.get("original_text") or "").strip()
+    source_group_tg_id = int(payload.get("source_group_tg_id") or 0)
+    source_message_id = int(payload.get("source_message_id") or 0)
+
+    full_text = message
+    if include_original and original_text:
+        full_text = f"{message}\n\nOriginal message: \"{original_text}\""
+
+    if mode == "group" and source_group_tg_id:
+        kwargs = {}
+        if source_message_id:
+            kwargs["reply_to"] = source_message_id
+        sent = await client.send_message(source_group_tg_id, full_text, **kwargs)
+        return {"sent": True, "message_id": sent.id, "chat_id": source_group_tg_id, "mode": "group"}
+    else:
+        sent = await client.send_message(tg_user_id, full_text)
+        return {"sent": True, "message_id": sent.id, "chat_id": tg_user_id, "mode": "private"}
+
+
 async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     message = CurrentMessage.get_current_message()
     message_options = message.options or {} if message is not None else {}
@@ -310,6 +359,10 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(client=client, agent=agent, payload=dict(job.job_payload or {}))
+                    await _set_job_state(session, job.id, "completed", result=result)
+                    handled = True
+                elif job.job_type == "send_lead_message":
+                    result = await _handle_send_lead_message(client=client, session=session, job=job)
                     await _set_job_state(session, job.id, "completed", result=result)
                     handled = True
                 elif job.job_type in {SCRAPER_GROUP_INFO_JOB_TYPE, SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_MESSAGES_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
