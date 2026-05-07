@@ -131,8 +131,6 @@ async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict
         return {
             "status": "skipped",
             "reason": "missing_ack_template",
-            "assignment_id": event.assignment_id,
-            "task_key": "lead_capture",
         }
 
     text = _render_template(template, event)
