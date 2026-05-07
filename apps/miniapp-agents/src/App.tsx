@@ -3095,7 +3095,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
     }
     setIsSending(true)
     try {
-      const notes = `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\nOriginal message: "${contactingLead.message_text}"` : ''}`
+      const notes = `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\n${contactingLead.message_text}` : ''}`
       await agentsApi.updateAgentLead(account.id, contactingLead.id, {
         status: 'contacted',
         notes,

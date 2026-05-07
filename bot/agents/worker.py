@@ -276,7 +276,7 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
 
     full_text = message
     if include_original and original_text:
-        full_text = f"{message}\n\nOriginal message: \"{original_text}\""
+        full_text = f"{message}\n\n{original_text}"
 
     if mode == "group" and source_group_tg_id:
         kwargs = {}
