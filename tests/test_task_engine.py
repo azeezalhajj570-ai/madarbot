@@ -17,7 +17,8 @@ from bot.automation.executors import BotTaskExecutor
 from bot.automation.models import ActionTemplate, TaskAssignment, TaskCondition, TaskEvent, TaskTrigger
 from bot.automation.planners import RulesPlanner
 from bot.automation.registry import build_default_registry
-from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, ModerationLog, User
+from bot.db.models import Agent, AgentJob, AgentLead, Group, GroupAdminRole, ModerationLog, User
+from bot.services.agent_lead_service import AgentLeadService
 from bot.services.task_service import TaskService
 
 
@@ -533,6 +534,139 @@ async def test_task_service_persists_lead_capture_metadata(db_session, fake_bot)
         await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == group.id))
     ).scalars().all()
     assert any(log.action == "lead_captured" and log.details.get("lead_label") == "sales" for log in logs)
+
+
+@pytest.mark.asyncio
+async def test_bot_executor_lead_capture_persists_agent_lead(db_session, fake_bot) -> None:
+    owner = User(tg_user_id=905, username="owner5", full_name="Owner 5", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(tg_group_id=-100905, title="Bot Lead Group", owner_user_id=owner.id, is_active=True)
+    db_session.add(group)
+    await db_session.flush()
+    db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
+    await db_session.commit()
+
+    service = TaskService(db_session, dispatch_agent_job=lambda _: None, dispatch_follow_up=None)
+    await service.save_assignment(
+        actor_user_id=owner.tg_user_id,
+        group_id=group.id,
+        task_key="lead_capture",
+        executor_type="bot",
+        conditions={"text_contains": "pricing"},
+        config={"ack_template": "Got it", "lead_label": "support", "ask_contact": False},
+    )
+
+    await service.handle_message_event(
+        group_id=group.id,
+        user_id=301,
+        payload={
+            "chat_id": group.tg_group_id,
+            "text": "need pricing info",
+            "message_id": 201,
+            "group_title": "Bot Lead Group",
+            "username": "testuser",
+            "first_name": "Test",
+            "full_name": "Test User",
+            "bot": fake_bot,
+        },
+    )
+
+    leads = (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id))).scalars().all()
+    assert len(leads) == 1
+    lead = leads[0]
+    assert lead.lead_label == "support"
+    assert lead.tg_user_id == 301
+    assert lead.message_text == "need pricing info"
+    assert lead.username == "testuser"
+    assert lead.first_name == "Test"
+    assert lead.source_group_tg_id == group.tg_group_id
+    assert lead.agent_id is None
+
+
+@pytest.mark.asyncio
+async def test_bot_executor_lead_capture_deduplicates_by_group_user_source(db_session, fake_bot) -> None:
+    owner = User(tg_user_id=906, username="owner6", full_name="Owner 6", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(tg_group_id=-100906, title="Dedup Lead Group", owner_user_id=owner.id, is_active=True)
+    db_session.add(group)
+    await db_session.flush()
+    db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
+    await db_session.commit()
+
+    service = TaskService(db_session, dispatch_agent_job=lambda _: None, dispatch_follow_up=None)
+    await service.save_assignment(
+        actor_user_id=owner.tg_user_id,
+        group_id=group.id,
+        task_key="lead_capture",
+        executor_type="bot",
+        conditions={},
+        config={"ack_template": "Ok", "lead_label": "general"},
+    )
+
+    payload = {
+        "chat_id": group.tg_group_id,
+        "text": "first message",
+        "message_id": 301,
+        "username": "dupeuser",
+        "first_name": "Dupe",
+        "bot": fake_bot,
+    }
+    await service.handle_message_event(group_id=group.id, user_id=401, payload=payload)
+    await service.handle_message_event(group_id=group.id, user_id=401, payload={**payload, "text": "second message", "message_id": 302})
+
+    leads = (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id))).scalars().all()
+    assert len(leads) == 1
+    assert leads[0].message_text == "second message"
+    assert leads[0].source_message_id == 302
+
+
+@pytest.mark.asyncio
+async def test_agent_lead_service_capture_lead_without_agent(db_session) -> None:
+    owner = User(tg_user_id=907, username="owner7", full_name="Owner 7", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(tg_group_id=-100907, title="NoAgent Lead Group", owner_user_id=owner.id, is_active=True)
+    db_session.add(group)
+    await db_session.commit()
+
+    lead_service = AgentLeadService(db_session)
+    lead = await lead_service.capture_lead(
+        agent_id=None,
+        group_id=group.id,
+        tg_user_id=501,
+        username="nouser",
+        first_name="No",
+        last_name="Agent",
+        source_group_tg_id=group.tg_group_id,
+        source_group_title="NoAgent Lead Group",
+        source_message_id=401,
+        message_text="I need help",
+        lead_label="general",
+    )
+    assert lead.id is not None
+    assert lead.agent_id is None
+    assert lead.group_id == group.id
+    assert lead.tg_user_id == 501
+    assert lead.lead_label == "general"
+
+    second_lead = await lead_service.capture_lead(
+        agent_id=None,
+        group_id=group.id,
+        tg_user_id=501,
+        username="nouser_updated",
+        first_name="Updated",
+        source_group_tg_id=group.tg_group_id,
+        source_group_title="NoAgent Lead Group",
+        source_message_id=402,
+        message_text="updated message",
+        lead_label="support",
+    )
+    assert second_lead.id == lead.id
+    assert second_lead.message_text == "updated message"
+    assert second_lead.lead_label == "support"
+    assert second_lead.username == "nouser_updated"
 
 
 @pytest.mark.asyncio
