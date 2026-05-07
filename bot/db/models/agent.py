@@ -95,12 +95,9 @@ class AgentLead(Base):
     """Dedicated lead model for agent-captured leads with full CRM lifecycle."""
 
     __tablename__ = "agent_leads"
-    __table_args__ = (
-        UniqueConstraint("agent_id", "tg_user_id", "source_group_tg_id", name="uq_agent_lead_user_group"),
-    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

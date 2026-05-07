@@ -22,7 +22,7 @@ class AgentLeadService:
     async def capture_lead(
         self,
         *,
-        agent_id: int,
+        agent_id: int | None = None,
         group_id: int,
         tg_user_id: int | None = None,
         username: str | None = None,
@@ -39,7 +39,7 @@ class AgentLeadService:
         existing = (
             await self.session.execute(
                 select(AgentLead).where(
-                    AgentLead.agent_id == agent_id,
+                    AgentLead.group_id == group_id,
                     AgentLead.tg_user_id == tg_user_id,
                     AgentLead.source_group_tg_id == source_group_tg_id,
                 )
@@ -87,7 +87,7 @@ class AgentLeadService:
             dup = (
                 await self.session.execute(
                     select(AgentLead).where(
-                        AgentLead.agent_id == agent_id,
+                        AgentLead.group_id == group_id,
                         AgentLead.tg_user_id == tg_user_id,
                         AgentLead.source_group_tg_id == source_group_tg_id,
                     )

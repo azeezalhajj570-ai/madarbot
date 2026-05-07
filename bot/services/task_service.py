@@ -255,6 +255,14 @@ class TaskService:
                         metadata=metadata,
                         reason=str(metadata.get("lead_label") or metadata.get("capture_type") or ""),
                     )
+                if result.assignment.task_key == "lead_capture":
+                    await self._persist_bot_lead(
+                        session=self.session,
+                        group_id=group_id,
+                        user_id=user_id,
+                        event=event,
+                        metadata=metadata,
+                    )
                 follow_up = output.get("follow_up")
                 if self.dispatch_follow_up and isinstance(follow_up, dict):
                     delay_seconds = int(follow_up.get("delay_seconds") or 0)
@@ -289,6 +297,37 @@ class TaskService:
 
     async def _load_assignments(self, group_id: int) -> list[TaskAssignment]:
         return await self.store.list_assignments(group_id)
+
+    async def _persist_bot_lead(
+        self,
+        *,
+        session: Any,
+        group_id: int,
+        user_id: int | None,
+        event: TaskEvent,
+        metadata: dict[str, Any],
+    ) -> None:
+        try:
+            from bot.services.agent_lead_service import AgentLeadService
+
+            lead_label = str(metadata.get("lead_label") or "general")
+            lead_service = AgentLeadService(session)
+            await lead_service.capture_lead(
+                agent_id=None,
+                group_id=group_id,
+                tg_user_id=user_id,
+                username=str(event.payload.get("username") or ""),
+                first_name=str(event.payload.get("first_name") or ""),
+                last_name=str(event.payload.get("full_name") or "").split()[-1] if event.payload.get("full_name") else None,
+                source_group_tg_id=event.payload.get("chat_id") or event.group_id,
+                source_group_title=str(event.payload.get("group_title") or ""),
+                source_message_id=event.payload.get("message_id"),
+                message_text=str(event.payload.get("text") or ""),
+                lead_label=lead_label,
+                confidence=0.6,
+            )
+        except Exception:
+            logger.exception("bot_lead_capture_persistence_failed", group_id=group_id)
 
     async def _get_group(self, group_id: int) -> Group | None:
         return (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
