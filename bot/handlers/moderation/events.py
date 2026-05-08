@@ -407,7 +407,7 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
                         user_id=message.from_user.id if message.from_user else None,
                         payload={
                             "chat_id": message.chat.id,
-                            "group_title": group.title or getattr(message.chat, "title", ""),
+                            "group_title": getattr(message.chat, "title", "") or group.title,
                             "text": text,
                             "message_id": message.message_id,
                             "first_name": getattr(message.from_user, "first_name", "") if message.from_user else "",
