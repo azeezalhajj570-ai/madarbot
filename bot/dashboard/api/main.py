@@ -154,6 +154,8 @@ if settings.mcp_enabled:
                         status_code=401,
                         content={"error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"},
                     )
+                if tg_user_id is None and token:
+                    _, tg_user_id = await verify_mcp_auth_async(token)
                 if tg_user_id is not None:
                     set_mcp_actor_user_id(tg_user_id)
             response = await call_next(request)
