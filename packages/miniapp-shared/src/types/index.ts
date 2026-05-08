@@ -200,6 +200,8 @@ export interface AgentGroupMember {
   full_name?: string | null
   role?: string
   message_count?: number
+  is_bot?: boolean
+  sent_by_agent?: boolean
 }
 
 export interface AgentGroupMembersPage {

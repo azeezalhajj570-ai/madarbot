@@ -2838,9 +2838,15 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                           setBulkMemberStatus(null)
                         }}
                       >
-                        <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
+                          {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600 }}>✓ Sent</span> : null}
+                        </div>
                         <div style={{ color: '#655d52', marginTop: 4 }}>
                           {member.username ? `@${member.username} · ` : ''}{member.user_id}
+                          {(typeof member.message_count === 'number' && member.message_count > 0) ? (
+                            <span style={{ marginLeft: 4 }}>· {member.message_count} msg{member.message_count !== 1 ? 's' : ''}</span>
+                          ) : null}
                         </div>
                       </LinkRow>
                     ))}
@@ -2863,6 +2869,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     }}
                   >
                     {member.full_name || member.username || `User ${member.user_id}`}
+                    {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
                     <button
                       type="button"
                       onClick={() => setBulkSelectedMembers((current) => current.filter((entry) => entry.user_id !== member.user_id))}

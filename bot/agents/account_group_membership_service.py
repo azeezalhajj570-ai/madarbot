@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import AccountGroupVisibility
 from bot.agents.session import SessionManager
-from bot.db.models import Agent, Group, GroupAdminRole, ScrapedGroup, ScrapedMember, ScrapedMessage, User
+from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, ScrapedGroup, ScrapedMember, ScrapedMessage, User
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scraper_service import ScraperService
 
@@ -271,6 +271,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         query: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        exclude_bots: bool = True,
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -298,6 +299,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
             if scraped_group is not None
             else (ScrapedMember.tg_group_id == canonical_id)
         ]
+        if exclude_bots:
+            filters.append(ScrapedMember.is_bot == False)
         if normalized_query:
             pattern = f"%{normalized_query.lower()}%"
             filters.append(
@@ -313,7 +316,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         try:
             total = (
                 int(scraped_group.member_count or 0)
-                if scraped_group is not None and not normalized_query and scraped_group.member_count is not None
+                if scraped_group is not None and not normalized_query and not exclude_bots and scraped_group.member_count is not None
                 else int((await self.session.execute(select(func.count(ScrapedMember.id)).where(*filters))).scalar_one() or 0)
             )
             rows = (
@@ -323,6 +326,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         ScrapedMember.username,
                         ScrapedMember.full_name,
                         ScrapedMember.role,
+                        ScrapedMember.is_bot,
                     )
                     .where(*filters)
                     .order_by(desc(ScrapedMember.scraped_at), desc(ScrapedMember.id))
@@ -362,6 +366,29 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 if row.sender_user_id is not None
             }
 
+        sent_to: set[int] = set()
+        if user_ids:
+            broadcast_jobs = (
+                await self.session.execute(
+                    select(AgentJob.job_payload)
+                    .where(
+                        AgentJob.agent_id == agent.id,
+                        AgentJob.job_type == "group_member_broadcast",
+                        AgentJob.status == "completed",
+                    )
+                    .order_by(desc(AgentJob.id))
+                    .limit(20)
+                )
+            ).scalars().all()
+            for job_payload in (j for j in broadcast_jobs if j):
+                source_group_id = int(job_payload.get("source_group_id") or 0)
+                if source_group_id != canonical_id:
+                    continue
+                progress = job_payload.get("progress") or {}
+                sent_users = progress.get("sent_users") or []
+                for uid in sent_users:
+                    sent_to.add(int(uid))
+
         return {
             "members": [
                 {
@@ -370,6 +397,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
                     "full_name": member.full_name,
                     "role": member.role or "member",
                     "message_count": message_counts.get(int(member.tg_user_id), 0),
+                    "is_bot": bool(member.is_bot) if hasattr(member, "is_bot") else False,
+                    "sent_by_agent": int(member.tg_user_id) in sent_to,
                 }
                 for member in rows
             ],
