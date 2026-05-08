@@ -33,6 +33,9 @@ class LinkedAccountService(AgentServiceSupport):
             raise ValueError("Agent account identifier is required")
         normalized_phone_number = normalize_optional_agent_phone_number(phone_number)
 
+        if group_id is None:
+            group_id = await self.ensure_agents_workspace_group(actor_user_id=actor_user_id)
+
         existing = (
             await self.session.execute(
                 select(Agent).where(
