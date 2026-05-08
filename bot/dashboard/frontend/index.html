@@ -7,11 +7,8 @@
     content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
   />
   <meta name="theme-color" content="#0a0a0a" />
-  <title>Combot WebApp</title>
-  <link
-    rel="preconnect"
-    href="https://cdn.jsdelivr.net"
-  />
+  <title>MadarBot</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-sans/style.css"
@@ -20,3070 +17,27 @@
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-mono/style.css"
   />
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --surface-2: #151515;
-      --surface-3: #161616;
-      --border: #1f1f1f;
-      --text: #ededed;
-      --text-secondary: #888888;
-      --text-muted: #444444;
-      --accent: #5865f2;
-      --accent-soft: rgba(88, 101, 242, 0.12);
-      --danger: #e5484d;
-      --success: #46a758;
-      --warning: #f76b15;
-      --sidebar-width: 240px;
-      --header-height: 72px;
-      --radius: 6px;
-      --radius-sm: 4px;
-      --shadow-focus: 0 0 0 1px var(--border);
-      --font-ui: "Geist", ui-monospace, monospace;
-      --font-mono: "Geist Mono", ui-monospace, monospace;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      margin: 0;
-      min-height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-ui);
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    body {
-      overflow: hidden;
-    }
-
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-      color: inherit;
-    }
-
-    button {
-      cursor: pointer;
-      background: none;
-      border: 0;
-      padding: 0;
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .app {
-      display: grid;
-      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(88, 101, 242, 0.08), transparent 28%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 20%),
-        var(--bg);
-    }
-
-    .sidebar {
-      border-inline-end: 1px solid var(--border);
-      background: rgba(10, 10, 10, 0.96);
-      padding: 20px 16px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      min-height: 100vh;
-    }
-
-    html[dir="rtl"] .sidebar {
-      order: 2;
-      border-inline-end: 0;
-      border-inline-start: 1px solid var(--border);
-    }
-
-    html[dir="rtl"] .main {
-      order: 1;
-    }
-
-    .brand {
-      display: grid;
-      gap: 6px;
-      padding: 8px 8px 12px;
-    }
-
-    .brand-mark {
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      display: inline-grid;
-      place-items: center;
-      color: var(--accent);
-      background: linear-gradient(135deg, rgba(88, 101, 242, 0.1), rgba(88, 101, 242, 0.02));
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-    }
-
-    .brand-title {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-    }
-
-    .brand-subtitle {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-secondary);
-    }
-
-    .group-selector {
-      position: relative;
-    }
-
-    .group-trigger,
-    .nav-item,
-    .ghost-button,
-    .panel-button,
-    .list-item,
-    .tab-button,
-    .drawer-close,
-    .icon-button {
-      border: 1px solid transparent;
-      transition:
-        background-color 150ms ease,
-        border-color 150ms ease,
-        color 150ms ease,
-        opacity 150ms ease,
-        transform 150ms ease;
-    }
-
-    .group-trigger {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: var(--radius);
-      border-color: var(--border);
-      background: var(--surface);
-      text-align: start;
-    }
-
-    .group-trigger:hover,
-    .nav-item:hover,
-    .ghost-button:hover,
-    .panel-button:hover,
-    .list-item:hover,
-    .tab-button:hover {
-      background: var(--surface-3);
-      color: var(--text);
-    }
-
-    .group-trigger-title {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .group-trigger-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-
-    .group-trigger-name {
-      font-size: 13px;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sidebar-divider {
-      height: 1px;
-      background: var(--border);
-      margin: 4px 0;
-    }
-
-    .sidebar-nav,
-    .bottom-nav {
-      display: grid;
-      gap: 4px;
-    }
-
-    .nav-item {
-      min-height: 40px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      border-inline-start: 2px solid transparent;
-      padding: 0 12px 0 10px;
-      border-radius: 6px;
-      color: var(--text-secondary);
-      background: transparent;
-    }
-
-    .nav-item.active {
-      border-inline-start-color: var(--accent);
-      color: var(--text);
-      background: rgba(88, 101, 242, 0.08);
-    }
-
-    .nav-label {
-      flex: 1 1 auto;
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      padding: 2px 6px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: var(--surface-2);
-      font-size: 11px;
-      color: var(--text-secondary);
-      line-height: 1;
-      font-family: var(--font-mono);
-    }
-
-    .badge.accent {
-      color: var(--accent);
-      background: rgba(88, 101, 242, 0.1);
-      border-color: rgba(88, 101, 242, 0.32);
-    }
-
-    .badge.warning {
-      color: var(--warning);
-      background: rgba(247, 107, 21, 0.1);
-      border-color: rgba(247, 107, 21, 0.32);
-    }
-
-    .badge.success {
-      color: var(--success);
-      background: rgba(70, 167, 88, 0.1);
-      border-color: rgba(70, 167, 88, 0.32);
-    }
-
-    .badge.danger {
-      color: var(--danger);
-      background: rgba(229, 72, 77, 0.1);
-      border-color: rgba(229, 72, 77, 0.32);
-    }
-
-    .sidebar-user {
-      margin-top: auto;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      display: grid;
-      gap: 4px;
-    }
-
-    .sidebar-user-name {
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .sidebar-user-meta {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .language-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding-top: 4px;
-    }
-
-    .language-toggle.compact {
-      padding-top: 0;
-    }
-
-    .language-chip {
-      min-width: 36px;
-      height: 28px;
-      padding: 0 8px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: var(--surface-2);
-      color: var(--text-secondary);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-family: var(--font-mono);
-    }
-
-    .language-chip.active {
-      color: var(--text);
-      border-color: rgba(88, 101, 242, 0.4);
-      background: rgba(88, 101, 242, 0.12);
-    }
-
-    .main {
-      min-width: 0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .topbar {
-      min-height: var(--header-height);
-      padding: 20px 28px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: flex-end;
-      justify-content: flex-start;
-      gap: 16px;
-      background: rgba(10, 10, 10, 0.92);
-      backdrop-filter: blur(12px);
-    }
-
-    html[dir="rtl"] .topbar {
-      flex-direction: row-reverse;
-    }
-
-    .page-header {
-      display: grid;
-      gap: 6px;
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    .eyebrow {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-
-    .page-title {
-      font-size: 22px;
-      font-weight: 600;
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-    }
-
-    .page-subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-
-    .page-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      flex: 0 0 auto;
-      margin-inline-start: auto;
-    }
-
-    html[dir="rtl"] .page-actions {
-      justify-content: flex-start;
-    }
-
-    .content {
-      flex: 1 1 auto;
-      overflow: auto;
-      overflow-x: hidden;
-      padding: 24px 28px 96px;
-    }
-
-    .view {
-      display: grid;
-      gap: 24px;
-      min-width: 0;
-    }
-
-    .panel,
-    .stat-card,
-    .table-wrap,
-    .feed,
-    .task-item,
-    .agent-card,
-    .popover,
-    .empty-state,
-    .session-screen {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-    }
-
-    .panel {
-      padding: 16px;
-      min-width: 0;
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    html[dir="rtl"] .panel-header,
-    html[dir="rtl"] .section-head,
-    html[dir="rtl"] .toolbar {
-      flex-direction: row-reverse;
-    }
-
-    .panel-title {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    .section-card {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    .section-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
-    }
-
-    .section-meta {
-      display: grid;
-      gap: 6px;
-      min-width: 0;
-    }
-
-    .section-kicker {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-
-    .section-subtitle {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .section-content {
-      padding: 16px;
-      min-width: 0;
-    }
-
-    .grid-4 {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      min-width: 0;
-    }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .grid-2-equal {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .stat-card {
-      padding: 16px;
-      display: grid;
-      gap: 14px;
-      min-height: 132px;
-    }
-
-    .stat-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-
-    .stat-value {
-      font-family: var(--font-mono);
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.03em;
-    }
-
-    .stat-trend {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .trend-up {
-      color: var(--success);
-    }
-
-    .trend-down {
-      color: var(--danger);
-    }
-
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      min-width: 0;
-    }
-
-    .stack {
-      display: grid;
-      gap: 12px;
-    }
-
-    .muted {
-      color: var(--text-secondary);
-    }
-
-    .mono {
-      font-family: var(--font-mono);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .icon {
-      width: 16px;
-      height: 16px;
-      display: inline-block;
-      flex: 0 0 auto;
-      pointer-events: none;
-    }
-
-    .button,
-    .ghost-button,
-    .danger-button,
-    .success-button {
-      min-height: 36px;
-      padding: 0 12px;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-      background: var(--surface-2);
-    }
-
-    .icon-button {
-      width: 32px;
-      height: 32px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--surface-2);
-      color: var(--text-secondary);
-      flex: 0 0 auto;
-    }
-
-    .task-inline-button-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
-      gap: 8px;
-      align-items: end;
-    }
-
-    .task-inline-button-actions {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      padding-bottom: 1px;
-    }
-
-    .button {
-      background: var(--accent);
-      border-color: rgba(88, 101, 242, 0.48);
-      color: #ffffff;
-    }
-
-    .danger-button {
-      background: rgba(229, 72, 77, 0.12);
-      color: var(--danger);
-      border-color: rgba(229, 72, 77, 0.32);
-    }
-
-    .success-button {
-      background: rgba(70, 167, 88, 0.12);
-      color: var(--success);
-      border-color: rgba(70, 167, 88, 0.32);
-    }
-
-    .button:hover {
-      background: #6570f3;
-    }
-
-    .ghost-button:hover,
-    .icon-button:hover,
-    .danger-button:hover,
-    .success-button:hover {
-      background: var(--surface-3);
-    }
-
-    .button:focus-visible,
-    .ghost-button:focus-visible,
-    .icon-button:focus-visible,
-    .danger-button:focus-visible,
-    .success-button:focus-visible,
-    .nav-item:focus-visible,
-    .group-trigger:focus-visible,
-    .field input:focus-visible,
-    .field textarea:focus-visible,
-    .field select:focus-visible,
-    .search-input:focus-visible,
-    .searchable-select-trigger:focus-visible,
-    .searchable-select-search:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 1px var(--accent);
-      border-color: var(--accent);
-    }
-
-    .search-input,
-    .field input,
-    .field textarea,
-    .field select,
-    .number-input {
-      width: 100%;
-      background: #0f0f0f;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      min-height: 38px;
-      padding: 0 12px;
-      color: var(--text);
-    }
-
-    .searchable-select {
-      position: relative;
-      display: grid;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .searchable-select-native {
-      display: none !important;
-    }
-
-    .searchable-select-trigger,
-    .searchable-select-search {
-      width: 100%;
-      min-height: 38px;
-      padding: 0 12px;
-      background: #0f0f0f;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-size: 13px;
-      text-align: start;
-    }
-
-    .searchable-select-trigger {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .searchable-select-search {
-      padding-inline-end: 36px;
-    }
-
-    .searchable-select-trigger[disabled],
-    .searchable-select-search[disabled] {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .searchable-select-trigger-text {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .searchable-select-trigger-icon {
-      color: var(--text-muted);
-      flex: 0 0 auto;
-      font-size: 12px;
-    }
-
-    .searchable-select-panel {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      overflow: hidden;
-      min-width: 0;
-    }
-
-    .searchable-select-panel.hidden {
-      display: none;
-    }
-
-    .searchable-select-search-wrap {
-      padding: 8px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.01);
-    }
-
-    .searchable-select-options {
-      display: grid;
-      gap: 0;
-      max-height: 240px;
-      overflow: auto;
-    }
-
-    .searchable-select-option {
-      width: 100%;
-      min-height: 42px;
-      padding: 10px 12px;
-      border: 0;
-      border-bottom: 1px solid var(--border);
-      background: transparent;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      text-align: start;
-      color: var(--text);
-    }
-
-    .searchable-select-option:last-child {
-      border-bottom: 0;
-    }
-
-    .searchable-select-option:hover {
-      background: var(--surface-3);
-    }
-
-    .searchable-select-option.active {
-      background: rgba(88, 101, 242, 0.08);
-    }
-
-    .searchable-select-option-copy {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .searchable-select-option-title,
-    .searchable-select-option-meta {
-      min-width: 0;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .searchable-select-option-meta {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .searchable-select-empty {
-      padding: 12px;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    .field textarea {
-      min-height: 96px;
-      padding: 10px 12px;
-      resize: vertical;
-    }
-
-    .search-input::placeholder,
-    .field input::placeholder,
-    .field textarea::placeholder {
-      color: var(--text-muted);
-    }
-
-    .field {
-      display: grid;
-      gap: 6px;
-    }
-
-    .field-label {
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .field-hint {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .field-error {
-      font-size: 12px;
-      color: var(--danger);
-    }
-
-    .table-wrap {
-      overflow-x: auto;
-      overflow-y: hidden;
-      max-width: 100%;
-    }
-
-    .table-wrap.no-scroll {
-      overflow: visible;
-    }
-
-    .table-wrap.no-scroll table {
-      min-width: 0;
-      table-layout: fixed;
-    }
-
-    .table-wrap.no-scroll th,
-    .table-wrap.no-scroll td {
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .table-wrap.row-actions-safe {
-      padding-bottom: 96px;
-    }
-
-    table {
-      width: 100%;
-      min-width: 640px;
-      border-collapse: collapse;
-    }
-
-    thead th {
-      background: #101010;
-      border-bottom: 1px solid var(--border);
-      padding: 12px 14px;
-      text-align: start;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    tbody td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-      vertical-align: top;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    tbody tr:hover {
-      background: rgba(255, 255, 255, 0.015);
-    }
-
-    .row-actions-cell {
-      text-align: end;
-      vertical-align: middle;
-      white-space: nowrap;
-    }
-
-    .row-actions {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: flex-end;
-      opacity: 1;
-      transition: opacity 150ms ease;
-    }
-
-    .row-actions-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--surface-2);
-      color: var(--text-secondary);
-    }
-
-    .row-actions-toggle:hover,
-    .row-actions-toggle:focus-visible,
-    .row-actions.is-open .row-actions-toggle {
-      color: var(--text);
-      background: var(--surface-3);
-      border-color: var(--accent);
-    }
-
-    .row-actions-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      z-index: 20;
-      min-width: 168px;
-      padding: 6px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: rgba(17, 17, 17, 0.98);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-      display: grid;
-      gap: 2px;
-    }
-
-    .row-action {
-      min-height: 36px;
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid transparent;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-secondary);
-      font-size: 12px;
-      line-height: 1.4;
-      text-align: left;
-    }
-
-    .row-action:hover,
-    .row-action:focus-visible {
-      color: var(--text);
-      background: var(--surface-3);
-    }
-
-    .row-action.danger {
-      color: var(--danger);
-    }
-
-    @media (pointer: fine) {
-      .row-actions {
-        opacity: 0.4;
-      }
-
-      tr:hover .row-actions,
-      tr:focus-within .row-actions {
-        opacity: 1;
-      }
-    }
-
-    @media (pointer: coarse) {
-      .row-actions {
-        opacity: 1;
-      }
-    }
-
-    .feed {
-      overflow: hidden;
-    }
-
-    .feed-row,
-    .settings-row,
-    .task-item,
-    .list-item,
-    .agent-card {
-      border-bottom: 1px solid var(--border);
-    }
-
-    .feed-row:last-child,
-    .settings-row:last-child,
-    .task-item:last-child,
-    .list-item:last-child,
-    .agent-card:last-child {
-      border-bottom: 0;
-    }
-
-    .feed-row,
-    .settings-row,
-    .list-item {
-      padding: 14px 16px;
-    }
-
-    .feed-meta,
-    .inline-meta {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-      font-size: 12px;
-      color: var(--text-secondary);
-    }
-
-    .quick-actions {
-      display: grid;
-      gap: 10px;
-    }
-
-    .quick-action {
-      width: 100%;
-      justify-content: flex-start;
-    }
-
-    .split-layout {
-      display: grid;
-      grid-template-columns: 200px minmax(0, 1fr);
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .category-list,
-    .tabs,
-    .subtabs {
-      display: grid;
-      gap: 4px;
-    }
-
-    .category-button,
-    .tab-button {
-      min-height: 40px;
-      padding: 0 12px;
-      border-inline-start: 2px solid transparent;
-      color: var(--text-secondary);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      background: transparent;
-      border-top: 1px solid transparent;
-      border-inline-end: 1px solid transparent;
-      border-bottom: 1px solid transparent;
-    }
-
-    .category-button.active,
-    .tab-button.active {
-      color: var(--text);
-      border-inline-start-color: var(--accent);
-      background: rgba(88, 101, 242, 0.08);
-    }
-
-    .settings-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
-      gap: 16px;
-      align-items: center;
-    }
-
-    .toggle {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: #0d0d0d;
-      display: inline-flex;
-      align-items: center;
-      padding: 2px;
-    }
-
-    .toggle::after {
-      content: "";
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--text-muted);
-      transition: transform 150ms ease, background-color 150ms ease;
-    }
-
-    .toggle.active {
-      background: rgba(88, 101, 242, 0.18);
-      border-color: rgba(88, 101, 242, 0.4);
-    }
-
-    .toggle.active::after {
-      background: var(--accent);
-      transform: translateX(20px);
-    }
-
-    .slider-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 92px;
-      gap: 8px;
-      align-items: center;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-    }
-
-    .saved-chip {
-      font-size: 13px;
-      color: var(--success);
-      opacity: 0;
-      transition: opacity 180ms ease;
-      white-space: nowrap;
-    }
-
-    .saved-chip.visible {
-      opacity: 1;
-    }
-
-    .saved-chip.error {
-      color: var(--danger);
-    }
-
-    .saved-chip.dirty {
-      color: var(--text-muted);
-    }
-
-    .settings-control-inline {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .gate-form {
-      display: grid;
-      gap: 12px;
-    }
-
-    .gate-inline-form {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      align-items: end;
-    }
-
-    .gate-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .gate-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: #0d0d0d;
-      min-width: 0;
-    }
-
-    .gate-row-copy {
-      display: grid;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .toolbar-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      min-width: 0;
-    }
-
-    .task-item,
-    .agent-card {
-      padding: 16px;
-      display: grid;
-      gap: 10px;
-      background: var(--surface);
-      min-width: 0;
-    }
-
-    .agents-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .agent-card .mono,
-    .agent-card .inline-meta,
-    .agent-card .muted {
-      min-width: 0;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .automation-layout {
-      display: grid;
-      grid-template-columns: minmax(320px, 1.1fr) minmax(340px, 0.95fr);
-      gap: 16px;
-      align-items: start;
-      min-width: 0;
-    }
-
-    .automation-column,
-    .automation-sidebar {
-      display: grid;
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .automation-sidebar {
-      position: sticky;
-      top: 0;
-    }
-
-    .automation-surface {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 32px),
-        var(--surface);
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    .automation-surface > .panel-header,
-    .automation-surface > .panel,
-    .automation-section {
-      min-width: 0;
-    }
-
-    .automation-section {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .automation-section:last-child {
-      border-bottom: 0;
-    }
-
-    .automation-surface-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 16px;
-    }
-
-    .automation-header-actions {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .automation-kicker {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .automation-empty {
-      padding: 24px 16px;
-      text-align: center;
-      color: var(--text-secondary);
-    }
-
-    .task-list {
-      display: grid;
-      gap: 0;
-    }
-
-    .task-item {
-      width: 100%;
-      border: 0;
-      border-radius: 0;
-      text-align: start;
-      padding: 14px 16px;
-      background:
-        linear-gradient(90deg, rgba(88, 101, 242, 0), rgba(88, 101, 242, 0)),
-        var(--surface);
-    }
-
-    .task-item.active {
-      background:
-        linear-gradient(90deg, rgba(88, 101, 242, 0.12), rgba(88, 101, 242, 0.03)),
-        var(--surface);
-    }
-
-    .task-item:hover {
-      background:
-        linear-gradient(90deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
-        var(--surface-2);
-    }
-
-    .task-item-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      min-width: 0;
-    }
-
-    html[dir="rtl"] .task-item-title {
-      flex-direction: row-reverse;
-    }
-
-    .task-item-body {
-      display: grid;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .task-item .mono {
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .task-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      color: var(--text-secondary);
-      font-size: 12px;
-      min-width: 0;
-    }
-
-    .task-editor {
-      padding: 0;
-      min-width: 0;
-    }
-
-    .task-editor .panel-header {
-      padding: 16px;
-      margin: 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .task-editor-form {
-      padding: 16px;
-      display: grid;
-      gap: 14px;
-    }
-
-    .split-fields {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .multi-select-shell {
-      display: grid;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .multi-select-list {
-      display: grid;
-      gap: 8px;
-      max-height: 220px;
-      overflow: auto;
-      padding: 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: rgba(17, 17, 17, 0.72);
-    }
-
-    .member-search-results.is-idle,
-    .member-search-results.is-loading,
-    .member-search-results.is-empty,
-    .member-search-results.is-error {
-      align-items: center;
-      justify-content: center;
-    }
-
-    .member-search-status {
-      min-height: 40px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      width: 100%;
-      font-size: 13px;
-      color: var(--text-muted);
-      text-align: center;
-    }
-
-    .member-search-results.is-error .member-search-status {
-      color: var(--danger);
-    }
-
-    .member-search-spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid currentColor;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: member-search-spin 0.7s linear infinite;
-      flex: 0 0 auto;
-    }
-
-    @keyframes member-search-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .multi-select-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .multi-select-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 28px;
-      padding: 0 10px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: #161616;
-      font-size: 12px;
-      min-width: 0;
-    }
-
-    .multi-select-chip.active {
-      border-color: rgba(88, 101, 242, 0.48);
-      background: rgba(88, 101, 242, 0.14);
-    }
-
-    .multi-select-chip-label {
-      border: 0;
-      background: transparent;
-      color: inherit;
-      padding: 0;
-      font: inherit;
-      cursor: pointer;
-      min-width: 0;
-      text-align: start;
-    }
-
-    .chip-remove {
-      border: 0;
-      background: transparent;
-      color: var(--text-secondary);
-      padding: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-
-    .multi-select-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: #141414;
-      min-width: 0;
-    }
-
-    .multi-select-item-copy {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .multi-select-empty {
-      padding: 10px 12px;
-      border: 1px dashed var(--border);
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    @media (max-width: 767px) {
-      .split-fields {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .scheduled-table td:last-child {
-      width: 160px;
-    }
-
-    @media (max-width: 767px) {
-      .scheduled-table td:last-child {
-        width: auto;
-      }
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      display: inline-block;
-      background: var(--text-muted);
-    }
-
-    .status-dot.success {
-      background: var(--success);
-    }
-
-    .status-dot.warning {
-      background: var(--warning);
-    }
-
-    .status-dot.danger {
-      background: var(--danger);
-    }
-
-    .status-dot.muted {
-      background: #666666;
-    }
-
-    .popover {
-      position: fixed;
-      z-index: 40;
-      width: min(360px, calc(100vw - 24px));
-      padding: 12px;
-      box-shadow: none;
-    }
-
-    .popover-list {
-      max-height: 320px;
-      overflow: auto;
-      margin-top: 10px;
-    }
-
-    .modal-backdrop,
-    .drawer-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
-      z-index: 60;
-    }
-
-    .modal-backdrop {
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-
-    .modal {
-      width: min(480px, 100%);
-      max-height: calc(100vh - 48px);
-      overflow: hidden;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      transform: scale(1);
-      opacity: 1;
-      transition: opacity 150ms ease, transform 150ms ease;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .modal.modal-wide {
-      width: min(760px, 100%);
-    }
-
-    .modal-header,
-    .modal-footer,
-    .modal-body,
-    .drawer-header,
-    .drawer-body {
-      padding: 16px;
-    }
-
-    .modal-header,
-    .modal-footer,
-    .drawer-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .modal-header {
-      min-height: 64px;
-      flex: 0 0 auto;
-    }
-
-    .modal-body {
-      flex: 1 1 auto;
-      overflow-y: auto;
-      max-height: calc(100vh - 180px);
-      overscroll-behavior: contain;
-      padding: 1rem;
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--border);
-      border-bottom: 0;
-      justify-content: space-between;
-      position: sticky;
-      bottom: 0;
-      background: var(--surface);
-      flex: 0 0 auto;
-    }
-
-    html[dir="rtl"] .drawer-header {
-      flex-direction: row-reverse;
-    }
-
-    .modal-footer-actions {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .modal-footer-start,
-    .modal-footer-end {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .modal-footer-end {
-      margin-inline-start: auto;
-    }
-
-    .drawer-backdrop {
-      display: flex;
-      justify-content: flex-end;
-    }
-
-    .drawer {
-      width: min(720px, 100vw);
-      height: 100vh;
-      background: var(--surface);
-      border-inline-start: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .drawer-body {
-      overflow: auto;
-      flex: 1 1 auto;
-    }
-
-    .toast-stack {
-      position: fixed;
-      inset-inline-end: 16px;
-      bottom: 16px;
-      z-index: 70;
-      display: grid;
-      gap: 8px;
-      width: min(360px, calc(100vw - 32px));
-    }
-
-    .toast {
-      border: 1px solid var(--border);
-      border-inline-start-width: 3px;
-      border-radius: var(--radius);
-      background: rgba(17, 17, 17, 0.96);
-      padding: 12px 12px 12px 14px;
-      font-size: 13px;
-      color: var(--text);
-    }
-
-    .toast.neutral {
-      border-inline-start-color: var(--text-secondary);
-    }
-
-    .toast.success {
-      border-inline-start-color: var(--success);
-    }
-
-    .toast.warning {
-      border-inline-start-color: var(--warning);
-    }
-
-    .toast.danger {
-      border-inline-start-color: var(--danger);
-    }
-
-    .chart {
-      display: flex;
-      align-items: end;
-      gap: 8px;
-      min-height: 180px;
-      padding-top: 16px;
-    }
-
-    .chart-bar {
-      flex: 1 1 0;
-      display: grid;
-      gap: 8px;
-      align-items: end;
-      justify-items: center;
-    }
-
-    .chart-bar-fill {
-      width: 100%;
-      border: 1px solid rgba(88, 101, 242, 0.32);
-      background: linear-gradient(180deg, rgba(88, 101, 242, 0.48), rgba(88, 101, 242, 0.12));
-      min-height: 8px;
-    }
-
-    .chart-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-    }
-
-    .json-toggle {
-      color: var(--accent);
-      font-size: 12px;
-    }
-
-    .json-view {
-      margin-top: 8px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      background: #0d0d0d;
-      border-radius: var(--radius);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-
-    .session-screen {
-      min-height: 320px;
-      display: grid;
-      place-items: center;
-      text-align: center;
-      padding: 32px;
-    }
-
-    .empty-state {
-      padding: 24px;
-      text-align: center;
-      color: var(--text-secondary);
-    }
-
-    .bottom-nav {
-      position: fixed;
-      inset-inline-start: 0;
-      inset-inline-end: 0;
-      bottom: 0;
-      z-index: 20;
-      grid-template-columns: repeat(var(--nav-count, 5), minmax(0, 1fr));
-      gap: 0;
-      border-top: 1px solid var(--border);
-      background: rgba(10, 10, 10, 0.98);
-      backdrop-filter: blur(12px);
-      padding-bottom: env(safe-area-inset-bottom, 0);
-    }
-
-    .bottom-nav.drawer-open {
-      transform: translateY(100%);
-    }
-
-    .bottom-nav .nav-item {
-      min-height: 60px;
-      justify-content: center;
-      border-inline-start: 0;
-      border-top: 2px solid transparent;
-      border-radius: 0;
-      padding: 0;
-    }
-
-    .bottom-nav .nav-label {
-      display: none;
-    }
-
-    html[dir="rtl"] .drawer-backdrop {
-      justify-content: flex-start;
-    }
-
-    @media (max-width: 1100px) {
-      .grid-4,
-      .grid-2-equal {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-
-      .automation-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .automation-sidebar {
-        position: static;
-      }
-    }
-
-    @media (max-width: 767px) {
-      body {
-        overflow: auto;
-      }
-
-      .app {
-        grid-template-columns: 1fr;
-      }
-
-      .sidebar {
-        display: none;
-      }
-
-      .bottom-nav {
-        display: grid !important;
-      }
-
-      .topbar {
-        padding: 16px 16px 12px;
-        min-height: auto;
-        align-items: flex-start;
-      }
-
-      .content {
-        padding: 16px 16px 92px;
-      }
-
-      .split-layout,
-      .settings-row,
-      .grid-4,
-      .grid-2-equal {
-        grid-template-columns: 1fr;
-      }
-
-      .table-wrap {
-        margin-inline: -16px;
-        padding-inline: 16px;
-        border-radius: 0;
-      }
-
-      table {
-        min-width: 560px;
-      }
-
-      .panel-header,
-      .toolbar {
-        align-items: flex-start;
-      }
-
-      .page-title {
-        font-size: 18px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/dashboard/assets/css/dashboard.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/dashboard/assets/js/state.js"></script>
+  <script src="/dashboard/assets/js/i18n.js"></script>
+  <script src="/dashboard/assets/js/mock.js"></script>
 </head>
 <body>
-  <div id="app" class="app">
-    <aside id="sidebar" class="sidebar"></aside>
-    <div class="main">
-      <header id="topbar" class="topbar"></header>
-      <main id="content" class="content"></main>
-    </div>
+<div class="app">
+  <nav id="sidebar" class="sidebar"></nav>
+  <div class="main">
+    <header id="topbar"></header>
+    <div id="content"></div>
+    <div id="bottom-nav" class="bottom-nav"></div>
   </div>
-  <nav id="bottom-nav" class="bottom-nav hidden"></nav>
-  <div id="group-popover-root"></div>
-  <div id="modal-root"></div>
-  <div id="drawer-root"></div>
-  <div id="toast-root"></div>
-  <script>
-    const APP_VERSION = "v2.0.0";
-    const INIT_DATA_STORAGE_KEY = "combot.telegramInitData";
-    const readLaunchParams = (source) => new URLSearchParams(String(source || "").replace(/^[?#]/, ""));
-    const searchParams = readLaunchParams(window.location.search);
-    const hashParams = readLaunchParams(window.location.hash);
+</div>
+<div id="group-popover-root"></div>
+<div id="modal-root"></div>
+<div id="drawer-root"></div>
+<div id="toast-root"></div>
+<script>
 
-    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-    const queryInitData =
-      searchParams.get("init_data") ||
-      searchParams.get("tgWebAppData") ||
-      hashParams.get("init_data") ||
-      hashParams.get("tgWebAppData") ||
-      "";
-    let telegramInitData = tg
-      ? (tg.initData || "")
-      : (
-          queryInitData ||
-          window.sessionStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-          window.localStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-          ""
-        );
-    const DEV_MODE = searchParams.get("mock") === "1";
-
-    function refreshTelegramInitData() {
-      const nextValue = tg
-        ? (
-            tg.initData ||
-            queryInitData ||
-            window.sessionStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-            window.localStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-            ""
-          )
-        : (
-            queryInitData ||
-            window.sessionStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-            window.localStorage.getItem(INIT_DATA_STORAGE_KEY) ||
-            ""
-          );
-      telegramInitData = nextValue;
-      if (telegramInitData) {
-        window.sessionStorage.setItem(INIT_DATA_STORAGE_KEY, telegramInitData);
-        window.localStorage.setItem(INIT_DATA_STORAGE_KEY, telegramInitData);
-      }
-      return telegramInitData;
-    }
-
-    if (tg) {
-      tg.ready();
-      tg.expand();
-      tg.setHeaderColor("#0a0a0a");
-      tg.setBackgroundColor("#0a0a0a");
-      refreshTelegramInitData();
-    } else if (DEV_MODE) {
-      console.warn("Telegram WebApp SDK unavailable. Running in explicit mock mode.");
-    } else {
-      console.warn("Telegram WebApp SDK unavailable. Using HTTP API mode with stored or query init data.");
-    }
-
-    const state = {
-      user: null,
-      groups: [],
-      activeGroupId: Number(localStorage.getItem("combot.activeGroupId")) || null,
-      route: location.hash || "#/overview",
-      isOwner: false,
-      sessionExpired: false,
-      subscriptionGate: {
-        active: false,
-        request: null,
-      },
-      loading: {
-        auth: false,
-        page: false,
-      },
-      cache: {
-        overview: {},
-        settings: {},
-        settingsSchema: null,
-        accessGate: {},
-        joinRequestSettings: {},
-        joinRequests: {},
-        scraper: {},
-        scraperList: {},
-        scraperMembers: {},
-        scraperMessages: {},
-        warnings: {},
-        logs: {},
-        moderationActivity: {},
-        members: {},
-        liveMemberSearch: {},
-        liveMemberDirectory: {},
-        taskCatalog: null,
-        tasks: {},
-        scheduledMessages: {},
-        agents: {},
-        agentGroups: {},
-        agentJobs: {},
-        botInstallGroups: null,
-        ownerStats: null,
-        ownerGroups: null,
-        ownerSubscriptions: null,
-        ownerPrivateAccessGate: null,
-        ownerAudit: null,
-      },
-      ui: {
-        groupPopoverOpen: false,
-        groupQuery: "",
-        moderationTab: "warnings",
-        ownerTab: "stats",
-        scraperDraft: {
-          agent_id: "",
-          tg_group_id: "",
-          member_limit: "100",
-          message_limit: "50",
-        },
-        scraperListFilters: {
-          agent_id: "",
-          tg_group_id: "",
-        },
-        settingsCategory: "",
-        accessGateProtectedGroupId: null,
-        settingsStatus: {},
-        moderationSettingsDraft: null,
-        automationSelection: null,
-        automationFormMode: "edit",
-        automationEditorOpen: false,
-        automationBindingGroupId: null,
-        bulkMessageOpen: false,
-        bulkMessageDraft: {
-          agent_id: "",
-          source_group_id: "",
-          source_managed_group_id: "",
-          message: "",
-          threshold: "25",
-          interval_seconds: "1",
-          selected_user_ids: [],
-          user_query: "",
-          loading: false,
-          error: "",
-        },
-        bulkAddMembersOpen: false,
-        bulkAddMembersDraft: {
-          agent_id: "",
-          source_group_id: "",
-          target_group_id: "",
-          interval_seconds: "20",
-          selected_user_ids: [],
-          user_query: "",
-          loading: false,
-          error: "",
-        },
-        quickActionDraft: null,
-        ownerGroupSearch: "",
-        warningSearch: "",
-        memberSearch: "",
-        moderationActivityGroup: "all",
-        moderationActivityFamily: "",
-        moderationActivitySearch: "",
-        logsActionFilter: "",
-        logsDateFrom: "",
-        logsDateTo: "",
-        ownerAuditFilter: "",
-        rowActionsOpenKey: "",
-        pagination: {},
-        paginationSizes: {},
-        drawerContext: null,
-        logJsonExpanded: {},
-        agentJobsFilter: {},
-        agentGroupsSearch: {},
-        agentGroupMembersSearch: {},
-        botInstallResult: null,
-      },
-      overlays: {
-        modal: null,
-        drawer: null,
-      },
-      toasts: [],
-    };
-
-    const messages = {
-      en: {
-        appTitle: "Combot WebApp",
-        dashboard: "Dashboard",
-        group: "Group",
-        selectGroup: "Select a group",
-        overview: "Overview",
-        settings: "Settings",
-        moderation: "Moderation",
-        automation: "Automation",
-        agents: "Agents",
-        scraper: "Scraper",
-        ownerPanel: "Owner Panel",
-        root: "root",
-        telegramUser: "Telegram user",
-        telegramWebApp: "Telegram WebApp",
-        languageSet: "Language set to {language}.",
-        overviewTitle: "Overview",
-        overviewSubtitle: "Group telemetry, live moderation activity, and quick actions.",
-        settingsTitle: "Settings",
-        settingsSubtitle: "Schema-driven configuration with immediate persistence.",
-        moderationTitle: "Moderation",
-        moderationSubtitle: "Warnings, actions, logs, and role management.",
-        automationTitle: "Automation",
-        automationSubtitle: "Task assignments, schedules, and execution routing.",
-        agentsTitle: "Agents",
-        agentsSubtitle: "Linked Telegram userbot accounts and job execution.",
-        scraperTitle: "Scraper",
-        scraperSubtitle: "Run linked-agent scrape jobs and inspect the stored group, member, and message data.",
-        ownerTitle: "Owner Panel",
-        ownerSubtitle: "Platform-wide operations, subscriptions, and audit events.",
-        scraperRunGroupInfo: "Group Info",
-        scraperRunMembers: "Members",
-        scraperRunMessages: "Messages",
-        scraperRunFull: "Full Scrape",
-        scraperExecutor: "Executor",
-        scraperExecutorAgent: "Linked Agent",
-        scraperExecutorBot: "Bot",
-        scraperExecutorHint: "Choose how the scraper job should run.",
-        scraperBotUnsupported: "Bot scraping is not supported yet. Use a linked agent account.",
-        scraperTargetGroup: "Target Telegram Group ID",
-        scraperAgent: "Scraper Agent",
-        scraperChooseAgent: "Choose the linked agent account that should run this scrape.",
-        scraperAgentRequired: "Choose a linked agent before starting a scraper job.",
-        scraperMembersLimit: "Member Limit",
-        scraperMessagesLimit: "Message Limit",
-        scraperStoredData: "Stored Data",
-        scraperListTitle: "All Scraped Data",
-        scraperListSubtitle: "Browse stored scraped groups and filter them by agent and group.",
-        scraperListEmpty: "No scraped data matches the current filters.",
-        scraperNoAgents: "Link an active agent for this group before starting scraper jobs.",
-        scraperNoData: "No scraped data has been stored for this target yet.",
-        scraperRefresh: "Refresh",
-        scraperLatestGroup: "Latest scraped group",
-        scraperQueued: "Scraper job queued.",
-        scraperRefreshed: "Scraper data refreshed.",
-        scraperQueueFailed: "Unable to queue scraper job.",
-        scraperMembersStored: "Stored members",
-        scraperMessagesStored: "Stored messages",
-        scraperUpdatedAt: "Updated",
-        scraperNoMessages: "No scraped messages yet.",
-        scraperNoMembers: "No scraped members yet.",
-        scraperGroupType: "Type",
-        scraperUsername: "Username",
-        scraperDescription: "Description",
-        scraperTargetHint: "Use the current workspace group ID or enter another Telegram group/channel ID the selected agent can access.",
-        subscriptionGateTitle: "Subscription required",
-        subscriptionGateSubtitle: "This WebApp is locked until the owner approves your subscription request.",
-        subscriptionGateHint: "Send a short note so the owner knows why you need access.",
-        subscriptionGatePlaceholder: "Tell the owner why you need dashboard access",
-        subscriptionGateSubmit: "Send subscription request",
-        subscriptionGatePending: "Latest request status: {status}",
-        subscriptionGateSent: "Subscription request sent.",
-        issueWarning: "Issue Warning",
-        muteUser: "Mute User",
-        banUser: "Ban User",
-        totalMembers: "Total Members",
-        activeWarnings: "Active Warnings",
-        messagesToday: "Messages Today",
-        moderationActions7d: "Moderation Actions (7d)",
-        vsLastWeekUp: "↑ 12% vs last week",
-        noChange: "No change",
-        activityFeed: "Activity Feed",
-        loadMore: "Load more",
-        quickActions: "Quick Actions",
-        liveSnapshot: "Live Snapshot",
-        recentLogRows: "Recent log rows: {count}",
-        configuredSettings: "Configured settings: {count}",
-        enabledPlugins: "Enabled plugins: {count}",
-        noOverviewData: "No overview data available for the selected group.",
-        accessGate: "Access Gate",
-        joinRequestTitle: "Join Request Verification",
-        joinRequestSubtitle: "Review pending requests and require users to satisfy the access gate before approval.",
-        joinRequestUsesAccessGate: "Required groups are configured in Access Gate and reused here automatically.",
-        joinRequestEnabled: "Verification enabled",
-        joinRequestRequiredGroups: "Required groups",
-        joinRequestNoRequiredGroups: "No required groups configured. Set them in Access Gate first.",
-        joinRequestPendingTitle: "Pending requests",
-        joinRequestPendingEmpty: "No pending join requests.",
-        joinRequestUser: "User",
-        joinRequestChecks: "Verification",
-        joinRequestRequired: "Required groups",
-        joinRequestRequestedAt: "Requested",
-        joinRequestVerified: "Verified",
-        joinRequestMissing: "Missing requirements",
-        joinRequestRefresh: "Refresh",
-        joinRequestToggleSaved: "Join request verification updated.",
-        joinRequestRefreshSaved: "Pending join requests refreshed.",
-        joinRequestApproveSaved: "Join request approved.",
-        joinRequestDeclineSaved: "Join request declined.",
-        joinRequestActionFailed: "Failed to update join request.",
-        requireMembership: "Require membership in other managed groups before entry is granted.",
-        noCandidateGroups: "No candidate groups available.",
-        botInstallTitle: "Add bot to groups",
-        botInstallSubtitle: "Prepare Telegram add links with admin rights before Anti links.",
-        botInstallHint: "Telegram still requires manual confirmation for each selected group.",
-        botInstallSelectGroups: "Target groups",
-        botInstallPermissions: "Admin permissions",
-        botInstallGenerate: "Generate add links",
-        botInstallSelectAll: "Select all",
-        botInstallClear: "Clear",
-        botInstallNoEligibleGroups: "No eligible groups are available for this Telegram session.",
-        botInstallNoGroups: "Select at least one group.",
-        botInstallReady: "Open each link and confirm the matching group in Telegram.",
-        botInstallOpenGroup: "Open for {group}",
-        botInstallGenerated: "Bot install links generated.",
-        gateAddGroup: "Add Required Group",
-        gateConfiguredGroups: "Required Groups",
-        gateNoGroups: "No required groups configured yet.",
-        gateChooseGroup: "Choose a managed group",
-        gateAdd: "Add Group",
-        gateRemove: "Remove",
-        saved: "Saved",
-        failed: "Failed",
-        noSettingsForCategory: "No settings found for this category.",
-        warnings: "Warnings",
-        actions: "Actions",
-        logs: "Logs",
-        members: "Members",
-        searchUsernameReason: "Search username or reason",
-        user: "User",
-        warningCount: "Warning Count",
-        lastWarning: "Last Warning",
-        reason: "Reason",
-        actionsCol: "Actions",
-        removeWarning: "Remove Warning",
-        noWarningsFound: "No warnings found.",
-        directAction: "Direct Action",
-        actionType: "Action Type",
-        mute: "Mute",
-        ban: "Ban",
-        unmute: "Unmute",
-        unban: "Unban",
-        userId: "User ID",
-        duration: "Duration",
-        unit: "Unit",
-        minutes: "Minutes",
-        hours: "Hours",
-        days: "Days",
-        submitAction: "Submit Action",
-        directActionHint: "The current backend exposes direct mute and ban actions. Unmute and unban remain visible for UI parity and will warn if unavailable.",
-        moderationLogs: "Moderation Logs",
-        allActions: "All actions",
-        time: "Time",
-        moderator: "Moderator",
-        target: "Target",
-        noLogEntries: "No log entries found.",
-        rowsPerPage: "50 rows per page",
-        prev: "Prev",
-        next: "Next",
-        searchMembers: "Search members",
-        username: "Username",
-        role: "Role",
-        joined: "Joined",
-        tracked: "Tracked",
-        noMembersFound: "No members found.",
-        taskAssignments: "Task Assignments",
-        activeDefinitions: "{count} active definitions",
-        addTask: "Add Task",
-        via: "via",
-        assignment: "assignment",
-        noTasksConfigured: "No tasks configured yet.",
-        scheduledMessages: "Scheduled Messages",
-        entriesCount: "{count} entries",
-        addScheduledMessage: "Add Scheduled Message",
-        bulkMessage: "Bulk Message",
-        bulkMessageSubtitle: "Queue a member broadcast job through a linked agent.",
-        bulkAddMembers: "Add Members",
-        bulkAddMembersSubtitle: "Queue staggered member adds through a linked agent account.",
-        bulkAddMemberJobs: "Member Add Jobs",
-        bulkAddMemberJobsSubtitle: "Queued member add requests for linked agents in this group.",
-        queueMemberAdd: "Queue Member Adds",
-        sendBulkMessage: "Send Bulk Message",
-        sourceGroup: "Source Group",
-        targetGroup: "Target Group",
-        selectAgent: "Select an agent",
-        selectSourceGroup: "Select a group",
-        selectTargetGroup: "Select a target group",
-        broadcastMessage: "Broadcast Message",
-        threshold: "Threshold",
-        intervalSeconds: "Interval Seconds",
-        users: "Users",
-        searchUsers: "Search users",
-        selectedUsers: "Selected Users",
-        noSelectedUsers: "No users selected yet.",
-        chooseGroupFirst: "Choose a group first to load users.",
-        chooseGroupSearchFirst: "Choose a group, then search for members.",
-        addUser: "Add",
-        pickUser: "Pick user",
-        searching: "Searching…",
-        noSearchResults: "No matching users found.",
-        linkedAgentRequired: "Link an active agent to search group members.",
-        close: "Close",
-        bulkUsersHint: "Select one or more users from the chosen group. Leave empty to use the threshold-based selection.",
-        noBulkUsers: "No group members available for selection.",
-        noAgentsLinkedHint: "Link at least one healthy agent to queue a member broadcast.",
-        bulkMessageQueued: "Member broadcast job queued.",
-        bulkMessageUnavailable: "Bulk message delivery requires at least one linked agent.",
-        bulkMessageFailed: "Unable to queue member broadcast.",
-        bulkAddMembersQueued: "Member add jobs queued.",
-        bulkAddMembersFailed: "Unable to queue member add jobs.",
-        bulkAddMemberJobsEmpty: "No member add jobs found.",
-        bulkAddMemberJobsUnavailable: "Link an agent first to view member add jobs.",
-        queueRunJob: "Run",
-        queueAbortJob: "Abort",
-        queueJobRunSuccess: "Job queued to run.",
-        queueJobAbortSuccess: "Job aborted.",
-        queueJobActionFailed: "Unable to update job.",
-        thresholdValidation: "Threshold must be at least 1.",
-        intervalValidation: "Interval must be 0 or higher.",
-        bulkMessageRequired: "Source group and message are required.",
-        bulkAddMembersRequired: "Agent, source group, target group, and selected users are required.",
-        bulkAddMembersHint: "Use a healthy delay between adds. 20 to 60 seconds is safer than rapid bursts.",
-        addCapableGroupRequired: "Choose a target group where the selected agent can invite users.",
-        messagePreview: "Message Preview",
-        schedule: "Schedule",
-        nextRun: "Next Run",
-        edit: "Edit",
-        delete: "Delete",
-        noScheduledMessages: "No scheduled messages.",
-        taskDetail: "Task Detail",
-        taskType: "Task Type",
-        executor: "Executor",
-        enabled: "Enabled",
-        textContainsAny: "Text Contains Any",
-        hasText: "Has Text",
-        unset: "Unset",
-        save: "Save",
-        cancel: "Cancel",
-        noTaskSchema: "No configuration schema for this task.",
-        linkedAccounts: "{count} linked accounts",
-        linkNewAgent: "Link New Agent",
-        linked: "Linked {when}",
-        jobsCount: "{count} jobs",
-        lastActive: "last active {when}",
-        viewJobs: "View Jobs",
-        viewGroups: "View Groups",
-        unlink: "Unlink",
-        noLinkedAgents: "No linked agents for this group.",
-        stats: "Stats",
-        groups: "Groups",
-        subscriptions: "Subscriptions",
-        botGate: "Bot Gate",
-        auditLog: "Audit Log",
-        totalGroups: "Total Groups",
-        activeGroups: "Active Groups",
-        totalUsers: "Total Users",
-        pendingSubscriptions: "Pending Subscriptions",
-        privateBotGate: "Private Bot Gate",
-        privateBotGateBody: "Require membership in selected groups before users can use the bot in private chat.",
-        platformTotal: "Platform total",
-        servingTraffic: "Serving traffic",
-        trackedAdmins: "Tracked admins",
-        needsReview: "Needs review",
-        groupsRegisteredPerMonth: "Groups Registered Per Month",
-        searchGroups: "Search groups",
-        groupName: "Group Name",
-        status: "Status",
-        registered: "Registered",
-        view: "View",
-        disable: "Disable",
-        forceLeave: "Force Leave",
-        noGroupsFound: "No groups found.",
-        requester: "Requester",
-        subscriptionStatus: "Status",
-        requestedAt: "Requested At",
-        approve: "Approve",
-        decline: "Decline",
-        cancelSubscription: "Cancel Subscription",
-        approved: "Approved",
-        declined: "Declined",
-        cancelled: "Cancelled",
-        pending: "Pending",
-        noSubscriptionRequests: "No subscription requests.",
-        noBotGateGroups: "No managed groups are available for the bot gate.",
-        ownerGroupsPage: "Page {current} of {total}",
-        timestamp: "Timestamp",
-        actor: "Actor",
-        detail: "Detail",
-        viewJson: "View JSON",
-        hideJson: "Hide JSON",
-        noAuditEntries: "No audit entries.",
-        page: "Page {page}",
-        noManagedGroups: "No managed groups are available for this account.",
-        sessionExpiredTitle: "Session expired.",
-        sessionExpiredBody: "Please reopen the WebApp from Telegram to continue.",
-        noRecentModeration: "No recent moderation activity.",
-        event: "event",
-        now: "now",
-        unknown: "unknown",
-        system: "system",
-        selectUser: "Select user",
-        manualUserId: "Manual User ID",
-        quickActionSubtitle: "Choose a group, then select the target user and reason.",
-        userFallbackHint: "Manual Telegram user ID still works if the user is not listed here.",
-        count: "Count",
-        chooseGroupUser: "Select a group and user first.",
-        moderationSaved: "Moderation action saved.",
-        warningRemoved: "Warning removed.",
-        roleUpdated: "Role updated.",
-        roleUpdateFailed: "Failed to update role.",
-        taskDeleted: "Task deleted.",
-        scheduledDeleted: "Scheduled message deleted.",
-        taskSaved: "Task saved.",
-        scheduledSaved: "Scheduled message saved.",
-        networkError: "Network error. Check your connection and try again.",
-        noPermission: "You don't have permission for this action.",
-        somethingWrong: "Something went wrong. Try again.",
-        failedDashboard: "Failed to load dashboard.",
-        groupDisabled: "Group disabled.",
-        botLeftGroup: "Bot left group.",
-        subscriptionUpdated: "Subscription updated.",
-        editFlowPlaceholder: "Edit flow keeps the existing backend contract and can be expanded from this shell.",
-        ownerDetailPanel: "Owner detail panel",
-        areYouSure: "Are you sure?",
-        response: "Response",
-        optionalNote: "Optional note",
-        approveSubscription: "Approve Subscription",
-        declineSubscription: "Decline Subscription",
-        groupDetail: "Group Detail",
-        close: "Close",
-      },
-      ar: {
-        appTitle: "كومبوت ويب آب",
-        dashboard: "لوحة التحكم",
-        group: "المجموعة",
-        selectGroup: "اختر مجموعة",
-        overview: "نظرة عامة",
-        settings: "الإعدادات",
-        moderation: "الإشراف",
-        automation: "الأتمتة",
-        agents: "الوكلاء",
-        scraper: "السحب",
-        ownerPanel: "لوحة المالك",
-        root: "مالك",
-        telegramUser: "مستخدم تيليجرام",
-        telegramWebApp: "ويب آب تيليجرام",
-        languageSet: "تم تغيير اللغة إلى {language}.",
-        overviewTitle: "نظرة عامة",
-        overviewSubtitle: "إحصاءات المجموعة ونشاط الإشراف والإجراءات السريعة.",
-        settingsTitle: "الإعدادات",
-        settingsSubtitle: "إعدادات مبنية على المخطط مع حفظ مباشر.",
-        moderationTitle: "الإشراف",
-        moderationSubtitle: "التحذيرات والإجراءات والسجلات وإدارة الصلاحيات.",
-        automationTitle: "الأتمتة",
-        automationSubtitle: "المهام المجدولة والتنفيذ ومسارات التشغيل.",
-        agentsTitle: "الوكلاء",
-        agentsSubtitle: "حسابات تيليجرام المرتبطة وسجل الوظائف.",
-        scraperTitle: "السحب",
-        scraperSubtitle: "شغّل مهام السحب عبر الوكلاء المرتبطين واستعرض بيانات المجموعة والأعضاء والرسائل المخزنة.",
-        ownerTitle: "لوحة المالك",
-        ownerSubtitle: "عمليات المنصة والاشتراكات وسجل التدقيق.",
-        scraperRunGroupInfo: "معلومات المجموعة",
-        scraperRunMembers: "الأعضاء",
-        scraperRunMessages: "الرسائل",
-        scraperRunFull: "سحب كامل",
-        scraperExecutor: "المنفّذ",
-        scraperExecutorAgent: "وكيل مرتبط",
-        scraperExecutorBot: "البوت",
-        scraperExecutorHint: "اختر كيفية تشغيل مهمة السحب.",
-        scraperBotUnsupported: "السحب عبر البوت غير مدعوم بعد. استخدم حساب وكيل مرتبط.",
-        scraperTargetGroup: "معرّف مجموعة تيليجرام الهدف",
-        scraperAgent: "وكيل السحب",
-        scraperChooseAgent: "اختر حساب الوكيل المرتبط الذي سيشغّل عملية السحب.",
-        scraperAgentRequired: "اختر وكيلاً مرتبطاً قبل تشغيل مهمة السحب.",
-        scraperMembersLimit: "حد الأعضاء",
-        scraperMessagesLimit: "حد الرسائل",
-        scraperStoredData: "البيانات المخزنة",
-        scraperListTitle: "كل البيانات المسحوبة",
-        scraperListSubtitle: "استعرض المجموعات المسحوبة المخزنة وصفِّها حسب الوكيل والمجموعة.",
-        scraperListEmpty: "لا توجد بيانات سحب تطابق عوامل التصفية الحالية.",
-        scraperNoAgents: "اربط وكيلاً نشطاً لهذه المجموعة قبل تشغيل مهام السحب.",
-        scraperNoData: "لا توجد بيانات سحب مخزنة لهذا الهدف بعد.",
-        scraperRefresh: "تحديث",
-        scraperLatestGroup: "آخر مجموعة مسحوبة",
-        scraperQueued: "تمت إضافة مهمة السحب إلى الطابور.",
-        scraperRefreshed: "تم تحديث بيانات السحب.",
-        scraperQueueFailed: "تعذر إضافة مهمة السحب.",
-        scraperMembersStored: "الأعضاء المخزنون",
-        scraperMessagesStored: "الرسائل المخزنة",
-        scraperUpdatedAt: "آخر تحديث",
-        scraperNoMessages: "لا توجد رسائل مسحوبة بعد.",
-        scraperNoMembers: "لا يوجد أعضاء مسحوبون بعد.",
-        scraperGroupType: "النوع",
-        scraperUsername: "اسم المستخدم",
-        scraperDescription: "الوصف",
-        scraperTargetHint: "استخدم معرّف مجموعة مساحة العمل الحالية أو أدخل معرّف مجموعة أو قناة أخرى يستطيع الوكيل المحدد الوصول إليها.",
-        subscriptionGateTitle: "الاشتراك مطلوب",
-        subscriptionGateSubtitle: "هذا الويب آب مقفل حتى يوافق المالك على طلب اشتراكك.",
-        subscriptionGateHint: "أرسل ملاحظة قصيرة حتى يعرف المالك سبب حاجتك للوصول.",
-        subscriptionGatePlaceholder: "اذكر للمالك سبب حاجتك إلى لوحة التحكم",
-        subscriptionGateSubmit: "إرسال طلب اشتراك",
-        subscriptionGatePending: "حالة آخر طلب: {status}",
-        subscriptionGateSent: "تم إرسال طلب الاشتراك.",
-        issueWarning: "إصدار تحذير",
-        muteUser: "كتم المستخدم",
-        banUser: "حظر المستخدم",
-        totalMembers: "إجمالي الأعضاء",
-        activeWarnings: "التحذيرات النشطة",
-        messagesToday: "رسائل اليوم",
-        moderationActions7d: "إجراءات الإشراف خلال 7 أيام",
-        vsLastWeekUp: "↑ 12% مقارنة بالأسبوع الماضي",
-        noChange: "بدون تغيير",
-        activityFeed: "سجل النشاط",
-        loadMore: "تحميل المزيد",
-        quickActions: "إجراءات سريعة",
-        liveSnapshot: "ملخص مباشر",
-        recentLogRows: "عدد السجلات الأخيرة: {count}",
-        configuredSettings: "الإعدادات المضبوطة: {count}",
-        enabledPlugins: "الإضافات المفعلة: {count}",
-        noOverviewData: "لا توجد بيانات نظرة عامة للمجموعة المحددة.",
-        accessGate: "بوابة الوصول",
-        joinRequestTitle: "التحقق من طلبات الانضمام",
-        joinRequestSubtitle: "راجع الطلبات المعلقة واشترط استيفاء مجموعات بوابة الوصول قبل الموافقة.",
-        joinRequestUsesAccessGate: "المجموعات المطلوبة تُدار من بوابة الوصول ويُعاد استخدامها هنا تلقائياً.",
-        joinRequestEnabled: "تفعيل التحقق",
-        joinRequestRequiredGroups: "المجموعات المطلوبة",
-        joinRequestNoRequiredGroups: "لا توجد مجموعات مطلوبة. اضبطها أولاً من بوابة الوصول.",
-        joinRequestPendingTitle: "الطلبات المعلقة",
-        joinRequestPendingEmpty: "لا توجد طلبات انضمام معلقة.",
-        joinRequestUser: "المستخدم",
-        joinRequestChecks: "التحقق",
-        joinRequestRequired: "المجموعات المطلوبة",
-        joinRequestRequestedAt: "وقت الطلب",
-        joinRequestVerified: "تم التحقق",
-        joinRequestMissing: "المتطلبات غير مكتملة",
-        joinRequestRefresh: "تحديث",
-        joinRequestToggleSaved: "تم تحديث تحقق طلبات الانضمام.",
-        joinRequestRefreshSaved: "تم تحديث طلبات الانضمام المعلقة.",
-        joinRequestApproveSaved: "تمت الموافقة على طلب الانضمام.",
-        joinRequestDeclineSaved: "تم رفض طلب الانضمام.",
-        joinRequestActionFailed: "تعذر تحديث طلب الانضمام.",
-        requireMembership: "اشترط العضوية في مجموعات أخرى مُدارة قبل السماح بالدخول.",
-        noCandidateGroups: "لا توجد مجموعات متاحة للاختيار.",
-        botInstallTitle: "إضافة البوت إلى المجموعات",
-        botInstallSubtitle: "جهّز روابط إضافة تيليجرام مع صلاحيات المشرف قبل Anti links.",
-        botInstallHint: "ما يزال تيليجرام يتطلب تأكيداً يدوياً لكل مجموعة مختارة.",
-        botInstallSelectGroups: "المجموعات المستهدفة",
-        botInstallPermissions: "صلاحيات المشرف",
-        botInstallGenerate: "إنشاء روابط الإضافة",
-        botInstallSelectAll: "تحديد الكل",
-        botInstallClear: "مسح",
-        botInstallNoEligibleGroups: "لا توجد مجموعات مؤهلة متاحة في جلسة تيليجرام الحالية.",
-        botInstallNoGroups: "اختر مجموعة واحدة على الأقل.",
-        botInstallReady: "افتح كل رابط وأكد المجموعة المطابقة داخل تيليجرام.",
-        botInstallOpenGroup: "فتح لـ {group}",
-        botInstallGenerated: "تم إنشاء روابط إضافة البوت.",
-        gateAddGroup: "إضافة مجموعة مطلوبة",
-        gateConfiguredGroups: "المجموعات المطلوبة",
-        gateNoGroups: "لا توجد مجموعات مطلوبة مضبوطة بعد.",
-        gateChooseGroup: "اختر مجموعة مُدارة",
-        gateAdd: "إضافة مجموعة",
-        gateRemove: "إزالة",
-        saved: "تم الحفظ",
-        failed: "فشل",
-        noSettingsForCategory: "لا توجد إعدادات في هذا القسم.",
-        warnings: "التحذيرات",
-        actions: "الإجراءات",
-        logs: "السجلات",
-        members: "الأعضاء",
-        searchUsernameReason: "ابحث باسم المستخدم أو السبب",
-        user: "المستخدم",
-        warningCount: "عدد التحذيرات",
-        lastWarning: "آخر تحذير",
-        reason: "السبب",
-        actionsCol: "الإجراءات",
-        removeWarning: "إزالة التحذير",
-        noWarningsFound: "لا توجد تحذيرات.",
-        directAction: "إجراء مباشر",
-        actionType: "نوع الإجراء",
-        mute: "كتم",
-        ban: "حظر",
-        unmute: "إلغاء الكتم",
-        unban: "إلغاء الحظر",
-        userId: "معرف المستخدم",
-        duration: "المدة",
-        unit: "الوحدة",
-        minutes: "دقائق",
-        hours: "ساعات",
-        days: "أيام",
-        submitAction: "تنفيذ الإجراء",
-        directActionHint: "الخلفية الحالية تدعم الكتم والحظر مباشرة فقط. تمت إبقاء إلغاء الكتم وإلغاء الحظر في الواجهة للتوافق وسيظهر تنبيه عند عدم الدعم.",
-        moderationLogs: "سجلات الإشراف",
-        allActions: "كل الإجراءات",
-        time: "الوقت",
-        moderator: "المشرف",
-        target: "الهدف",
-        noLogEntries: "لا توجد سجلات.",
-        rowsPerPage: "50 صفًا في الصفحة",
-        prev: "السابق",
-        next: "التالي",
-        searchMembers: "ابحث في الأعضاء",
-        username: "اسم المستخدم",
-        role: "الدور",
-        joined: "تاريخ الإضافة",
-        tracked: "متابع",
-        noMembersFound: "لا يوجد أعضاء.",
-        taskAssignments: "تعيينات المهام",
-        activeDefinitions: "{count} مهام نشطة",
-        addTask: "إضافة مهمة",
-        via: "عبر",
-        assignment: "مهمة",
-        noTasksConfigured: "لا توجد مهام مضبوطة حتى الآن.",
-        scheduledMessages: "الرسائل المجدولة",
-        entriesCount: "{count} عناصر",
-        addScheduledMessage: "إضافة رسالة مجدولة",
-        bulkMessage: "رسالة جماعية",
-        bulkMessageSubtitle: "ضع مهمة إرسال إلى أعضاء المجموعة عبر وكيل مرتبط.",
-        bulkAddMembers: "إضافة أعضاء",
-        bulkAddMembersSubtitle: "ضع مهام إضافة أعضاء بشكل متدرج عبر حساب وكيل مرتبط.",
-        bulkAddMemberJobs: "مهام إضافة الأعضاء",
-        bulkAddMemberJobsSubtitle: "طلبات إضافة الأعضاء الموجودة في الطابور للوكلاء المرتبطين في هذه المجموعة.",
-        queueMemberAdd: "إضافة الأعضاء للطابور",
-        sendBulkMessage: "إرسال رسالة جماعية",
-        sourceGroup: "المجموعة المصدر",
-        targetGroup: "المجموعة الهدف",
-        selectAgent: "اختر وكيلاً",
-        selectSourceGroup: "اختر مجموعة",
-        selectTargetGroup: "اختر المجموعة الهدف",
-        broadcastMessage: "نص الرسالة",
-        threshold: "الحد",
-        intervalSeconds: "الفاصل بالثواني",
-        users: "المستخدمون",
-        searchUsers: "ابحث عن المستخدمين",
-        selectedUsers: "المستخدمون المحددون",
-        noSelectedUsers: "لا يوجد مستخدمون محددون بعد.",
-        chooseGroupFirst: "اختر مجموعة أولاً لتحميل المستخدمين.",
-        chooseGroupSearchFirst: "اختر مجموعة ثم ابحث عن الأعضاء.",
-        addUser: "إضافة",
-        pickUser: "اختر مستخدمًا",
-        searching: "جارٍ البحث…",
-        noSearchResults: "لا توجد نتائج مطابقة.",
-        linkedAgentRequired: "اربط وكيلاً نشطًا أولاً للبحث في أعضاء المجموعة.",
-        close: "إغلاق",
-        bulkUsersHint: "اختر مستخدمًا واحدًا أو أكثر من المجموعة المحددة. اتركه فارغًا لاستخدام الحد العددي.",
-        noBulkUsers: "لا يوجد أعضاء متاحون للاختيار.",
-        noAgentsLinkedHint: "اربط وكيلاً واحداً على الأقل لبدء إرسال الرسائل الجماعية.",
-        bulkMessageQueued: "تمت إضافة مهمة الرسالة الجماعية.",
-        bulkMessageUnavailable: "إرسال الرسائل الجماعية يحتاج إلى وكيل مرتبط واحد على الأقل.",
-        bulkMessageFailed: "تعذر إضافة مهمة الرسالة الجماعية.",
-        bulkAddMembersQueued: "تمت إضافة مهام إضافة الأعضاء إلى الطابور.",
-        queueRunJob: "تشغيل",
-        queueAbortJob: "إيقاف",
-        queueJobRunSuccess: "تمت إضافة المهمة للتشغيل.",
-        queueJobAbortSuccess: "تم إيقاف المهمة.",
-        queueJobActionFailed: "تعذر تحديث المهمة.",
-        bulkAddMembersFailed: "تعذر إضافة مهام إضافة الأعضاء.",
-        bulkAddMemberJobsEmpty: "لا توجد مهام إضافة أعضاء.",
-        bulkAddMemberJobsUnavailable: "اربط وكيلاً أولاً لعرض مهام إضافة الأعضاء.",
-        thresholdValidation: "يجب أن يكون الحد 1 أو أكثر.",
-        intervalValidation: "يجب أن يكون الفاصل 0 أو أكثر.",
-        bulkMessageRequired: "المجموعة المصدر ونص الرسالة مطلوبان.",
-        bulkAddMembersRequired: "الوكيل والمجموعة المصدر والمجموعة الهدف والأعضاء المحددون مطلوبة.",
-        bulkAddMembersHint: "استخدم فاصلًا صحيًا بين كل إضافة. من 20 إلى 60 ثانية أكثر أمانًا من الإرسال السريع.",
-        addCapableGroupRequired: "اختر مجموعة هدف يستطيع الوكيل المحدد دعوة المستخدمين إليها.",
-        messagePreview: "معاينة الرسالة",
-        schedule: "الجدولة",
-        nextRun: "التشغيل التالي",
-        edit: "تعديل",
-        delete: "حذف",
-        noScheduledMessages: "لا توجد رسائل مجدولة.",
-        taskDetail: "تفاصيل المهمة",
-        taskType: "نوع المهمة",
-        executor: "المنفذ",
-        enabled: "مفعل",
-        textContainsAny: "يحتوي النص على أي من",
-        hasText: "يحتوي على نص",
-        unset: "غير محدد",
-        save: "حفظ",
-        cancel: "إلغاء",
-        noTaskSchema: "لا يوجد مخطط إعدادات لهذه المهمة.",
-        linkedAccounts: "{count} حسابات مرتبطة",
-        linkNewAgent: "ربط وكيل جديد",
-        linked: "تم الربط {when}",
-        jobsCount: "{count} وظائف",
-        lastActive: "آخر نشاط {when}",
-        viewJobs: "عرض الوظائف",
-        unlink: "إلغاء الربط",
-        noLinkedAgents: "لا يوجد وكلاء مرتبطون لهذه المجموعة.",
-        stats: "الإحصاءات",
-        groups: "المجموعات",
-        subscriptions: "الاشتراكات",
-        botGate: "بوابة البوت",
-        auditLog: "سجل التدقيق",
-        totalGroups: "إجمالي المجموعات",
-        activeGroups: "المجموعات النشطة",
-        totalUsers: "إجمالي المستخدمين",
-        pendingSubscriptions: "الاشتراكات المعلقة",
-        privateBotGate: "بوابة البوت الخاصة",
-        privateBotGateBody: "اشترط عضوية المجموعات المحددة قبل أن يتمكن المستخدم من استخدام البوت في الخاص.",
-        platformTotal: "إجمالي المنصة",
-        servingTraffic: "تخدم النشاط",
-        trackedAdmins: "المشرفون المتابعون",
-        needsReview: "بحاجة إلى مراجعة",
-        groupsRegisteredPerMonth: "المجموعات المسجلة شهريًا",
-        searchGroups: "ابحث في المجموعات",
-        groupName: "اسم المجموعة",
-        status: "الحالة",
-        registered: "تاريخ التسجيل",
-        view: "عرض",
-        disable: "تعطيل",
-        forceLeave: "إجبار المغادرة",
-        noGroupsFound: "لا توجد مجموعات.",
-        requester: "صاحب الطلب",
-        subscriptionStatus: "الحالة",
-        requestedAt: "وقت الطلب",
-        approve: "موافقة",
-        decline: "رفض",
-        cancelSubscription: "إلغاء الاشتراك",
-        approved: "تمت الموافقة",
-        declined: "تم الرفض",
-        cancelled: "تم الإلغاء",
-        pending: "قيد الانتظار",
-        noSubscriptionRequests: "لا توجد طلبات اشتراك.",
-        noBotGateGroups: "لا توجد مجموعات مُدارة متاحة لبوابة البوت.",
-        ownerGroupsPage: "الصفحة {current} من {total}",
-        timestamp: "الوقت",
-        actor: "المنفذ",
-        detail: "التفاصيل",
-        viewJson: "عرض JSON",
-        hideJson: "إخفاء JSON",
-        noAuditEntries: "لا توجد سجلات تدقيق.",
-        page: "الصفحة {page}",
-        noManagedGroups: "لا توجد مجموعات مُدارة لهذا الحساب.",
-        sessionExpiredTitle: "انتهت الجلسة.",
-        sessionExpiredBody: "أعد فتح التطبيق من تيليجرام للمتابعة.",
-        noRecentModeration: "لا يوجد نشاط إشراف حديث.",
-        event: "حدث",
-        now: "الآن",
-        unknown: "غير معروف",
-        system: "النظام",
-        selectUser: "اختر المستخدم",
-        manualUserId: "معرف المستخدم اليدوي",
-        quickActionSubtitle: "اختر المجموعة أولًا ثم المستخدم المستهدف والسبب.",
-        userFallbackHint: "يمكنك إدخال معرف المستخدم يدويًا إذا لم يظهر في القائمة.",
-        count: "العدد",
-        chooseGroupUser: "اختر المجموعة والمستخدم أولًا.",
-        moderationSaved: "تم حفظ إجراء الإشراف.",
-        warningRemoved: "تمت إزالة التحذير.",
-        roleUpdated: "تم تحديث الدور.",
-        roleUpdateFailed: "فشل تحديث الدور.",
-        taskDeleted: "تم حذف المهمة.",
-        scheduledDeleted: "تم حذف الرسالة المجدولة.",
-        taskSaved: "تم حفظ المهمة.",
-        scheduledSaved: "تم حفظ الرسالة المجدولة.",
-        networkError: "خطأ في الشبكة. تحقق من الاتصال ثم أعد المحاولة.",
-        noPermission: "ليس لديك صلاحية لهذا الإجراء.",
-        somethingWrong: "حدث خطأ ما. حاول مرة أخرى.",
-        failedDashboard: "فشل تحميل لوحة التحكم.",
-        groupDisabled: "تم تعطيل المجموعة.",
-        botLeftGroup: "غادر البوت المجموعة.",
-        subscriptionUpdated: "تم تحديث الاشتراك.",
-        editFlowPlaceholder: "تدفق التعديل يحافظ على عقد الخلفية الحالية ويمكن توسيعه لاحقًا.",
-        ownerDetailPanel: "لوحة تفاصيل المالك",
-        areYouSure: "هل أنت متأكد؟",
-        response: "الرد",
-        optionalNote: "ملاحظة اختيارية",
-        approveSubscription: "الموافقة على الاشتراك",
-        declineSubscription: "رفض الاشتراك",
-        groupDetail: "تفاصيل المجموعة",
-        close: "إغلاق",
-      },
-    };
-
-    const mockDb = {
-      auth: {
-        user: {
-          id: 1,
-          username: "owner",
-          first_name: "Combot",
-          last_name: "Owner",
-          language_code: "en",
-        },
-        is_bot_owner: true,
-        subscription_required: false,
-        subscription_request: null,
-        groups: [
-          { id: 101, title: "Growth Ops Room", tg_group_id: -100101, role: "owner" },
-          { id: 202, title: "Support Escalations", tg_group_id: -100202, role: "admin" },
-        ],
-      },
-      overview: {
-        101: {
-          group: { id: 101, title: "Growth Ops Room", tg_group_id: -100101 },
-          stats: {
-            configured_settings: 18,
-            enabled_plugins: 6,
-            total_warnings: 7,
-            total_leads: 32,
-            active_moderators: 4,
-            member_growth: { tracked_admin_accounts: 4 },
-            message_activity: {
-              "2026-03-28": 41,
-              "2026-03-29": 58,
-              "2026-03-30": 45,
-              "2026-03-31": 62,
-              "2026-04-01": 39,
-            },
-          },
-          recent_actions: [
-            {
-              action: "warn",
-              reason: "Repeated invite links",
-              moderator_id: 1,
-              created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-              details: { target_user_id: 4001 },
-            },
-            {
-              action: "mute_user",
-              reason: "Flooding",
-              moderator_id: 2,
-              created_at: new Date(Date.now() - 36 * 60 * 1000).toISOString(),
-              details: { target_user_id: 4002 },
-            },
-            {
-              action: "ban_user",
-              reason: "Scam links",
-              moderator_id: 1,
-              created_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-              details: { target_user_id: 4003 },
-            },
-          ],
-        },
-      },
-      settingsSchema: {
-        anti_links: [
-          { key: "anti_links_enabled", type: "toggle", category: "general", label_key: "Anti links", default: true },
-          { key: "anti_links_warn_limit", type: "number", category: "general", label_key: "Warn limit", min: 1, max: 10, default: 3 },
-        ],
-        anti_spam: [
-          { key: "anti_spam_enabled", type: "toggle", category: "moderation", label_key: "Anti spam", default: true },
-          { key: "anti_spam_threshold", type: "number", category: "moderation", label_key: "Spam threshold", min: 1, max: 100, default: 12 },
-        ],
-        semantic_assistant: [
-          { key: "semantic_assistant_enabled", type: "toggle", category: "automation", label_key: "Semantic assistant", default: false },
-          { key: "semantic_assistant_prompt", type: "text", category: "automation", label_key: "Prompt", default: "Reply concisely." },
-        ],
-      },
-      settings: {
-        101: {
-          anti_links_enabled: true,
-          anti_links_warn_limit: 3,
-          anti_spam_enabled: true,
-          anti_spam_threshold: 12,
-          semantic_assistant_enabled: false,
-          semantic_assistant_prompt: "Reply concisely.",
-        },
-      },
-      accessGate: {
-        101: {
-          group_id: 101,
-          required_group_tg_ids: [-100202],
-          candidates: [{ id: 202, title: "Support Escalations", tg_group_id: -100202, role: "admin" }],
-        },
-      },
-      joinRequestSettings: {
-        101: {
-          group_id: 101,
-          enabled: true,
-          required_group_tg_ids: [-100202],
-        },
-      },
-      joinRequests: {
-        101: {
-          group_id: 101,
-          pending_count: 2,
-          items: [
-            {
-              id: 501,
-              user_tg_id: 9001,
-              first_name: "Lina",
-              username: "lina_ops",
-              created_at: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-              required_groups: [
-                { tg_id: -100202, title: "Support Escalations", joined: true },
-              ],
-              verified_count: 1,
-              required_count: 1,
-              all_verified: true,
-            },
-            {
-              id: 502,
-              user_tg_id: 9002,
-              first_name: "Rami",
-              username: "rami_queue",
-              created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
-              required_groups: [
-                { tg_id: -100202, title: "Support Escalations", joined: false },
-              ],
-              verified_count: 0,
-              required_count: 1,
-              all_verified: false,
-            },
-          ],
-        },
-      },
-      warnings: {
-        101: [
-          { user_id: 4001, count: 2, reason: "Repeated invite links", issued_by: 1, created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString() },
-          { user_id: 4012, count: 1, reason: "Off-topic ads", issued_by: 2, created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString() },
-        ],
-      },
-      logs: {
-        101: [
-          { action: "warn", target_user_id: 4001, moderator_id: 1, reason: "Repeated invite links", details: {}, created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString() },
-          { action: "mute_user", target_user_id: 4002, moderator_id: 2, reason: "Flooding", details: {}, created_at: new Date(Date.now() - 36 * 60 * 1000).toISOString() },
-          { action: "lead_captured", target_user_id: 4021, moderator_id: null, reason: "Pricing request", details: { lead_label: "sales" }, created_at: new Date(Date.now() - 240 * 60 * 1000).toISOString() },
-        ],
-      },
-      members: {
-        101: [
-          { user_id: 1, role: "owner", username: "owner", full_name: "Combot Owner" },
-          { user_id: 2, role: "admin", username: "opsmod", full_name: "Ops Mod" },
-          { user_id: 3, role: "moderator", username: "queuewatch", full_name: "Queue Watch" },
-        ],
-      },
-      taskCatalog: [
-        {
-          key: "reply_message",
-          title: "Reply Message",
-          description: "Send a templated reply when a message matches conditions.",
-          trigger: "message.received",
-          config_schema: [
-            { key: "template", type: "string", label: "Template", description: "Supports {text}, {group_title}, {user_id}." },
-          ],
-        },
-        {
-          key: "notify_destination",
-          title: "Notify Destination",
-          description: "Forward or copy lead activity to another destination.",
-          trigger: "message.received",
-          config_schema: [
-            { key: "destination", type: "string", label: "Destination", description: "Chat ID, username, or destination identifier." },
-            { key: "delivery_mode", type: "string", label: "Delivery Mode", description: "text, forward, copy, text_and_forward, text_and_copy" },
-            { key: "template", type: "string", label: "Template", description: "Optional notification text." },
-          ],
-        },
-      ],
-      tasks: {
-        101: [
-          {
-            assignment_id: "task-a1",
-            task_key: "reply_message",
-            executor_type: "bot",
-            enabled: true,
-            conditions: { text_contains_any: "pricing,demo" },
-            config: { template: "Thanks for reaching out. We will follow up shortly." },
-            agent_id: null,
-          },
-        ],
-      },
-      scheduledMessages: {
-        101: [
-          {
-            id: "sched-1",
-            text: "Weekly rollout summary at 16:00 UTC.",
-            send_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-            status: "pending",
-            cron: "0 16 * * 1",
-            delete_after_seconds: null,
-          },
-        ],
-      },
-      agents: {
-        101: [
-          {
-            id: 11,
-            group_id: 101,
-            telegram_user_id: 9011,
-            phone_number: "+12025550101",
-            external_account_id: "ops.agent",
-            status: "healthy",
-            auth_state: "authorized",
-            metadata: { username: "ops_agent", linked_at: new Date(Date.now() - 3 * 86400000).toISOString(), last_active_at: new Date(Date.now() - 3600000).toISOString(), jobs_count: 4 },
-          },
-        ],
-      },
-      agentJobs: {
-        11: [
-          { id: 701, agent_id: 11, job_type: "send_message", job_payload: { text: "follow up" }, status: "completed" },
-          { id: 702, agent_id: 11, job_type: "reply_message", job_payload: { text: "response" }, status: "queued" },
-        ],
-      },
-      ownerStats: {
-        total_groups: 14,
-        active_groups: 12,
-        tracked_admins: 28,
-        moderation_actions: 642,
-        open_warnings: 18,
-        enabled_plugins: 41,
-        linked_agents: 6,
-        pending_agent_jobs: 3,
-      },
-      ownerGroups: [
-        {
-          id: 101,
-          title: "Growth Ops Room",
-          tg_group_id: -100101,
-          is_active: true,
-          created_at: "2026-03-01T10:00:00+00:00",
-          admin_count: 4,
-          warning_count: 7,
-          plugin_count: 6,
-          agent_count: 1,
-          last_activity_at: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: 202,
-          title: "Support Escalations",
-          tg_group_id: -100202,
-          is_active: false,
-          created_at: "2026-02-16T09:30:00+00:00",
-          admin_count: 3,
-          warning_count: 1,
-          plugin_count: 3,
-          agent_count: 0,
-          last_activity_at: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ],
-      ownerSubscriptions: [
-        {
-          id: 31,
-          tg_user_id: 5501,
-          username: "newadmin",
-          full_name: "New Admin",
-          language_code: "en",
-          message: "Need access for rollout support.",
-          status: "pending",
-          response: null,
-          response_by: null,
-          created_at: new Date(Date.now() - 6 * 3600000).toISOString(),
-          updated_at: new Date(Date.now() - 6 * 3600000).toISOString(),
-        },
-        {
-          id: 32,
-          tg_user_id: 5502,
-          username: "opslead",
-          full_name: "Ops Lead",
-          language_code: "en",
-          message: "Production owner access.",
-          status: "approved",
-          response: "Approved",
-          response_by: 1,
-          created_at: new Date(Date.now() - 24 * 3600000).toISOString(),
-          updated_at: new Date(Date.now() - 20 * 3600000).toISOString(),
-        },
-      ],
-      ownerPrivateAccessGate: {
-        required_group_tg_ids: [-100101],
-        candidates: [
-          { id: 101, title: "Growth Ops Room", tg_group_id: -100101, is_active: true },
-          { id: 202, title: "Support Escalations", tg_group_id: -100202, is_active: true },
-        ],
-      },
-      ownerAudit: [
-        {
-          id: 1,
-          actor_id: 1,
-          action: "disable_group",
-          target_type: "group",
-          target_id: "202",
-          detail: { reason: "chargeback" },
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: 2,
-          actor_id: 1,
-          action: "approve_subscription",
-          target_type: "subscription",
-          target_id: "31",
-          detail: { response: "Approved" },
-          created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
-        },
-      ],
-    };
 
     const roots = {
       sidebar: document.getElementById("sidebar"),
@@ -3350,17 +304,6 @@
       });
     }
 
-    function currentLanguage() {
-      return state.user && state.user.language_code === "ar" ? "ar" : "en";
-    }
-
-    function t(key, vars = {}) {
-      const lang = currentLanguage();
-      const dictionary = messages[lang] || messages.en;
-      const fallback = messages.en[key] || key;
-      const template = dictionary[key] || fallback;
-      return String(template).replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ""));
-    }
 
     function applyLanguageDirection() {
       const lang = currentLanguage();
@@ -3416,6 +359,15 @@
         close: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 3 13 13"/><path d="M13 3 3 13"/></svg>',
         plus: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10"/><path d="M3 8h10"/></svg>',
         trash: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 4.5h9"/><path d="M6.5 2.5h3"/><path d="M5 4.5v8h6v-8"/><path d="M6.5 6.5v4"/><path d="M9.5 6.5v4"/></svg>',
+        home: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 6 8 1.5 13.5 6v8.5h-3v-5h-5v5h-3V6Z"/></svg>',
+        layers: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2 2 5l6 3 6-3-6-3Z"/><path d="M2 8l6 3 6-3"/><path d="M2 11l6 3 6-3"/></svg>',
+        download: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5v9"/><path d="M4 6.5l4 4 4-4"/><path d="M2.5 13v1.5h11V13"/></svg>',
+        target: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="0.5" fill="currentColor"/></svg>',
+        "message-circle": '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 7.5a5.5 5.5 0 0 1-7.45 5.18L3.5 13.5l1.18-2.82A5.5 5.5 0 1 1 14 7.5Z"/></svg>',
+        send: '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 2 2 7l5 1.5L14 2Z"/><path d="M7 8.5 14 2"/><path d="M7 13.5V8.5"/><path d="M2 7l5 6.5"/></svg>',
+        "settings-2": '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.5"/><path d="M1.5 8H5m6 0h3.5"/><path d="M8 1.5V5m0 6v3.5"/><path d="M3.4 3.4l2.5 2.5m4.2 4.2 2.5 2.5"/><path d="M12.6 3.4l-2.5 2.5M5.9 10.1l-2.5 2.5"/></svg>',
+        "bar-chart-2": '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 14.5h13"/><path d="M2.5 10.5v4"/><path d="M5.5 7.5v7"/><path d="M8.5 4.5v10"/><path d="M11.5 1.5v13"/></svg>',
+        "credit-card": '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="4" width="13" height="9" rx="1.5"/><path d="M1.5 7h13"/><path d="M4 10.5h3"/></svg>',
       };
       return icons[name] || "";
     }
@@ -3643,6 +595,7 @@
           headers: {
             "Content-Type": "application/json",
             "X-Telegram-Init-Data": telegramInitData,
+            ...(options.boundary ? { "X-App-Boundary": options.boundary } : {}),
             ...(options.headers || {}),
           },
         });
@@ -3689,362 +642,6 @@
       return response.json();
     }
 
-    async function mockRequest(path, options = {}) {
-      const method = (options.method || "GET").toUpperCase();
-      const body = options.body ? JSON.parse(options.body) : null;
-
-      if (path === "/webapp/auth/me") return structuredClone(mockDb.auth);
-      if (path === "/webapp/subscription-request" && method === "POST") {
-        mockDb.auth.subscription_required = true;
-        mockDb.auth.subscription_request = {
-          id: Date.now(),
-          status: "pending",
-          message: body.message || "",
-          response: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        return { status: "ok", request: structuredClone(mockDb.auth.subscription_request) };
-      }
-      if (path === "/webapp/auth/language" && method === "PATCH") {
-        mockDb.auth.user.language_code = body.language_code || "en";
-        return { status: "ok", language_code: mockDb.auth.user.language_code };
-      }
-      if (path === "/settings/schema") return structuredClone(mockDb.settingsSchema);
-      if (path === "/webapp/owner/stats") return structuredClone(mockDb.ownerStats);
-      if (path === "/webapp/owner/groups") return structuredClone(mockDb.ownerGroups);
-      if (path === "/webapp/owner/subscriptions") return structuredClone(mockDb.ownerSubscriptions);
-      if (path === "/webapp/owner/private-access-gate") return structuredClone(mockDb.ownerPrivateAccessGate);
-      if (path.startsWith("/webapp/owner/audit-log")) return structuredClone(mockDb.ownerAudit);
-      if (path.startsWith("/webapp/scraper/groups?")) {
-        const url = new URL(path, "http://mock.local");
-        const tgGroupId = Number(url.searchParams.get("tg_group_id") || 0);
-        return structuredClone(
-          tgGroupId
-            ? [
-                {
-                  id: 900 + Math.abs(tgGroupId % 100),
-                  tg_group_id: tgGroupId,
-                  title: "Mock Scraped Group",
-                  username: "mock_group",
-                  group_type: "supergroup",
-                  member_count: 128,
-                  description: "Mock scraper output",
-                  created_at: new Date(Date.now() - 3600_000).toISOString(),
-                  updated_at: new Date().toISOString(),
-                },
-              ]
-            : []
-        );
-      }
-      if (path.match(/\/webapp\/scraper\/groups\/\d+\/members/)) {
-        return structuredClone({
-          members: [
-            { id: 1, tg_user_id: 1001, username: "alice", first_name: "Alice", last_name: "", full_name: "Alice", phone: null, is_bot: false, is_premium: true, role: "admin", joined_date: new Date(Date.now() - 86400_000).toISOString(), scraped_at: new Date().toISOString() },
-            { id: 2, tg_user_id: 1002, username: "bob", first_name: "Bob", last_name: "", full_name: "Bob", phone: null, is_bot: false, is_premium: false, role: "member", joined_date: new Date(Date.now() - 172800_000).toISOString(), scraped_at: new Date().toISOString() },
-          ],
-          total: 2,
-          page: 1,
-          page_size: 20,
-        });
-      }
-      if (path.match(/\/webapp\/scraper\/groups\/\d+\/messages/)) {
-        return structuredClone({
-          messages: [
-            { id: 1, message_id: 501, sender_user_id: 1001, sender_username: "alice", sender_first_name: "Alice", sender_last_name: "", message_text: "First scraped message", message_date: new Date(Date.now() - 1800_000).toISOString(), message_type: "text", media_file_id: null, media_url: null, reply_to_message_id: null, forward_from_user_id: null, scraped_at: new Date().toISOString() },
-            { id: 2, message_id: 502, sender_user_id: 1002, sender_username: "bob", sender_first_name: "Bob", sender_last_name: "", message_text: "Second scraped message", message_date: new Date(Date.now() - 900_000).toISOString(), message_type: "text", media_file_id: null, media_url: null, reply_to_message_id: null, forward_from_user_id: null, scraped_at: new Date().toISOString() },
-          ],
-          total: 2,
-          page: 1,
-          page_size: 20,
-        });
-      }
-      if (path.match(/\/webapp\/join-requests\/\d+\/action/) && method === "POST") {
-        const approvalId = Number((path.match(/\/webapp\/join-requests\/(\d+)\/action/) || [])[1] || 0);
-        Object.keys(mockDb.joinRequests || {}).forEach((groupId) => {
-          const payload = mockDb.joinRequests[groupId];
-          if (!payload) return;
-          payload.items = (payload.items || []).filter((item) => Number(item.id) !== approvalId);
-          payload.pending_count = payload.items.length;
-        });
-        return { status: body.action === "approve" ? "approved" : "declined", approval_id: approvalId };
-      }
-      if (path.startsWith("/webapp/scraper/scrape/") && method === "POST") {
-        return { job_id: Date.now(), status: "pending", message: "Scraping job dispatched successfully" };
-      }
-      if (path === "/webapp/bot/install-groups") {
-        return structuredClone(
-          (mockDb.auth?.groups || [])
-            .filter((group) => ["owner", "admin"].includes(String(group.role || "").toLowerCase()))
-            .map((group) => ({
-              managed_group_id: group.id,
-              tg_group_id: group.tg_group_id,
-              title: group.title,
-              role: group.role || "admin",
-              is_managed: true,
-            }))
-        );
-      }
-      if (path === "/webapp/bot/install-links" && method === "POST") {
-        return {
-          bot_username: "combot_test_bot",
-          permissions: body.permissions || [],
-          manual_confirmation_required: true,
-          links: (body.groups || []).map((group) => ({
-            group_id: group.managed_group_id || null,
-            tg_group_id: group.tg_group_id,
-            title: group.title,
-            url: "https://t.me/combot_test_bot?startgroup=true",
-          })),
-        };
-      }
-      if (path === "/webapp/tasks/catalog") return structuredClone(mockDb.taskCatalog);
-      if (path.startsWith("/webapp/moderation/activity")) {
-        const url = new URL(path, "http://mock.local");
-        const groupId = Number(url.searchParams.get("group_id") || 0);
-        const family = String(url.searchParams.get("family") || "");
-        const allRows = Object.entries(mockDb.logs).flatMap(([rawGroupId, rows]) => {
-          const group = (mockDb.groups || []).find((item) => Number(item.id) === Number(rawGroupId));
-          return (rows || []).map((row, index) => ({
-            id: Number(`${rawGroupId}${index + 1}`),
-            group_id: Number(rawGroupId),
-            group_title: group ? group.title : `Group ${rawGroupId}`,
-            group_tg_id: group ? group.tg_group_id : null,
-            action: row.action,
-            family: String(row.action || "").startsWith("delete_")
-              ? "delete"
-              : String(row.action || "").startsWith("mute_") || row.action === "unmute_user"
-                ? "mute"
-                : String(row.action || "").startsWith("ban_") || ["remove_warn_limit", "unban_user"].includes(String(row.action || ""))
-                  ? "ban"
-                  : ["warn", "warn_spam", "clear_warnings", "approve_warning", "warnings_reset"].includes(String(row.action || ""))
-                    ? "warning"
-                    : "other",
-            target_user_id: row.target_user_id,
-            moderator_id: row.moderator_id,
-            reason: row.reason,
-            details: row.details || {},
-            created_at: row.created_at,
-          }));
-        });
-        return structuredClone(
-          allRows.filter((row) => (!groupId || Number(row.group_id) === groupId) && (!family || row.family === family))
-        );
-      }
-
-      const groupIdMatch = path.match(/\/webapp\/groups\/(\d+)/);
-      const agentMatch = path.match(/\/webapp\/agents\/(\d+)/);
-      const ownerGroupMatch = path.match(/\/webapp\/owner\/groups\/(\d+)/);
-
-      if (groupIdMatch) {
-        const groupId = Number(groupIdMatch[1]);
-        if (path.endsWith("/overview")) return structuredClone(mockDb.overview[groupId] || mockDb.overview[101]);
-        if (path.endsWith("/settings") && method === "GET") return { group_id: groupId, settings: structuredClone(mockDb.settings[groupId] || {}) };
-        if (path.endsWith("/settings") && method === "PATCH") {
-          mockDb.settings[groupId] = { ...(mockDb.settings[groupId] || {}), ...(body.settings || {}) };
-          return { status: "ok", group_id: groupId, changed: body.settings || {} };
-        }
-        if (path.endsWith("/access-gate") && method === "GET") return structuredClone(mockDb.accessGate[groupId] || mockDb.accessGate[101]);
-        if (path.endsWith("/access-gate") && method === "PATCH") {
-          mockDb.accessGate[groupId].required_group_tg_ids = body.required_group_tg_ids || [];
-          return { status: "ok", group_id: groupId, required_group_tg_ids: body.required_group_tg_ids || [] };
-        }
-        if (path.endsWith("/join-request-settings") && method === "GET") {
-          return structuredClone(mockDb.joinRequestSettings[groupId] || { group_id: groupId, enabled: false, required_group_tg_ids: [] });
-        }
-        if (path.endsWith("/join-request-settings") && method === "PATCH") {
-          mockDb.joinRequestSettings[groupId] = {
-            group_id: groupId,
-            enabled: Boolean(body.settings?.enabled ?? body.settings?.join_request_verify ?? false),
-            required_group_tg_ids: structuredClone((mockDb.accessGate[groupId] || mockDb.accessGate[101] || {}).required_group_tg_ids || []),
-          };
-          return { status: "ok", group_id: groupId };
-        }
-        if (path.endsWith("/join-requests") && method === "GET") {
-          return structuredClone(mockDb.joinRequests[groupId] || { group_id: groupId, pending_count: 0, items: [] });
-        }
-        if (path.endsWith("/moderation/warnings") && method === "GET") return structuredClone(mockDb.warnings[groupId] || []);
-        if (path.endsWith("/moderation/warnings") && method === "POST") {
-          mockDb.warnings[groupId] = mockDb.warnings[groupId] || [];
-          mockDb.warnings[groupId].unshift({
-            user_id: body.user_id,
-            count: body.count || 1,
-            reason: body.reason || "",
-            issued_by: state.user.id,
-            created_at: new Date().toISOString(),
-          });
-          return { status: "ok" };
-        }
-        if (path.includes("/moderation/warnings/") && method === "DELETE") {
-          const userId = Number(path.split("/").pop());
-          mockDb.warnings[groupId] = (mockDb.warnings[groupId] || []).filter((item) => item.user_id !== userId);
-          return { status: "ok", deleted: 1 };
-        }
-        if (path.endsWith("/moderation/actions") && method === "POST") {
-          mockDb.logs[groupId] = mockDb.logs[groupId] || [];
-          mockDb.logs[groupId].unshift({
-            action: body.action === "mute" ? "mute_user" : body.action === "ban" ? "ban_user" : body.action,
-            target_user_id: body.user_id,
-            moderator_id: state.user.id,
-            reason: body.reason || "",
-            details: {},
-            created_at: new Date().toISOString(),
-          });
-          return { status: "ok", action: body.action };
-        }
-        if (path.includes("/members/") && path.endsWith("/role") && method === "POST") {
-          return { status: "ok" };
-        }
-        if (path.endsWith("/members")) return structuredClone(mockDb.members[groupId] || []);
-        if (path.endsWith("/logs")) return structuredClone(mockDb.logs[groupId] || []);
-        if (path.endsWith("/tasks") && method === "GET") return structuredClone(mockDb.tasks[groupId] || []);
-        if (path.endsWith("/tasks") && method === "POST") {
-          mockDb.tasks[groupId] = mockDb.tasks[groupId] || [];
-          const assignment = { ...body, assignment_id: body.assignment_id || Math.random().toString(36).slice(2, 10) };
-          mockDb.tasks[groupId].push(assignment);
-          return { status: "ok", assignment };
-        }
-        if (path.includes("/tasks/") && method === "PATCH") {
-          const assignmentId = path.split("/").pop();
-          mockDb.tasks[groupId] = (mockDb.tasks[groupId] || []).map((task) => task.assignment_id === assignmentId ? { ...task, ...body, assignment_id: assignmentId } : task);
-          return { status: "ok", assignment: mockDb.tasks[groupId].find((task) => task.assignment_id === assignmentId) };
-        }
-        if (path.includes("/tasks/") && method === "DELETE") {
-          const assignmentId = path.split("/").pop();
-          mockDb.tasks[groupId] = (mockDb.tasks[groupId] || []).filter((task) => task.assignment_id !== assignmentId);
-          return { status: "ok", deleted: true };
-        }
-        if (path.endsWith("/scheduled-messages") && method === "GET") return structuredClone(mockDb.scheduledMessages[groupId] || []);
-        if (path.endsWith("/scheduled-messages") && method === "POST") {
-          const entry = { id: "sched-" + Math.random().toString(36).slice(2, 7), text: body.text, status: "pending", send_at: new Date(Date.now() + 3600000).toISOString(), cron: body.schedule.includes(" ") ? body.schedule : null, delete_after_seconds: body.delete_after_seconds || null };
-          mockDb.scheduledMessages[groupId] = [entry, ...(mockDb.scheduledMessages[groupId] || [])];
-          return { status: "ok", scheduled_message: entry };
-        }
-      }
-
-      if (path.startsWith("/webapp/agents?group_id=")) {
-        const groupId = Number(new URL("https://local" + path).searchParams.get("group_id"));
-        return structuredClone(mockDb.agents[groupId] || []);
-      }
-
-      if (agentMatch && path.endsWith("/groups")) {
-        return [
-          { id: 101, tg_group_id: -1002001, title: "Growth Ops", managed_title: "Growth Ops", can_add_members: true },
-          { id: 102, tg_group_id: -1002002, title: "Support Hub", managed_title: "Support Hub", can_add_members: true },
-          { id: null, tg_group_id: -1002998, title: "Read Only Feed", managed_title: null, can_add_members: false },
-        ];
-      }
-
-      if (path === "/webapp/agents/link" || path === "/webapp/agents/auth/start") {
-        const agent = {
-          id: Math.floor(Math.random() * 1000) + 20,
-          group_id: body.group_id,
-          telegram_user_id: null,
-          phone_number: body.phone_number || null,
-          external_account_id: body.external_account_id || "new.agent",
-          status: "unknown",
-          auth_state: "pending_code",
-          metadata: { username: null, linked_at: new Date().toISOString(), jobs_count: 0 },
-        };
-        mockDb.agents[body.group_id] = [agent, ...(mockDb.agents[body.group_id] || [])];
-        return { status: "ok", agent };
-      }
-
-      if (agentMatch && path.endsWith("/auth/code")) {
-        const agentId = Number(agentMatch[1]);
-        for (const groupId of Object.keys(mockDb.agents)) {
-          mockDb.agents[groupId] = mockDb.agents[groupId].map((agent) => agent.id === agentId ? { ...agent, auth_state: body.code === "0000" ? "pending_2fa" : "active", status: "healthy", metadata: { ...(agent.metadata || {}), username: "linked_agent" } } : agent);
-        }
-        return { status: "ok", agent: Object.values(mockDb.agents).flat().find((agent) => agent.id === agentId) };
-      }
-
-      if (agentMatch && path.endsWith("/auth/password")) {
-        const agentId = Number(agentMatch[1]);
-        for (const groupId of Object.keys(mockDb.agents)) {
-          mockDb.agents[groupId] = mockDb.agents[groupId].map((agent) => agent.id === agentId ? { ...agent, auth_state: "active", status: "healthy", metadata: { ...(agent.metadata || {}), username: "linked_agent" } } : agent);
-        }
-        return { status: "ok", agent: Object.values(mockDb.agents).flat().find((agent) => agent.id === agentId) };
-      }
-
-      if (agentMatch && path.endsWith("/jobs") && method === "POST") {
-        const agentId = Number(agentMatch[1]);
-        const job = {
-          id: Math.floor(Math.random() * 100000) + 100,
-          agent_id: agentId,
-          job_type: body.job_type,
-          job_payload: body.job_payload || {},
-          status: "pending",
-        };
-        mockDb.agentJobs[agentId] = [job, ...(mockDb.agentJobs[agentId] || [])];
-        for (const groupId of Object.keys(mockDb.agents)) {
-          mockDb.agents[groupId] = mockDb.agents[groupId].map((agent) =>
-            agent.id === agentId
-              ? {
-                  ...agent,
-                  metadata: {
-                    ...(agent.metadata || {}),
-                    jobs_count: Number(agent.metadata?.jobs_count || 0) + 1,
-                    last_active_at: new Date().toISOString(),
-                  },
-                }
-              : agent
-          );
-        }
-        return { status: "ok", job };
-      }
-
-      if (agentMatch && path.endsWith("/jobs")) {
-        const agentId = Number(agentMatch[1]);
-        return structuredClone(mockDb.agentJobs[agentId] || []);
-      }
-
-      if (agentMatch && path.endsWith("/member-adds") && method === "POST") {
-        return {
-          status: "queued",
-          queued_count: Array.isArray(body.user_ids) ? body.user_ids.length : 0,
-          job_ids: Array.isArray(body.user_ids)
-            ? body.user_ids.map(() => "membership-" + Math.random().toString(36).slice(2, 10))
-            : [],
-        };
-      }
-
-      if (agentMatch && method === "PATCH") {
-        return { status: "ok", agent: { id: Number(agentMatch[1]), ...body } };
-      }
-
-      if (agentMatch && method === "DELETE") {
-        return { status: "ok", deleted: true };
-      }
-
-      if (ownerGroupMatch) {
-        const groupId = Number(ownerGroupMatch[1]);
-        if (method === "GET") return structuredClone(mockDb.ownerGroups.find((group) => group.id === groupId));
-        if (path.endsWith("/disable") && method === "POST") {
-          mockDb.ownerGroups = mockDb.ownerGroups.map((group) => group.id === groupId ? { ...group, is_active: false } : group);
-          mockDb.ownerAudit.unshift({ id: Date.now(), actor_id: 1, action: "disable_group", target_type: "group", target_id: String(groupId), detail: null, created_at: new Date().toISOString() });
-          return { status: "disabled", group: mockDb.ownerGroups.find((group) => group.id === groupId) };
-        }
-        if (path.endsWith("/leave") && method === "POST") {
-          mockDb.ownerGroups = mockDb.ownerGroups.map((group) => group.id === groupId ? { ...group, is_active: false } : group);
-          mockDb.ownerAudit.unshift({ id: Date.now(), actor_id: 1, action: "force_leave", target_type: "group", target_id: String(groupId), detail: null, created_at: new Date().toISOString() });
-          return { status: "left", group: mockDb.ownerGroups.find((group) => group.id === groupId) };
-        }
-      }
-
-      if (path.startsWith("/webapp/owner/subscriptions/") && method === "POST") {
-        const id = Number(path.split("/").pop());
-        mockDb.ownerSubscriptions = mockDb.ownerSubscriptions.map((item) => item.id === id ? { ...item, status: body.status, response: body.response || null, updated_at: new Date().toISOString() } : item);
-        mockDb.ownerAudit.unshift({ id: Date.now(), actor_id: 1, action: body.status === "approved" ? "approve_subscription" : body.status === "cancelled" ? "cancel_subscription" : "decline_subscription", target_type: "subscription", target_id: String(id), detail: { response: body.response || null }, created_at: new Date().toISOString() });
-        return { status: "ok", request: mockDb.ownerSubscriptions.find((item) => item.id === id) };
-      }
-      if (path === "/webapp/owner/private-access-gate" && method === "PATCH") {
-        mockDb.ownerPrivateAccessGate.required_group_tg_ids = body.required_group_tg_ids || [];
-        mockDb.ownerAudit.unshift({ id: Date.now(), actor_id: 1, action: "update_private_access_gate", target_type: "private_access_gate", target_id: "global", detail: { required_group_tg_ids: body.required_group_tg_ids || [] }, created_at: new Date().toISOString() });
-        return structuredClone(mockDb.ownerPrivateAccessGate);
-      }
-
-      throw new Error("Unhandled mock route: " + method + " " + path);
-    }
 
     async function loadAuth() {
       state.loading.auth = true;
@@ -4065,26 +662,38 @@
 
     function routeMeta() {
       const map = {
-        "#/overview": { title: t("overviewTitle"), subtitle: t("overviewSubtitle") },
-        "#/settings": { title: t("settingsTitle"), subtitle: t("settingsSubtitle") },
-        "#/automation": { title: t("automationTitle"), subtitle: t("automationSubtitle") },
-        "#/agents": { title: t("agentsTitle"), subtitle: t("agentsSubtitle") },
+        "#/home": { title: t("homeTitle"), subtitle: t("homeSubtitle") },
+        "#/accounts": { title: t("accountsTitle"), subtitle: t("accountsSubtitle") },
+        "#/groups": { title: t("groupsTitle"), subtitle: t("groupsSubtitle") },
         "#/scraper": { title: t("scraperTitle"), subtitle: t("scraperSubtitle") },
-        "#/owner": { title: t("ownerTitle"), subtitle: t("ownerSubtitle") },
+        "#/leads": { title: t("leadsTitle"), subtitle: t("leadsSubtitle") },
+        "#/replies": { title: t("repliesTitle"), subtitle: t("repliesSubtitle") },
+        "#/campaigns": { title: t("campaignsTitle"), subtitle: t("campaignsSubtitle") },
+        "#/automation": { title: t("automationTitle"), subtitle: t("automationSubtitle") },
+        "#/analytics": { title: t("analyticsTitle"), subtitle: t("analyticsSubtitle") },
+        "#/subscription": { title: t("subscriptionTitle"), subtitle: t("subscriptionSubtitle") },
+        "#/settings": { title: t("settingsTitle"), subtitle: t("settingsSubtitle") },
+        "#/owner": { title: t("platformTitle"), subtitle: t("platformSubtitle") },
       };
-      return map[state.route] || map["#/overview"];
+      return map[state.route] || map["#/home"];
     }
 
     function navigationItems() {
       const items = [
-        { route: "#/overview", label: t("overview"), icon: "grid" },
-        { route: "#/settings", label: t("settings"), icon: "sliders" },
-        { route: "#/automation", label: t("automation"), icon: "zap" },
-        { route: "#/agents", label: t("agents"), icon: "user" },
-        { route: "#/scraper", label: t("scraper"), icon: "shield" },
+        { route: "#/home", label: t("navHome"), icon: "home" },
+        { route: "#/accounts", label: t("navAccounts"), icon: "user" },
+        { route: "#/groups", label: t("navGroups"), icon: "layers" },
+        { route: "#/scraper", label: t("navScraper"), icon: "download" },
+        { route: "#/leads", label: t("navLeads"), icon: "target" },
+        { route: "#/replies", label: t("navReplies"), icon: "message-circle" },
+        { route: "#/campaigns", label: t("navCampaigns"), icon: "send" },
+        { route: "#/automation", label: t("navAutomation"), icon: "settings-2" },
+        { route: "#/analytics", label: t("navAnalytics"), icon: "bar-chart-2" },
+        { route: "#/subscription", label: t("navSubscription"), icon: "credit-card" },
+        { route: "#/settings", label: t("navSettings"), icon: "sliders" },
       ];
       if (state.isOwner) {
-        items.push({ route: "#/owner", label: t("ownerPanel"), icon: "crown", badge: { text: t("root"), tone: "accent" } });
+        items.push({ route: "#/owner", label: t("navPlatform"), icon: "shield", badge: { text: "owner", tone: "accent" } });
       }
       return items;
     }
@@ -4472,7 +1081,9 @@
         for (const entry of entries) {
           const key = entry.category || "general";
           if (!categories.has(key)) {
-            categories.set(key, { key, label: key, plugins: new Set() });
+            var label = key;
+            if (key === "moderation") label = "advanced_safety";
+            categories.set(key, { key: key, label: label, plugins: new Set() });
           }
           categories.get(key).plugins.add(pluginName);
         }
@@ -6072,18 +2683,24 @@
     }
 
     async function ensureRouteData() {
-      if (state.route === "#/overview") {
+      if (state.route === "#/home") {
         await Promise.all([loadOverview(), loadWarnings()]);
-      } else if (state.route === "#/settings") {
-        await loadSettings();
-      } else if (state.route === "#/moderation") {
-        await Promise.all([loadWarnings(), loadLogs(), loadMembers(), loadModerationActivity()]);
-      } else if (state.route === "#/automation") {
-        await Promise.all([loadAutomation(), loadAgents()]);
-      } else if (state.route === "#/agents") {
+      } else if (state.route === "#/accounts") {
         await loadAgents();
+      } else if (state.route === "#/groups") {
+        await Promise.all([loadAgents(), loadScraperList()]);
       } else if (state.route === "#/scraper") {
         await Promise.all([loadAgents(), primeScraperAgentGroupCaches(), loadScraper(), loadScraperList()]);
+      } else if (state.route === "#/leads") {
+        await loadAgents(state.activeGroupId);
+      } else if (state.route === "#/replies" || state.route === "#/campaigns" || state.route === "#/automation") {
+        await Promise.all([loadAutomation(), loadAgents()]);
+      } else if (state.route === "#/analytics") {
+        await loadAgents();
+      } else if (state.route === "#/subscription") {
+        await loadAgents();
+      } else if (state.route === "#/settings") {
+        await loadSettings();
       } else if (state.route === "#/owner" && state.isOwner) {
         await loadOwner();
       }
@@ -6138,6 +2755,357 @@
           </div>
         </div>
       `;
+    }
+
+
+    // ── Phase 6 placeholder renderers (replaced in Phase 7) ──
+
+    function renderHomeView() {
+      const payload = state.cache.overview[state.activeGroupId];
+      const stats = payload ? (payload.stats || {}) : {};
+      const recent = payload ? (payload.recent_actions || []) : [];
+      const agents = state.cache.agents[state.activeGroupId] || [];
+      const activeAgents = agents.filter(function(a) { return a.status === "active"; });
+      const warnings = state.cache.warnings[state.activeGroupId] || [];
+      
+      var quickActionCards = "";
+      if (agents.length === 0) {
+        quickActionCards = statCard(t("linkAccount"), "", t("linkNewAccount"));
+      } else {
+        quickActionCards = 
+          statCard(t("activeAccounts"), formatNumber(activeAgents.length), agents.length + " total") +
+          statCard(t("connectedGroups"), formatNumber(Object.keys(state.cache.scraperList).length || stats.configured_settings || 0), t("groupsTitle")) +
+          statCard(t("leadsCaptured"), formatNumber(stats.total_leads || 0), stats.total_leads ? "from all sources" : "") +
+          statCard(t("activeScrapingJobs"), "--", "scrape to begin");
+      }
+
+      return `
+        <div class="view">
+          <div class="grid-4">
+            ${quickActionCards}
+          </div>
+          <div class="grid-2">
+            ${sectionCard("Quick Actions", "Get started with growth operations", `
+              <div class="toolbar">
+                ${agents.length === 0 ? '<button class="button" type="button" data-action="link-agent">' + escapeHtml(t("linkAccount")) + '</button>' : ''}
+                <button class="button" type="button" data-action="scrape-members">${escapeHtml(t("startScraping"))}</button>
+                <button class="button" type="button" data-route="#/leads">${escapeHtml(t("viewLeads"))}</button>
+                <button class="button" type="button" data-route="#/replies">${escapeHtml(t("createReply"))}</button>
+              </div>
+            `)}
+            ${sectionCard("Recent Activity", "", recent.length > 0 ? `
+              <div class="feed">
+                ${recent.slice(0, 5).map(function(item) {
+                  return '<div class="feed-row"><div class="feed-meta"><span class="mono">' + escapeHtml(relativeTime(item.created_at)) + '</span>' + actionBadge(item.action) + '</div><div class="feed-body">' + escapeHtml(item.reason || item.action || "") + '</div></div>';
+                }).join("")}
+              </div>
+            ` : '<div class="empty-state">No recent activity. Start scraping or set up automation to see activity here.</div>')}
+          </div>
+        </div>
+      `;
+    }
+    function renderAccountsView() {
+      const agents = state.cache.agents[state.activeGroupId] || [];
+      if (agents.length === 0) {
+        return `
+          <div class="view">
+            ${emptyState(t("noAccountsYet"))}
+            <div class="toolbar">
+              <button class="button" type="button" data-action="link-agent">${escapeHtml(t("linkNewAccount"))}</button>
+            </div>
+          </div>
+        `;
+      }
+      var cards = agents.map(function(agent) {
+        var statusTone = "success";
+        var statusLabel = "active";
+        if (agent.status === "pending" || agent.auth_state === "pending_code" || agent.auth_state === "pending_2fa") {
+          statusTone = "warning";
+          statusLabel = "setup";
+        } else if (agent.status === "failed" || agent.auth_state === "failed") {
+          statusTone = "danger";
+          statusLabel = "failed";
+        }
+        var meta = agent.metadata || {};
+        var jobsText = meta.jobs_count ? formatNumber(meta.jobs_count) + " jobs" : "no jobs";
+        var lastActive = meta.last_active_at ? relativeTime(meta.last_active_at) : "never";
+        return '\
+          <div class="section-card">\
+            <div class="panel-header">\
+              <div class="panel-title">@' + escapeHtml(meta.username || agent.phone_number || "Agent " + agent.id) + '</div>\
+              <span class="badge ' + statusTone + '">' + escapeHtml(statusLabel) + '</span>\
+            </div>\
+            <div class="section-subtitle">' + escapeHtml(jobsText) + ' &middot; last active ' + escapeHtml(lastActive) + '</div>\
+            <div class="toolbar">\
+              <button class="button small" type="button" data-action="sync-agent-workspace" data-agent-id="' + agent.id + '">' + escapeHtml(t("syncWorkspace")) + '</button>\
+              <button class="button small" type="button" data-action="view-agent-groups" data-agent-id="' + agent.id + '">' + escapeHtml(t("viewGroups")) + '</button>\
+              <button class="button small danger" type="button" data-action="unlink-agent" data-agent-id="' + agent.id + '">' + escapeHtml(t("unlink")) + '</button>\
+            </div>\
+          </div>';
+      }).join("");
+      
+      return `
+        <div class="view">
+          <div class="toolbar">
+            <div class="page-title">${escapeHtml(t("yourAccounts"))}</div>
+            <button class="button" type="button" data-action="link-agent">${escapeHtml(t("linkNewAccount"))}</button>
+          </div>
+          ${cards}
+        </div>
+      `;
+    }
+    
+    function renderGroupsView() {
+      var allGroups = [];
+      var scraperCache = state.cache.scraperList;
+      Object.keys(scraperCache).forEach(function(key) {
+        var groups = scraperCache[key];
+        if (Array.isArray(groups)) {
+          groups.forEach(function(g) {
+            if (!allGroups.some(function(existing) { return existing.tg_group_id === g.tg_group_id; })) {
+              allGroups.push(g);
+            }
+          });
+        }
+      });
+      
+      var managedGroups = state.groups || [];
+      managedGroups.forEach(function(g) {
+        if (!allGroups.some(function(existing) { return existing.tg_group_id === g.tg_group_id; })) {
+          allGroups.push({ tg_group_id: g.tg_group_id, title: g.title, members_stored: 0, messages_stored: 0 });
+        }
+      });
+      
+      if (allGroups.length === 0) {
+        return '<div class="view">' + emptyState(t("noGroupsYet")) + '</div>';
+      }
+      
+      var cards = allGroups.map(function(group) {
+        return '\
+          <div class="section-card">\
+            <div class="panel-header">\
+              <div class="panel-title">' + escapeHtml(group.title || "Group") + '</div>\
+              <span class="badge">' + escapeHtml(group.members_stored ? "scraped" : "connected") + '</span>\
+            </div>\
+            <div class="section-subtitle">' + escapeHtml("Members: " + formatNumber(group.members_stored || 0) + " &middot; Messages: " + formatNumber(group.messages_stored || 0)) + '</div>\
+            <div class="toolbar">\
+              <button class="button small" type="button" data-action="view-scraped-members" data-group-id="' + group.tg_group_id + '">View Members</button>\
+              <button class="button small" type="button" data-action="scrape-members" data-group-id="' + group.tg_group_id + '">' + escapeHtml(t("startScraping")) + '</button>\
+            </div>\
+          </div>';
+      }).join("");
+      
+      return '<div class="view"><div class="toolbar"><div class="page-title">' + escapeHtml(t("groupsTitle")) + '</div></div>' + cards + '</div>';
+    }
+    
+    function renderLeadsView() {
+      var agents = state.cache.agents[state.activeGroupId] || [];
+      if (agents.length === 0) {
+        return '<div class="view">' + emptyState(t("noLeadsYet")) + '</div>';
+      }
+      
+      var agent = agents[0];
+      var leadsCache = state.cache.agentLeads || {};
+      var leadsPage = leadsCache[agent.id];
+      var items = leadsPage ? (leadsPage.items || []) : [];
+      var total = leadsPage ? (leadsPage.total || 0) : 0;
+      
+      var statuses = ["new", "contacted", "interested", "converted"];
+      var junkStatuses = ["junk", "dismissed"];
+      var statusLabels = {
+        "new": t("leadNew"),
+        "contacted": t("leadContacted"),
+        "interested": t("leadInterested"),
+        "converted": t("leadConverted"),
+        "junk": t("leadJunk"),
+        "dismissed": t("leadDismissed"),
+      };
+      
+      var pipelineHtml = statuses.map(function(status) {
+        var statusItems = items.filter(function(l) { return l.status === status; });
+        return '\
+          <div class="section-card">\
+            <div class="panel-title">' + escapeHtml(statusLabels[status]) + ' <span class="badge">' + statusItems.length + '</span></div>\
+            ' + (statusItems.length > 0 ? statusItems.map(function(lead) {
+              return '<div class="feed-row"><div class="feed-body"><strong>' + escapeHtml(lead.first_name || lead.username || "Lead") + '</strong><br/><span class="mono">' + escapeHtml(truncate(lead.message_text || "", 60)) + '</span></div><div class="feed-meta"><button class="button small" type="button" data-action="view-lead" data-lead-id="' + lead.id + '" data-agent-id="' + agent.id + '">' + escapeHtml(t("contactLead")) + '</button></div></div>';
+            }).join("") : '<div class="empty-state">No ' + statusLabels[status].toLowerCase() + ' leads</div>') + '\
+          </div>';
+      }).join("");
+      
+      var junkHtml = '';
+      var junkItems = items.filter(function(l) { return junkStatuses.indexOf(l.status) !== -1; });
+      if (junkItems.length > 0) {
+        junkHtml = '<details class="section-card"><summary>Junk & Dismissed (' + junkItems.length + ')</summary>' + junkItems.map(function(lead) {
+          return '<div class="feed-row"><span>' + escapeHtml(lead.first_name || lead.username || "Lead") + '</span><span class="badge">' + escapeHtml(lead.status) + '</span></div>';
+        }).join("") + '</details>';
+      }
+      
+      var statsHtml = '';
+      if (leadsCache._stats && leadsCache._stats[agent.id]) {
+        var leadStats = leadsCache._stats[agent.id];
+        statsHtml = '<div class="grid-4">' +
+          statCard("Total", formatNumber(leadStats.total || 0), "") +
+          statCard(t("conversionRate"), (leadStats.by_status && leadStats.by_status.converted ? Math.round(leadStats.by_status.converted / Math.max(leadStats.total, 1) * 100) : 0) + "%", "") +
+          statCard("Interested", formatNumber(leadStats.by_status ? (leadStats.by_status.interested || 0) : 0), "") +
+          statCard("New", formatNumber(leadStats.by_status ? (leadStats.by_status["new"] || 0) : 0), "") +
+        '</div>';
+      }
+      
+      if (items.length === 0) {
+        return '<div class="view">' + statsHtml + '<div class="section-card"><div class="panel-title">' + escapeHtml(t("leadsTitle")) + '</div>' + emptyState(t("noLeadsYet")) + '</div></div>';
+      }
+      
+      return '<div class="view">' + statsHtml + pipelineHtml + junkHtml + '</div>';
+    }
+    
+    function renderRepliesView() {
+      var tasks = state.cache.tasks[state.activeGroupId] || [];
+      var replyTasks = tasks.filter(function(t) { return t.task_key === "reply_message"; });
+      var notifyTasks = tasks.filter(function(t) { return t.task_key === "notify_destination"; });
+      var allReplyTasks = replyTasks.concat(notifyTasks);
+      
+      if (allReplyTasks.length === 0) {
+        return '<div class="view"><div class="toolbar"><div class="page-title">' + escapeHtml(t("repliesTitle")) + '</div><button class="button" type="button" data-action="add-automation-task">' + escapeHtml(t("createReplyRule")) + '</button></div>' + emptyState(t("noRepliesYet")) + '</div>';
+      }
+      
+      var rows = allReplyTasks.map(function(task) {
+        var conditions = task.conditions || {};
+        var config = task.config || {};
+        var keyword = conditions.text_contains ? escapeHtml(conditions.text_contains) : "any message";
+        var template = config.message ? truncate(config.message, 50) : "default reply";
+        return '\
+          <tr>\
+            <td><span class="badge">' + escapeHtml(task.task_key === "reply_message" ? "Reply" : "Forward") + '</span></td>\
+            <td>' + keyword + '</td>\
+            <td>' + template + '</td>\
+            <td><span class="badge ' + (task.enabled ? 'success' : '') + '">' + (task.enabled ? "active" : "paused") + '</span></td>\
+            <td>' + (rowActionsMarkup ? rowActionsMarkup("reply-" + task.assignment_id, [
+              '<button class="row-action" type="button" data-action="edit-task" data-assignment-id="' + task.assignment_id + '">Edit</button>',
+              '<button class="row-action danger" type="button" data-action="delete-task" data-assignment-id="' + task.assignment_id + '">Delete</button>'
+            ]) : "") + '</td>\
+          </tr>';
+      }).join("");
+      
+      return '\
+        <div class="view">\
+          <div class="toolbar">\
+            <div class="page-title">' + escapeHtml(t("repliesTitle")) + '</div>\
+            <button class="button" type="button" data-action="add-automation-task">' + escapeHtml(t("createReplyRule")) + '</button>\
+          </div>\
+          <div class="section-card">\
+            <div class="panel-title">' + escapeHtml(t("replyRules")) + '</div>\
+            <table class="table">\
+              <thead><tr><th>Type</th><th>Keyword</th><th>Template</th><th>Status</th><th></th></tr></thead>\
+              <tbody>' + rows + '</tbody>\
+            </table>\
+          </div>\
+        </div>';
+    }
+    
+    function renderCampaignsView() {
+      var agents = state.cache.agents[state.activeGroupId] || [];
+      var tasks = state.cache.tasks[state.activeGroupId] || [];
+      var activeTasks = tasks.filter(function(t) { return t.enabled; });
+      
+      if (agents.length === 0) {
+        return '<div class="view"><div class="toolbar"><div class="page-title">' + escapeHtml(t("campaignsTitle")) + '</div></div>' + emptyState(t("noCampaignsYet")) + '</div>';
+      }
+      
+      return '\
+        <div class="view">\
+          <div class="toolbar">\
+            <div class="page-title">' + escapeHtml(t("campaignsTitle")) + '</div>\
+          </div>\
+          <div class="grid-2">\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("memberOutreach")) + '</div>\
+              <div class="section-subtitle">Send controlled bulk messages to group members via your connected accounts</div>\
+              <button class="button" type="button" data-action="bulk-message">' + escapeHtml(t("newCampaign")) + '</button>\
+            </div>\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("notifyForwarding")) + '</div>\
+              <div class="section-subtitle">Forward or copy activity to another destination</div>\
+              <button class="button" type="button" data-action="add-automation-task">Set Up Forwarding</button>\
+            </div>\
+          </div>\
+          ' + (activeTasks.length > 0 ? '\
+          <div class="section-card">\
+            <div class="panel-title">Active Campaigns</div>\
+            <table class="table">\
+              <thead><tr><th>Type</th><th>Config</th><th>Groups</th><th>Status</th></tr></thead>\
+              <tbody>' + activeTasks.map(function(t) {
+                return '<tr><td><span class="badge">' + escapeHtml(t.task_key) + '</span></td><td>' + escapeHtml(truncate(JSON.stringify(t.config || {}), 40)) + '</td><td>' + formatNumber((t.group_ids || t.group_tg_ids || []).length) + '</td><td><span class="badge success">active</span></td></tr>';
+              }).join("") + '</tbody>\
+            </table>\
+          </div>' : "") + '\
+        </div>';
+    }
+    
+    function renderAnalyticsView() {
+      var agents = state.cache.agents[state.activeGroupId] || [];
+      var overview = state.cache.overview[state.activeGroupId];
+      var stats = overview ? (overview.stats || {}) : {};
+      var recent = overview ? (overview.recent_actions || []) : [];
+      
+      var agentJobs = 0;
+      agents.forEach(function(a) {
+        var meta = a.metadata || {};
+        agentJobs += meta.jobs_count || 0;
+      });
+      
+      return '\
+        <div class="view">\
+          <div class="toolbar">\
+            <div class="page-title">' + escapeHtml(t("analyticsTitle")) + '</div>\
+          </div>\
+          <div class="grid-4">\
+            ' + statCard(t("leadsCaptured"), formatNumber(stats.total_leads || 0), "all sources") + '\
+            ' + statCard(t("activeAccounts"), formatNumber(agents.filter(function(a) { return a.status === "active"; }).length), agents.length + " total") + '\
+            ' + statCard(t("connectedGroups"), formatNumber(state.groups.length), "managed") + '\
+            ' + statCard(t("messagesProcessed"), formatNumber(stats.message_activity ? Object.values(stats.message_activity || {}).reduce(function(a,b) { return (a||0)+(b||0); }, 0) : 0), "daily") + '\
+          </div>\
+          <div class="grid-2">\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("taskPerformance")) + '</div>\
+              <div class="section-subtitle">' + formatNumber(agentJobs) + ' jobs across ' + agents.length + ' account(s)</div>\
+            </div>\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("groupsTitle")) + '</div>\
+              <div class="section-subtitle">' + formatNumber(state.groups.length) + ' managed &middot; ' + formatNumber(Object.keys(state.cache.scraperList).length) + ' scraped</div>\
+            </div>\
+          </div>\
+        </div>';
+    }
+    
+    function renderSubscriptionView() {
+      return '\
+        <div class="view">\
+          <div class="grid-2">\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("currentPlan")) + '</div>\
+              <div class="section-subtitle">' + escapeHtml(t("noActiveSubscription")) + '</div>\
+              <div class="toolbar">\
+                <button class="button" type="button" data-action="upgrade-plan" data-plan="pro">Upgrade to Pro - $29/mo</button>\
+                <button class="button" type="button" data-action="upgrade-plan" data-plan="business">Upgrade to Business - $79/mo</button>\
+              </div>\
+            </div>\
+            <div class="section-card">\
+              <div class="panel-title">' + escapeHtml(t("redeemPromo")) + '</div>\
+              <div class="section-subtitle">Have a promo code? Redeem it here</div>\
+              <form id="promo-code-form" class="stack">\
+                <input type="text" name="code" placeholder="Enter promo code" class="input" />\
+                <button class="button" type="submit">Redeem</button>\
+              </form>\
+            </div>\
+          </div>\
+          <div class="section-card">\
+            <div class="panel-title">' + escapeHtml(t("mcpTokens")) + '</div>\
+            <div class="section-subtitle">API tokens for external integrations</div>\
+            <div class="toolbar">\
+              <button class="button small" type="button" data-action="create-mcp-token">Create Token</button>\
+            </div>\
+          </div>\
+        </div>';
     }
 
     function renderSettingsView() {
@@ -6341,7 +3309,7 @@
           <div class="split-layout">
             <div class="category-list panel">
               ${categories.map((category) => `
-                <button class="category-button ${category.key === activeCategory ? "active" : ""}" type="button" data-action="select-settings-category" data-category="${escapeHtml(category.key)}">
+                <button class="category-button ${category.key === activeCategory ? "active" : ""} ${category.key === "moderation" ? "collapsed-section" : ""}" type="button" data-action="select-settings-category" data-category="${escapeHtml(category.key)}">
                   <span>${escapeHtml(category.label.replaceAll("_", " "))}</span>
                   ${category.key === "access_gate" ? `<span class="badge accent">gate</span>` : ""}
                 </button>
@@ -7101,13 +4069,13 @@
       const auditPage = paginateItems("owner-audit", audit, 20);
       let body = "";
 
-      if (tab === "stats") {
+      if (tab === "overview" || tab === "stats") {
         body = `
           <div class="stack">
             <div class="grid-4">
               ${statCard("Total Groups", formatNumber(stats.total_groups || 0), "Platform total")}
               ${statCard("Active Groups", formatNumber(stats.active_groups || 0), "Serving traffic")}
-              ${statCard("Total Users", formatNumber(stats.tracked_admins || 0), "Tracked admins")}
+              ${statCard("Tracked Users", formatNumber(stats.tracked_admins || 0), "Admins")}
               ${statCard("Pending Subscriptions", formatNumber(subscriptions.filter((item) => item.status === "pending").length), "Needs review")}
             </div>
             ${sectionCard("Groups Registered Per Month", "Owner-level registration history.", ownerMonthChart(state.cache.ownerGroups || []), "", "Owner")}
@@ -7141,8 +4109,8 @@
           </div>
           ${paginationControls(groupsPage)}
         `, "", "Owner");
-      } else if (tab === "bot_gate") {
-        body = sectionCard(t("privateBotGate"), t("privateBotGateBody"), `
+      } else if (tab === "bot_gate" || tab === "access_control") {
+        body = sectionCard("Access Control", "Global bot access gate configuration.", `
           <div class="table-wrap no-scroll">
             <table>
               <thead><tr><th>${escapeHtml(t("groupName"))}</th><th>TG ID</th><th>${escapeHtml(t("status"))}</th><th>${escapeHtml(t("actions"))}</th></tr></thead>
@@ -7167,8 +4135,8 @@
           </div>
           ${paginationControls(botGatePage)}
         `, "", "Owner");
-      } else if (tab === "subscriptions") {
-        body = sectionCard("Subscriptions", "Pending and processed access requests.", `
+      } else if (tab === "subscriptions" || tab === "billing") {
+        body = sectionCard("Billing & Plans", "Subscription requests and plan management.", `
           <div class="table-wrap no-scroll">
             <table>
               <thead><tr><th>Requester</th><th>Group</th><th>Status</th><th>Actions</th></tr></thead>
@@ -7192,8 +4160,21 @@
           </div>
           ${paginationControls(subscriptionsPage)}
         `, "", "Owner");
+      } else if (tab === "account_health") {
+        var allAgents = [];
+        Object.keys(state.cache.agents).forEach(function(k) { allAgents = allAgents.concat(state.cache.agents[k] || []); });
+        var healthRows = allAgents.map(function(a) {
+          var meta = a.metadata || {};
+          return '<tr><td>@' + escapeHtml(meta.username || "Agent " + a.id) + '</td><td><span class="badge ' + (a.status === "active" ? "success" : "warning") + '">' + escapeHtml(a.status || "unknown") + '</span></td><td>' + escapeHtml(meta.last_active_at ? relativeTime(meta.last_active_at) : "never") + '</td><td>' + formatNumber(meta.jobs_count || 0) + '</td></tr>';
+        }).join("");
+        body = sectionCard("Account Health", "Connected agent account status overview.", '<table class="table"><thead><tr><th>Account</th><th>Status</th><th>Last Active</th><th>Jobs</th></tr></thead><tbody>' + (healthRows || '<tr><td colspan="4">' + emptyState("No connected accounts.") + '</td></tr>') + '</tbody></table>');
+      } else if (tab === "scraping") {
+        var scraperCount = Object.keys(state.cache.scraperList).length;
+        body = sectionCard("Scraping Operations", "Scrape job overview across the platform.", '<div class="grid-4">' + statCard("Scraped Groups", formatNumber(scraperCount), "") + statCard("Active Jobs", "--", "") + statCard("Completed", "--", "") + statCard("Failed", "--", "") + '</div>');
+      } else if (tab === "leads_growth") {
+        body = sectionCard("Leads & Growth", "Aggregated lead generation metrics.", '<div class="grid-4">' + statCard("Total Leads", "--", "aggregate") + statCard("Converted", "--", "") + statCard("Conversion Rate", "--", "") + statCard("Active Sources", formatNumber(Object.keys(state.cache.scraperList).length), "") + '</div>');
       } else {
-        body = sectionCard("Audit Log", "Chronological record of owner actions.", `
+        body = sectionCard("Audit Log", "Chronological record of owner and system actions.", `
           <div class="toolbar" style="margin-bottom:12px">
             <select data-action="owner-audit-filter">
               <option value="">All actions</option>
@@ -7231,10 +4212,13 @@
         <div class="view">
           <div class="tabs panel">
             ${[
-              ["stats", "Stats"],
-              ["groups", "Groups"],
-              ["bot_gate", t("botGate")],
-              ["subscriptions", "Subscriptions"],
+              ["overview", "Platform Overview"],
+              ["groups", "Groups & Sources"],
+              ["account_health", "Account Health"],
+              ["scraping", "Scraping Operations"],
+              ["leads_growth", "Leads & Growth"],
+              ["billing", "Billing & Plans"],
+              ["access_control", "Access Control"],
               ["audit", "Audit Log"],
             ].map(([value, label]) => `
               <button class="tab-button ${tab === value ? "active" : ""}" type="button" data-action="select-owner-tab" data-tab="${value}">${escapeHtml(label)}</button>
@@ -7270,14 +4254,20 @@
       }
 
       const renderers = {
-        "#/overview": renderOverviewView,
-        "#/settings": renderSettingsView,
-        "#/automation": renderAutomationView,
-        "#/agents": renderAgentsView,
+        "#/home": renderHomeView,
+        "#/accounts": renderAccountsView,
+        "#/groups": renderGroupsView,
         "#/scraper": renderScraperView,
+        "#/leads": renderLeadsView,
+        "#/replies": renderRepliesView,
+        "#/campaigns": renderCampaignsView,
+        "#/automation": renderAutomationView,
+        "#/analytics": renderAnalyticsView,
+        "#/subscription": renderSubscriptionView,
+        "#/settings": renderSettingsView,
         "#/owner": renderOwnerView,
       };
-      const renderer = renderers[state.route] || renderOverviewView;
+      const renderer = renderers[state.route] || renderHomeView;
       roots.content.innerHTML = renderer();
     }
 
@@ -9806,13 +6796,21 @@
     });
 
     window.addEventListener("hashchange", async () => {
-      const nextRoute = location.hash || "#/overview";
+      const nextRoute = location.hash || "#/home";
       if (nextRoute === "#/moderation") {
-        location.hash = "#/overview";
+        location.hash = "#/home";
+        return;
+      }
+      if (nextRoute === "#/overview") {
+        location.hash = "#/home";
+        return;
+      }
+      if (nextRoute === "#/agents") {
+        location.hash = "#/accounts";
         return;
       }
       if (nextRoute === "#/owner" && !state.isOwner) {
-        location.hash = "#/overview";
+        location.hash = "#/home";
         return;
       }
       state.route = nextRoute;
@@ -9827,11 +6825,19 @@
       refreshTelegramInitData();
       await loadAuth();
       if (state.route === "#/moderation") {
-        state.route = "#/overview";
+        state.route = "#/home";
+        location.hash = state.route;
+      }
+      if (state.route === "#/overview") {
+        state.route = "#/home";
+        location.hash = state.route;
+      }
+      if (state.route === "#/agents") {
+        state.route = "#/accounts";
         location.hash = state.route;
       }
       if (state.route === "#/owner" && !state.isOwner) {
-        state.route = "#/overview";
+        state.route = "#/home";
         location.hash = state.route;
       }
       await ensureRouteData();
@@ -9840,6 +6846,89 @@
       renderContent();
       renderBottomNav();
       renderToasts();
+    }
+
+
+    // -- New loaders for Leads, Analytics, Subscription pages --
+
+    async function loadAgentLeads(agentId, options) {
+      options = options || {};
+      var params = new URLSearchParams();
+      if (options.status) params.set("status", options.status);
+      if (options.lead_label) params.set("lead_label", options.lead_label);
+      if (options.page) params.set("page", String(options.page));
+      if (options.page_size) params.set("page_size", String(options.page_size));
+      var qs = params.toString();
+      return apiRequest("/webapp/agents/" + agentId + "/leads" + (qs ? "?" + qs : ""), { boundary: "agents" });
+    }
+
+    async function loadAgentLeadStats(agentId) {
+      return apiRequest("/webapp/agents/" + agentId + "/leads/stats", { boundary: "agents" });
+    }
+
+    async function loadAgentAnalytics(agentId) {
+      return apiRequest("/webapp/agents/" + agentId + "/analytics", { boundary: "agents" });
+    }
+
+    async function loadSubscriptionStatus() {
+      return apiRequest("/webapp/agents/subscription/status");
+    }
+
+    async function createSubscriptionCheckout(plan, successUrl, cancelUrl) {
+      return apiRequest("/webapp/agents/subscription/checkout/stripe", {
+        method: "POST",
+        boundary: "agents",
+        body: JSON.stringify({ plan: plan, success_url: successUrl, cancel_url: cancelUrl }),
+      });
+    }
+
+    async function redeemPromoCode(code) {
+      return apiRequest("/webapp/agents/subscription/redeem", {
+        method: "POST",
+        boundary: "agents",
+        body: JSON.stringify({ code: code }),
+      });
+    }
+
+    async function cancelMySubscription() {
+      return apiRequest("/webapp/agents/subscription/cancel", { method: "POST", boundary: "agents" });
+    }
+
+    async function loadMCPTokens() {
+      return apiRequest("/api/mcp/tokens", { boundary: "agents" });
+    }
+
+    async function createMCPToken(name, expiresInDays) {
+      return apiRequest("/api/mcp/tokens", {
+        method: "POST",
+        boundary: "agents",
+        body: JSON.stringify({ name: name, expires_in_days: expiresInDays }),
+      });
+    }
+
+    async function revokeMCPToken(tokenId) {
+      return apiRequest("/api/mcp/tokens/" + tokenId, { method: "DELETE", boundary: "agents" });
+    }
+
+    async function updateAgentLead(agentId, leadId, payload) {
+      return apiRequest("/webapp/agents/" + agentId + "/leads/" + leadId, {
+        method: "PATCH",
+        boundary: "agents",
+        body: JSON.stringify(payload),
+      });
+    }
+
+    async function updateAgentSafetyConfig(agentId, payload) {
+      return apiRequest("/webapp/agents/" + agentId + "/safety", {
+        method: "PATCH",
+        boundary: "agents",
+        body: JSON.stringify(payload),
+      });
+    }
+
+    async function loadAgentNotifications(agentId, limit) {
+      var params = limit ? "?limit=" + limit : "";
+      return apiRequest("/webapp/agents/" + agentId + "/notifications" + params, { boundary: "agents" });
     }
 
     boot().catch((error) => {
@@ -9853,6 +6942,7 @@
         pushToast("Failed to load dashboard.", "danger");
       }
     });
+
   </script>
 </body>
 </html>

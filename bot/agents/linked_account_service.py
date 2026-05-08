@@ -160,33 +160,19 @@ class LinkedAccountService(AgentServiceSupport):
         return True
 
     async def list_agents(self, *, actor_user_id: int, group_id: int | None = None) -> list[Agent]:
-        from bot.config import get_settings
-        if actor_user_id not in get_settings().bot_owner_ids:
-            return list(
-                (
-                    await self.session.execute(
-                        select(Agent).where(Agent.linked_by_user_id == actor_user_id).order_by(Agent.created_at.desc(), Agent.id.desc())
-                    )
-                ).scalars()
-            )
-        stmt = select(Agent).order_by(Agent.created_at.desc(), Agent.id.desc())
+        stmt = (
+            select(Agent)
+            .where(Agent.linked_by_user_id == actor_user_id)
+            .order_by(Agent.created_at.desc(), Agent.id.desc())
+        )
         if group_id is not None:
             from sqlalchemy import or_
             stmt = stmt.where(or_(Agent.group_id == group_id, Agent.group_id.is_(None)))
         return list((await self.session.execute(stmt)).scalars())
 
     async def list_all_active_agents(self, *, actor_user_id: int) -> list[Agent]:
-        admin_groups = await GroupService(self.session).list_admin_groups_all(actor_user_id)
-        agents: list[Agent] = []
-        for group in admin_groups:
-            agents.extend(
-                [
-                    agent
-                    for agent in await self.list_agents(actor_user_id=actor_user_id, group_id=int(group["id"]))
-                    if agent.auth_state == "active"
-                ]
-            )
-        return agents
+        agents = await self.list_agents(actor_user_id=actor_user_id)
+        return [a for a in agents if a.auth_state == "active"]
 
     async def get_agent_by_external_account(
         self,

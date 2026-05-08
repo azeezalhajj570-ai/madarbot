@@ -28,7 +28,7 @@ MadarBot helps automate Telegram group operations by:
 
 | File | Purpose |
 |---|---|
-| `AGENT.md` | Main AI agent operating guide |
+| `AGENT.md` | Main AI agent operating guide + MCP server details |
 | `agents/lead_capture_agent.md` | Lead capture agent behavior and rules |
 | `agents/reply_agent.md` | AI reply agent behavior and safety rules |
 | `agents/system_prompt.md` | Shared system prompt guidance |
@@ -268,6 +268,61 @@ Redis may warn that memory overcommit is disabled. On Linux hosts, enable it wit
 sudo sysctl vm.overcommit_memory=1
 echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/99-redis.conf
 ```
+
+## MCP Server
+
+MadarBot exposes an MCP (Model Context Protocol) JSON-RPC endpoint at `/mcp/` for external AI agent control when `MCP_ENABLED=true`.
+
+### Endpoint
+- `POST /mcp/` — JSON-RPC 2.0 (tools/list, tools/call, initialize)
+- `GET /mcp/` — returns initialize payload (ChatGPT compatibility)
+
+### Enabling
+```env
+MCP_ENABLED=true
+MCP_AUTH_TOKEN=your-secret-token
+```
+
+### Authentication
+- Bearer token via `Authorization: Bearer <token>` header or `?token=<token>` query param
+- DB-backed tokens in `mcp_tokens` table (primary; extracts tg_user_id from token)
+- Env fallback: `MCP_AUTH_TOKEN` (pass/fail only)
+- Token management: `bot/dashboard/api/mcp_tokens_router.py`
+
+### Available Tools
+| Tool | Description |
+|---|---|
+| `madarbot_health` | Database and Redis health check |
+| `madarbot_list_accounts` | List agent accounts linked to user |
+| `madarbot_list_visible_groups` | List Telegram groups visible to agents |
+| `madarbot_list_tasks` | List automation tasks for a group |
+| `madarbot_get_task_configuration` | Get task configuration details |
+| `madarbot_update_task_configuration` | Update task control fields |
+| `madarbot_get_leads` | Get lead records from a Telegram group |
+| `madarbot_get_notification_config` | Get notification settings |
+| `madarbot_update_notification_config` | Update notification settings |
+| `madarbot_get_subscriptions` | List active subscriptions |
+| `madarbot_get_analytics` | Get analytics data for an agent |
+
+### Verify
+```bash
+curl https://madar.hamedco.com/mcp/
+curl -s "https://madar.hamedco.com/mcp/" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"tools/list","id":1,"params":{}}'
+```
+
+### Key Files
+| File | Purpose |
+|---|---|
+| `bot/mcp/server.py` | MCP server creation + lifecycle |
+| `bot/mcp/auth.py` | DB-first token auth + env fallback |
+| `bot/mcp/context.py` | Per-request user ID via contextvars |
+| `bot/mcp/tools/` | Tool implementations (health, groups, tasks, leads, etc.) |
+| `bot/dashboard/api/mcp_router.py` | /mcp/ JSON-RPC endpoint |
+| `bot/config.py` | MCP_ENABLED, MCP_AUTH_TOKEN, MCP_READONLY |
+| `tests/test_mcp.py` | MCP integration tests |
 
 ## Security Rules
 

@@ -146,10 +146,23 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if agent is None:
             return []
         groups = await self.list_managed_member_groups(actor_user_id=actor_user_id, agent_id=agent_id)
+
+        tg_ids = {int(g["tg_group_id"]) for g in groups}
+        group_id_map: dict[int, int] = {}
+        if tg_ids:
+            group_rows = (
+                await self.session.execute(
+                    select(Group.id, Group.tg_group_id).where(Group.tg_group_id.in_(tg_ids))
+                )
+            ).all()
+            for row in group_rows:
+                key = canonical_tg_group_id(int(row.tg_group_id))
+                group_id_map[key] = int(row.id)
+
         return [
             AccountGroupVisibility(
                 agent_id=agent.id,
-                group_id=agent.group_id,
+                group_id=group_id_map.get(canonical_tg_group_id(int(group["tg_group_id"])), agent.group_id),
                 tg_group_id=int(group["tg_group_id"]),
                 title=str(group["title"]),
             )
