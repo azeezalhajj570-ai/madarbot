@@ -16,3 +16,4 @@ telethon>=1.38.1
 cryptography>=42.0.0
 strenum>=0.4.15
 stripe>=9.0.0
+mcp>=1.0.0

@@ -29,6 +29,8 @@ from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine, get_session
 from bot.agents.session import shutdown_client_pool
+from bot.mcp.auth import verify_mcp_auth, verify_mcp_auth_async
+from bot.mcp.context import set_mcp_actor_user_id
 
 
 @asynccontextmanager
@@ -128,6 +130,48 @@ app.include_router(group_subscription_router)
 app.include_router(internal_router)
 app.include_router(internal_router, prefix="/api/internal")
 app.include_router(mcp_tokens_router)
+
+if settings.mcp_enabled:
+    from bot.dashboard.api.mcp_router import router as mcp_router
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import JSONResponse as StarletteJSONResponse
+
+    class McpAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            path = request.url.path
+            if path.startswith("/mcp") and ".well-known" not in path:
+                token = None
+                auth_header = request.headers.get("authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:]
+                if not token:
+                    token = request.query_params.get("token")
+                ok, tg_user_id = verify_mcp_auth(token)
+                if not ok:
+                    ok, tg_user_id = await verify_mcp_auth_async(token)
+                if not ok:
+                    return StarletteJSONResponse(
+                        status_code=401,
+                        content={"error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"},
+                    )
+                if tg_user_id is not None:
+                    set_mcp_actor_user_id(tg_user_id)
+            response = await call_next(request)
+            if path.startswith("/mcp"):
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "connect-src 'self' https://api.telegram.org https://api.openai.com https://generativelanguage.googleapis.com; "
+                    "script-src 'self'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "img-src 'self' data:; "
+                    "frame-ancestors 'none'; "
+                    "base-uri 'self'"
+                )
+            return response
+
+    app.add_middleware(McpAuthMiddleware)
+    app.include_router(mcp_router)
+    logger.info("MCP endpoint mounted at /mcp")
 
 
 @app.get("/")

@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     rate_limit_requests_per_minute: int = Field(default=100, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")
     rate_limit_burst: int = Field(default=25, alias="RATE_LIMIT_BURST")
     automation_rate_limit_per_group_minute: int = Field(default=10, alias="AUTOMATION_RATE_LIMIT_PER_GROUP_MINUTE")
+    mcp_enabled: bool = Field(default=False, alias="MCP_ENABLED")
+    mcp_readonly: bool = Field(default=True, alias="MCP_READONLY")
+    mcp_auth_token: str | None = Field(default=None, alias="MCP_AUTH_TOKEN")
+    mcp_default_actor_user_id: int | None = Field(default=None, alias="MCP_DEFAULT_ACTOR_USER_ID")
 
     FREE_PLAN_LIMITS: dict[str, int] = {
         "max_groups": 5,
