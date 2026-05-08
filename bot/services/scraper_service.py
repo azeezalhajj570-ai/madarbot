@@ -246,7 +246,7 @@ class ScraperService:
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0}
+            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0}
 
         managed_client = client
         should_disconnect = False
@@ -256,7 +256,7 @@ class ScraperService:
                 should_disconnect = True
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
-                return {"success_count": 0, "error_count": 0, "total_scraped": 0}
+                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0}
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
@@ -267,6 +267,7 @@ class ScraperService:
             error_count = 0
             total_scraped = 0
             member_processed_count = 0
+            seen_senders: set[int] = set()
             message_batch: list[dict[str, Any]] = []
             member_batch: list[dict[str, Any]] = []
             canonical_group_id = canonical_tg_group_id(int(tg_group_id))
@@ -297,12 +298,15 @@ class ScraperService:
                     message_batch.append(msg_row)
 
                     if sender_user_id is not None and int(sender_user_id) > 0:
+                        uid = int(sender_user_id)
                         member_row = serializers.build_member_row_from_sender(
-                            scraped_group.id, canonical_group_id, sender_user_id,
+                            scraped_group.id, canonical_group_id, uid,
                             sender_username, sender_first_name, sender_last_name, sender_raw_data,
                         )
                         member_batch.append(member_row)
-                        member_processed_count += 1
+                        if uid not in seen_senders:
+                            seen_senders.add(uid)
+                            member_processed_count += 1
 
                     if len(message_batch) >= self._MESSAGE_BATCH_SIZE:
                         await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
@@ -372,7 +376,7 @@ class ScraperService:
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "batches": 0, "completed": False}
+            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
 
         managed_client = client
         should_disconnect = False
@@ -382,7 +386,7 @@ class ScraperService:
                 should_disconnect = True
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
-                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "batches": 0, "completed": False}
+                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
@@ -399,6 +403,8 @@ class ScraperService:
             success_count = 0
             error_count = 0
             batch_count = 0
+            seen_senders: set[int] = set()
+            member_success_count = 0
             reached_end = False
 
             while limit <= 0 or (success_count < limit):
@@ -442,11 +448,15 @@ class ScraperService:
                         message_batch.append(msg_row)
 
                         if sender_user_id is not None and int(sender_user_id) > 0:
+                            uid = int(sender_user_id)
                             member_row = serializers.build_member_row_from_sender(
-                                scraped_group.id, canonical_group_id, sender_user_id,
+                                scraped_group.id, canonical_group_id, uid,
                                 sender_username, sender_first_name, sender_last_name, sender_raw_data,
                             )
                             member_batch.append(member_row)
+                            if uid not in seen_senders:
+                                seen_senders.add(uid)
+                                member_success_count += 1
 
                         batch_success += 1
                     except Exception as exc:
@@ -495,6 +505,7 @@ class ScraperService:
                 "success_count": success_count,
                 "error_count": error_count,
                 "total_scraped": success_count + error_count,
+                "member_success_count": member_success_count,
                 "batches": batch_count,
                 "completed": reached_end,
                 "last_offset_id": last_offset_id,
@@ -502,7 +513,7 @@ class ScraperService:
         except Exception as exc:
             await self.session.rollback()
             logger.exception("checkpoint_scrape_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "batches": 0, "completed": False}
+            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
         finally:
             if should_disconnect:
                 with suppress(Exception):
@@ -581,7 +592,7 @@ class ScraperService:
                 return {
                     "group_info": None,
                     "members": {"success_count": 0, "error_count": 0, "total_scraped": 0},
-                    "messages": {"success_count": 0, "error_count": 0, "total_scraped": 0},
+                    "messages": {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0},
                 }
 
         try:
