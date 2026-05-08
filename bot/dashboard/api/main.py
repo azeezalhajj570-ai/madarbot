@@ -146,16 +146,14 @@ if settings.mcp_enabled:
                     token = auth_header[7:]
                 if not token:
                     token = request.query_params.get("token")
-                ok, tg_user_id = verify_mcp_auth(token)
-                if not ok:
-                    ok, tg_user_id = await verify_mcp_auth_async(token)
-                if not ok:
-                    return StarletteJSONResponse(
-                        status_code=401,
-                        content={"error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"},
-                    )
-                if tg_user_id is None and token:
-                    _, tg_user_id = await verify_mcp_auth_async(token)
+                _, tg_user_id = await verify_mcp_auth_async(token)
+                if tg_user_id is None:
+                    ok, _ = verify_mcp_auth(token)
+                    if not ok:
+                        return StarletteJSONResponse(
+                            status_code=401,
+                            content={"error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"},
+                        )
                 if tg_user_id is not None:
                     set_mcp_actor_user_id(tg_user_id)
             response = await call_next(request)
