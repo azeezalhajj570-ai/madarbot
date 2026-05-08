@@ -150,6 +150,7 @@ def build_member_row_from_sender(
     first_name = str(sender_first_name or "").strip() or None
     last_name = str(sender_last_name or "").strip() or None
     full_name = " ".join(part for part in [first_name, last_name] if part).strip() or None
+    raw_data = sender_raw_data or {}
     return build_scraped_member_row(
         scraped_group_id=scraped_group_id,
         tg_group_id=canonical_group_id,
@@ -158,6 +159,8 @@ def build_member_row_from_sender(
         first_name=first_name,
         last_name=last_name,
         full_name=full_name,
+        is_bot=bool(raw_data.get("bot", False)),
+        is_premium=bool(raw_data.get("premium", False)),
         role="member",
         raw_data=sender_raw_data,
     )
