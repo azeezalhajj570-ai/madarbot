@@ -2308,7 +2308,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkMessage, setBulkMessage] = useState('')
   const [bulkThreshold, setBulkThreshold] = useState('25')
-  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('1')
+  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('15')
   const [bulkMemberQuery, setBulkMemberQuery] = useState('')
   const [bulkMemberResults, setBulkMemberResults] = useState<AgentGroupMember[]>([])
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
@@ -2563,8 +2563,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       }
 
       const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) {
-        setStatus('Interval seconds must be a non-negative number')
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 15) {
+        setStatus('Interval seconds must be at least 15')
         return
       }
 
