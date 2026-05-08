@@ -349,7 +349,7 @@ class AgentListenerManager:
                 user_id=user_id,
                 payload={
                     "chat_id": chat_id,
-                    "group_title": group.title or group_title,
+                    "group_title": group_title or group.title,
                     "text": text,
                     "message_id": message_id,
                     "first_name": first_name,
