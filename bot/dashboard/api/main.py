@@ -29,6 +29,42 @@ from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine, get_session
 from bot.agents.session import shutdown_client_pool
+
+
+async def _backfill_lead_group_titles() -> None:
+    try:
+        from sqlalchemy import text, select, update
+        from bot.db.models import AgentLead, Group
+
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                select(AgentLead.id, AgentLead.source_group_tg_id, AgentLead.source_group_title)
+                .where(AgentLead.source_group_tg_id.isnot(None))
+                .where(AgentLead.source_group_tg_id != 0)
+            )
+            rows = result.all()
+            if not rows:
+                return
+
+            updates = 0
+            for lead_id, tg_group_id, current_title in rows:
+                group_title = (await conn.execute(
+                    select(Group.title).where(Group.tg_group_id == tg_group_id)
+                )).scalar_one_or_none()
+                if not group_title:
+                    group_title = (await conn.execute(
+                        select(Group.title).where(Group.tg_group_id == -tg_group_id)
+                    )).scalar_one_or_none()
+                if group_title and group_title != current_title:
+                    await conn.execute(
+                        update(AgentLead).where(AgentLead.id == lead_id).values(source_group_title=group_title)
+                    )
+                    updates += 1
+
+            if updates:
+                logger.info("backfilled_lead_group_titles", updates=updates, total_checked=len(rows))
+    except Exception:
+        logger.exception("lead_group_title_backfill_failed")
 from bot.mcp.auth import verify_mcp_auth, verify_mcp_auth_async
 from bot.mcp.context import set_mcp_actor_user_id
 
@@ -38,6 +74,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_schema_bootstrap:
         await ensure_schema(engine)
+    await _backfill_lead_group_titles()
     yield
     await shutdown_client_pool()
     await engine.dispose()

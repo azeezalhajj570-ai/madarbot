@@ -276,11 +276,15 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
         if not source_group_tg_id or not source_message_id:
             raise ValueError("source_group_tg_id and source_message_id are required for forward mode")
         sent = await client.forward_messages(
-            entity=source_group_tg_id,
+            entity=tg_user_id,
             messages=source_message_id,
             from_peer=source_group_tg_id,
         )
-        return {"sent": True, "forwarded": True, "message_ids": sent if isinstance(sent, list) else [sent.id], "chat_id": source_group_tg_id, "mode": "forward"}
+        result = {"sent": True, "forwarded": True, "message_ids": sent if isinstance(sent, list) else [sent.id], "chat_id": tg_user_id, "mode": "forward"}
+        if message:
+            follow_up = await client.send_message(tg_user_id, message)
+            result["follow_up_message_id"] = follow_up.id
+        return result
 
     if not message:
         raise ValueError("message is required")

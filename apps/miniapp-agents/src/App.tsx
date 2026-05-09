@@ -94,6 +94,16 @@ const SCRAPE_TASK_META: TaskCatalogItem = {
   executor_types: ['agent'],
 }
 
+function _parseKeywords(raw: string | string[] | undefined | null): string[] {
+  if (Array.isArray(raw)) return raw.filter(Boolean)
+  if (!raw) return []
+  return String(raw).split(',').map((k) => k.trim()).filter(Boolean)
+}
+
+function _formatKeywords(keywords: string[]): string {
+  return keywords.join(',')
+}
+
 interface SubscriptionStatusInfo {
   status: 'active' | 'inactive'
   plan: 'pro' | 'business' | null
@@ -1049,7 +1059,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'groups',
-      label: 'Groups',
+      label: 'Leads',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.7" />
@@ -2295,6 +2305,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [isSaving, setIsSaving] = useState(false)
   const [taskKey, setTaskKey] = useState('reply_message')
   const [taskKeyword, setTaskKeyword] = useState('')
+  const [taskKeywords, setTaskKeywords] = useState<string[]>([])
+  const [pendingKeyword, setPendingKeyword] = useState('')
   const [taskTemplate, setTaskTemplate] = useState('')
   const [taskReplyMode, setTaskReplyMode] = useState('public')
   const [taskDeliveryMode, setTaskDeliveryMode] = useState('text')
@@ -2396,6 +2408,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setEditingTask(null)
     setTaskKey(catalog[0]?.key || 'reply_message')
     setTaskKeyword('')
+    setTaskKeywords([])
+    setPendingKeyword('')
     setTaskTemplate('')
     setTaskReplyMode('public')
     setTaskDeliveryMode('text')
@@ -2436,6 +2450,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setEditingTask(task)
     setTaskKey(task.task_key)
     setTaskKeyword(String(task.conditions.text_contains || ''))
+    setTaskKeywords(task.task_key === 'lead_capture' ? _parseKeywords(task.conditions.text_contains) : [])
+    setPendingKeyword('')
     setTaskTemplate(String(task.config.message_template || ''))
     setTaskReplyMode(String(task.config.reply_mode || 'public'))
     setTaskDeliveryMode(String(task.config.delivery_mode || 'text'))
@@ -2590,12 +2606,13 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     }
 
     if (taskKey === 'lead_capture') {
-      if (!leadAckTemplate.trim()) {
-        setStatus('Acknowledgment template is required for lead capture')
+      if (!taskKeywords.length) {
+        setStatus('At least one keyword is required for lead capture')
         return
       }
-      const config: Record<string, unknown> = {
-        ack_template: leadAckTemplate.trim(),
+      const config: Record<string, unknown> = {}
+      if (leadAckTemplate.trim()) {
+        config.ack_template = leadAckTemplate.trim()
       }
       if (leadLabel.trim()) {
         config.lead_label = leadLabel.trim()
@@ -2607,7 +2624,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
         task_key: taskKey,
         executor_type: 'agent',
         enabled: true,
-        conditions: { text_contains: taskKeyword.trim() },
+        conditions: { text_contains: _formatKeywords(taskKeywords) },
         config,
         agent_id: account.id,
         group_tg_ids: taskGroups.map((group) => group.tg_group_id),
@@ -2894,7 +2911,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           ) : isLeadCaptureTask ? (
             <>
               <TextAreaField
-                label="Acknowledgment template"
+                label="Acknowledgment template (optional)"
                 value={leadAckTemplate}
                 onChange={setLeadAckTemplate}
                 rows={4}
@@ -2910,7 +2927,50 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 />
                 Ask for contact details
               </label>
-              <InputField label="Keyword condition (optional)" value={taskKeyword} onChange={setTaskKeyword} placeholder="support" />
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>
+                  Keyword condition
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {taskKeywords.map((kw, i) => (
+                    <span key={i} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '4px 10px', borderRadius: 999,
+                      background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)',
+                      fontSize: 13, fontWeight: 500,
+                    }}>
+                      {kw}
+                      <button type="button" onClick={() => setTaskKeywords((prev) => prev.filter((_, j) => j !== i))} style={{
+                        border: 'none', background: 'none', cursor: 'pointer',
+                        color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0,
+                      }}>&times;</button>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={pendingKeyword}
+                  onChange={(e) => setPendingKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && pendingKeyword.trim()) {
+                      e.preventDefault()
+                      setTaskKeywords((prev) => prev.includes(pendingKeyword.trim()) ? prev : [...prev, pendingKeyword.trim()])
+                      setPendingKeyword('')
+                    }
+                  }}
+                  placeholder="support"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--miniapp-border)',
+                    background: 'var(--miniapp-surface)',
+                    color: 'var(--miniapp-text-primary)',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
               <GroupAutocompleteField
                 label="Select groups"
                 query={taskGroupsQuery}
@@ -3096,11 +3156,6 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   async function sendContact() {
     if (!contactingLead) return
     const isForward = contactMode === 'forward'
-    const msg = isForward ? '' : contactMessage.trim()
-    if (!isForward && !msg) {
-      setStatus('Message text is required')
-      return
-    }
     if (isForward && !contactingLead.source_message_id) {
       setStatus('No original message to forward')
       return
@@ -3108,15 +3163,15 @@ function AccountLeadsPage({ account }: { account: Agent }) {
     setIsSending(true)
     try {
       const notes = isForward
-        ? `Original message forwarded`
-        : `Contacted via ${contactMode}: ${msg}${includeOriginal && contactingLead.message_text ? `\n\n${contactingLead.message_text}` : ''}`
+        ? `Original message forwarded${contactMessage.trim() ? ` with message: ${contactMessage.trim()}` : ''}`
+        : `Contacted via ${contactMode}: ${contactMessage.trim()}${includeOriginal && contactingLead.message_text ? `\n\n${contactingLead.message_text}` : ''}`
       await agentsApi.updateAgentLead(account.id, contactingLead.id, {
         status: 'contacted',
         notes,
       })
       await agentsApi.createAgentJob(account.id, 'send_lead_message', {
         tg_user_id: contactingLead.tg_user_id,
-        message: msg,
+        message: contactMessage.trim(),
         mode: contactMode,
         include_original: isForward ? false : includeOriginal,
         original_text: !isForward && includeOriginal ? contactingLead.message_text : null,
@@ -3232,17 +3287,16 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
             </h2>
             {contactMode === 'forward' ? (
-              <Note>This will forward the lead's original message using Telegram's native forward to the source group.</Note>
-            ) : (
-              <>
-                <TextAreaField
-                  label="Message"
-                  value={contactMessage}
-                  onChange={setContactMessage}
-                  rows={5}
-                  placeholder="Type your message to this lead..."
-                />
-                {contactingLead.message_text ? (
+              <Note>Forward the lead's original message to their private chat, then send your message below.</Note>
+            ) : null}
+            <TextAreaField
+              label="Message"
+              value={contactMessage}
+              onChange={setContactMessage}
+              rows={5}
+              placeholder="Type your message to this lead..."
+            />
+            {contactingLead.message_text ? (
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -3253,8 +3307,6 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                     Include original message
                   </label>
                 ) : null}
-              </>
-            )}
             <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
               <option value="private">Private (direct message)</option>
               <option value="public">Public (in group)</option>
@@ -3263,7 +3315,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 onClick={() => void sendContact()}
-                disabled={isSending || (contactMode !== 'forward' && !contactMessage.trim()) || (contactMode === 'forward' && !contactingLead.source_message_id)}
+                disabled={isSending || (contactMode === 'forward' && !contactingLead.source_message_id)}
               >
                 {isSending ? 'Sending...' : contactMode === 'forward' ? 'Forward' : 'Send'}
               </Button>

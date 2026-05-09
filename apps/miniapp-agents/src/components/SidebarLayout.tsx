@@ -18,7 +18,7 @@ interface SidebarLayoutProps {
 
 const NAV_ICONS: Record<string, string> = {
   accounts: 'manage_accounts',
-  groups: 'groups',
+  groups: 'person_search',
   scraping: 'travel_explore',
   tasks: 'assignment',
   leads: 'person_search',
