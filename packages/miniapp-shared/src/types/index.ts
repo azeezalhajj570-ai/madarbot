@@ -199,6 +199,8 @@ export interface AgentGroupMember {
   username?: string | null
   full_name?: string | null
   role?: string
+  is_admin?: boolean
+  is_creator?: boolean
   message_count?: number
   is_bot?: boolean
   sent_by_agent?: boolean

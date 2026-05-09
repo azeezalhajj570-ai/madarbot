@@ -197,13 +197,18 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 first_name = str(getattr(participant, "first_name", None) or "").strip()
                 last_name = str(getattr(participant, "last_name", None) or "").strip()
                 full_name = " ".join(part for part in [first_name, last_name] if part).strip() or None
-                members.append({"user_id": int(user_id), "username": getattr(participant, "username", None), "full_name": full_name})
+                role = "member"
+                if hasattr(participant, "creator") and participant.creator:
+                    role = "creator"
+                elif hasattr(participant, "admin_rights") and participant.admin_rights:
+                    role = "admin"
+                elif hasattr(participant, "banned_rights") and participant.banned_rights:
+                    role = "restricted"
+                members.append({"user_id": int(user_id), "username": getattr(participant, "username", None), "full_name": full_name, "role": role, "is_admin": role in {"admin", "creator"}, "is_creator": role == "creator"})
         finally:
             await client.disconnect()
 
         await self._sync_users(members)
-        for member in members:
-            member["role"] = "member"
         logger.info("agent_member_lookup_completed", actor_user_id=actor_user_id, group_id=agent.group_id, tg_group_id=int(tg_group_id), agent_id=agent.id, query=normalized_query, count=len(members))
         return members
 
@@ -389,19 +394,22 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 for uid in sent_users:
                     sent_to.add(int(uid))
 
+        def _member_dict(member) -> dict[str, Any]:
+            role = member.role or "member"
+            return {
+                "user_id": int(member.tg_user_id),
+                "username": member.username,
+                "full_name": member.full_name,
+                "role": role,
+                "is_admin": role in {"admin", "creator"},
+                "is_creator": role == "creator",
+                "message_count": message_counts.get(int(member.tg_user_id), 0),
+                "is_bot": bool(member.is_bot) if hasattr(member, "is_bot") else False,
+                "sent_by_agent": int(member.tg_user_id) in sent_to,
+            }
+
         return {
-            "members": [
-                {
-                    "user_id": int(member.tg_user_id),
-                    "username": member.username,
-                    "full_name": member.full_name,
-                    "role": member.role or "member",
-                    "message_count": message_counts.get(int(member.tg_user_id), 0),
-                    "is_bot": bool(member.is_bot) if hasattr(member, "is_bot") else False,
-                    "sent_by_agent": int(member.tg_user_id) in sent_to,
-                }
-                for member in rows
-            ],
+            "members": [_member_dict(member) for member in rows],
             "total": total,
             "page": normalized_page,
             "page_size": normalized_page_size,

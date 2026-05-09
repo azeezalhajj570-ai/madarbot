@@ -2326,6 +2326,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
+  const [excludeAdmins, setExcludeAdmins] = useState(false)
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -2428,6 +2429,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkMemberResults([])
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
+    setExcludeAdmins(false)
     setScrapeGroupQuery('')
     setScrapeSelectedGroup(null)
     setScrapeGroups([])
@@ -2477,6 +2479,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkMemberResults([])
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
+    setExcludeAdmins(false)
     setLeadAckTemplate(task.task_key === 'lead_capture' ? String(task.config.ack_template || '') : '')
     setLeadLabel(task.task_key === 'lead_capture' ? String(task.config.lead_label || '') : '')
     setLeadAskContact(task.task_key === 'lead_capture' ? Boolean(task.config.ask_contact) : false)
@@ -2592,7 +2595,9 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           message: bulkMessage.trim(),
           threshold,
           interval_seconds: intervalSeconds,
-          selected_user_ids: bulkSelectedMembers.map((member) => member.user_id),
+          selected_user_ids: bulkSelectedMembers
+                .filter((member) => !excludeAdmins || !(member.is_admin || member.is_creator))
+                .map((member) => member.user_id),
         })
         closeForm()
         setStatus(null)
@@ -2857,6 +2862,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
+                          {member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Owner</span> : null}
+                          {member.is_admin && !member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#c2bdb5', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Admin</span> : null}
                           {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600 }}>✓ Sent</span> : null}
                         </div>
                         <div style={{ color: '#655d52', marginTop: 4 }}>
@@ -2886,6 +2893,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     }}
                   >
                     {member.full_name || member.username || `User ${member.user_id}`}
+                    {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
+                    {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#c2bdb5', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
                     {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
                     <button
                       type="button"
@@ -2907,6 +2916,15 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
               </div>
               <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={excludeAdmins}
+                  onChange={(event) => setExcludeAdmins(event.target.checked)}
+                  style={{ accentColor: 'var(--miniapp-accent)' }}
+                />
+                Exclude admins
+              </label>
             </>
           ) : isLeadCaptureTask ? (
             <>
