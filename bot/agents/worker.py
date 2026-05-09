@@ -107,7 +107,7 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
         if status == "completed":
             if mode == "forward":
                 body = "Original message forwarded."
-            elif mode == "group":
+            elif mode in ("public", "group"):
                 body = "Lead message sent in group."
             else:
                 body = f"Contact sent to user {tg_user_id}."
@@ -295,7 +295,7 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
     if include_original and original_text:
         full_text = f"{message}\n\n{original_text}"
 
-    if mode == "group" and source_group_tg_id:
+    if mode in ("public", "group") and source_group_tg_id:
         kwargs = {}
         if source_message_id:
             kwargs["reply_to"] = source_message_id

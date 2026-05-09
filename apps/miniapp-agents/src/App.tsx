@@ -3287,7 +3287,21 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
             </h2>
             {contactMode === 'forward' ? (
-              <Note>Forward the lead's original message to their private chat, then send your message below.</Note>
+              <>
+                <Note>Forward the lead's original message to their private chat, then send your message below.</Note>
+                {contactingLead.message_text ? (
+                  <div style={{
+                    padding: 12, borderRadius: 10,
+                    background: 'var(--miniapp-bg-soft)',
+                    border: '1px solid var(--miniapp-border-soft)',
+                    fontSize: 13, color: '#655d52', lineHeight: 1.5,
+                    maxHeight: 140, overflow: 'auto',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  }}>
+                    {contactingLead.message_text}
+                  </div>
+                ) : null}
+              </>
             ) : null}
             <TextAreaField
               label="Message"
