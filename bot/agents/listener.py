@@ -337,6 +337,12 @@ class AgentListenerManager:
                     message_id=message_id,
                     text=text,
                 )
+            source_title = group_title
+            if not source_title:
+                source_title_row = (await session.execute(
+                    select(Group.title).where(Group.tg_group_id == canonical_tg_group_id(int(chat_id)))
+                )).scalar_one_or_none()
+                source_title = source_title_row or str(chat_id)
             await TaskService(
                 session,
                 dispatch_agent_job=dispatch_agent_job,
@@ -349,7 +355,7 @@ class AgentListenerManager:
                 user_id=user_id,
                 payload={
                     "chat_id": chat_id,
-                    "group_title": group_title or group.title,
+                    "group_title": source_title,
                     "text": text,
                     "message_id": message_id,
                     "first_name": first_name,

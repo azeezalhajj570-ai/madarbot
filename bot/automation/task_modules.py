@@ -184,7 +184,7 @@ async def notify_destination_handler(config: dict[str, Any], event: TaskEvent) -
             or str(event.payload.get("username") or "").strip()
             or str(event.user_id)
         )
-        source_group_title = str(event.payload.get("group_title") or "").strip() or str(event.group_id)
+        source_group_title = str(event.payload.get("group_title") or "").strip() or f"Group {event.group_id}"
         original_message = str(event.payload.get("text") or "").strip() or "[No message text]"
         private_reply_text = _render_template(suggested_reply_template, event)
         prompt_sections: list[str] = []
