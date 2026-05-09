@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from aiogram.types import InlineKeyboardMarkup
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.runtime import AgentTaskRuntime, GroupMemberBroadcastRuntime, ScraperRuntime
@@ -1055,3 +1055,196 @@ async def test_scraper_runtime_passes_max_age_days_to_full_group_scrape(
     assert captured["member_limit"] == 250
     assert captured["message_limit"] == 500
     assert captured["max_age_days"] == 14
+
+
+# ── tests for MissingGreenlet fix (worker.py) ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_job_uses_job_id_parameter_not_orm_attribute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_set_job_state must receive job_id (int param) not job.id (ORM attr).
+
+    After session.commit() expires the ORM object, accessing job.id
+    triggers lazy-load which requires a greenlet context that dramatiq's
+    asyncio wrapper does not provide, causing MissingGreenlet.
+    """
+    agent = Agent(
+        id=18901,
+        group_id=1950,
+        telegram_user_id=18901,
+        external_account_id="agent-captured-id",
+        status="active",
+        auth_state="active",
+        session_string="session-captured",
+        details={},
+    )
+    job = AgentJob(
+        id=2950,
+        agent_id=agent.id,
+        job_type="automation_task",
+        job_payload={
+            "task_key": "reply_message",
+            "assignment_id": "assignment-captured-id",
+            "task_config": {"message_template": "ok"},
+            "event": {
+                "name": "message.received",
+                "group_id": agent.group_id,
+                "user_id": 1950,
+                "payload": {"chat_id": -1001950, "message_id": 55, "text": "test"},
+            },
+        },
+        status="pending",
+    )
+
+    set_job_state_calls: list[tuple[int, str]] = []
+
+    async def fake_set_job_state(session, job_id_arg: int, status: str, *, result=None, error=None):
+        set_job_state_calls.append((job_id_arg, status))
+
+    class FakeClient:
+        async def disconnect(self) -> None:
+            pass
+
+    class FakeSessionManager:
+        async def get_client(self, agent_id: int):
+            return FakeClient()
+
+    class FakeAgentTaskRuntime:
+        def __init__(self, *, registry) -> None:
+            pass
+
+        async def execute(self, *, client, agent, job, session) -> bool:
+            return True
+
+    class FakeResult:
+        def __init__(self, item) -> None:
+            self.item = item
+
+        def scalar_one_or_none(self):
+            return self.item
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.commits = 0
+
+        async def execute(self, stmt):
+            entity = stmt.column_descriptions[0].get("entity")
+            if entity is AgentJob:
+                return FakeResult(job)
+            if entity is Agent:
+                return FakeResult(agent)
+            return FakeResult(None)
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+    class FakeSessionContext:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        async def __aenter__(self) -> FakeSession:
+            return self.session
+
+        async def __aexit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+    class FakeSessionFactory:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        def __call__(self) -> FakeSessionContext:
+            return FakeSessionContext(self.session)
+
+    fake_session = FakeSession()
+
+    monkeypatch.setattr("bot.agents.worker.SessionLocal", FakeSessionFactory(fake_session))
+    monkeypatch.setattr("bot.agents.worker.SessionManager", FakeSessionManager)
+    monkeypatch.setattr("bot.agents.worker.AgentTaskRuntime", FakeAgentTaskRuntime)
+    monkeypatch.setattr("bot.agents.worker._set_job_state", fake_set_job_state)
+    monkeypatch.setattr("bot.agents.worker._create_job_notification", AsyncMock())
+
+    await _execute_agent_job_impl(agent.id, job.id)
+
+    assert len(set_job_state_calls) == 1
+    called_job_id, called_status = set_job_state_calls[0]
+    assert called_job_id == job.id
+    assert called_status == "completed"
+
+
+# ── tests for MultipleResultsFound fix (agent_lead_service.py) ────────
+
+
+@pytest.mark.asyncio
+async def test_capture_lead_handles_existing_duplicates_gracefully(db_session) -> None:
+    """When duplicate AgentLead rows exist for the same (group, user, source),
+    capture_lead must not raise MultipleResultsFound."""
+    owner = User(tg_user_id=9901, username="owner-dup", full_name="Owner Dup", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(tg_group_id=-1009901, title="Dup Test Group", owner_user_id=owner.id, is_active=True)
+    db_session.add(group)
+    await db_session.commit()
+
+    lead_service = AgentLeadService(db_session)
+
+    # Insert two duplicate rows directly (bypassing capture_lead uniqueness logic)
+    lead_a = AgentLead(
+        agent_id=None,
+        group_id=group.id,
+        tg_user_id=6201,
+        username="dupuser_a",
+        first_name="DupeA",
+        source_group_tg_id=group.tg_group_id,
+        source_group_title="Dup Test Group",
+        source_message_id=501,
+        message_text="first duplicate",
+        lead_label="general",
+        confidence=0.5,
+    )
+    lead_b = AgentLead(
+        agent_id=None,
+        group_id=group.id,
+        tg_user_id=6201,
+        username="dupuser_b",
+        first_name="DupeB",
+        source_group_tg_id=group.tg_group_id,
+        source_group_title="Dup Test Group",
+        source_message_id=502,
+        message_text="second duplicate",
+        lead_label="general",
+        confidence=0.5,
+    )
+    db_session.add_all([lead_a, lead_b])
+    await db_session.commit()
+
+    # Now call capture_lead — must not raise MultipleResultsFound
+    result = await lead_service.capture_lead(
+        agent_id=None,
+        group_id=group.id,
+        tg_user_id=6201,
+        username="updated_user",
+        first_name="Updated",
+        source_group_tg_id=group.tg_group_id,
+        source_group_title="Dup Test Group",
+        source_message_id=503,
+        message_text="updated message",
+        lead_label="support",
+    )
+    # Must pick one of the existing rows and update it
+    assert result is not None
+    assert result.id in {lead_a.id, lead_b.id}
+    assert result.message_text == "updated message"
+    assert result.lead_label == "support"
+    assert result.username == "updated_user"
+
+    # Verify total count is still 2 (no new row inserted)
+    count = (await db_session.execute(
+        select(func.count(AgentLead.id)).where(
+            AgentLead.group_id == group.id,
+            AgentLead.tg_user_id == 6201,
+            AgentLead.source_group_tg_id == group.tg_group_id,
+        )
+    )).scalar_one()
+    assert count == 2

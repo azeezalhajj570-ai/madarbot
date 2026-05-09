@@ -345,7 +345,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 if job.job_type == "automation_task":
                     handled = await runtime.execute(client=client, agent=agent, job=job, session=session)
                     if handled:
-                        await _set_job_state(session, job.id, "completed")
+                        await _set_job_state(session, job_id, "completed")
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
                     result = await broadcast_runtime.execute(client=client, agent=agent, payload=broadcast_payload)
@@ -365,22 +365,22 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         job.job_payload = broadcast_payload
                         await session.commit()
                         delay_sec = max(5, int(progress.get("retry_after", 60)))
-                        execute_agent_job.send_with_options(args=(agent_id, job.id), delay=delay_sec * 1000)
+                        execute_agent_job.send_with_options(args=(agent_id, job_id), delay=delay_sec * 1000)
                         bound_logger.info("agent_broadcast_partial_rescheduled",
-                            agent_id=agent_id, job_id=job.id,
+                            agent_id=agent_id, job_id=job_id,
                             sent=progress.get("success_count", 0),
                             reason=progress.get("stop_reason"))
                         handled = True
                         return
-                    await _set_job_state(session, job.id, "completed", result=result)
+                    await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(client=client, agent=agent, payload=dict(job.job_payload or {}))
-                    await _set_job_state(session, job.id, "completed", result=result)
+                    await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 elif job.job_type == "send_lead_message":
                     result = await _handle_send_lead_message(client=client, session=session, job=job)
-                    await _set_job_state(session, job.id, "completed", result=result)
+                    await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 elif job.job_type in {SCRAPER_GROUP_INFO_JOB_TYPE, SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_MESSAGES_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
                     result = await scraper_runtime.execute(
@@ -389,10 +389,10 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         payload=dict(job.job_payload or {}),
                         job_type=job.job_type,
                     )
-                    await _set_job_state(session, job.id, "completed", result=result)
+                    await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 if not handled:
-                    await _set_job_state(session, job.id, "failed", error=f"Unhandled job type: {job.job_type}")
+                    await _set_job_state(session, job_id, "failed", error=f"Unhandled job type: {job.job_type}")
                     bound_logger.warning("agent_job_unhandled", job_type=job.job_type)
                     return
             finally:

@@ -38,11 +38,14 @@ class AgentLeadService:
     ) -> AgentLead:
         existing = (
             await self.session.execute(
-                select(AgentLead).where(
+                select(AgentLead)
+                .where(
                     AgentLead.group_id == group_id,
                     AgentLead.tg_user_id == tg_user_id,
                     AgentLead.source_group_tg_id == source_group_tg_id,
                 )
+                .order_by(AgentLead.id.desc())
+                .limit(1)
             )
         ).scalar_one_or_none()
 
@@ -86,11 +89,14 @@ class AgentLeadService:
             await self.session.rollback()
             dup = (
                 await self.session.execute(
-                    select(AgentLead).where(
+                    select(AgentLead)
+                    .where(
                         AgentLead.group_id == group_id,
                         AgentLead.tg_user_id == tg_user_id,
                         AgentLead.source_group_tg_id == source_group_tg_id,
                     )
+                    .order_by(AgentLead.id.desc())
+                    .limit(1)
                 )
             ).scalar_one_or_none()
             if dup is not None:
