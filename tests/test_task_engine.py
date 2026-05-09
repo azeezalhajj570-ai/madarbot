@@ -141,7 +141,7 @@ async def test_task_engine_executes_lead_capture_module(fake_bot) -> None:
     )
 
     assert results[0].output["metadata"]["lead_label"] == "sales"
-    assert fake_bot.sent_messages == [(-1002, "Thanks, we received your request.\n\nPlease share your preferred contact details.")]
+    assert fake_bot.sent_messages == []
 
 
 def test_registry_contains_builtin_task_modules() -> None:

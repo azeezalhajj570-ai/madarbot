@@ -131,22 +131,8 @@ async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict
         "capture_type": "lead_capture",
         "message_text": str(event.payload.get("text") or ""),
     }
-    template = str(config.get("ack_template") or "").strip()
-    if not template:
-        return {
-            "status": "skipped",
-            "reason": "missing_ack_template",
-            "metadata": metadata,
-        }
-
-    text = _render_template(template, event)
-    if bool(config.get("ask_contact")):
-        text = f"{text}\n\nPlease share your preferred contact details."
     return {
-        "text": text,
-        "reply_to_message_id": event.payload.get("message_id"),
         "metadata": metadata,
-        **({"delete_after_seconds": int(config.get("delete_after_seconds") or 0)} if int(config.get("delete_after_seconds") or 0) > 0 else {}),
     }
 
 
