@@ -1226,7 +1226,14 @@
     }
 
     function memberOptionLabel(member) {
-      return member.username ? "@" + member.username : member.full_name || "user:" + member.user_id;
+      const role = member.is_creator ? "Owner " : member.is_admin ? "Admin " : "";
+      return member.username ? role + "@" + member.username : role + (member.full_name || "user:" + member.user_id);
+    }
+
+    function memberRoleBadge(member) {
+      if (member.is_creator) return "Owner";
+      if (member.is_admin) return "Admin";
+      return "";
     }
 
     function memberSearchStateClass(stateName) {
@@ -1307,7 +1314,7 @@
               options: availableMembers.map((member) => ({
                 id: member.user_id,
                 label: memberOptionLabel(member),
-                meta: `${member.role || "member"} · ${String(member.user_id)}`,
+                meta: `${memberRoleBadge(member) || (member.role || "member")} · ${String(member.user_id)}`,
                 actionLabel: t("addUser"),
               })),
               addAction: "add-bulk-user",
@@ -2119,6 +2126,12 @@
             </div>
           </div>
           <div class="field-hint">${escapeHtml(agents.length ? t("bulkMessageSubtitle") : t("noAgentsLinkedHint"))}</div>
+          <div class="field">
+            <label class="field-checkbox">
+              <input type="checkbox" name="exclude_admins" value="1" ${bulkDraft.exclude_admins ? "checked" : ""} />
+              <span>Exclude admins</span>
+            </label>
+          </div>
         </form>
       `;
     }
@@ -5084,6 +5097,7 @@
         state.ui.bulkMessageDraft.user_query = "";
         state.ui.bulkMessageDraft.error = "";
         state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
         state.ui.bulkAddMembersDraft.source_group_id = "";
         state.ui.bulkAddMembersDraft.target_group_id = "";
         state.ui.bulkAddMembersDraft.selected_user_ids = [];
@@ -5374,6 +5388,7 @@
             state.ui.bulkMessageDraft.error = error.message || t("linkedAgentRequired");
           } finally {
             state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
           }
         }
         renderBulkMessageModal();
@@ -5897,6 +5912,7 @@
             state.ui.bulkMessageDraft.error = error.message || t("linkedAgentRequired");
           } finally {
             state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
             if (state.ui.bulkMessageOpen) {
               renderBulkMessageModal();
             } else {
@@ -6009,6 +6025,7 @@
         state.ui.bulkMessageDraft.user_query = "";
         state.ui.bulkMessageDraft.error = "";
         state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
         state.ui.bulkAddMembersDraft.source_group_id = "";
         state.ui.bulkAddMembersDraft.target_group_id = "";
         state.ui.bulkAddMembersDraft.selected_user_ids = [];
@@ -6082,6 +6099,7 @@
           state.ui.bulkMessageDraft.error = error.message || t("linkedAgentRequired");
         } finally {
           state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
         }
         if (state.ui.bulkMessageOpen) {
           renderBulkMessageModal();
@@ -6158,6 +6176,7 @@
           state.ui.bulkMessageDraft.error = error.message || t("linkedAgentRequired");
         } finally {
           state.ui.bulkMessageDraft.loading = false;
+        state.ui.bulkMessageDraft.exclude_admins = false;
         }
         if (state.ui.bulkMessageOpen) {
           renderBulkMessageModal();
@@ -6415,9 +6434,17 @@
         const message = String(fd.get("message") || "").trim();
         const threshold = Number(fd.get("threshold") || 0);
         const intervalSeconds = Number(fd.get("interval_seconds") || 0);
+        const excludeAdmins = Boolean(fd.get("exclude_admins"));
+        const sourceManagedGroupId = Number(state.ui.bulkMessageDraft.source_managed_group_id || 0);
         const selectedUserIds = (state.ui.bulkMessageDraft.selected_user_ids || [])
           .map((value) => Number(value))
-          .filter((value) => Number.isFinite(value) && value > 0);
+          .filter((value) => Number.isFinite(value) && value > 0)
+          .filter((value) => {
+            if (!excludeAdmins) return true;
+            const member = liveMemberById(sourceManagedGroupId, value);
+            if (!member) return true;
+            return !(member.is_admin || member.is_creator);
+          });
         if (!agentId) {
           pushToast(t("bulkMessageUnavailable"), "warning");
           return;
@@ -6459,6 +6486,7 @@
           user_query: "",
           loading: false,
           error: "",
+          exclude_admins: false,
         };
         state.ui.bulkMessageOpen = false;
         closeModal();
