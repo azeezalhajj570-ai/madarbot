@@ -2837,6 +2837,15 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button tone="secondary" onClick={() => { setBulkMemberResults([]); setBulkMemberQuery(''); }}>
                       Clear results
                     </Button>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '4px 0' }}>
+                      <input
+                        type="checkbox"
+                        checked={excludeAdmins}
+                        onChange={(event) => setExcludeAdmins(event.target.checked)}
+                        style={{ accentColor: 'var(--miniapp-accent)' }}
+                      />
+                      Exclude admins
+                    </label>
                   </div>
                   <div
                     style={{
@@ -2916,15 +2925,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
               </div>
               <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={excludeAdmins}
-                  onChange={(event) => setExcludeAdmins(event.target.checked)}
-                  style={{ accentColor: 'var(--miniapp-accent)' }}
-                />
-                Exclude admins
-              </label>
             </>
           ) : isLeadCaptureTask ? (
             <>
