@@ -1,0 +1,44 @@
+# Auto-detect text files
+* text=auto
+
+# Python
+*.py text diff=python
+
+# Markdown
+*.md text
+
+# YAML
+*.yml text
+*.yaml text
+
+# Shell
+*.sh text eol=lf
+
+# Docker
+Dockerfile* text
+*.dockerfile text
+
+# Config
+*.toml text
+*.ini text
+*.cfg text
+*.example text
+
+# Static assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# JS/TS/Node
+*.js text
+*.ts text
+*.jsx text
+*.tsx text
+*.json text
+*.css text
+
+# Lock files
+package-lock.json -diff

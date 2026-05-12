@@ -5,6 +5,12 @@ from mcp.types import ToolAnnotations
 
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
+from bot.mcp.structured_response import (
+    OUTPUT_SCHEMA_BASE,
+    error_response,
+    success_response,
+    to_mcp_text,
+)
 from bot.services.subscription_service import SubscriptionService
 
 
@@ -24,8 +30,11 @@ def _serialize_subscription(sub) -> dict:
 
 def register_subscription_tools(server: FastMCP) -> None:
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    async def madarbot_get_subscription(tg_user_id: int | None = None) -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+
+    )
+    async def madarbot_get_subscription(tg_user_id: int | None = None) -> str:
         """Get the active subscription for a user. Defaults to MCP actor if not specified."""
         ctx = resolve_mcp_context()
         target_user_id = tg_user_id or ctx.actor_user_id
@@ -36,31 +45,54 @@ def register_subscription_tools(server: FastMCP) -> None:
                 bot_kind="agents",
             )
             if sub:
-                return {"subscription": _serialize_subscription(sub)}
-            return {"subscription": None}
+                result = success_response(
+                    content=f"Active {sub.plan} subscription found",
+                    data={"subscription": _serialize_subscription(sub)},
+                )
+            else:
+                result = success_response(
+                    content="No active subscription found",
+                    data={"subscription": None},
+                )
+            return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    async def madarbot_list_subscriptions() -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+
+    )
+    async def madarbot_list_subscriptions() -> str:
         """List all active subscriptions for the agents miniapp."""
         ctx = resolve_mcp_context()
         async with SessionLocal() as session:
             service = SubscriptionService(session)
             subs = await service.list_active_subscriptions(bot_kind="agents")
-            return {
-                "subscriptions": [_serialize_subscription(s) for s in subs],
-                "total": len(subs),
-            }
+            result = success_response(
+                content=f"Found {len(subs)} active subscription{'s' if len(subs) != 1 else ''}",
+                data={
+                    "subscriptions": [_serialize_subscription(s) for s in subs],
+                    "total": len(subs),
+                },
+            )
+            return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False))
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+
+    )
     async def madarbot_grant_subscription(
         tg_user_id: int,
         plan: str = "pro",
         expires_at: str | None = None,
-    ) -> dict:
+    ) -> str:
         """Grant a subscription. Requires MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
-            return {"error": "Write operations are disabled (MCP_READONLY=true)"}
+            result = error_response(
+                content="Write operations are disabled",
+                code="READONLY_MODE",
+                message="Set MCP_READONLY=false to enable write operations",
+            )
+            return to_mcp_text(result)
         from datetime import datetime, timezone
         async with SessionLocal() as session:
             service = SubscriptionService(session)
@@ -74,21 +106,49 @@ def register_subscription_tools(server: FastMCP) -> None:
                 responder_id=ctx.actor_user_id,
                 bot_kind="agents",
             )
-            return {"subscription": _serialize_subscription(sub)}
+            result = success_response(
+                content=f"Granted {plan} subscription to user {tg_user_id}",
+                data={"subscription": _serialize_subscription(sub)},
+            )
+            return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False))
-    async def madarbot_cancel_subscription(tg_user_id: int, confirm: bool = False) -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+
+    )
+    async def madarbot_cancel_subscription(tg_user_id: int, confirm: bool = False) -> str:
         """Cancel a subscription. Requires confirmation and MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
-            return {"error": "Write operations are disabled (MCP_READONLY=true)"}
+            result = error_response(
+                content="Write operations are disabled",
+                code="READONLY_MODE",
+                message="Set MCP_READONLY=false to enable write operations",
+            )
+            return to_mcp_text(result)
         if not confirm:
-            return {"error": "Confirmation required. Set confirm=true to proceed."}
+            result = error_response(
+                content="Confirmation required",
+                code="CONFIRMATION_REQUIRED",
+                message="Set confirm=true to proceed with cancellation",
+            )
+            return to_mcp_text(result)
         async with SessionLocal() as session:
             service = SubscriptionService(session)
-            result = await service.cancel_subscription(
+            cancelled = await service.cancel_subscription(
                 tg_user_id=tg_user_id,
                 responder_id=ctx.actor_user_id,
                 bot_kind="agents",
             )
-            return {"success": result}
+            if cancelled:
+                result = success_response(
+                    content="Subscription cancelled successfully",
+                    data={"success": True, "tg_user_id": tg_user_id},
+                )
+            else:
+                result = error_response(
+                    content="Subscription not found",
+                    code="NOT_FOUND",
+                    message="No active subscription found for the given user",
+                )
+            return to_mcp_text(result)

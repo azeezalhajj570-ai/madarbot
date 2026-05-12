@@ -1,0 +1,10 @@
+# Global owners
+* @azeezalhajj570-ai
+
+# CI/CD workflows
+.github/ @azeezalhajj570-ai
+
+# Security-sensitive files
+.env.example @azeezalhajj570-ai
+**/Dockerfile* @azeezalhajj570-ai
+docker-compose*.yml @azeezalhajj570-ai

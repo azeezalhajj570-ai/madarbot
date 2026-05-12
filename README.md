@@ -27,8 +27,9 @@ MadarBot helps automate Telegram group operations by:
 ## Repository Documentation
 
 | File | Purpose |
-|---|---|
+|---|---|---|
 | `AGENT.md` | Main AI agent operating guide + MCP server details |
+| `CONTRIBUTING.md` | Contribution guide, workflow, and standards |
 | `agents/lead_capture_agent.md` | Lead capture agent behavior and rules |
 | `agents/reply_agent.md` | AI reply agent behavior and safety rules |
 | `agents/system_prompt.md` | Shared system prompt guidance |
@@ -36,6 +37,7 @@ MadarBot helps automate Telegram group operations by:
 | `docs/TESTING_STRATEGY.md` | Unit, integration, E2E, regression, DB, and smoke testing strategy |
 | `docs/DEPLOYMENT_CHECKLIST.md` | Deployment, verification, and rollback checklist |
 | `.env.example` | Environment variable template |
+| `.github/workflows/tests.yml` | CI workflow (lint, format, tests, builds) |
 
 ## Requirements
 

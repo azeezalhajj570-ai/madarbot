@@ -8,8 +8,44 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.server import create_mcp_server
+from bot.mcp.structured_response import success_response, error_response, to_mcp_text, OUTPUT_SCHEMA_BASE
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
+
+# Output schema definitions for each MCP tool
+# These are exposed in tools/list for ChatGPT Apps compatibility
+TOOL_OUTPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "madarbot_health": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_accounts": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_account": OUTPUT_SCHEMA_BASE,
+    "madarbot_update_account": OUTPUT_SCHEMA_BASE,
+    "madarbot_delete_account": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_visible_groups": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_group_members": OUTPUT_SCHEMA_BASE,
+    "madarbot_start_group_sync": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_sync_status": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_member_messages": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_task_catalog": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_tasks": OUTPUT_SCHEMA_BASE,
+    "madarbot_create_task": OUTPUT_SCHEMA_BASE,
+    "madarbot_update_task": OUTPUT_SCHEMA_BASE,
+    "madarbot_delete_task": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_notifications": OUTPUT_SCHEMA_BASE,
+    "madarbot_mark_notifications_seen": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_unseen_count": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_leads": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_lead": OUTPUT_SCHEMA_BASE,
+    "madarbot_update_lead_status": OUTPUT_SCHEMA_BASE,
+    "madarbot_add_lead_note": OUTPUT_SCHEMA_BASE,
+    "madarbot_delete_lead": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_analytics": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_safety_settings": OUTPUT_SCHEMA_BASE,
+    "madarbot_update_safety_settings": OUTPUT_SCHEMA_BASE,
+    "madarbot_get_subscription": OUTPUT_SCHEMA_BASE,
+    "madarbot_list_subscriptions": OUTPUT_SCHEMA_BASE,
+    "madarbot_grant_subscription": OUTPUT_SCHEMA_BASE,
+    "madarbot_cancel_subscription": OUTPUT_SCHEMA_BASE,
+}
 
 
 @router.get("/")
@@ -73,11 +109,15 @@ async def _handle_single_message(server: Any, message: dict) -> dict:
     if method == "tools/list":
         tools = []
         for tool in server._tool_manager.list_tools():
-            tools.append({
+            tool_def = {
                 "name": tool.name,
                 "description": tool.description or "",
                 "inputSchema": tool.parameters,
-            })
+            }
+            # Include outputSchema for ChatGPT Apps compatibility
+            if tool.name in TOOL_OUTPUT_SCHEMAS:
+                tool_def["outputSchema"] = TOOL_OUTPUT_SCHEMAS[tool.name]
+            tools.append(tool_def)
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
     if method == "tools/call":
@@ -86,11 +126,68 @@ async def _handle_single_message(server: Any, message: dict) -> dict:
         try:
             tool = next(t for t in server._tool_manager.list_tools() if t.name == tool_name)
             result = await tool.fn(**arguments)
+
+            # Check if result is already a structured response string
+            # or if it's a dict that needs to be wrapped
+            if isinstance(result, str):
+                # Try to parse as JSON to check if it's already structured
+                try:
+                    parsed = json.loads(result)
+                    if "content" in parsed and "structuredContent" in parsed:
+                        # Already structured, return as text content
+                        content_text = result
+                    else:
+                        # Plain JSON, wrap in structured format
+                        content_text = json.dumps(
+                            success_response(
+                                content="Operation completed",
+                                data=parsed,
+                            ),
+                            default=str,
+                        )
+                except json.JSONDecodeError:
+                    # Not JSON, wrap as text
+                    content_text = json.dumps(
+                        success_response(
+                            content=result,
+                            data={},
+                        ),
+                        default=str,
+                    )
+            elif isinstance(result, dict):
+                # Dict result, wrap in structured format
+                if "error" in result and len(result) == 1:
+                    # Error dict
+                    content_text = json.dumps(
+                        error_response(
+                            content=result["error"],
+                            code="TOOL_ERROR",
+                            message=result["error"],
+                        ),
+                        default=str,
+                    )
+                else:
+                    content_text = json.dumps(
+                        success_response(
+                            content="Operation completed",
+                            data=result,
+                        ),
+                        default=str,
+                    )
+            else:
+                content_text = json.dumps(
+                    success_response(
+                        content=str(result),
+                        data={},
+                    ),
+                    default=str,
+                )
+
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {
-                    "content": [{"type": "text", "text": json.dumps(result, default=str)}],
+                    "content": [{"type": "text", "text": content_text}],
                 },
             }
         except StopIteration:

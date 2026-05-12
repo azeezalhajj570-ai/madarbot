@@ -5,6 +5,12 @@ from mcp.types import ToolAnnotations
 
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
+from bot.mcp.structured_response import (
+    OUTPUT_SCHEMA_BASE,
+    error_response,
+    success_response,
+    to_mcp_text,
+)
 from bot.services.agent_lead_service import AgentLeadService
 
 
@@ -32,29 +38,40 @@ def _serialize_lead(lead) -> dict:
 
 def register_lead_tools(server: FastMCP) -> None:
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+
+    )
     async def madarbot_list_leads(
         agent_id: int | None = None,
         group_id: int | None = None,
         status: str | None = None,
         page: int = 1,
         page_size: int = 25,
-    ) -> dict:
+    ) -> str:
         """List leads with optional filters."""
         ctx = resolve_mcp_context()
         async with SessionLocal() as session:
             service = AgentLeadService(session)
-            result = await service.list_leads(
+            result_data = await service.list_leads(
                 agent_id=agent_id,
                 group_id=group_id,
                 status=status,
                 page=page,
                 page_size=page_size,
             )
-            return result
+            leads = result_data.get("leads", [])
+            result = success_response(
+                content=f"Found {len(leads)} lead{'s' if len(leads) != 1 else ''}",
+                data=result_data,
+            )
+            return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    async def madarbot_get_lead(lead_id: int) -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+
+    )
+    async def madarbot_get_lead(lead_id: int) -> str:
         """Get a single lead by ID."""
         ctx = resolve_mcp_context()
         async with SessionLocal() as session:
@@ -62,21 +79,43 @@ def register_lead_tools(server: FastMCP) -> None:
             try:
                 lead = await service.get_lead(lead_id=lead_id)
                 if int(lead.agent_id) != ctx.actor_user_id:
-                    return {"error": "Access denied"}
-                return {"lead": _serialize_lead(lead)}
+                    result = error_response(
+                        content="Access denied",
+                        code="ACCESS_DENIED",
+                        message="You do not have permission to view this lead",
+                    )
+                    return to_mcp_text(result)
+                result = success_response(
+                    content=f"Lead: {lead.first_name or lead.username or lead.tg_user_id}",
+                    data={"lead": _serialize_lead(lead)},
+                )
+                return to_mcp_text(result)
             except Exception as e:
-                return {"error": str(e)}
+                result = error_response(
+                    content="Lead not found",
+                    code="NOT_FOUND",
+                    message=str(e),
+                )
+                return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
+
+    )
     async def madarbot_update_lead_status(
         lead_id: int,
         status: str,
         notes: str | None = None,
-    ) -> dict:
+    ) -> str:
         """Update lead status. Requires MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
-            return {"error": "Write operations are disabled (MCP_READONLY=true)"}
+            result = error_response(
+                content="Write operations are disabled",
+                code="READONLY_MODE",
+                message="Set MCP_READONLY=false to enable write operations",
+            )
+            return to_mcp_text(result)
         async with SessionLocal() as session:
             service = AgentLeadService(session)
             try:
@@ -85,16 +124,33 @@ def register_lead_tools(server: FastMCP) -> None:
                     status=status,
                     notes=notes,
                 )
-                return {"lead": _serialize_lead(lead)}
+                result = success_response(
+                    content=f"Lead status updated to {status}",
+                    data={"lead": _serialize_lead(lead)},
+                )
+                return to_mcp_text(result)
             except Exception as e:
-                return {"error": str(e)}
+                result = error_response(
+                    content="Failed to update lead",
+                    code="VALIDATION_ERROR",
+                    message=str(e),
+                )
+                return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    async def madarbot_add_lead_note(lead_id: int, note: str) -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
+
+    )
+    async def madarbot_add_lead_note(lead_id: int, note: str) -> str:
         """Add a note to a lead. Requires MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
-            return {"error": "Write operations are disabled (MCP_READONLY=true)"}
+            result = error_response(
+                content="Write operations are disabled",
+                code="READONLY_MODE",
+                message="Set MCP_READONLY=false to enable write operations",
+            )
+            return to_mcp_text(result)
         async with SessionLocal() as session:
             service = AgentLeadService(session)
             try:
@@ -102,22 +158,60 @@ def register_lead_tools(server: FastMCP) -> None:
                 current_notes = existing.notes or ""
                 new_notes = f"{current_notes}\n{note}" if current_notes else note
                 lead = await service.update_lead(lead_id=lead_id, notes=new_notes)
-                return {"lead": _serialize_lead(lead)}
+                result = success_response(
+                    content="Note added to lead",
+                    data={"lead": _serialize_lead(lead)},
+                )
+                return to_mcp_text(result)
             except Exception as e:
-                return {"error": str(e)}
+                result = error_response(
+                    content="Failed to add note",
+                    code="VALIDATION_ERROR",
+                    message=str(e),
+                )
+                return to_mcp_text(result)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False))
-    async def madarbot_delete_lead(lead_id: int, confirm: bool = False) -> dict:
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+
+    )
+    async def madarbot_delete_lead(lead_id: int, confirm: bool = False) -> str:
         """Delete a lead. Requires confirmation and MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
-            return {"error": "Write operations are disabled (MCP_READONLY=true)"}
+            result = error_response(
+                content="Write operations are disabled",
+                code="READONLY_MODE",
+                message="Set MCP_READONLY=false to enable write operations",
+            )
+            return to_mcp_text(result)
         if not confirm:
-            return {"error": "Confirmation required. Set confirm=true to proceed."}
+            result = error_response(
+                content="Confirmation required",
+                code="CONFIRMATION_REQUIRED",
+                message="Set confirm=true to proceed with deletion",
+            )
+            return to_mcp_text(result)
         async with SessionLocal() as session:
             service = AgentLeadService(session)
             try:
-                result = await service.delete_lead(lead_id=lead_id)
-                return {"success": result}
+                deleted = await service.delete_lead(lead_id=lead_id)
+                if deleted:
+                    result = success_response(
+                        content="Lead deleted successfully",
+                        data={"success": True, "lead_id": lead_id},
+                    )
+                else:
+                    result = error_response(
+                        content="Lead not found",
+                        code="NOT_FOUND",
+                        message="No lead found with the given ID",
+                    )
+                return to_mcp_text(result)
             except Exception as e:
-                return {"error": str(e)}
+                result = error_response(
+                    content="Failed to delete lead",
+                    code="VALIDATION_ERROR",
+                    message=str(e),
+                )
+                return to_mcp_text(result)

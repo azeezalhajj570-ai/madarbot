@@ -1,1 +1,53 @@
+# Environment
 .env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+*.so
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Telegram sessions
+*.session
+*.session-journal
+*_session.session
+
+# Logs
+*.log
+logs/
+*.out
+
+# Database / cache
+*.db
+*.sqlite
+.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.rdb
+dump.rdb
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
