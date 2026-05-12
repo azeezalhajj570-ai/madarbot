@@ -88,6 +88,13 @@ class SubscriptionBillingStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class MemberRole(StrEnum):
+    MEMBER = "member"
+    ADMIN = "admin"
+    CREATOR = "creator"
+    RESTRICTED = "restricted"
+
+
 class LinkedAccountRole(StrEnum):
     MEMBER = "member"
     PRIMARY = "primary"
@@ -148,6 +155,7 @@ __all__ = [
     "LinkedAccountRole",
     "MCPToken",
     "Message",
+    "MemberRole",
     "MembershipAuditLog",
     "MessagingSuppression",
     "ModerationEvent",

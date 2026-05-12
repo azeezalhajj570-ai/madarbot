@@ -9,6 +9,8 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from telethon.tl.types import ChannelParticipantsAdmins
+
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.session import SessionManager
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
@@ -186,6 +188,29 @@ class ScraperService:
             total_scraped = 0
             member_batch: list[dict[str, Any]] = []
             canonical_group_id = canonical_tg_group_id(int(tg_group_id))
+
+            # Fetch and store admins first so they are available even if members are hidden
+            try:
+                admin_participants = await managed_client.get_participants(
+                    entity=entity, filter=ChannelParticipantsAdmins()
+                )
+                for admin in admin_participants:
+                    admin_user_id = getattr(admin, "id", None)
+                    if admin_user_id is None:
+                        continue
+                    admin_row = serializers.build_member_row_from_participant(
+                        admin, scraped_group.id, canonical_group_id, int(admin_user_id)
+                    )
+                    member_batch.append(admin_row)
+                    if len(member_batch) >= self._MEMBER_BATCH_SIZE:
+                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        member_batch = []
+                if member_batch:
+                    await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                    member_batch = []
+                logger.info("admins_fetched_first", agent_id=agent_id, tg_group_id=tg_group_id, admin_count=len(admin_participants))
+            except Exception as exc:
+                logger.warning("admin_fetch_failed_proceeding", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
 
             seen = 0
             async for participant in managed_client.iter_participants(entity=entity, limit=limit + max(0, offset)):
