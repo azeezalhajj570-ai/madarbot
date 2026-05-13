@@ -2242,20 +2242,26 @@
           </div>
           ${bulkManagedGroupId ? `
             <div class="field">
-              ${bulkMessageMembersMarkup(
-                bulkMembers,
-                bulkDraft.selected_user_ids || [],
-                bulkDraft.user_query || "",
-                Boolean(bulkDraft.loading),
-                bulkDraft.error || "",
-                bulkDraft.source_managed_group_id || "",
-                Boolean(bulkDraft.exclude_admins),
-                Boolean(bulkDraft.show_admins),
-                Boolean(bulkDraft.show_bots),
-                bulkPage,
-                bulkTotal,
-                bulkPageSize
-              )}
+              <div style="display:flex;gap:8px;align-items:start">
+                <div style="flex:1;min-width:0">
+                  ${bulkMessageMembersMarkup(
+                    bulkMembers,
+                    bulkDraft.selected_user_ids || [],
+                    bulkDraft.user_query || "",
+                    Boolean(bulkDraft.loading),
+                    bulkDraft.error || "",
+                    bulkDraft.source_managed_group_id || "",
+                    Boolean(bulkDraft.exclude_admins),
+                    Boolean(bulkDraft.show_admins),
+                    Boolean(bulkDraft.show_bots),
+                    bulkPage,
+                    bulkTotal,
+                    bulkPageSize
+                  )}
+                </div>
+                <button class="button button-sm" type="button" data-action="sync-admins-bots" style="white-space:nowrap;flex-shrink:0;margin-top:28px">Sync admins &amp; bots</button>
+              </div>
+              <div id="sync-admins-bots-status" style="font-size:12px;color:var(--text-secondary,#a0a0a0);margin-top:4px;margin-bottom:4px"></div>
               <div class="field-hint">${escapeHtml(t("bulkUsersHint"))}</div>
             </div>
           ` : `<div class="field-hint">${escapeHtml(t("chooseGroupFirst"))}</div>`}
@@ -5835,6 +5841,31 @@
           renderBulkMessageModal();
         } else {
           renderContent();
+        }
+      } else if (action === "sync-admins-bots") {
+        const agentId = Number(state.ui.bulkMessageDraft.agent_id || 0);
+        const tgGroupId = Number(state.ui.bulkMessageDraft.source_group_id || 0);
+        const statusEl = document.getElementById("sync-admins-bots-status");
+        if (!agentId || !tgGroupId) {
+          if (statusEl) statusEl.textContent = "Select a source group first.";
+          return;
+        }
+        if (statusEl) statusEl.textContent = "Syncing admins and bots from Telegram...";
+        try {
+          const result = await apiRequest(`/webapp/agents/${agentId}/groups/${tgGroupId}/sync-admins-bots`, {
+            method: "POST",
+          });
+          if (statusEl) {
+            statusEl.textContent = `Synced ${result.admins_count} admin${result.admins_count !== 1 ? 's' : ''} and ${result.bots_count} bot${result.bots_count !== 1 ? 's' : ''} from Telegram.`;
+          }
+          pushToast(`Synced ${result.admins_count} admins and ${result.bots_count} bots`, "success");
+          if (state.ui.bulkMessageOpen) {
+            searchBulkMembers(true).then(() => renderBulkMessageModal());
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "Failed to sync admins and bots";
+          if (statusEl) statusEl.textContent = msg;
+          pushToast(msg, "error");
         }
       } else if (action === "bulk-prev-page") {
         const page = Number(state.ui.bulkMessageDraft.page || 1);

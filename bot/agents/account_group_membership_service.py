@@ -629,6 +629,106 @@ class AccountGroupMembershipService(AgentServiceSupport):
             )
         ).scalar_one_or_none()
 
+    async def sync_group_admins_and_bots_from_telegram(
+        self,
+        *,
+        actor_user_id: int,
+        agent_id: int,
+        tg_group_id: int,
+    ) -> dict[str, int]:
+        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
+        from bot.services.group_service import canonical_tg_group_id
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+        if agent.auth_state != "active" or not agent.session_string:
+            raise ValueError("Link an active agent first")
+
+        from bot.agents.session import SessionManager
+        client = await SessionManager().get_client(agent_id)
+        try:
+            scraped_group = await entity_resolver.get_or_create_group_from_client(
+                client=client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
+            )
+            entity = await entity_resolver.resolve_group_entity(client, int(tg_group_id), self.session)
+            canonical_id = canonical_tg_group_id(int(tg_group_id))
+
+            from telethon.tl.functions.channels import GetParticipantsRequest
+            from telethon.tl.types import ChannelParticipantsAdmins
+
+            admin_result = await client(GetParticipantsRequest(
+                channel=entity, filter=ChannelParticipantsAdmins(),
+                offset=0, limit=200, hash=0,
+            ))
+            admin_users_by_id = {u.id: u for u in admin_result.users}
+            admin_rows: list[dict] = []
+            bot_rows: list[dict] = []
+            admin_count = 0
+            bot_count = 0
+
+            for admin_participant in admin_result.participants:
+                user_id = getattr(admin_participant, "user_id", None)
+                if user_id is None:
+                    continue
+                admin_user = admin_users_by_id.get(user_id)
+                if admin_user is None:
+                    continue
+                uid = int(user_id)
+                row = serializers.build_member_row_from_participant(
+                    admin_user, scraped_group.id, canonical_id, uid,
+                )
+                role = "member"
+                if hasattr(admin_participant, "creator") and admin_participant.creator:
+                    role = "creator"
+                elif hasattr(admin_participant, "admin_rights") and admin_participant.admin_rights:
+                    role = "admin"
+                row["role"] = role
+                admin_rows.append(row)
+                admin_count += 1
+                if bool(getattr(admin_user, "bot", False)):
+                    bot_count += 1
+
+            seen_ids = {int(getattr(p, "user_id", 0)) for p in admin_result.participants if getattr(p, "user_id", None)}
+            async for participant in client.iter_participants(entity=entity, limit=50000):
+                uid = int(getattr(participant, "id", 0) or getattr(participant, "user_id", 0))
+                if uid <= 0 or uid in seen_ids:
+                    continue
+                seen_ids.add(uid)
+                is_bot = bool(getattr(participant, "bot", False))
+                if is_bot:
+                    row = serializers.build_member_row_from_participant(
+                        participant, scraped_group.id, canonical_id, uid,
+                    )
+                    row["role"] = "member"
+                    bot_rows.append(row)
+                    bot_count += 1
+
+            all_rows = admin_rows + bot_rows
+            if all_rows:
+                await bulk_upsert.bulk_upsert_scraped_members(all_rows, self.session)
+                await self.session.commit()
+
+            await AgentNotificationService(self.session).create_notification(
+                actor_user_id=actor_user_id,
+                agent=agent,
+                kind="scrape_completed",
+                title="Admins & Bots synced",
+                body=(
+                    f"Synced {admin_count} admin{'s' if admin_count != 1 else ''} "
+                    f"and {bot_count} bot{'s' if bot_count != 1 else ''} from Telegram"
+                ),
+                payload={
+                    "tg_group_id": canonical_id,
+                    "admins_count": admin_count,
+                    "bots_count": bot_count,
+                },
+            )
+            return {"admins_count": admin_count, "bots_count": bot_count}
+        finally:
+            await client.disconnect()
+
     async def _sync_users(self, members: list[dict[str, Any]]) -> None:
         user_ids = [int(member["user_id"]) for member in members]
         if not user_ids:

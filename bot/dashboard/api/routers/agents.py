@@ -314,6 +314,26 @@ async def webapp_stored_members(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
+@router.post("/api/agents/{agent_id}/groups/{tg_group_id}/sync-admins-bots", dependencies=[Depends(require_agents_boundary)])
+@router.post("/webapp/agents/{agent_id}/groups/{tg_group_id}/sync-admins-bots", dependencies=[Depends(require_agents_boundary)])
+async def webapp_sync_admins_bots(
+    agent_id: int,
+    tg_group_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        result = await AccountGroupMembershipService(session).sync_group_admins_and_bots_from_telegram(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            tg_group_id=tg_group_id,
+        )
+        return {"status": "ok", **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
 @router.get("/api/agents/{agent_id}/groups/{tg_group_id}/members/{user_id}/messages", dependencies=[Depends(require_agents_boundary)])
 @router.get("/webapp/agents/{agent_id}/groups/{tg_group_id}/members/{user_id}/messages", dependencies=[Depends(require_agents_boundary)])
 async def webapp_agent_group_member_messages(

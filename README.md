@@ -28,7 +28,7 @@ MadarBot helps automate Telegram group operations by:
 
 | File | Purpose |
 |---|---|---|
-| `AGENT.md` | Main AI agent operating guide + MCP server details |
+| `AGENTS.md` | Main AI agent operating guide + build, restart, settings, nginx, DB |
 | `CONTRIBUTING.md` | Contribution guide, workflow, and standards |
 | `agents/lead_capture_agent.md` | Lead capture agent behavior and rules |
 | `agents/reply_agent.md` | AI reply agent behavior and safety rules |
@@ -43,11 +43,43 @@ MadarBot helps automate Telegram group operations by:
 
 - Docker
 - Docker Compose
-- PostgreSQL
-- Redis
-- Telegram API credentials
+- PostgreSQL 16
+- Redis 7
+- Telegram API credentials (api_id + api_hash)
 - Telegram bot token or agent session credentials
-- Python backend runtime used by this project
+- Python 3.11+ runtime
+
+## Stack Architecture
+
+```
+                    ┌──────────────┐
+                    │   Nginx      │  ← infra/nginx-madarbot.conf
+                    │  :443/:80    │
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────────┐
+              │            │                │
+        ┌─────▼─────┐ ┌───▼────┐ ┌─────────▼────────┐
+        │  Backend  │ │  Bot   │ │  Agent Worker    │
+        │ FastAPI   │ │Telegram│ │  Dramatiq        │
+        │ :8080     │ │ Client │ │  (async worker)  │
+        └─────┬─────┘ └───┬────┘ └─────────┬────────┘
+              │           │                │
+        ┌─────▼─────┐ ┌───▼──────────────┐ │
+        │PostgreSQL │ │     Redis        │◄┘
+        │  :5432    │ │     :6379        │
+        └───────────┘ └──────────────────┘
+```
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| `postgres` | postgres:16 | Primary database |
+| `redis` | redis:7 | Message queue (Dramatiq), caching |
+| `backend` | madarbot-backend | FastAPI dashboard (port 8080 → 8000) |
+| `bot` | madarbot-bot | Telegram bot listener + agent sessions |
+| `agent_worker` | madarbot-agent_worker | Dramatiq async job processor |
+| `migrate` | madarbot-migrate | Alembic migration runner (exits after run) |
+| `miniapp_agents` | madarbot-miniapp_agents | React SPA served by nginx (port 80 → 5175) |
 
 ## Required Environment Variables
 
@@ -71,7 +103,38 @@ DEFAULT_LANGUAGE=ar
 OPENAI_API_KEY=
 ```
 
+All settings are defined in `bot/config.py` via Pydantic `BaseSettings`. They read from `.env` or environment variables. Key categories:
+
+- **Telegram**: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `BOT_TOKEN`, `AGENTS_BOT_TOKEN`
+- **Database**: `DATABASE_URL` (asyncpg), `REDIS_URL`
+- **AI**: `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `AI_PROVIDER`, `AI_MODEL`
+- **MCP**: `MCP_ENABLED`, `MCP_AUTH_TOKEN`, `MCP_READONLY`
+- **Webapp**: `WEBAPP_URL`, `ADMIN_WEBAPP_URL`, `AGENTS_WEBAPP_URL`
+- **Dashboard**: `DASHBOARD_BROWSER_USERS` (JSON array for password auth)
+
 Never commit `.env` or production secrets.
+
+## Building
+
+Build all images:
+
+```bash
+docker compose build
+```
+
+Build a specific service:
+
+```bash
+docker compose build backend
+docker compose build agent_worker
+docker compose build bot
+```
+
+For a full rebuild without cache:
+
+```bash
+docker compose build --no-cache backend
+```
 
 ## Running Locally
 
@@ -97,6 +160,27 @@ For focused logs:
 
 ```bash
 docker compose logs --tail=200 backend bot agent_worker
+```
+
+## Restarting After Code Changes
+
+After modifying Python source, rebuild and restart the affected service:
+
+```bash
+docker compose build backend && docker compose up -d backend
+docker compose build agent_worker && docker compose up -d agent_worker
+```
+
+After modifying dashboard frontend (`index.html`), rebuild and restart backend:
+
+```bash
+docker compose build backend && docker compose up -d backend
+```
+
+After modifying the mini-app (`apps/miniapp-agents/`), rebuild:
+
+```bash
+docker compose build miniapp_agents && docker compose up -d miniapp_agents
 ```
 
 ## Database Migrations
@@ -230,6 +314,45 @@ After deployment, confirm:
 - no service is crash-looping
 
 See `docs/DEPLOYMENT_CHECKLIST.md` for the full deployment checklist.
+
+## Nginx Configuration
+
+Production nginx config:
+
+```
+infra/nginx-madarbot.conf
+```
+
+This proxies `madar.hamedco.com` to the backend at `http://127.0.0.1:8000`. Key features:
+
+- SSL with Let's Encrypt on port 443
+- HTTP (port 80) redirects to HTTPS
+- Root `/` redirects to `/webapp/agents`
+- Static assets served by the backend or miniapp nginx
+
+Internal nginx for miniapp-agents SPA:
+
+```
+apps/miniapp-agents/nginx.conf
+```
+
+Serves the Vite-built React app from `/usr/share/nginx/html` and routes `/webapp/agents/` to `index.html` for SPA client-side routing.
+
+## Docker Compose Files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Main stack (postgres, redis, backend, bot, agent_worker, miniapp_agents) |
+| `docker-compose.dev.yml` | Dev overlays: local code mounts + hot-reload |
+| `docker-compose.deploy.yml` | Production overlays: `.env.deploy`, external network, port 8002 |
+
+## Dockerfiles
+
+| File | Builds |
+|------|--------|
+| `Dockerfile` | `bot` and `agent_worker` images (Python 3.11-slim) |
+| `Dockerfile.backend` | `backend` image (FastAPI dashboard + deps) |
+| `apps/miniapp-agents/Dockerfile` | `miniapp_agents` image (Vite build → nginx) |
 
 ## AI Agent Runtime Expectations
 
