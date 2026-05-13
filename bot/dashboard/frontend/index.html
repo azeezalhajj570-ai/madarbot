@@ -54,6 +54,37 @@
       border-color: var(--accent, #5b8def);
       color: #fff;
     }
+    .multi-select-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .multi-select-pagination .button-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border, rgba(255,255,255,0.1));
+      background: var(--button-bg, rgba(255,255,255,0.06));
+      color: var(--text-primary, #f5f5f5);
+      cursor: pointer;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .multi-select-pagination .button-sm:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .multi-select-pagination .button-sm:hover:not(:disabled) {
+      background: var(--button-hover, rgba(255,255,255,0.1));
+    }
+    .multi-select-pagination-info {
+      font-size: 11px;
+      color: var(--text-secondary, #a0a0a0);
+      min-width: 40px;
+      text-align: center;
+    }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/dashboard/assets/js/state.js"></script>
@@ -246,6 +277,19 @@
       excludeAdmins = false,
       excludeAdminsAction = "",
       excludeAdminsLabel = "Exclude admins",
+      showAdminsFilter = false,
+      adminsFilterActive = false,
+      adminsFilterAction = "",
+      adminsFilterLabel = "Show admins",
+      showBotsFilter = false,
+      botsFilterActive = false,
+      botsFilterAction = "",
+      botsFilterLabel = "Show bots",
+      showPagination = false,
+      currentPage = 1,
+      totalPages = 1,
+      prevPageAction = "",
+      nextPageAction = "",
     } = {}) {
       return `
         <div class="searchable-select searchable-select-multi" data-searchable-select="${escapeHtml(id || "multi-picker")}">
@@ -260,8 +304,10 @@
                 ${searchAction ? `data-action="${escapeHtml(searchAction)}"` : ""}
               />
             </div>
-            ${showSelectAll || showClear || showExcludeAdmins ? `
+            ${showSelectAll || showClear || showExcludeAdmins || showAdminsFilter || showBotsFilter ? `
             <div class="multi-select-actions">
+              ${showAdminsFilter ? `<button class="button button-sm ${adminsFilterActive ? 'button-active' : 'button-ghost'}" type="button" data-action="${escapeHtml(adminsFilterAction)}">${adminsFilterActive ? '✓ ' : ''}${escapeHtml(adminsFilterLabel)}</button>` : ""}
+              ${showBotsFilter ? `<button class="button button-sm ${botsFilterActive ? 'button-active' : 'button-ghost'}" type="button" data-action="${escapeHtml(botsFilterAction)}">${botsFilterActive ? '✓ ' : ''}${escapeHtml(botsFilterLabel)}</button>` : ""}
               ${showSelectAll ? `<button class="button button-sm" type="button" data-action="${escapeHtml(selectAllAction)}">${escapeHtml(selectAllLabel)}</button>` : ""}
               ${showClear ? `<button class="button button-sm button-ghost" type="button" data-action="${escapeHtml(clearAction)}">${escapeHtml(clearLabel)}</button>` : ""}
               ${showExcludeAdmins ? `<button class="button button-sm ${excludeAdmins ? 'button-active' : 'button-ghost'}" type="button" data-action="${escapeHtml(excludeAdminsAction)}">${excludeAdmins ? '✓ ' : ''}${escapeHtml(excludeAdminsLabel)}</button>` : ""}
@@ -297,6 +343,13 @@
                 `).join("")
                 : `<div class="searchable-select-empty">${escapeHtml(emptyLabel)}</div>`}
             </div>
+            ${showPagination && totalPages > 1 ? `
+            <div class="multi-select-pagination">
+              <button class="button button-sm button-ghost" type="button" data-action="${escapeHtml(prevPageAction)}" ${currentPage <= 1 ? "disabled" : ""}>Previous</button>
+              <span class="multi-select-pagination-info">${escapeHtml(String(currentPage))} / ${escapeHtml(String(totalPages))}</span>
+              <button class="button button-sm button-ghost" type="button" data-action="${escapeHtml(nextPageAction)}" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+            </div>
+            ` : ""}
           </div>
         </div>
       `;
@@ -1335,12 +1388,11 @@
       `;
     }
 
-    function bulkMessageMembersMarkup(members, selectedUserIds, query, isLoading, errorMessage, sourceGroupId = "", excludeAdmins = false) {
+    function bulkMessageMembersMarkup(members, selectedUserIds, query, isLoading, errorMessage, sourceGroupId = "", excludeAdmins = false, showAdmins = false, showBots = false, page = 1, total = 0, pageSize = 200) {
       const selected = new Set((selectedUserIds || []).map((value) => Number(value)));
       const selectedMembers = (selectedUserIds || [])
         .map((value) => liveMemberById(sourceGroupId, value))
         .filter(Boolean);
-      const availableMembers = members.filter((member) => !selected.has(Number(member.user_id)));
       const normalizedQuery = String(query || "").trim();
       const emptyLabel = errorMessage
         ? "Search unavailable"
@@ -1349,6 +1401,15 @@
           : normalizedQuery
             ? "No members found"
             : "No members available";
+
+      const filteredMembers = members.filter((member) => {
+        if (showAdmins && !member.is_admin && !member.is_creator) return false;
+        if (showBots && !member.is_bot) return false;
+        if (showAdmins && showBots) return member.is_admin || member.is_creator || member.is_bot;
+        return true;
+      });
+      const availableMembers = filteredMembers.filter((member) => !selected.has(Number(member.user_id)));
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
       return `
         <div class="multi-select-shell">
@@ -1373,9 +1434,9 @@
               })),
               addAction: "add-bulk-user",
               removeAction: "remove-bulk-user",
-              showSelectAll: members.length > 0,
+              showSelectAll: filteredMembers.length > 0,
               selectAllAction: "select-all-bulk-users",
-              selectAllLabel: `Select all (${members.length})`,
+              selectAllLabel: `Select all (${filteredMembers.length})`,
               showClear: selectedUserIds && selectedUserIds.length > 0,
               clearAction: "clear-bulk-users",
               clearLabel: "Clear selected",
@@ -1383,6 +1444,19 @@
               excludeAdmins,
               excludeAdminsAction: "toggle-bulk-exclude-admins",
               excludeAdminsLabel: "Exclude admins",
+              showAdminsFilter: true,
+              adminsFilterActive: showAdmins,
+              adminsFilterAction: "toggle-bulk-show-admins",
+              adminsFilterLabel: "Show admins",
+              showBotsFilter: true,
+              botsFilterActive: showBots,
+              botsFilterAction: "toggle-bulk-show-bots",
+              botsFilterLabel: "Show bots",
+              showPagination: total > pageSize,
+              currentPage: page,
+              totalPages,
+              prevPageAction: "bulk-prev-page",
+              nextPageAction: "bulk-next-page",
             })}
           </div>
           ${errorMessage ? `<div class="field-error">${escapeHtml(errorMessage)}</div>` : ""}
@@ -2126,9 +2200,13 @@
       const selectedAgentId = Number(bulkDraft.agent_id || 0);
       const sourceGroups = selectedAgentId ? (state.cache.agentGroups[selectedAgentId] || []) : [];
       const bulkManagedGroupId = Number(bulkDraft.source_managed_group_id || 0);
-      const bulkMembers = bulkManagedGroupId
-        ? (state.cache.liveMemberSearch[liveMemberSearchKey(bulkManagedGroupId, bulkDraft.user_query || "")] || [])
-        : [];
+      const bulkMembersCache = bulkManagedGroupId
+        ? (state.cache.liveMemberSearch[liveMemberSearchKey(bulkManagedGroupId, bulkDraft.user_query || "", bulkDraft.page || 1)] || null)
+        : null;
+      const bulkMembers = bulkMembersCache ? (Array.isArray(bulkMembersCache) ? bulkMembersCache : (bulkMembersCache.members || [])) : [];
+      const bulkTotal = bulkMembersCache && !Array.isArray(bulkMembersCache) ? (bulkMembersCache.total || 0) : bulkMembers.length;
+      const bulkPage = Number(bulkDraft.page || 1);
+      const bulkPageSize = 200;
       return `
         <form id="bulk-message-form" class="task-editor-form">
           <div class="field">
@@ -2171,7 +2249,12 @@
                 Boolean(bulkDraft.loading),
                 bulkDraft.error || "",
                 bulkDraft.source_managed_group_id || "",
-                Boolean(bulkDraft.exclude_admins)
+                Boolean(bulkDraft.exclude_admins),
+                Boolean(bulkDraft.show_admins),
+                Boolean(bulkDraft.show_bots),
+                bulkPage,
+                bulkTotal,
+                bulkPageSize
               )}
               <div class="field-hint">${escapeHtml(t("bulkUsersHint"))}</div>
             </div>
@@ -2482,8 +2565,8 @@
       return payload;
     }
 
-    function liveMemberSearchKey(groupId, query = "") {
-      return `${Number(groupId || 0)}:${String(query || "").trim().toLowerCase()}`;
+    function liveMemberSearchKey(groupId, query = "", page = 1) {
+      return `${Number(groupId || 0)}:${String(query || "").trim().toLowerCase()}:${Number(page || 1)}`;
     }
 
     function mergeLiveMembers(groupId, members) {
@@ -2654,20 +2737,30 @@
       const groupId = Number(state.ui.bulkMessageDraft.source_managed_group_id || 0);
       if (!groupId) return [];
       const normalizedQuery = String(state.ui.bulkMessageDraft.user_query || "").trim();
-      const cacheKey = liveMemberSearchKey(groupId, normalizedQuery);
+      const page = Number(state.ui.bulkMessageDraft.page || 1);
+      const cacheKey = liveMemberSearchKey(groupId, normalizedQuery, page);
       if (!force && state.cache.liveMemberSearch[cacheKey]) {
+        const cached = state.cache.liveMemberSearch[cacheKey];
+        const members = Array.isArray(cached) ? cached : (cached?.members || []);
+        if (Array.isArray(cached)) {
+          state.cache.liveMemberSearch[cacheKey] = { members, total: members.length, page, page_size: members.length || 200 };
+        }
         return state.cache.liveMemberSearch[cacheKey];
       }
       const params = new URLSearchParams();
       if (normalizedQuery) params.set("q", normalizedQuery);
-      params.set("limit", normalizedQuery ? "100" : "200");
+      const limit = normalizedQuery ? "100" : "200";
+      params.set("limit", limit);
+      params.set("page", String(page));
+      params.set("order_by", "message_count");
       const payload = await apiRequest(`/webapp/groups/${groupId}/stored-members?${params.toString()}`, {
         signal: bulkSearchController.signal,
       });
       if (seq !== bulkSearchSeq) return [];
-      state.cache.liveMemberSearch[cacheKey] = payload;
-      mergeLiveMembers(groupId, payload);
-      return payload;
+      const result = payload && payload.members ? payload : { members: payload && Array.isArray(payload) ? payload : [], total: (payload && payload.total) || (Array.isArray(payload) ? payload.length : 0) || 0, page, page_size: Number(limit) };
+      state.cache.liveMemberSearch[cacheKey] = result;
+      mergeLiveMembers(groupId, result.members || result);
+      return result;
     }
 
     async function searchMembersToAdd(force = false) {
@@ -5694,11 +5787,21 @@
       } else if (action === "select-all-bulk-users") {
         const sourceManagedGroupId = Number(state.ui.bulkMessageDraft.source_managed_group_id || 0);
         const userQuery = String(state.ui.bulkMessageDraft.user_query || "").trim();
-        const allMembers = sourceManagedGroupId
-          ? (state.cache.liveMemberSearch[liveMemberSearchKey(sourceManagedGroupId, userQuery)] || [])
-          : [];
+        const page = Number(state.ui.bulkMessageDraft.page || 1);
+        const cacheEntry = sourceManagedGroupId
+          ? state.cache.liveMemberSearch[liveMemberSearchKey(sourceManagedGroupId, userQuery, page)]
+          : null;
+        const allMembers = cacheEntry ? (Array.isArray(cacheEntry) ? cacheEntry : (cacheEntry.members || [])) : [];
+        const showAdmins = Boolean(state.ui.bulkMessageDraft.show_admins);
+        const showBots = Boolean(state.ui.bulkMessageDraft.show_bots);
+        const filteredMembers = allMembers.filter((m) => {
+          if (showAdmins && showBots) return m.is_admin || m.is_creator || m.is_bot;
+          if (showAdmins) return m.is_admin || m.is_creator;
+          if (showBots) return m.is_bot;
+          return true;
+        });
         const current = new Set((state.ui.bulkMessageDraft.selected_user_ids || []).map((value) => Number(value)));
-        allMembers.forEach((member) => current.add(Number(member.user_id)));
+        filteredMembers.forEach((member) => current.add(Number(member.user_id)));
         state.ui.bulkMessageDraft.selected_user_ids = Array.from(current);
         if (state.ui.bulkMessageOpen) {
           renderBulkMessageModal();
@@ -5716,6 +5819,36 @@
         state.ui.bulkMessageDraft.exclude_admins = !state.ui.bulkMessageDraft.exclude_admins;
         if (state.ui.bulkMessageOpen) {
           renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
+      } else if (action === "toggle-bulk-show-admins") {
+        state.ui.bulkMessageDraft.show_admins = !state.ui.bulkMessageDraft.show_admins;
+        if (state.ui.bulkMessageOpen) {
+          renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
+      } else if (action === "toggle-bulk-show-bots") {
+        state.ui.bulkMessageDraft.show_bots = !state.ui.bulkMessageDraft.show_bots;
+        if (state.ui.bulkMessageOpen) {
+          renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
+      } else if (action === "bulk-prev-page") {
+        const page = Number(state.ui.bulkMessageDraft.page || 1);
+        state.ui.bulkMessageDraft.page = Math.max(1, page - 1);
+        if (state.ui.bulkMessageOpen) {
+          searchBulkMembers(true).then(() => renderBulkMessageModal());
+        } else {
+          renderContent();
+        }
+      } else if (action === "bulk-next-page") {
+        const page = Number(state.ui.bulkMessageDraft.page || 1);
+        state.ui.bulkMessageDraft.page = page + 1;
+        if (state.ui.bulkMessageOpen) {
+          searchBulkMembers(true).then(() => renderBulkMessageModal());
         } else {
           renderContent();
         }
@@ -5975,6 +6108,7 @@
         state.ui.bulkAddMembersDraft[target.name] = target.value;
       } else if (target.dataset.action === "bulk-user-query") {
         state.ui.bulkMessageDraft.user_query = target.value;
+        state.ui.bulkMessageDraft.page = 1;
         state.ui.bulkMessageDraft.error = "";
         if (state.ui.bulkMessageOpen) {
           renderBulkMessageModal();

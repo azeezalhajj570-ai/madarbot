@@ -86,20 +86,23 @@ export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
 }
 
-export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false) {
-  return apiClient.get<AgentGroupMember[]>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
+export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count') {
+  return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
     q: query,
     limit,
+    page,
+    order_by: orderBy,
     exclude_bots: excludeBots,
   })
 }
 
-export async function fetchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, page = 1, pageSize = 10) {
+export async function fetchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, page = 1, pageSize = 10, orderBy = 'message_count') {
   return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/groups/${tgGroupId}/members`, {
     q: query,
     page,
     page_size: pageSize,
+    order_by: orderBy,
   })
 }
 

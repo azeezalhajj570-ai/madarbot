@@ -228,6 +228,8 @@ async def webapp_agent_member_search(
     tg_group_id: int = Query(...),
     q: str | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=50),
+    page: int = Query(default=1, ge=1),
+    order_by: str = Query(default="message_count"),
     exclude_bots: bool = Query(default=False),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
@@ -239,8 +241,9 @@ async def webapp_agent_member_search(
             agent_id=agent.id,
             tg_group_id=tg_group_id,
             query=q,
-            page=1,
+            page=page,
             page_size=limit,
+            order_by=order_by,
             exclude_bots=exclude_bots,
         )
         return payload["members"]
@@ -256,6 +259,7 @@ async def webapp_agent_group_members(
     q: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=50),
+    order_by: str = Query(default="message_count"),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
@@ -268,6 +272,43 @@ async def webapp_agent_group_members(
             query=q,
             page=page,
             page_size=page_size,
+            order_by=order_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.get("/webapp/groups/{scraped_group_id}/stored-members", dependencies=[Depends(require_agents_boundary)])
+async def webapp_stored_members(
+    scraped_group_id: int,
+    q: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    page: int = Query(default=1, ge=1),
+    order_by: str = Query(default="message_count"),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from sqlalchemy import select
+    from bot.db.models import ScrapedGroup
+
+    scraped_group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == scraped_group_id))
+    ).scalar_one_or_none()
+    if scraped_group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped group not found")
+    agent_id = int(scraped_group.last_agent_id) if scraped_group.last_agent_id else None
+    if agent_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No agent linked to this group")
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AccountGroupMembershipService(session).list_scraped_agent_group_members(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            tg_group_id=int(scraped_group.tg_group_id),
+            query=q,
+            page=page,
+            page_size=limit,
+            order_by=order_by,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc

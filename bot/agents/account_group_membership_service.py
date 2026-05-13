@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from sqlalchemy import String, and_, cast, desc, func, inspect, or_, select
+from sqlalchemy import String, and_, cast, desc, func, inspect, nullslast, or_, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -277,6 +277,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         page: int = 1,
         page_size: int = 10,
         exclude_bots: bool = True,
+        order_by: str = "message_count",
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -324,17 +325,38 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 if scraped_group is not None and not normalized_query and not exclude_bots and scraped_group.member_count is not None
                 else int((await self.session.execute(select(func.count(ScrapedMember.id)).where(*filters))).scalar_one() or 0)
             )
+
+            base_query = select(
+                ScrapedMember.tg_user_id,
+                ScrapedMember.username,
+                ScrapedMember.full_name,
+                ScrapedMember.role,
+                ScrapedMember.is_bot,
+            )
+
+            if order_by == "message_count":
+                msg_count_subq = (
+                    select(
+                        ScrapedMessage.sender_user_id,
+                        func.count(ScrapedMessage.id).label("message_count"),
+                    )
+                    .where(ScrapedMessage.tg_group_id == canonical_id)
+                    .group_by(ScrapedMessage.sender_user_id)
+                    .subquery()
+                )
+                base_query = base_query.outerjoin(
+                    msg_count_subq,
+                    ScrapedMember.tg_user_id == msg_count_subq.c.sender_user_id,
+                )
+                order_columns = [nullslast(desc(msg_count_subq.c.message_count)), desc(ScrapedMember.tg_user_id)]
+            else:
+                order_columns = [desc(ScrapedMember.scraped_at), desc(ScrapedMember.id)]
+
             rows = (
                 await self.session.execute(
-                    select(
-                        ScrapedMember.tg_user_id,
-                        ScrapedMember.username,
-                        ScrapedMember.full_name,
-                        ScrapedMember.role,
-                        ScrapedMember.is_bot,
-                    )
+                    base_query
                     .where(*filters)
-                    .order_by(desc(ScrapedMember.scraped_at), desc(ScrapedMember.id))
+                    .order_by(*order_columns)
                     .offset((normalized_page - 1) * normalized_page_size)
                     .limit(normalized_page_size)
                 )
