@@ -18,6 +18,43 @@
     href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-mono/style.css"
   />
   <link rel="stylesheet" href="/dashboard/assets/css/dashboard.css" />
+  <style>
+    .multi-select-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      flex-wrap: wrap;
+    }
+    .multi-select-actions .button-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border, rgba(255,255,255,0.1));
+      background: var(--button-bg, rgba(255,255,255,0.06));
+      color: var(--text-primary, #f5f5f5);
+      cursor: pointer;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .multi-select-actions .button-sm:hover {
+      background: var(--button-hover, rgba(255,255,255,0.1));
+    }
+    .multi-select-actions .button-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-secondary, #a0a0a0);
+    }
+    .multi-select-actions .button-ghost:hover {
+      color: var(--text-primary, #f5f5f5);
+      background: var(--button-hover, rgba(255,255,255,0.06));
+    }
+    .multi-select-actions .button-active {
+      background: var(--accent, #5b8def);
+      border-color: var(--accent, #5b8def);
+      color: #fff;
+    }
+  </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/dashboard/assets/js/state.js"></script>
   <script src="/dashboard/assets/js/i18n.js"></script>
@@ -199,6 +236,16 @@
       addAction = "",
       removeAction = "",
       addLabel = "Add",
+      showSelectAll = false,
+      selectAllAction = "",
+      selectAllLabel = "Select all",
+      showClear = false,
+      clearAction = "",
+      clearLabel = "Clear",
+      showExcludeAdmins = false,
+      excludeAdmins = false,
+      excludeAdminsAction = "",
+      excludeAdminsLabel = "Exclude admins",
     } = {}) {
       return `
         <div class="searchable-select searchable-select-multi" data-searchable-select="${escapeHtml(id || "multi-picker")}">
@@ -213,6 +260,13 @@
                 ${searchAction ? `data-action="${escapeHtml(searchAction)}"` : ""}
               />
             </div>
+            ${showSelectAll || showClear || showExcludeAdmins ? `
+            <div class="multi-select-actions">
+              ${showSelectAll ? `<button class="button button-sm" type="button" data-action="${escapeHtml(selectAllAction)}">${escapeHtml(selectAllLabel)}</button>` : ""}
+              ${showClear ? `<button class="button button-sm button-ghost" type="button" data-action="${escapeHtml(clearAction)}">${escapeHtml(clearLabel)}</button>` : ""}
+              ${showExcludeAdmins ? `<button class="button button-sm ${excludeAdmins ? 'button-active' : 'button-ghost'}" type="button" data-action="${escapeHtml(excludeAdminsAction)}">${excludeAdmins ? '✓ ' : ''}${escapeHtml(excludeAdminsLabel)}</button>` : ""}
+            </div>
+            ` : ""}
             <div class="multi-select-chips">
               ${selectedItems.length
                 ? selectedItems.map((item) => `
@@ -1281,7 +1335,7 @@
       `;
     }
 
-    function bulkMessageMembersMarkup(members, selectedUserIds, query, isLoading, errorMessage, sourceGroupId = "") {
+    function bulkMessageMembersMarkup(members, selectedUserIds, query, isLoading, errorMessage, sourceGroupId = "", excludeAdmins = false) {
       const selected = new Set((selectedUserIds || []).map((value) => Number(value)));
       const selectedMembers = (selectedUserIds || [])
         .map((value) => liveMemberById(sourceGroupId, value))
@@ -1319,6 +1373,16 @@
               })),
               addAction: "add-bulk-user",
               removeAction: "remove-bulk-user",
+              showSelectAll: members.length > 0,
+              selectAllAction: "select-all-bulk-users",
+              selectAllLabel: `Select all (${members.length})`,
+              showClear: selectedUserIds && selectedUserIds.length > 0,
+              clearAction: "clear-bulk-users",
+              clearLabel: "Clear selected",
+              showExcludeAdmins: true,
+              excludeAdmins,
+              excludeAdminsAction: "toggle-bulk-exclude-admins",
+              excludeAdminsLabel: "Exclude admins",
             })}
           </div>
           ${errorMessage ? `<div class="field-error">${escapeHtml(errorMessage)}</div>` : ""}
@@ -2106,7 +2170,8 @@
                 bulkDraft.user_query || "",
                 Boolean(bulkDraft.loading),
                 bulkDraft.error || "",
-                bulkDraft.source_managed_group_id || ""
+                bulkDraft.source_managed_group_id || "",
+                Boolean(bulkDraft.exclude_admins)
               )}
               <div class="field-hint">${escapeHtml(t("bulkUsersHint"))}</div>
             </div>
@@ -2126,12 +2191,7 @@
             </div>
           </div>
           <div class="field-hint">${escapeHtml(agents.length ? t("bulkMessageSubtitle") : t("noAgentsLinkedHint"))}</div>
-          <div class="field">
-            <label class="field-checkbox">
-              <input type="checkbox" name="exclude_admins" value="1" ${bulkDraft.exclude_admins ? "checked" : ""} />
-              <span>Exclude admins</span>
-            </label>
-          </div>
+          <input type="hidden" name="exclude_admins" value="${bulkDraft.exclude_admins ? "1" : ""}" />
         </form>
       `;
     }
@@ -5631,6 +5691,34 @@
         } else {
           renderContent();
         }
+      } else if (action === "select-all-bulk-users") {
+        const sourceManagedGroupId = Number(state.ui.bulkMessageDraft.source_managed_group_id || 0);
+        const userQuery = String(state.ui.bulkMessageDraft.user_query || "").trim();
+        const allMembers = sourceManagedGroupId
+          ? (state.cache.liveMemberSearch[liveMemberSearchKey(sourceManagedGroupId, userQuery)] || [])
+          : [];
+        const current = new Set((state.ui.bulkMessageDraft.selected_user_ids || []).map((value) => Number(value)));
+        allMembers.forEach((member) => current.add(Number(member.user_id)));
+        state.ui.bulkMessageDraft.selected_user_ids = Array.from(current);
+        if (state.ui.bulkMessageOpen) {
+          renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
+      } else if (action === "clear-bulk-users") {
+        state.ui.bulkMessageDraft.selected_user_ids = [];
+        if (state.ui.bulkMessageOpen) {
+          renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
+      } else if (action === "toggle-bulk-exclude-admins") {
+        state.ui.bulkMessageDraft.exclude_admins = !state.ui.bulkMessageDraft.exclude_admins;
+        if (state.ui.bulkMessageOpen) {
+          renderBulkMessageModal();
+        } else {
+          renderContent();
+        }
       } else if (action === "add-task-group") {
         const internalId = Number(target.dataset.groupId || 0);
         const tgGroupId = Number(target.dataset.groupTgId || 0);
@@ -5912,7 +6000,6 @@
             state.ui.bulkMessageDraft.error = error.message || t("linkedAgentRequired");
           } finally {
             state.ui.bulkMessageDraft.loading = false;
-        state.ui.bulkMessageDraft.exclude_admins = false;
             if (state.ui.bulkMessageOpen) {
               renderBulkMessageModal();
             } else {
