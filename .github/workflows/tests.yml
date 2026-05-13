@@ -72,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Create dummy env for config validation
+        run: cp .env.example .env
       - name: Validate docker compose config
         run: docker compose config
 
@@ -79,6 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Create dummy env for build
+        run: cp .env.example .env
       - name: Build runtime images
         run: |
           docker compose -f docker-compose.yml build

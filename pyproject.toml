@@ -25,6 +25,7 @@ dependencies = [
   "telethon>=1.38.1",
   "cryptography>=42.0.0",
   "stripe>=9.0.0",
+  "strenum>=0.4.10",
 ]
 
 [project.scripts]
