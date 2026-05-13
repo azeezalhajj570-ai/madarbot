@@ -2328,6 +2328,10 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [excludeAdmins, setExcludeAdmins] = useState(false)
   const [excludeBots, setExcludeBots] = useState(false)
+  const [showAdminsOnly, setShowAdminsOnly] = useState(false)
+  const [showBotsOnly, setShowBotsOnly] = useState(false)
+  const [bulkMemberPage, setBulkMemberPage] = useState(1)
+  const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -2497,6 +2501,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   useEffect(() => {
     if (taskKey !== BULK_MESSAGE_TASK_KEY || !bulkSourceGroup?.tg_group_id) {
       setBulkMemberResults([])
+      setBulkMemberTotal(0)
       setBulkMemberStatus(null)
       setLoadingBulkMembers(false)
       return
@@ -2505,6 +2510,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     const query = bulkMemberQuery.trim()
     if (!query) {
       setBulkMemberResults([])
+      setBulkMemberTotal(0)
       setBulkMemberStatus(null)
       return
     }
@@ -2512,14 +2518,15 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     let cancelled = false
     setLoadingBulkMembers(true)
     setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query, 20)
-      .then((members) => {
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query, 20, false, bulkMemberPage)
+      .then((page) => {
         if (cancelled) {
           return
         }
         const selectedIds = new Set(bulkSelectedMembers.map((member) => member.user_id))
-        const filteredMembers = members.filter((member) => !selectedIds.has(member.user_id))
+        const filteredMembers = page.members.filter((member) => !selectedIds.has(member.user_id))
         setBulkMemberResults(filteredMembers)
+        setBulkMemberTotal(page.total)
         setBulkMemberStatus(filteredMembers.length ? null : 'No matching members found.')
       })
       .catch((error) => {
@@ -2527,6 +2534,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           return
         }
         setBulkMemberResults([])
+        setBulkMemberTotal(0)
         setBulkMemberStatus(error instanceof Error ? error.message : 'Failed to search group members')
       })
       .finally(() => {
@@ -2538,7 +2546,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     return () => {
       cancelled = true
     }
-  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey])
+  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage])
 
   async function saveTask() {
     if (taskKey === SCRAPE_TASK_KEY) {
@@ -2841,6 +2849,12 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button tone="secondary" onClick={() => { setBulkMemberResults([]); setBulkMemberQuery(''); }}>
                       Clear results
                     </Button>
+                    <Button tone={showAdminsOnly ? 'primary' : 'secondary'} onClick={() => { setShowAdminsOnly(!showAdminsOnly); setShowBotsOnly(false) }}>
+                      {showAdminsOnly ? '✓ ' : ''}Show admins
+                    </Button>
+                    <Button tone={showBotsOnly ? 'primary' : 'secondary'} onClick={() => { setShowBotsOnly(!showBotsOnly); setShowAdminsOnly(false) }}>
+                      {showBotsOnly ? '✓ ' : ''}Show bots
+                    </Button>
                   </div>
                   <div
                     style={{
@@ -2852,7 +2866,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       background: 'var(--miniapp-bg)',
                     }}
                   >
-                    {(bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot))).map((member) => (
+                    {(bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showAdminsOnly && !m.is_admin && !m.is_creator) && !(showBotsOnly && !m.is_bot))).map((member) => (
                       <LinkRow
                         key={member.user_id}
                         onClick={() => {
@@ -2880,6 +2894,17 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       </LinkRow>
                     ))}
                   </div>
+                  {bulkMemberTotal > 20 ? (
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
+                      <Button tone="secondary" disabled={bulkMemberPage <= 1} onClick={() => setBulkMemberPage((p) => Math.max(1, p - 1))}>
+                        Previous
+                      </Button>
+                      <span>{bulkMemberPage} / {Math.ceil(bulkMemberTotal / 20)}</span>
+                      <Button tone="secondary" disabled={bulkMemberPage >= Math.ceil(bulkMemberTotal / 20)} onClick={() => setBulkMemberPage((p) => p + 1)}>
+                        Next
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
