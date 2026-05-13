@@ -86,14 +86,16 @@ export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
 }
 
-export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count') {
+export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', onlyAdmins = false, onlyBots = false) {
   return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
-    q: query,
+    q: query || undefined,
     limit,
     page,
     order_by: orderBy,
     exclude_bots: excludeBots,
+    only_admins: onlyAdmins,
+    only_bots: onlyBots,
   })
 }
 
@@ -252,6 +254,12 @@ export async function updateAgentLead(agentId: number, leadId: number, payload: 
 
 export async function deleteAgentLead(agentId: number, leadId: number) {
   return apiClient.delete(`${AGENTS_API_PREFIX}/${agentId}/leads/${leadId}`)
+}
+
+export async function syncAgentGroupAdminsBots(agentId: number, tgGroupId: number) {
+  return apiClient.post<{ status: string; message: string }>(
+    `/webapp/agents/${agentId}/groups/${tgGroupId}/sync-admins-bots`,
+  )
 }
 
 export async function fetchAgentAnalytics(agentId: number) {

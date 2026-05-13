@@ -1,3 +1,24 @@
+# ---------- React build stage ----------
+FROM node:20-alpine AS react-build
+
+ARG BUILD_TIME
+ENV VITE_BUILD_TIME=$BUILD_TIME
+
+WORKDIR /app
+
+COPY apps/miniapp-agents/package*.json ./apps/miniapp-agents/
+COPY packages/miniapp-shared/package*.json ./packages/miniapp-shared/
+
+RUN cd apps/miniapp-agents && npm install
+
+COPY apps ./apps
+COPY packages ./packages
+
+RUN cd apps/miniapp-agents && \
+    npx vite build --outDir /built-agents && \
+    test -f /built-agents/index.html
+
+# ---------- Backend stage ----------
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -16,5 +37,6 @@ COPY alembic /app/alembic
 COPY alembic.ini pyproject.toml /app/
 
 COPY bot/dashboard/frontend /app/bot/dashboard/frontend
+COPY --from=react-build /built-agents /app/bot/dashboard/frontend/agents
 
 CMD ["uvicorn", "bot.dashboard.api.main:app", "--host", "0.0.0.0", "--port", "8080"]

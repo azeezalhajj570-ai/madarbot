@@ -17,6 +17,7 @@ env/
 
 # Node
 node_modules/
+packages/node_modules
 *.tsbuildinfo
 
 # IDE
@@ -47,6 +48,9 @@ dump.rdb
 
 # Docker
 .docker/
+
+# Local state
+.local/
 
 # OS
 .DS_Store

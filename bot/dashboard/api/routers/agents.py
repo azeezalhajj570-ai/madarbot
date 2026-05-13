@@ -282,9 +282,11 @@ async def webapp_agent_member_search(
     page: int = Query(default=1, ge=1),
     order_by: str = Query(default="message_count"),
     exclude_bots: bool = Query(default=False),
+    only_admins: bool = Query(default=False),
+    only_bots: bool = Query(default=False),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     try:
         payload = await AccountGroupMembershipService(session).list_scraped_agent_group_members(
@@ -296,8 +298,10 @@ async def webapp_agent_member_search(
             page_size=limit,
             order_by=order_by,
             exclude_bots=exclude_bots,
+            only_admins=only_admins,
+            only_bots=only_bots,
         )
-        return payload["members"]
+        return payload
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)

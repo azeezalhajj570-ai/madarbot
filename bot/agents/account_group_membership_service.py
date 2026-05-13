@@ -354,6 +354,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         page: int = 1,
         page_size: int = 10,
         exclude_bots: bool = True,
+        only_admins: bool = False,
+        only_bots: bool = False,
         order_by: str = "message_count",
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
@@ -384,6 +386,10 @@ class AccountGroupMembershipService(AgentServiceSupport):
         ]
         if exclude_bots:
             filters.append(ScrapedMember.is_bot.is_(False))
+        if only_admins:
+            filters.append(ScrapedMember.role.in_(["admin", "creator"]))
+        if only_bots:
+            filters.append(ScrapedMember.is_bot.is_(True))
         if normalized_query:
             pattern = f"%{normalized_query.lower()}%"
             filters.append(

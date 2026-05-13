@@ -857,6 +857,7 @@ function GroupDestinationField({
   selectedGroup,
   onSelect,
   onClear,
+  syncButton,
 }: {
   label: string
   query: string
@@ -865,6 +866,7 @@ function GroupDestinationField({
   selectedGroup: SelectedGroupChip | null
   onSelect: (group: SelectedGroupChip) => void
   onClear: () => void
+  syncButton?: React.ReactNode
 }) {
   const normalizedQuery = query.trim().toLowerCase()
   const suggestions = useMemo(() => {
@@ -910,6 +912,7 @@ function GroupDestinationField({
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Note>{selectedGroup.title} · {selectedGroup.tg_group_id}</Note>
           <Button tone="secondary" onClick={onClear}>Clear</Button>
+          {syncButton}
         </div>
       ) : null}
     </div>
@@ -2330,8 +2333,12 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [excludeBots, setExcludeBots] = useState(false)
   const [showAdminsOnly, setShowAdminsOnly] = useState(false)
   const [showBotsOnly, setShowBotsOnly] = useState(false)
+  const [showSentOnly, setShowSentOnly] = useState(false)
+  const [showFiltersOpen, setShowFiltersOpen] = useState(false)
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
+  const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
+  const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -2508,17 +2515,11 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     }
 
     const query = bulkMemberQuery.trim()
-    if (!query) {
-      setBulkMemberResults([])
-      setBulkMemberTotal(0)
-      setBulkMemberStatus(null)
-      return
-    }
 
     let cancelled = false
     setLoadingBulkMembers(true)
     setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query, 20, false, bulkMemberPage)
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, 'message_count', showAdminsOnly, showBotsOnly)
       .then((page) => {
         if (cancelled) {
           return
@@ -2546,7 +2547,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     return () => {
       cancelled = true
     }
-  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage])
+  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage, showAdminsOnly, showBotsOnly])
 
   async function saveTask() {
     if (taskKey === SCRAPE_TASK_KEY) {
@@ -2807,7 +2808,42 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   setBulkSelectedMembers([])
                   setBulkMemberStatus(null)
                 }}
+                syncButton={
+                  <button
+                    type="button"
+                    disabled={syncingAdminsBots}
+                    onClick={async () => {
+                      if (!account || !bulkSourceGroup) return
+                      setSyncingAdminsBots(true)
+                      setSyncAdminsBotsStatus(null)
+                      try {
+                        const result = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id)
+                        setSyncAdminsBotsStatus(result.message || 'Sync completed')
+                      } catch (error) {
+                        setSyncAdminsBotsStatus(error instanceof Error ? error.message : 'Sync failed')
+                      } finally {
+                        setSyncingAdminsBots(false)
+                      }
+                    }}
+                    style={{
+                      background: 'var(--miniapp-bg)',
+                      color: 'var(--miniapp-text-primary)',
+                      border: '1px solid var(--miniapp-border-soft)',
+                      borderRadius: 12,
+                      padding: '10px 12px',
+                      fontSize: 18,
+                      lineHeight: '18px',
+                      cursor: syncingAdminsBots ? 'default' : 'pointer',
+                      opacity: syncingAdminsBots ? 0.6 : 1,
+                    }}
+                  >
+                    {syncingAdminsBots ? '…' : '↻'}
+                  </button>
+                }
               />
+              {syncAdminsBotsStatus ? (
+                <Note>{syncAdminsBotsStatus}</Note>
+              ) : null}
               <TextAreaField
                 label="Message"
                 value={bulkMessage}
@@ -2829,7 +2865,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button
                       tone="secondary"
                       onClick={() => {
-                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot))
+                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
                         setBulkSelectedMembers((current) => {
                           const next = [...current]
                           candidates.forEach((member) => {
@@ -2849,12 +2885,36 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button tone="secondary" onClick={() => { setBulkMemberResults([]); setBulkMemberQuery(''); }}>
                       Clear results
                     </Button>
-                    <Button tone={showAdminsOnly ? 'primary' : 'secondary'} onClick={() => { setShowAdminsOnly(!showAdminsOnly); setShowBotsOnly(false) }}>
-                      {showAdminsOnly ? '✓ ' : ''}Show admins
-                    </Button>
-                    <Button tone={showBotsOnly ? 'primary' : 'secondary'} onClick={() => { setShowBotsOnly(!showBotsOnly); setShowAdminsOnly(false) }}>
-                      {showBotsOnly ? '✓ ' : ''}Show bots
-                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFiltersOpen(!showFiltersOpen)}
+                      style={{
+                        background: showFiltersOpen || showAdminsOnly || showBotsOnly || showSentOnly ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
+                        color: showFiltersOpen || showAdminsOnly || showBotsOnly || showSentOnly ? '#fff' : 'var(--miniapp-text-primary)',
+                        border: '1px solid var(--miniapp-border-soft)',
+                        borderRadius: 12,
+                        padding: '10px 12px',
+                        fontSize: 18,
+                        lineHeight: '18px',
+                        cursor: 'pointer',
+                      }}
+                      title="Filters"
+                    >
+                      △
+                    </button>
+                    {showFiltersOpen ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                        <Button tone={showAdminsOnly ? 'primary' : 'secondary'} onClick={() => { setShowAdminsOnly(!showAdminsOnly); setShowBotsOnly(false); setShowSentOnly(false) }}>
+                          {showAdminsOnly ? '✓ ' : ''}Show admins
+                        </Button>
+                        <Button tone={showBotsOnly ? 'primary' : 'secondary'} onClick={() => { setShowBotsOnly(!showBotsOnly); setShowAdminsOnly(false); setShowSentOnly(false) }}>
+                          {showBotsOnly ? '✓ ' : ''}Show bots
+                        </Button>
+                        <Button tone={showSentOnly ? 'primary' : 'secondary'} onClick={() => { setShowSentOnly(!showSentOnly); setShowAdminsOnly(false); setShowBotsOnly(false) }}>
+                          {showSentOnly ? '✓ ' : ''}Sent
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                   <div
                     style={{
@@ -2866,7 +2926,12 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       background: 'var(--miniapp-bg)',
                     }}
                   >
-                    {(bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showAdminsOnly && !m.is_admin && !m.is_creator) && !(showBotsOnly && !m.is_bot))).map((member) => (
+                    {(() => {
+                      const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
+                      if (!filtered.length) {
+                        return <Note>No matching members — try adjusting filters</Note>
+                      }
+                      return filtered.map((member) => (
                       <LinkRow
                         key={member.user_id}
                         onClick={() => {
@@ -2892,7 +2957,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                           ) : null}
                         </div>
                       </LinkRow>
-                    ))}
+                    ))
+                  })()}
                   </div>
                   {bulkMemberTotal > 20 ? (
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>

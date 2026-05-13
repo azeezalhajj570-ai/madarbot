@@ -5,7 +5,8 @@ RUN --mount=type=cache,target=/root/.npm \
     npm install
 COPY apps/miniapp-agents .
 COPY packages /packages
-RUN ln -s /app/node_modules /packages/node_modules && \
+RUN rm -rf /packages/node_modules && \
+    ln -s /app/node_modules /packages/node_modules && \
     npx vite build --outDir dist
 
 FROM nginx:alpine
