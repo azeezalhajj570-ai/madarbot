@@ -86,11 +86,12 @@ export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
 }
 
-export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20) {
+export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false) {
   return apiClient.get<AgentGroupMember[]>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
     q: query,
     limit,
+    exclude_bots: excludeBots,
   })
 }
 

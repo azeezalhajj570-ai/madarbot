@@ -146,6 +146,7 @@ def build_member_row_from_sender(
     sender_first_name: str | None,
     sender_last_name: str | None,
     sender_raw_data: dict | None,
+    role: str | None = None,
 ) -> dict[str, Any]:
     first_name = str(sender_first_name or "").strip() or None
     last_name = str(sender_last_name or "").strip() or None
@@ -161,7 +162,7 @@ def build_member_row_from_sender(
         full_name=full_name,
         is_bot=bool(raw_data.get("bot", False)),
         is_premium=bool(raw_data.get("premium", False)),
-        role="member",
+        role=role or "member",
         raw_data=sender_raw_data,
     )
 

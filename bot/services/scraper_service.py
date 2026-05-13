@@ -190,17 +190,34 @@ class ScraperService:
             canonical_group_id = canonical_tg_group_id(int(tg_group_id))
 
             # Fetch and store admins first so they are available even if members are hidden
+            admin_roles: dict[int, str] = {}
             try:
-                admin_participants = await managed_client.get_participants(
-                    entity=entity, filter=ChannelParticipantsAdmins()
-                )
-                for admin in admin_participants:
-                    admin_user_id = getattr(admin, "id", None)
+                from telethon.tl.functions.channels import GetParticipantsRequest
+                admin_result = await managed_client(GetParticipantsRequest(
+                    channel=entity,
+                    filter=ChannelParticipantsAdmins(),
+                    offset=0,
+                    limit=100,
+                    hash=0,
+                ))
+                admin_users_by_id = {u.id: u for u in admin_result.users}
+                for admin_participant in admin_result.participants:
+                    admin_user_id = getattr(admin_participant, "user_id", None)
                     if admin_user_id is None:
                         continue
+                    admin_user = admin_users_by_id.get(admin_user_id)
+                    if admin_user is None:
+                        continue
                     admin_row = serializers.build_member_row_from_participant(
-                        admin, scraped_group.id, canonical_group_id, int(admin_user_id)
+                        admin_user, scraped_group.id, canonical_group_id, int(admin_user_id)
                     )
+                    role = "member"
+                    if hasattr(admin_participant, "creator") and admin_participant.creator:
+                        role = "creator"
+                    elif hasattr(admin_participant, "admin_rights") and admin_participant.admin_rights:
+                        role = "admin"
+                    admin_row["role"] = role
+                    admin_roles[int(admin_user_id)] = role
                     member_batch.append(admin_row)
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
                         await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
@@ -208,7 +225,7 @@ class ScraperService:
                 if member_batch:
                     await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
                     member_batch = []
-                logger.info("admins_fetched_first", agent_id=agent_id, tg_group_id=tg_group_id, admin_count=len(admin_participants))
+                logger.info("admins_fetched_first", agent_id=agent_id, tg_group_id=tg_group_id, admin_count=len(admin_result.participants))
             except Exception as exc:
                 logger.warning("admin_fetch_failed_proceeding", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
 
@@ -227,6 +244,9 @@ class ScraperService:
                     row = serializers.build_member_row_from_participant(
                         participant, scraped_group.id, canonical_group_id, int(user_id)
                     )
+                    uid = int(user_id)
+                    if uid in admin_roles:
+                        row["role"] = admin_roles[uid]
                     member_batch.append(row)
 
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
@@ -296,6 +316,8 @@ class ScraperService:
             message_batch: list[dict[str, Any]] = []
             member_batch: list[dict[str, Any]] = []
             canonical_group_id = canonical_tg_group_id(int(tg_group_id))
+
+            existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
             min_message_date = (
                 datetime.utcnow() - timedelta(days=max(1, int(max_age_days)))
                 if max_age_days is not None
@@ -324,9 +346,11 @@ class ScraperService:
 
                     if sender_user_id is not None and int(sender_user_id) > 0:
                         uid = int(sender_user_id)
+                        sender_role = existing_admin_roles.get(uid)
                         member_row = serializers.build_member_row_from_sender(
                             scraped_group.id, canonical_group_id, uid,
                             sender_username, sender_first_name, sender_last_name, sender_raw_data,
+                            role=sender_role,
                         )
                         member_batch.append(member_row)
                         if uid not in seen_senders:
@@ -431,6 +455,7 @@ class ScraperService:
             seen_senders: set[int] = set()
             member_success_count = 0
             reached_end = False
+            existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
 
             while limit <= 0 or (success_count < limit):
                 batch_success = 0
@@ -474,9 +499,11 @@ class ScraperService:
 
                         if sender_user_id is not None and int(sender_user_id) > 0:
                             uid = int(sender_user_id)
+                            sender_role = existing_admin_roles.get(uid)
                             member_row = serializers.build_member_row_from_sender(
                                 scraped_group.id, canonical_group_id, uid,
                                 sender_username, sender_first_name, sender_last_name, sender_raw_data,
+                                role=sender_role,
                             )
                             member_batch.append(member_row)
                             if uid not in seen_senders:
@@ -659,6 +686,15 @@ class ScraperService:
             if should_disconnect:
                 with suppress(Exception):
                     await managed_client.disconnect()
+
+    async def _get_existing_admin_roles(self, scraped_group_id: int) -> dict[int, str]:
+        result = await self.session.execute(
+            select(ScrapedMember).where(
+                ScrapedMember.scraped_group_id == scraped_group_id,
+                ScrapedMember.role.in_(["admin", "creator"]),
+            )
+        )
+        return {int(m.tg_user_id): str(m.role) for m in result.scalars().all()}
 
     async def _get_active_agent(self, agent_id: int) -> Agent | None:
         return await entity_resolver.get_active_agent(agent_id, self.session)

@@ -2327,6 +2327,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [excludeAdmins, setExcludeAdmins] = useState(false)
+  const [excludeBots, setExcludeBots] = useState(false)
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -2430,6 +2431,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
     setExcludeAdmins(false)
+    setExcludeBots(false)
     setScrapeGroupQuery('')
     setScrapeSelectedGroup(null)
     setScrapeGroups([])
@@ -2480,6 +2482,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
     setExcludeAdmins(false)
+    setExcludeBots(false)
     setLeadAckTemplate(task.task_key === 'lead_capture' ? String(task.config.ack_template || '') : '')
     setLeadLabel(task.task_key === 'lead_capture' ? String(task.config.lead_label || '') : '')
     setLeadAskContact(task.task_key === 'lead_capture' ? Boolean(task.config.ask_contact) : false)
@@ -2596,7 +2599,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           threshold,
           interval_seconds: intervalSeconds,
           selected_user_ids: bulkSelectedMembers
-                .filter((member) => !excludeAdmins || !(member.is_admin || member.is_creator))
+                .filter((member) => !(excludeAdmins && (member.is_admin || member.is_creator)) && !(excludeBots && member.is_bot))
                 .map((member) => member.user_id),
         })
         closeForm()
@@ -2818,9 +2821,10 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button
                       tone="secondary"
                       onClick={() => {
+                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot))
                         setBulkSelectedMembers((current) => {
                           const next = [...current]
-                          bulkMemberResults.forEach((member) => {
+                          candidates.forEach((member) => {
                             if (!next.some((entry) => entry.user_id === member.user_id)) {
                               next.push(member)
                             }
@@ -2837,15 +2841,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button tone="secondary" onClick={() => { setBulkMemberResults([]); setBulkMemberQuery(''); }}>
                       Clear results
                     </Button>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '4px 0' }}>
-                      <input
-                        type="checkbox"
-                        checked={excludeAdmins}
-                        onChange={(event) => setExcludeAdmins(event.target.checked)}
-                        style={{ accentColor: 'var(--miniapp-accent)' }}
-                      />
-                      Exclude admins
-                    </label>
                   </div>
                   <div
                     style={{
@@ -2857,7 +2852,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       background: 'var(--miniapp-bg)',
                     }}
                   >
-                    {bulkMemberResults.map((member) => (
+                    {(bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot))).map((member) => (
                       <LinkRow
                         key={member.user_id}
                         onClick={() => {
@@ -2872,7 +2867,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
                           {member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Owner</span> : null}
-                          {member.is_admin && !member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#c2bdb5', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Admin</span> : null}
+                          {member.is_admin && !member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Admin</span> : null}
+                          {member.is_bot ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Bot</span> : null}
                           {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600 }}>✓ Sent</span> : null}
                         </div>
                         <div style={{ color: '#655d52', marginTop: 4 }}>
@@ -2903,7 +2899,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   >
                     {member.full_name || member.username || `User ${member.user_id}`}
                     {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
-                    {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#c2bdb5', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
+                    {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
+                    {member.is_bot ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 9, fontWeight: 700 }}>Bot</span> : null}
                     {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
                     <button
                       type="button"
@@ -2923,7 +2920,29 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   </span>
                 )) : null}
               </div>
-              <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+                <div style={{ flex: 1 }}>
+                  <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '0 0 10px', whiteSpace: 'nowrap' }}>
+                  <input
+                    type="checkbox"
+                    checked={excludeAdmins}
+                    onChange={(event) => setExcludeAdmins(event.target.checked)}
+                    style={{ accentColor: 'var(--miniapp-accent)' }}
+                  />
+                  Exclude admins
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '0 0 10px', whiteSpace: 'nowrap' }}>
+                  <input
+                    type="checkbox"
+                    checked={excludeBots}
+                    onChange={(event) => setExcludeBots(event.target.checked)}
+                    style={{ accentColor: 'var(--miniapp-accent)' }}
+                  />
+                  Exclude bots
+                </label>
+              </div>
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
             </>
           ) : isLeadCaptureTask ? (
