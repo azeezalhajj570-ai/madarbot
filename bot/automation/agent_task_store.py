@@ -43,4 +43,6 @@ class AgentTaskStore:
             conditions=dict(payload.get("conditions") or {}),
             agent_id=job.agent_id,
         )
-        return AgentTaskBinding(assignment=assignment, task=self.registry.get(task_key), event=event)
+        return AgentTaskBinding(
+            assignment=assignment, task=self.registry.get(task_key), event=event
+        )

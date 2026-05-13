@@ -96,5 +96,7 @@ def build_default_pipeline() -> ModerationPipeline:
         if settings.gemini_api_key
         else None
     )
-    classifier = AIClassifier(openai_provider=openai, gemini_provider=gemini, provider_name=settings.ai_provider)
+    classifier = AIClassifier(
+        openai_provider=openai, gemini_provider=gemini, provider_name=settings.ai_provider
+    )
     return ModerationPipeline(rule_engine=RuleEngine(), classifier=classifier)

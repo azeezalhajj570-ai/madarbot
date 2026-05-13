@@ -8,7 +8,11 @@ from sqlalchemy import select
 
 from bot.core.runtime.actions import AddWarningAction, ClearWarningsAction, DeleteMessageAction
 from bot.core.runtime.admin import AdminAutomationRuntimeService
-from bot.core.runtime.audit import AuditEntry, ModerationLogAuditSink, parse_runtime_audit_compatibility
+from bot.core.runtime.audit import (
+    AuditEntry,
+    ModerationLogAuditSink,
+    parse_runtime_audit_compatibility,
+)
 from bot.core.runtime.replay import RuntimeReplayService
 from bot.core.runtime.automation import ScheduledAnnouncementRequest
 from bot.core.runtime.events import RuntimeEvent, RuntimeEventType
@@ -34,14 +38,18 @@ async def test_dashboard_api_startup_runs_schema_bootstrap_only_when_enabled(
 ) -> None:
     ensure_schema = AsyncMock()
     monkeypatch.setattr(api_main, "ensure_schema", ensure_schema)
-    monkeypatch.setattr(api_main, "get_settings", lambda: SimpleNamespace(run_schema_bootstrap=True))
+    monkeypatch.setattr(
+        api_main, "get_settings", lambda: SimpleNamespace(run_schema_bootstrap=True)
+    )
 
     await api_main.on_startup()
 
     ensure_schema.assert_awaited_once_with(api_main.engine)
 
     ensure_schema.reset_mock()
-    monkeypatch.setattr(api_main, "get_settings", lambda: SimpleNamespace(run_schema_bootstrap=False))
+    monkeypatch.setattr(
+        api_main, "get_settings", lambda: SimpleNamespace(run_schema_bootstrap=False)
+    )
 
     await api_main.on_startup()
 
@@ -94,7 +102,10 @@ async def test_run_bot_wires_runtime_dependencies_without_bootstrap_when_disable
     monkeypatch.setattr("bot.main.build_router", Mock(return_value=router))
     monkeypatch.setattr("bot.main._configure_chat_menu_button", configure_menu)
     monkeypatch.setattr("bot.main._configure_bot_commands", AsyncMock())
-    monkeypatch.setattr("bot.main.AgentListenerManager", Mock(return_value=SimpleNamespace(start=AsyncMock(), stop=AsyncMock())))
+    monkeypatch.setattr(
+        "bot.main.AgentListenerManager",
+        Mock(return_value=SimpleNamespace(start=AsyncMock(), stop=AsyncMock())),
+    )
 
     await run_bot()
 
@@ -151,7 +162,9 @@ async def test_run_bot_starts_agent_listener_in_agents_mode(
     monkeypatch.setattr("bot.main.Dispatcher", Mock(return_value=fake_dispatcher))
     monkeypatch.setattr("bot.main.EventBus", Mock(return_value=object()))
     monkeypatch.setattr("bot.main.MenuEngine", Mock(return_value=object()))
-    monkeypatch.setattr("bot.main.PluginManager", Mock(return_value=SimpleNamespace(load_all=AsyncMock())))
+    monkeypatch.setattr(
+        "bot.main.PluginManager", Mock(return_value=SimpleNamespace(load_all=AsyncMock()))
+    )
     monkeypatch.setattr("bot.main.build_router", Mock(return_value=object()))
     monkeypatch.setattr("bot.main._configure_chat_menu_button", AsyncMock())
     monkeypatch.setattr("bot.main._configure_bot_commands", AsyncMock())
@@ -171,7 +184,9 @@ async def test_agent_job_executor_persists_job_payload_and_awaits_async_dispatch
     user = User(tg_user_id=9301, username="owner9301", full_name="Owner 9301", language_code="en")
     db_session.add(user)
     await db_session.flush()
-    group = Group(tg_group_id=-1009301, title="Executor Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1009301, title="Executor Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -206,14 +221,21 @@ async def test_agent_job_executor_persists_job_payload_and_awaits_async_dispatch
         name="message.received",
         group_id=group.id,
         user_id=user.tg_user_id,
-        payload={"chat_id": group.tg_group_id, "text": "hello", "message_id": 73, "first_name": "Owner"},
+        payload={
+            "chat_id": group.tg_group_id,
+            "text": "hello",
+            "message_id": 73,
+            "first_name": "Owner",
+        },
     )
     dispatch_job = AsyncMock()
     executor = AgentJobExecutor(job_service=AgentJobService(db_session), dispatch_job=dispatch_job)
 
     result = await executor.execute(task, assignment, event)
 
-    job = (await db_session.execute(select(AgentJob).where(AgentJob.id == result["job_id"]))).scalar_one()
+    job = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == result["job_id"]))
+    ).scalar_one()
     assert result == {"job_id": job.id, "status": "pending"}
     assert job.job_type == "automation_task"
     assert job.job_payload["assignment_id"] == "assignment-executor"
@@ -258,7 +280,9 @@ async def test_runtime_replay_service_normalizes_runtime_audit_record(db_session
 
 
 @pytest.mark.asyncio
-async def test_runtime_audit_compatibility_parser_falls_back_to_runtime_action_and_extra_details(db_session) -> None:
+async def test_runtime_audit_compatibility_parser_falls_back_to_runtime_action_and_extra_details(
+    db_session,
+) -> None:
     log = ModerationLog(
         group_id=902,
         action="warn_spam",
@@ -295,7 +319,9 @@ async def test_agent_task_runtime_schedules_follow_up_from_loaded_job(
     user = User(tg_user_id=9401, username="owner9401", full_name="Owner 9401", language_code="en")
     db_session.add(user)
     await db_session.flush()
-    group = Group(tg_group_id=-1009401, title="Runtime Follow Up Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1009401, title="Runtime Follow Up Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -348,12 +374,20 @@ async def test_agent_task_runtime_schedules_follow_up_from_loaded_job(
     dispatched = await runtime.dispatch_job(job.id)
 
     async with session_factory() as verification_session:
-        stored = (await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
+        stored = (
+            await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))
+        ).scalar_one()
         logs = (
-            await verification_session.execute(
-                select(ModerationLog).where(ModerationLog.group_id == group.id).order_by(ModerationLog.id.asc())
+            (
+                await verification_session.execute(
+                    select(ModerationLog)
+                    .where(ModerationLog.group_id == group.id)
+                    .order_by(ModerationLog.id.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert dispatched is True
     assert stored.status == "completed"
@@ -536,11 +570,21 @@ async def test_runtime_warn_flow_persists_warning_and_runtime_audit(
     )
 
     warning = (
-        await db_session.execute(select(Warning).where(Warning.group_id == group.id, Warning.user_id == 88))
+        await db_session.execute(
+            select(Warning).where(Warning.group_id == group.id, Warning.user_id == 88)
+        )
     ).scalar_one()
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == group.id).order_by(ModerationLog.id.asc()))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(ModerationLog)
+                .where(ModerationLog.group_id == group.id)
+                .order_by(ModerationLog.id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     assert result == {"status": "ok", "count": 1}
     assert warning.count == 1
@@ -577,10 +621,16 @@ async def test_runtime_flagged_warning_flow_uses_runtime_path(db_session) -> Non
     )
 
     warning = (
-        await db_session.execute(select(Warning).where(Warning.group_id == group.id, Warning.user_id == 99))
+        await db_session.execute(
+            select(Warning).where(Warning.group_id == group.id, Warning.user_id == 99)
+        )
     ).scalar_one()
     log = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == group.id, ModerationLog.action == "warn_spam"))
+        await db_session.execute(
+            select(ModerationLog).where(
+                ModerationLog.group_id == group.id, ModerationLog.action == "warn_spam"
+            )
+        )
     ).scalar_one()
 
     assert result["action"] == "warn_spam"
@@ -606,7 +656,10 @@ async def test_task_assignment_store_round_trips_current_group_setting_shape(db_
     loaded = await store.list_assignments(group.id)
 
     assert loaded == [assignment]
-    assert TaskAssignmentStore.serialize_assignment(loaded[0], group_id=group.id)["task_key"] == "reply_message"
+    assert (
+        TaskAssignmentStore.serialize_assignment(loaded[0], group_id=group.id)["task_key"]
+        == "reply_message"
+    )
 
 
 @pytest.mark.asyncio
@@ -653,7 +706,9 @@ async def test_task_service_keyword_reply_delegates_to_automation_runtime(
         runtime_calls.append({"request": request, "bot": bot})
         return {"status": "ok", "destination_message_id": 77}
 
-    monkeypatch.setattr("bot.automation.executors.AutomationRuntimeService.execute_keyword_reply", fake_execute)
+    monkeypatch.setattr(
+        "bot.automation.executors.AutomationRuntimeService.execute_keyword_reply", fake_execute
+    )
 
     await service.save_assignment(
         actor_user_id=1,
@@ -670,7 +725,12 @@ async def test_task_service_keyword_reply_delegates_to_automation_runtime(
     outputs = await service.handle_message_event(
         group_id=group.id,
         user_id=99,
-        payload={"chat_id": group.tg_group_id, "text": "price please", "message_id": 55, "bot": fake_bot},
+        payload={
+            "chat_id": group.tg_group_id,
+            "text": "price please",
+            "message_id": 55,
+            "bot": fake_bot,
+        },
     )
 
     assert outputs == [{"status": "ok", "destination_message_id": 77}]
@@ -707,7 +767,9 @@ async def test_task_service_notify_destination_delegates_to_automation_runtime(
             "forwarded_message_id": 89,
         }
 
-    monkeypatch.setattr("bot.automation.executors.AutomationRuntimeService.execute_notify_destination", fake_execute)
+    monkeypatch.setattr(
+        "bot.automation.executors.AutomationRuntimeService.execute_notify_destination", fake_execute
+    )
 
     await service.save_assignment(
         actor_user_id=1,
@@ -787,7 +849,9 @@ async def test_admin_runtime_loads_scheduled_dispatch_request(db_session) -> Non
     await db_session.commit()
 
     runtime = AdminAutomationRuntimeService(db_session, dispatch_agent_job=AsyncMock())
-    request = await runtime.get_scheduled_message_dispatch_request(group_id=group.id, entry_id="entry-2")
+    request = await runtime.get_scheduled_message_dispatch_request(
+        group_id=group.id, entry_id="entry-2"
+    )
 
     assert isinstance(request, ScheduledAnnouncementRequest)
     assert request.entry_id == "entry-2"
@@ -796,7 +860,9 @@ async def test_admin_runtime_loads_scheduled_dispatch_request(db_session) -> Non
 
 
 @pytest.mark.asyncio
-async def test_admin_runtime_forwards_agent_group_binding_fields(db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_admin_runtime_forwards_agent_group_binding_fields(
+    db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     captured: dict[str, object] = {}
 
     async def fake_save_assignment(self, **kwargs):

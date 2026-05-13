@@ -33,9 +33,18 @@ async def test_subscribe_notifies_bot_owners(
     await request_subscription(message, state)
 
     assert len(message.log.answers) == 1
-    assert message.log.answers[0]["text"] == "Thanks for your request. The owner will review it shortly."
+    assert (
+        message.log.answers[0]["text"]
+        == "Thanks for your request. The owner will review it shortly."
+    )
     assert message.log.answers[0]["reply_markup"].remove_keyboard is True
     assert fake_bot.sent_messages == [
-        (7001, "Subscription request #1\nFrom: requester (TG 3333)\nMessage: need access\nReview: https://app.test"),
-        (7002, "Subscription request #1\nFrom: requester (TG 3333)\nMessage: need access\nReview: https://app.test"),
+        (
+            7001,
+            "Subscription request #1\nFrom: requester (TG 3333)\nMessage: need access\nReview: https://app.test",
+        ),
+        (
+            7002,
+            "Subscription request #1\nFrom: requester (TG 3333)\nMessage: need access\nReview: https://app.test",
+        ),
     ]

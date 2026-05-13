@@ -3,9 +3,20 @@
 from __future__ import annotations
 from typing import Optional
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.db.base import Base
@@ -14,13 +25,17 @@ from bot.db.base import Base
 class Agent(Base):
     __tablename__ = "agents"
     __table_args__ = (
-        UniqueConstraint("linked_by_user_id", "external_account_id", name="uq_agent_linked_user_external_account"),
+        UniqueConstraint(
+            "linked_by_user_id", "external_account_id", name="uq_agent_linked_user_external_account"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     telegram_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
     linked_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
-    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="SET NULL"), index=True, nullable=True)
+    group_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("groups.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     phone_number: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True)
     external_account_id: Mapped[str] = mapped_column(String(255), index=True)
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
@@ -33,7 +48,9 @@ class Agent(Base):
     min_delay_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     safety_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    safety_mode_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    safety_mode_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -75,14 +92,18 @@ class AgentNotification(Base):
     __tablename__ = "agent_notifications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(64), index=True, default="info")
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     is_seen: Mapped[bool] = mapped_column(default=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, index=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,
@@ -97,7 +118,9 @@ class AgentLead(Base):
     __tablename__ = "agent_leads"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -113,7 +136,9 @@ class AgentLead(Base):
     contact_info: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.5)
-    last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_contacted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     converted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

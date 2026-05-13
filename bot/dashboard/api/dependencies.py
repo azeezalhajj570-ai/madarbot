@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import quote
 
 from aiogram import Bot
-from fastapi import Depends, Header, HTTPException, Query, status
+from fastapi import Depends, Header, HTTPException, status
 import sqlalchemy as sa
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,13 +34,18 @@ def _resolve_bot_kind_from_header(x_app_boundary: str | None) -> str | None:
 
 
 async def check_plan_limit(
-    session: AsyncSession, identity: TelegramWebAppIdentity, resource: str, current_count: int,
+    session: AsyncSession,
+    identity: TelegramWebAppIdentity,
+    resource: str,
+    current_count: int,
     bot_kind: str | None = None,
 ) -> None:
     settings = get_settings()
     if identity.user_id in settings.bot_owner_ids:
         return
-    sub = await SubscriptionService(session).get_active_subscription(tg_user_id=identity.user_id, bot_kind=bot_kind)
+    sub = await SubscriptionService(session).get_active_subscription(
+        tg_user_id=identity.user_id, bot_kind=bot_kind
+    )
     if sub is None or sub.plan != "free":
         return
     limit_key = PLAN_LIMIT_KEYS.get(resource)
@@ -54,7 +59,9 @@ async def check_plan_limit(
         )
 
 
-async def _resolve_subscription_info(session: AsyncSession, identity: TelegramWebAppIdentity) -> dict[str, Any] | None:
+async def _resolve_subscription_info(
+    session: AsyncSession, identity: TelegramWebAppIdentity
+) -> dict[str, Any] | None:
     sub = await SubscriptionService(session).get_active_subscription(tg_user_id=identity.user_id)
     if sub is None:
         return None
@@ -78,7 +85,9 @@ async def _bot_install_username() -> str:
         me = await bot.get_me()
         username = str(getattr(me, "username", "") or "").strip()
         if not username:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Bot username unavailable")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Bot username unavailable"
+            )
         return username
     finally:
         await bot.session.close()
@@ -151,20 +160,25 @@ async def list_identity_bot_install_groups(
             if not (dialog.is_group or getattr(entity, "megagroup", False)):
                 continue
 
-            can_add_bot = bool(getattr(entity, "creator", False) or getattr(entity, "admin_rights", None))
+            can_add_bot = bool(
+                getattr(entity, "creator", False) or getattr(entity, "admin_rights", None)
+            )
             if not can_add_bot:
                 try:
                     permissions = await client.get_permissions(entity, me)
                 except Exception:
                     permissions = None
                 can_add_bot = bool(
-                    getattr(permissions, "is_admin", False) or getattr(permissions, "is_creator", False)
+                    getattr(permissions, "is_admin", False)
+                    or getattr(permissions, "is_creator", False)
                 )
             if not can_add_bot:
                 continue
 
             tg_group_id = canonical_tg_group_id(int(get_peer_id(entity)))
-            title = str(getattr(dialog, "title", None) or getattr(entity, "title", None) or tg_group_id)
+            title = str(
+                getattr(dialog, "title", None) or getattr(entity, "title", None) or tg_group_id
+            )
             existing = candidates.get(tg_group_id, {})
             candidates[tg_group_id] = {
                 "managed_group_id": existing.get("managed_group_id"),
@@ -194,7 +208,9 @@ async def require_active_subscription(
         return identity
 
     bot_kind = _resolve_bot_kind_from_header(x_app_boundary)
-    if not await SubscriptionService(session).has_active_subscription(tg_user_id=identity.user_id, bot_kind=bot_kind):
+    if not await SubscriptionService(session).has_active_subscription(
+        tg_user_id=identity.user_id, bot_kind=bot_kind
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Active subscription required to access this feature",
@@ -212,7 +228,9 @@ async def require_business_plan(
         return identity
 
     bot_kind = _resolve_bot_kind_from_header(x_app_boundary)
-    sub = await SubscriptionService(session).get_active_subscription(tg_user_id=identity.user_id, bot_kind=bot_kind)
+    sub = await SubscriptionService(session).get_active_subscription(
+        tg_user_id=identity.user_id, bot_kind=bot_kind
+    )
     if not sub or sub.plan != "business":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -221,9 +239,13 @@ async def require_business_plan(
     return identity
 
 
-async def require_bot_owner(identity: TelegramWebAppIdentity = Depends(get_identity)) -> TelegramWebAppIdentity:
+async def require_bot_owner(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> TelegramWebAppIdentity:
     if identity.user_id not in get_settings().bot_owner_ids:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only bot owners can perform this action")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only bot owners can perform this action"
+        )
     return identity
 
 
@@ -232,7 +254,15 @@ async def _sync_identity_admin_roles(
     *,
     identity: TelegramWebAppIdentity,
 ) -> None:
-    groups = (await session.execute(select(Group).where(Group.is_active.is_(True)).order_by(Group.id.asc()))).scalars().all()
+    groups = (
+        (
+            await session.execute(
+                select(Group).where(Group.is_active.is_(True)).order_by(Group.id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     if not groups:
         return
 
@@ -289,9 +319,13 @@ async def _backfill_identity_groups_from_candidates(
         managed_group_id = candidate.get("managed_group_id")
 
         if managed_group_id:
-            group = (await session.execute(select(Group).where(Group.id == int(managed_group_id)))).scalar_one_or_none()
+            group = (
+                await session.execute(select(Group).where(Group.id == int(managed_group_id)))
+            ).scalar_one_or_none()
             if group is None:
-                group = await upsert_group(session, tg_group_id=tg_group_id, title=title, is_active=True)
+                group = await upsert_group(
+                    session, tg_group_id=tg_group_id, title=title, is_active=True
+                )
                 changed = True
             else:
                 if group.title != title:
@@ -301,7 +335,9 @@ async def _backfill_identity_groups_from_candidates(
                     group.is_active = True
                     changed = True
         else:
-            group = await upsert_group(session, tg_group_id=tg_group_id, title=title, is_active=True)
+            group = await upsert_group(
+                session, tg_group_id=tg_group_id, title=title, is_active=True
+            )
             changed = True
 
         existing_role = (
@@ -332,7 +368,9 @@ async def ensure_group_admin(
         return
     can_access = await PermissionService(session).user_level(group_id, identity.user_id)
     if can_access is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not a group administrator")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is not a group administrator"
+        )
 
 
 async def ensure_group_admin_access(
@@ -344,7 +382,9 @@ async def ensure_group_admin_access(
         return
     can_access = await PermissionService(session).user_level(group_id, identity.user_id)
     if can_access is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not a group administrator")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is not a group administrator"
+        )
 
 
 async def ensure_agent_admin(
@@ -366,7 +406,11 @@ async def build_identity_profile(
     identity: TelegramWebAppIdentity,
 ) -> dict[str, Any]:
     settings = get_settings()
-    language_code = await __import__("bot.services.user_service", fromlist=["UserService"]).UserService(session).resolve_language(identity.user_id)
+    language_code = (
+        await __import__("bot.services.user_service", fromlist=["UserService"])
+        .UserService(session)
+        .resolve_language(identity.user_id)
+    )
 
     inactive_stmt = (
         sa.select(Group.id, Group.tg_group_id, Group.title)
@@ -383,7 +427,9 @@ async def build_identity_profile(
     inactive = (await session.execute(inactive_stmt)).all()
     if inactive:
         for row in inactive:
-            group = (await session.execute(select(Group).where(Group.id == row.id))).scalar_one_or_none()
+            group = (
+                await session.execute(select(Group).where(Group.id == row.id))
+            ).scalar_one_or_none()
             if group is not None:
                 group.is_active = True
         await session.commit()
@@ -410,10 +456,9 @@ async def build_identity_profile(
         groups = (await session.execute(groups_stmt)).all()
 
     if not groups and identity.user_id in settings.bot_owner_ids:
-        all_groups_stmt = (
-            select(Group.id, Group.title, Group.tg_group_id, sa.literal("owner").label("role"))
-            .order_by(Group.created_at.desc())
-        )
+        all_groups_stmt = select(
+            Group.id, Group.title, Group.tg_group_id, sa.literal("owner").label("role")
+        ).order_by(Group.created_at.desc())
         groups = (await session.execute(all_groups_stmt)).all()
 
     return {

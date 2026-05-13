@@ -5,7 +5,17 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -25,7 +35,9 @@ class Group(Base):
     tg_group_id: Mapped[int] = mapped_column(BigInteger, index=True)
     title: Mapped[str] = mapped_column(String(255), index=True)
     owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    registered_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    registered_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -54,7 +66,9 @@ class GroupAdminRole(Base):
 
 class GroupMember(Base):
     __tablename__ = "group_members"
-    __table_args__ = (UniqueConstraint("group_id", "tg_user_id", name="uq_group_member_group_tg_user"),)
+    __table_args__ = (
+        UniqueConstraint("group_id", "tg_user_id", name="uq_group_member_group_tg_user"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)

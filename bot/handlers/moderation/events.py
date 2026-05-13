@@ -27,7 +27,11 @@ from bot.services.settings_service import SettingsService
 from bot.services.task_service import TaskService
 from bot.utils.rate_limiter import ApiRateLimiter
 from bot.summaries.collector import record_group_message_activity
-from bot.workers.tasks import run_spam_analysis, schedule_bot_message_delete, schedule_task_follow_up
+from bot.workers.tasks import (
+    run_spam_analysis,
+    schedule_bot_message_delete,
+    schedule_task_follow_up,
+)
 
 router = Router(name="moderation_events")
 logger = structlog.get_logger(__name__)
@@ -61,8 +65,10 @@ def _is_group_member(member: object) -> bool:
 async def _resolve_group(session, tg_group_id: int) -> Group | None:
     candidate_ids = _chat_id_candidates(tg_group_id)
     rows = (
-        await session.execute(select(Group).where(Group.tg_group_id.in_(candidate_ids)))
-    ).scalars().all()
+        (await session.execute(select(Group).where(Group.tg_group_id.in_(candidate_ids))))
+        .scalars()
+        .all()
+    )
     if not rows:
         return None
     for group in rows:
@@ -96,7 +102,9 @@ async def _required_group_titles(session, required_group_tg_ids: list[int]) -> l
     for required_group_tg_id in required_group_tg_ids:
         candidates = _chat_id_candidates(required_group_tg_id)
         rows = (
-            await session.execute(select(Group.tg_group_id, Group.title).where(Group.tg_group_id.in_(candidates)))
+            await session.execute(
+                select(Group.tg_group_id, Group.title).where(Group.tg_group_id.in_(candidates))
+            )
         ).all()
         for row in rows:
             title_map[int(row.tg_group_id)] = str(row.title)
@@ -116,14 +124,20 @@ async def _required_group_titles(session, required_group_tg_ids: list[int]) -> l
     return titles
 
 
-async def _required_group_targets(session, bot, required_group_tg_ids: list[int]) -> list[tuple[str, str]]:
+async def _required_group_targets(
+    session, bot, required_group_tg_ids: list[int]
+) -> list[tuple[str, str]]:
     rows = (
         await session.execute(
-            select(Group.tg_group_id, Group.title).where(Group.tg_group_id.in_(set(
-                candidate_id
-                for required_group_tg_id in required_group_tg_ids
-                for candidate_id in _chat_id_candidates(required_group_tg_id)
-            )))
+            select(Group.tg_group_id, Group.title).where(
+                Group.tg_group_id.in_(
+                    set(
+                        candidate_id
+                        for required_group_tg_id in required_group_tg_ids
+                        for candidate_id in _chat_id_candidates(required_group_tg_id)
+                    )
+                )
+            )
         )
     ).all()
     title_map = {int(row.tg_group_id): str(row.title) for row in rows}
@@ -131,7 +145,11 @@ async def _required_group_targets(session, bot, required_group_tg_ids: list[int]
     targets: list[tuple[str, str]] = []
     for required_group_tg_id in required_group_tg_ids:
         title = next(
-            (title_map[candidate_id] for candidate_id in _chat_id_candidates(required_group_tg_id) if candidate_id in title_map),
+            (
+                title_map[candidate_id]
+                for candidate_id in _chat_id_candidates(required_group_tg_id)
+                if candidate_id in title_map
+            ),
             str(required_group_tg_id),
         )
         url: str | None = None
@@ -188,7 +206,12 @@ async def _missing_required_group_tg_ids(
 
 
 def _message_contains_link(message: Message, text: str) -> bool:
-    if text and ("http://" in text.lower() or "https://" in text.lower() or "www." in text.lower() or "t.me/" in text.lower()):
+    if text and (
+        "http://" in text.lower()
+        or "https://" in text.lower()
+        or "www." in text.lower()
+        or "t.me/" in text.lower()
+    ):
         return True
 
     entities = list(message.entities or []) + list(message.caption_entities or [])
@@ -209,12 +232,16 @@ def _message_trace_payload(message: Message, text: str, contains_link: bool) -> 
         "has_text": bool(text),
         "contains_link": contains_link,
         "entity_types": [str(getattr(entity, "type", "")) for entity in message.entities or []],
-        "caption_entity_types": [str(getattr(entity, "type", "")) for entity in message.caption_entities or []],
+        "caption_entity_types": [
+            str(getattr(entity, "type", "")) for entity in message.caption_entities or []
+        ],
     }
 
 
 @router.message(F.chat.type.in_({"group", "supergroup"}))
-async def on_group_message(message: Message, event_bus: EventBus, redis: Redis | None = None) -> None:
+async def on_group_message(
+    message: Message, event_bus: EventBus, redis: Redis | None = None
+) -> None:
     if _is_bot_command_message(message):
         return
     MESSAGES_TOTAL.labels(chat_type=message.chat.type).inc()
@@ -290,7 +317,9 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
             group = await _resolve_group(session, message.chat.id)
             if group:
                 await record_group_message_activity(session, group=group, message=message)
-                required_groups = await AccessGateService(session).list_required_group_tg_ids(group.id)
+                required_groups = await AccessGateService(session).list_required_group_tg_ids(
+                    group.id
+                )
                 if required_groups:
                     missing_required_groups = await _missing_required_group_tg_ids(
                         message.bot,
@@ -300,8 +329,12 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
                     )
 
                     if missing_required_groups:
-                        required_group_titles = await _required_group_titles(session, missing_required_groups)
-                        required_group_targets = await _required_group_targets(session, message.bot, missing_required_groups)
+                        required_group_titles = await _required_group_titles(
+                            session, missing_required_groups
+                        )
+                        required_group_targets = await _required_group_targets(
+                            session, message.bot, missing_required_groups
+                        )
                         try:
                             await message.delete()
                             logger.info(
@@ -321,7 +354,9 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
                             )
                         try:
                             await message.answer(
-                                build_access_gate_notice(_message_lang(message), required_group_titles),
+                                build_access_gate_notice(
+                                    _message_lang(message), required_group_titles
+                                ),
                                 reply_markup=build_access_gate_buttons(required_group_targets),
                             )
                         except Exception:
@@ -363,7 +398,12 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
 
     if ads_service and text and anti_ads_enabled:
         result = await ads_service.classify(text)
-        if result and result.label == "ad" and result.ad_score >= settings.ads_classifier_threshold and not sender_is_admin:
+        if (
+            result
+            and result.label == "ad"
+            and result.ad_score >= settings.ads_classifier_threshold
+            and not sender_is_admin
+        ):
             async with SessionLocal() as session:
                 group = group or await _resolve_group(session, message.chat.id)
                 if group:
@@ -385,7 +425,10 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
                             incident_actions=("delete_ad",),
                             target_is_admin=sender_is_admin,
                             lang=_message_lang(message),
-                            metadata={"ad_score": result.ad_score, "message_id": message.message_id},
+                            metadata={
+                                "ad_score": result.ad_score,
+                                "message_id": message.message_id,
+                            },
                         ),
                         bot=message.bot,
                     )
@@ -402,22 +445,28 @@ async def on_group_message(message: Message, event_bus: EventBus, redis: Redis |
                     dispatch_delete_message=schedule_bot_message_delete,
                     rate_limiter=ApiRateLimiter(redis) if redis else None,
                     rate_limit_per_group_minute=settings.automation_rate_limit_per_group_minute,
-                    ).handle_message_event(
-                        group_id=group.id,
-                        user_id=message.from_user.id if message.from_user else None,
-                        payload={
-                            "chat_id": message.chat.id,
-                            "group_title": getattr(message.chat, "title", "") or group.title,
-                            "text": text,
-                            "message_id": message.message_id,
-                            "first_name": getattr(message.from_user, "first_name", "") if message.from_user else "",
-                            "full_name": getattr(message.from_user, "full_name", "") if message.from_user else "",
-                            "username": getattr(message.from_user, "username", "") if message.from_user else "",
-                            "bot": message.bot,
-                            "contains_link": contains_link,
-                            "lang": _message_lang(message),
-                        },
-                    )
+                ).handle_message_event(
+                    group_id=group.id,
+                    user_id=message.from_user.id if message.from_user else None,
+                    payload={
+                        "chat_id": message.chat.id,
+                        "group_title": getattr(message.chat, "title", "") or group.title,
+                        "text": text,
+                        "message_id": message.message_id,
+                        "first_name": getattr(message.from_user, "first_name", "")
+                        if message.from_user
+                        else "",
+                        "full_name": getattr(message.from_user, "full_name", "")
+                        if message.from_user
+                        else "",
+                        "username": getattr(message.from_user, "username", "")
+                        if message.from_user
+                        else "",
+                        "bot": message.bot,
+                        "contains_link": contains_link,
+                        "lang": _message_lang(message),
+                    },
+                )
 
         logger.info(
             "moderation_message_publish",

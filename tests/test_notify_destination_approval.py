@@ -90,7 +90,9 @@ async def test_notify_destination_approval_yes_sends_private_reply(
 
     await handle_notify_destination_approval(callback)
 
-    updated = await NotifyDestinationApprovalService(db_session).get_prompt(group_id=group.id, token=payload["token"])
+    updated = await NotifyDestinationApprovalService(db_session).get_prompt(
+        group_id=group.id, token=payload["token"]
+    )
     assert updated is not None
     assert fake_bot.sent_messages == [
         (555001, "Approve sending the reply?\n\nAgent: @ops_agent"),
@@ -115,7 +117,17 @@ async def test_notify_destination_approval_yes_sends_private_reply(
     assert updated["acted_by_user_id"] == 9001
     assert updated["acted_by_username"] == "reviewer"
     assert updated["acted_by_name"] == "Review Admin"
-    rows = (await db_session.execute(select(ModerationLog).where(ModerationLog.action == "notify_destination_confirmation"))).scalars().all()
+    rows = (
+        (
+            await db_session.execute(
+                select(ModerationLog).where(
+                    ModerationLog.action == "notify_destination_confirmation"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].admin_user_id == 9001
     assert rows[0].reason == "approved"
@@ -176,7 +188,9 @@ async def test_notify_destination_approval_no_replaces_prompt_with_report(
 
     await handle_notify_destination_approval(callback)
 
-    updated = await NotifyDestinationApprovalService(db_session).get_prompt(group_id=group.id, token=payload["token"])
+    updated = await NotifyDestinationApprovalService(db_session).get_prompt(
+        group_id=group.id, token=payload["token"]
+    )
     assert updated is not None
     assert fake_bot.sent_messages == [
         (555002, "Approve sending the reply?\n\nAgent: @notify_agent"),
@@ -275,7 +289,11 @@ async def test_notify_destination_edit_reply_sends_custom_reply_and_replaces_pro
     monkeypatch.setattr("bot.handlers.automation_notify.SessionManager", FakeSessionManager)
     monkeypatch.setattr("bot.handlers.automation_notify.UserAgentExecutor", FakeAgentExecutor)
 
-    reply_to_message = SimpleNamespace(message_id=payload["prompt_message_id"], delete=AsyncMock(), chat=SimpleNamespace(id=-1005001))
+    reply_to_message = SimpleNamespace(
+        message_id=payload["prompt_message_id"],
+        delete=AsyncMock(),
+        chat=SimpleNamespace(id=-1005001),
+    )
     message = SimpleNamespace(
         reply_to_message=reply_to_message,
         from_user=SimpleNamespace(id=9003, username="customizer", full_name="Custom Admin"),
@@ -288,7 +306,9 @@ async def test_notify_destination_edit_reply_sends_custom_reply_and_replaces_pro
 
     await handle_notify_destination_edit_reply(message)
 
-    updated = await NotifyDestinationApprovalService(db_session).get_prompt(group_id=group.id, token=payload["token"])
+    updated = await NotifyDestinationApprovalService(db_session).get_prompt(
+        group_id=group.id, token=payload["token"]
+    )
     assert updated is not None
     assert fake_bot.sent_messages == [
         (-1005001, "Approve sending the reply?\n\nAgent: @reply_agent"),
@@ -366,9 +386,16 @@ async def test_notify_destination_edit_reply_ignores_command_replies(
     )
 
     get_client = AsyncMock()
-    monkeypatch.setattr("bot.handlers.automation_notify.SessionManager", lambda session_factory=None: SimpleNamespace(get_client=get_client))
+    monkeypatch.setattr(
+        "bot.handlers.automation_notify.SessionManager",
+        lambda session_factory=None: SimpleNamespace(get_client=get_client),
+    )
 
-    reply_to_message = SimpleNamespace(message_id=payload["prompt_message_id"], delete=AsyncMock(), chat=SimpleNamespace(id=-1005002))
+    reply_to_message = SimpleNamespace(
+        message_id=payload["prompt_message_id"],
+        delete=AsyncMock(),
+        chat=SimpleNamespace(id=-1005002),
+    )
     message = SimpleNamespace(
         reply_to_message=reply_to_message,
         from_user=SimpleNamespace(id=9003, username="customizer", full_name="Custom Admin"),
@@ -383,11 +410,15 @@ async def test_notify_destination_edit_reply_ignores_command_replies(
 
     await handle_notify_destination_edit_reply(message)
 
-    updated = await NotifyDestinationApprovalService(db_session).get_prompt(group_id=group.id, token=payload["token"])
+    updated = await NotifyDestinationApprovalService(db_session).get_prompt(
+        group_id=group.id, token=payload["token"]
+    )
     assert updated is not None
     assert updated["status"] == "editing"
     assert get_client.await_count == 0
-    assert fake_bot.sent_messages == [(-1005002, "Approve sending the reply?\n\nAgent: @reply_agent_2")]
+    assert fake_bot.sent_messages == [
+        (-1005002, "Approve sending the reply?\n\nAgent: @reply_agent_2")
+    ]
     reply_to_message.delete.assert_not_awaited()
     message.reply.assert_not_awaited()
 
@@ -442,9 +473,16 @@ async def test_notify_destination_edit_reply_ignores_plain_text_moderation_alias
     )
 
     get_client = AsyncMock()
-    monkeypatch.setattr("bot.handlers.automation_notify.SessionManager", lambda session_factory=None: SimpleNamespace(get_client=get_client))
+    monkeypatch.setattr(
+        "bot.handlers.automation_notify.SessionManager",
+        lambda session_factory=None: SimpleNamespace(get_client=get_client),
+    )
 
-    reply_to_message = SimpleNamespace(message_id=payload["prompt_message_id"], delete=AsyncMock(), chat=SimpleNamespace(id=-1005003))
+    reply_to_message = SimpleNamespace(
+        message_id=payload["prompt_message_id"],
+        delete=AsyncMock(),
+        chat=SimpleNamespace(id=-1005003),
+    )
     message = SimpleNamespace(
         reply_to_message=reply_to_message,
         from_user=SimpleNamespace(id=9003, username="customizer", full_name="Custom Admin"),
@@ -459,11 +497,15 @@ async def test_notify_destination_edit_reply_ignores_plain_text_moderation_alias
 
     await handle_notify_destination_edit_reply(message)
 
-    updated = await NotifyDestinationApprovalService(db_session).get_prompt(group_id=group.id, token=payload["token"])
+    updated = await NotifyDestinationApprovalService(db_session).get_prompt(
+        group_id=group.id, token=payload["token"]
+    )
     assert updated is not None
     assert updated["status"] == "editing"
     assert get_client.await_count == 0
-    assert fake_bot.sent_messages == [(-1005003, "Approve sending the reply?\n\nAgent: @reply_agent_3")]
+    assert fake_bot.sent_messages == [
+        (-1005003, "Approve sending the reply?\n\nAgent: @reply_agent_3")
+    ]
     reply_to_message.delete.assert_not_awaited()
     message.reply.assert_not_awaited()
 

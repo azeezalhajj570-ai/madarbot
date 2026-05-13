@@ -15,7 +15,7 @@ from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
 from bot.db.models import Agent, Group, GroupSetting, ModerationLog
 from bot.db.session import SessionLocal
-from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group, upsert_group_member
+from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
 from bot.services.scraper_service import ScraperService
 from bot.services.task_assignment_store import TASKS_SETTING_KEY
 from bot.services.task_service import TaskService
@@ -168,7 +168,9 @@ class AgentListenerManager:
                 async def _sync_groups():
                     with suppress(Exception):
                         async with self.session_factory() as session:
-                            await ScraperService(session).sync_agent_groups(agent_id=agent_id, client=client)
+                            await ScraperService(session).sync_agent_groups(
+                                agent_id=agent_id, client=client
+                            )
 
                 asyncio.create_task(_sync_groups())
 
@@ -189,7 +191,11 @@ class AgentListenerManager:
                         await self.session_manager.mark_failed(agent_id)
                     elif isinstance(exc, AgentBannedError):
                         await self.session_manager.mark_banned(agent_id)
-                    logger.warning("agent_listener_stopped_terminal_error", agent_id=agent_id, error=type(exc).__name__)
+                    logger.warning(
+                        "agent_listener_stopped_terminal_error",
+                        agent_id=agent_id,
+                        error=type(exc).__name__,
+                    )
                     return
                 if self._stopping:
                     return
@@ -213,7 +219,12 @@ class AgentListenerManager:
         username = str(getattr(sender, "username", None) or "")
         first_name = str(getattr(sender, "first_name", None) or "")
         full_name = " ".join(
-            part for part in [str(getattr(sender, "first_name", None) or "").strip(), str(getattr(sender, "last_name", None) or "").strip()] if part
+            part
+            for part in [
+                str(getattr(sender, "first_name", None) or "").strip(),
+                str(getattr(sender, "last_name", None) or "").strip(),
+            ]
+            if part
         )
         if self.log_message_events:
             logger.info(
@@ -269,8 +280,14 @@ class AgentListenerManager:
     ) -> None:
         try:
             async with self.session_factory() as session:
-                agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
-                owner_user_id = int(agent.linked_by_user_id) if agent is not None and agent.linked_by_user_id is not None else None
+                agent = (
+                    await session.execute(select(Agent).where(Agent.id == agent_id))
+                ).scalar_one_or_none()
+                owner_user_id = (
+                    int(agent.linked_by_user_id)
+                    if agent is not None and agent.linked_by_user_id is not None
+                    else None
+                )
                 group = await GroupService(session).get_or_create_by_tg_id(
                     tg_group_id=chat_id,
                     title=group_title or None,
@@ -292,7 +309,9 @@ class AgentListenerManager:
                         group_id=group.id,
                         action="agent_message_seen",
                         target_user_id=user_id,
-                        admin_user_id=int(agent.telegram_user_id) if agent is not None and agent.telegram_user_id is not None else None,
+                        admin_user_id=int(agent.telegram_user_id)
+                        if agent is not None and agent.telegram_user_id is not None
+                        else None,
                         reason=text or None,
                         details={
                             "agent_id": agent_id,
@@ -308,7 +327,9 @@ class AgentListenerManager:
                 )
                 await session.commit()
         except Exception:
-            logger.exception("agent_listener_message_persist_failed", agent_id=agent_id, chat_id=chat_id)
+            logger.exception(
+                "agent_listener_message_persist_failed", agent_id=agent_id, chat_id=chat_id
+            )
 
     async def _dispatch_agent_message(
         self,
@@ -339,9 +360,13 @@ class AgentListenerManager:
                 )
             source_title = group_title
             if not source_title:
-                source_title_row = (await session.execute(
-                    select(Group.title).where(Group.tg_group_id == canonical_tg_group_id(int(chat_id)))
-                )).scalar_one_or_none()
+                source_title_row = (
+                    await session.execute(
+                        select(Group.title).where(
+                            Group.tg_group_id == canonical_tg_group_id(int(chat_id))
+                        )
+                    )
+                ).scalar_one_or_none()
                 source_title = source_title_row or str(chat_id)
             await TaskService(
                 session,
@@ -368,7 +393,9 @@ class AgentListenerManager:
             )
             return True
 
-    async def _resolve_listener_group(self, session: Any, *, agent_id: int, chat_id: int) -> Group | None:
+    async def _resolve_listener_group(
+        self, session: Any, *, agent_id: int, chat_id: int
+    ) -> Group | None:
         rows = (
             await session.execute(
                 select(Group.id, Group.tg_group_id, Group.title, GroupSetting.value)
@@ -402,8 +429,10 @@ class AgentListenerManager:
             if not has_matching_assignment:
                 continue
             group_rows = (
-                await session.execute(select(Group).where(Group.id == int(row.id)))
-            ).scalars().all()
+                (await session.execute(select(Group).where(Group.id == int(row.id))))
+                .scalars()
+                .all()
+            )
             if group_rows:
                 return group_rows[0]
         return None

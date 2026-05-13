@@ -27,13 +27,13 @@ from bot.dashboard.api.routers.internal import router as internal_router
 from bot.dashboard.api.routers.mcp_tokens import router as mcp_tokens_router
 from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
-from bot.db.session import engine, get_session
+from bot.db.session import engine
 from bot.agents.session import shutdown_client_pool
 
 
 async def _backfill_lead_group_titles() -> None:
     try:
-        from sqlalchemy import text, select, update
+        from sqlalchemy import select, update
         from bot.db.models import AgentLead, Group
 
         async with engine.begin() as conn:
@@ -48,23 +48,31 @@ async def _backfill_lead_group_titles() -> None:
 
             updates = 0
             for lead_id, tg_group_id, current_title in rows:
-                group_title = (await conn.execute(
-                    select(Group.title).where(Group.tg_group_id == tg_group_id)
-                )).scalar_one_or_none()
+                group_title = (
+                    await conn.execute(select(Group.title).where(Group.tg_group_id == tg_group_id))
+                ).scalar_one_or_none()
                 if not group_title:
-                    group_title = (await conn.execute(
-                        select(Group.title).where(Group.tg_group_id == -tg_group_id)
-                    )).scalar_one_or_none()
+                    group_title = (
+                        await conn.execute(
+                            select(Group.title).where(Group.tg_group_id == -tg_group_id)
+                        )
+                    ).scalar_one_or_none()
                 if group_title and group_title != current_title:
                     await conn.execute(
-                        update(AgentLead).where(AgentLead.id == lead_id).values(source_group_title=group_title)
+                        update(AgentLead)
+                        .where(AgentLead.id == lead_id)
+                        .values(source_group_title=group_title)
                     )
                     updates += 1
 
             if updates:
-                logger.info("backfilled_lead_group_titles", updates=updates, total_checked=len(rows))
+                logger.info(
+                    "backfilled_lead_group_titles", updates=updates, total_checked=len(rows)
+                )
     except Exception:
         logger.exception("lead_group_title_backfill_failed")
+
+
 from bot.mcp.auth import verify_mcp_auth, verify_mcp_auth_async
 from bot.mcp.context import set_mcp_actor_user_id
 
@@ -88,12 +96,14 @@ app = FastAPI(title="Combot Dashboard API", version="1.1.0", lifespan=lifespan)
 settings = get_settings()
 app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
 cors_origins = [
-    origin for origin in [
+    origin
+    for origin in [
         settings.dashboard_url,
         settings.webapp_url,
         settings.admin_webapp_url,
         settings.agents_webapp_url,
-    ] if origin
+    ]
+    if origin
 ] or [
     "http://localhost:5173",
     "http://localhost:5174",
@@ -142,15 +152,33 @@ browser_assets_dir = browser_frontend_dir / "assets"
 if webapp_assets_dir.exists():
     app.mount("/webapp/assets", StaticFiles(directory=str(webapp_assets_dir)), name="webapp-assets")
 if webapp_admin_assets_dir.exists():
-    app.mount("/webapp/admin/assets", StaticFiles(directory=str(webapp_admin_assets_dir)), name="webapp-admin-assets")
+    app.mount(
+        "/webapp/admin/assets",
+        StaticFiles(directory=str(webapp_admin_assets_dir)),
+        name="webapp-admin-assets",
+    )
 if webapp_agents_assets_dir.exists():
-    app.mount("/webapp/agents/assets", StaticFiles(directory=str(webapp_agents_assets_dir)), name="webapp-agents-assets")
+    app.mount(
+        "/webapp/agents/assets",
+        StaticFiles(directory=str(webapp_agents_assets_dir)),
+        name="webapp-agents-assets",
+    )
 if webapp_channels_assets_dir.exists():
-    app.mount("/webapp/channels/assets", StaticFiles(directory=str(webapp_channels_assets_dir)), name="webapp-channels-assets")
+    app.mount(
+        "/webapp/channels/assets",
+        StaticFiles(directory=str(webapp_channels_assets_dir)),
+        name="webapp-channels-assets",
+    )
 if webapp_modbot_assets_dir.exists():
-    app.mount("/webapp/modbot/assets", StaticFiles(directory=str(webapp_modbot_assets_dir)), name="webapp-modbot-assets")
+    app.mount(
+        "/webapp/modbot/assets",
+        StaticFiles(directory=str(webapp_modbot_assets_dir)),
+        name="webapp-modbot-assets",
+    )
 if browser_assets_dir.exists():
-    app.mount("/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets")
+    app.mount(
+        "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
+    )
 
 app.include_router(owner_router)
 app.include_router(scraper_router)
@@ -189,7 +217,9 @@ if settings.mcp_enabled:
                     if not ok:
                         return StarletteJSONResponse(
                             status_code=401,
-                            content={"error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"},
+                            content={
+                                "error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"
+                            },
                         )
                 if tg_user_id is not None:
                     set_mcp_actor_user_id(tg_user_id)

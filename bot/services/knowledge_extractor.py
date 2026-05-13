@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
-from bot.db.models import ScrapedDailySummary, ScrapedGroup, ScrapedMessage
+from bot.db.models import ScrapedDailySummary, ScrapedMessage
 from bot.db.models.scraper import GroupKnowledge
 
 logger = logging.getLogger(__name__)
@@ -59,21 +59,30 @@ class KnowledgeExtractor:
         self.session = session
         self._settings = get_settings()
 
-    async def extract_knowledge(self, *, scraped_group_id: int, max_messages: int = 2000) -> dict[str, Any]:
+    async def extract_knowledge(
+        self, *, scraped_group_id: int, max_messages: int = 2000
+    ) -> dict[str, Any]:
         messages = await self._fetch_message_texts(scraped_group_id, max_messages)
         if not messages:
             return {"status": "no_messages"}
 
         chunks = self._chunk_messages(messages, max_chars=8000)
         all_results: dict[str, list[dict[str, Any]]] = {
-            "faqs": [], "topics": [], "entities": [], "decisions": [], "trends": [], "insights": [],
+            "faqs": [],
+            "topics": [],
+            "entities": [],
+            "decisions": [],
+            "trends": [],
+            "insights": [],
         }
         total_cost = 0.0
 
         for i, chunk in enumerate(chunks):
             if i > 0:
                 await asyncio.sleep(1.5)
-            result, cost = await self._call_ai(KNOWLEDGE_EXTRACTION_PROMPT, chunk_text=chunk, phase="bulk")
+            result, cost = await self._call_ai(
+                KNOWLEDGE_EXTRACTION_PROMPT, chunk_text=chunk, phase="bulk"
+            )
             total_cost += cost
             if result:
                 for key in all_results:
@@ -85,10 +94,17 @@ class KnowledgeExtractor:
         total_cost += refine_cost
 
         saved_count = await self._save_knowledge(scraped_group_id, refined_results)
-        logger.info("knowledge_extraction_done", scraped_group_id=scraped_group_id, saved=saved_count, cost_estimate=round(total_cost, 4))
+        logger.info(
+            "knowledge_extraction_done",
+            scraped_group_id=scraped_group_id,
+            saved=saved_count,
+            cost_estimate=round(total_cost, 4),
+        )
         return {"items_saved": saved_count, "cost_estimate": round(total_cost, 4)}
 
-    async def generate_daily_summary(self, *, scraped_group_id: int, date: datetime) -> ScrapedDailySummary | None:
+    async def generate_daily_summary(
+        self, *, scraped_group_id: int, date: datetime
+    ) -> ScrapedDailySummary | None:
         messages = await self._fetch_message_texts(scraped_group_id, 500, date=date)
         if not messages:
             return None
@@ -107,9 +123,7 @@ class KnowledgeExtractor:
         if not result:
             return None
 
-        user_ids = sorted({
-            uid for uid, _ in messages if uid is not None
-        })[:10]
+        user_ids = sorted({uid for uid, _ in messages if uid is not None})[:10]
 
         summary = ScrapedDailySummary(
             scraped_group_id=scraped_group_id,
@@ -123,7 +137,9 @@ class KnowledgeExtractor:
         await self.session.commit()
         return summary
 
-    async def _fetch_message_texts(self, scraped_group_id: int, max_messages: int, date: datetime | None = None) -> list[tuple[int | None, str]]:
+    async def _fetch_message_texts(
+        self, scraped_group_id: int, max_messages: int, date: datetime | None = None
+    ) -> list[tuple[int | None, str]]:
         stmt = select(ScrapedMessage.sender_user_id, ScrapedMessage.message_text).where(
             ScrapedMessage.scraped_group_id == scraped_group_id,
             ScrapedMessage.message_text.isnot(None),
@@ -140,7 +156,9 @@ class KnowledgeExtractor:
         result = await self.session.execute(stmt)
         return [(row[0], str(row[1])) for row in result.all() if row[1] is not None]
 
-    def _chunk_messages(self, messages: list[tuple[int | None, str]], max_chars: int = 8000) -> list[str]:
+    def _chunk_messages(
+        self, messages: list[tuple[int | None, str]], max_chars: int = 8000
+    ) -> list[str]:
         chunks: list[str] = []
         current: list[str] = []
         current_len = 0
@@ -157,7 +175,9 @@ class KnowledgeExtractor:
             chunks.append(" ".join(current))
         return chunks
 
-    async def _call_ai(self, prompt_template: str, *, chunk_text: str = "", **extra) -> tuple[dict[str, Any] | None, float]:
+    async def _call_ai(
+        self, prompt_template: str, *, chunk_text: str = "", **extra
+    ) -> tuple[dict[str, Any] | None, float]:
         settings = self._settings
         provider = settings.ai_provider
 
@@ -170,7 +190,9 @@ class KnowledgeExtractor:
         else:
             return None, 0.0
 
-    async def _call_openai(self, prompt_template: str, chunk_text: str, **extra) -> tuple[dict[str, Any] | None, float]:
+    async def _call_openai(
+        self, prompt_template: str, chunk_text: str, **extra
+    ) -> tuple[dict[str, Any] | None, float]:
         api_key = self._settings.openai_api_key
         if not api_key:
             return None, 0.0
@@ -179,7 +201,10 @@ class KnowledgeExtractor:
         payload = {
             "model": self._settings.openai_model,
             "messages": [
-                {"role": "system", "content": "You are a knowledge extraction engine. Return only valid JSON."},
+                {
+                    "role": "system",
+                    "content": "You are a knowledge extraction engine. Return only valid JSON.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
@@ -200,13 +225,18 @@ class KnowledgeExtractor:
                     data = await resp.json()
                     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
                     usage = data.get("usage", {})
-                    cost = (usage.get("prompt_tokens", 0) * 0.00015 + usage.get("completion_tokens", 0) * 0.0006) / 1000
+                    cost = (
+                        usage.get("prompt_tokens", 0) * 0.00015
+                        + usage.get("completion_tokens", 0) * 0.0006
+                    ) / 1000
                     return self._parse_json_response(content), cost
         except Exception as exc:
             logger.warning("openai_extract_failed", error=str(exc))
             return None, 0.0
 
-    async def _call_gemini(self, prompt_template: str, chunk_text: str, **extra) -> tuple[dict[str, Any] | None, float]:
+    async def _call_gemini(
+        self, prompt_template: str, chunk_text: str, **extra
+    ) -> tuple[dict[str, Any] | None, float]:
         api_key = self._settings.gemini_api_key
         if not api_key:
             return None, 0.0
@@ -226,15 +256,25 @@ class KnowledgeExtractor:
                     timeout=aiohttp.ClientTimeout(total=self._settings.ai_request_timeout_seconds),
                 ) as resp:
                     data = await resp.json()
-                    text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    text = (
+                        data.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
+                    )
                     usage = data.get("usageMetadata", {})
-                    cost = (usage.get("promptTokenCount", 0) * 0.0000375 + usage.get("candidatesTokenCount", 0) * 0.00015) / 1000
+                    cost = (
+                        usage.get("promptTokenCount", 0) * 0.0000375
+                        + usage.get("candidatesTokenCount", 0) * 0.00015
+                    ) / 1000
                     return self._parse_json_response(text), cost
         except Exception as exc:
             logger.warning("gemini_extract_failed", error=str(exc))
             return None, 0.0
 
-    async def _call_openrouter(self, prompt_template: str, chunk_text: str, phase: str = "bulk", **extra) -> tuple[dict[str, Any] | None, float]:
+    async def _call_openrouter(
+        self, prompt_template: str, chunk_text: str, phase: str = "bulk", **extra
+    ) -> tuple[dict[str, Any] | None, float]:
         api_key = self._settings.openrouter_api_key
         if not api_key:
             return None, 0.0
@@ -258,7 +298,10 @@ class KnowledgeExtractor:
         payload = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "You are a knowledge extraction engine. Return only valid JSON."},
+                {
+                    "role": "system",
+                    "content": "You are a knowledge extraction engine. Return only valid JSON.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
@@ -276,14 +319,23 @@ class KnowledgeExtractor:
                     data = await resp.json()
                     content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
                     usage = data.get("usage", {})
-                    pricing = float(usage.get("prompt_tokens", 0)) * 0.0000001 + float(usage.get("completion_tokens", 0)) * 0.0000004
-                    cost = pricing if data.get("total_cost", 0) == 0 else data.get("total_cost", pricing)
+                    pricing = (
+                        float(usage.get("prompt_tokens", 0)) * 0.0000001
+                        + float(usage.get("completion_tokens", 0)) * 0.0000004
+                    )
+                    cost = (
+                        pricing
+                        if data.get("total_cost", 0) == 0
+                        else data.get("total_cost", pricing)
+                    )
                     return self._parse_json_response(content), cost
         except Exception as exc:
             logger.warning("openrouter_extract_failed", error=str(exc))
             return None, 0.0
 
-    async def _refine_knowledge(self, raw_results: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, list[dict[str, Any]]], float]:
+    async def _refine_knowledge(
+        self, raw_results: dict[str, list[dict[str, Any]]]
+    ) -> tuple[dict[str, list[dict[str, Any]]], float]:
         refined: dict[str, list[dict[str, Any]]] = {}
         total_cost = 0.0
         for key, items in raw_results.items():
@@ -302,14 +354,23 @@ class KnowledgeExtractor:
             refined[key] = deduped
         return refined, total_cost
 
-    async def _save_knowledge(self, scraped_group_id: int, results: dict[str, list[dict[str, Any]]]) -> int:
+    async def _save_knowledge(
+        self, scraped_group_id: int, results: dict[str, list[dict[str, Any]]]
+    ) -> int:
         saved = 0
         for knowledge_type, items in results.items():
             for item in items:
                 entry = GroupKnowledge(
                     scraped_group_id=scraped_group_id,
                     knowledge_type=knowledge_type,
-                    title=str(item.get("question") or item.get("topic") or item.get("name") or item.get("decision") or item.get("trend") or item.get("insight", ""))[:500],
+                    title=str(
+                        item.get("question")
+                        or item.get("topic")
+                        or item.get("name")
+                        or item.get("decision")
+                        or item.get("trend")
+                        or item.get("insight", "")
+                    )[:500],
                     content=json.dumps(item, default=str),
                     source_message_ids=item.get("source_message_ids"),
                     confidence=float(item.get("confidence", 0.5)),

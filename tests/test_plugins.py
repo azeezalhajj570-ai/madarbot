@@ -44,7 +44,9 @@ async def test_plugin_discovery_load_unload_reload(patch_db_dependencies) -> Non
 
 
 @pytest.mark.asyncio
-async def test_enable_disable_for_group_persists(patch_db_dependencies, seeded_group, db_session) -> None:
+async def test_enable_disable_for_group_persists(
+    patch_db_dependencies, seeded_group, db_session
+) -> None:
     manager = PluginManager()
     await manager.enable_for_group(db_session, seeded_group["group_id"], "anti_links")
     await manager.disable_for_group(db_session, seeded_group["group_id"], "anti_links")
@@ -79,10 +81,14 @@ async def test_anti_links_plugin_triggers_moderation_action(
     )
 
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_link" for log in logs)
     assert fake_bot.deleted_messages == [(seeded_group["tg_group_id"], 77)]
     assert fake_bot.sent_messages == [
@@ -124,27 +130,37 @@ async def test_anti_links_respects_group_setting_disable(
     )
 
     stored_logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert not any(log.details.get("message_id") == 88 for log in stored_logs)
-    assert ("anti_links_message_received", {
-        "group_tg_id": seeded_group["tg_group_id"],
-        "user_id": 4444,
-        "message_id": 88,
-        "contains_link": False,
-        "has_text": True,
-        "text": "https://example.com",
-    }) in log_events
-    assert ("anti_links_skip_disabled", {
-        "group_id": seeded_group["group_id"],
-        "group_tg_id": seeded_group["tg_group_id"],
-        "user_id": 4444,
-        "message_id": 88,
-        "contains_link": False,
-        "anti_links_enabled": False,
-    }) in log_events
+    assert (
+        "anti_links_message_received",
+        {
+            "group_tg_id": seeded_group["tg_group_id"],
+            "user_id": 4444,
+            "message_id": 88,
+            "contains_link": False,
+            "has_text": True,
+            "text": "https://example.com",
+        },
+    ) in log_events
+    assert (
+        "anti_links_skip_disabled",
+        {
+            "group_id": seeded_group["group_id"],
+            "group_tg_id": seeded_group["tg_group_id"],
+            "user_id": 4444,
+            "message_id": 88,
+            "contains_link": False,
+            "anti_links_enabled": False,
+        },
+    ) in log_events
 
 
 @pytest.mark.asyncio
@@ -158,7 +174,9 @@ async def test_anti_links_skips_group_admin_messages(
     dispatcher = Dispatcher()
     bus = EventBus()
     await manager.load_all(dispatcher, bus)
-    fake_bot.chat_members[(seeded_group["tg_group_id"], 4444)] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], 4444)] = SimpleNamespace(
+        status="administrator"
+    )
 
     await bus.publish(
         Event(
@@ -170,10 +188,14 @@ async def test_anti_links_skips_group_admin_messages(
     )
 
     stored_logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert fake_bot.deleted_messages == []
     assert fake_bot.sent_messages == []
     assert not any(log.details.get("message_id") == 881 for log in stored_logs)
@@ -196,6 +218,7 @@ async def test_anti_links_plugin_deletes_text_link_entities(
 
     def send_mock(*_args, **_kwargs) -> None:
         return None
+
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", send_mock)
 
     message = fake_message_factory(
@@ -213,10 +236,14 @@ async def test_anti_links_plugin_deletes_text_link_entities(
     await on_group_message(message, bus)
 
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_link" and log.details.get("message_id") == 89 for log in logs)
     assert fake_bot.deleted_messages == [(seeded_group["tg_group_id"], 89)]
     assert fake_bot.sent_messages == [
@@ -245,20 +272,27 @@ async def test_anti_links_plugin_matches_legacy_group_variant(
             name="MessageReceived",
             group_id=-100222333,
             user_id=4444,
-            payload={"text": "visit https://spam.example", "message_id": 90, "bot": fake_bot, "contains_link": True},
+            payload={
+                "text": "visit https://spam.example",
+                "message_id": 90,
+                "bot": fake_bot,
+                "contains_link": True,
+            },
         )
     )
 
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == legacy_group.id)
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == legacy_group.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_link" and log.details.get("message_id") == 90 for log in logs)
     assert fake_bot.deleted_messages == [(-100222333, 90)]
-    assert fake_bot.sent_messages == [
-        (-100222333, build_rule_notice("ar", "anti_links"))
-    ]
+    assert fake_bot.sent_messages == [(-100222333, build_rule_notice("ar", "anti_links"))]
 
 
 @pytest.mark.asyncio
@@ -278,6 +312,7 @@ async def test_anti_links_plugin_handles_link_entities_without_text(
 
     def send_mock(*_args, **_kwargs) -> None:
         return None
+
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", send_mock)
 
     message = fake_message_factory(
@@ -297,10 +332,14 @@ async def test_anti_links_plugin_handles_link_entities_without_text(
     await on_group_message(message, bus)
 
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_link" and log.details.get("message_id") == 91 for log in logs)
     assert fake_bot.deleted_messages == [(seeded_group["tg_group_id"], 91)]
     assert fake_bot.sent_messages == [
@@ -341,19 +380,26 @@ async def test_anti_links_logs_delete_failure_reason(
     )
 
     stored_logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert not any(log.details.get("message_id") == 91 for log in stored_logs)
-    assert ("anti_links_delete_failed", {
-        "group_id": seeded_group["group_id"],
-        "group_tg_id": seeded_group["tg_group_id"],
-        "user_id": 4444,
-        "message_id": 91,
-        "contains_link": False,
-        "error": f"delete failed for {seeded_group['tg_group_id']}:91",
-    }) in log_events
+    assert (
+        "anti_links_delete_failed",
+        {
+            "group_id": seeded_group["group_id"],
+            "group_tg_id": seeded_group["tg_group_id"],
+            "user_id": 4444,
+            "message_id": 91,
+            "contains_link": False,
+            "error": f"delete failed for {seeded_group['tg_group_id']}:91",
+        },
+    ) in log_events
 
 
 @pytest.mark.asyncio
@@ -438,7 +484,9 @@ async def test_semantic_assistant_plugin_skips_when_not_enabled(
         def __init__(self, *_args, **_kwargs) -> None:
             raise AssertionError("semantic service should not be called while plugin is disabled")
 
-    monkeypatch.setattr(semantic_assistant_plugin, "SemanticSearchService", _FailIfCalledSemanticService)
+    monkeypatch.setattr(
+        semantic_assistant_plugin, "SemanticSearchService", _FailIfCalledSemanticService
+    )
     monkeypatch.setattr(
         semantic_assistant_plugin,
         "get_settings",

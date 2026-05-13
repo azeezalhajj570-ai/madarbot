@@ -15,7 +15,15 @@ from bot.agents.auth import AgentTelegramAuthError, AgentTelegramAuthService
 from bot.agents.service import AgentAuthStateError, AgentService
 from bot.config import get_settings
 from bot.core.plugin_manager import PluginManager
-from bot.db.models import Agent, Group, GroupAdminRole, GroupSetting, ModerationLog, PluginEnabled, Warning
+from bot.db.models import (
+    Agent,
+    Group,
+    GroupAdminRole,
+    GroupSetting,
+    ModerationLog,
+    PluginEnabled,
+    Warning,
+)
 from bot.db.session import SessionLocal
 from bot.handlers.menu.states import SettingsFlow
 from bot.keyboards.reply import (
@@ -272,10 +280,16 @@ def _notify_delivery_mode_map(lang: str) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for candidate_lang in _menu_languages():
         mapping[_normalize_menu_text(f"📝 {t('task_notify_mode_text', candidate_lang)}")] = "text"
-        mapping[_normalize_menu_text(f"↪️ {t('task_notify_mode_forward', candidate_lang)}")] = "forward"
+        mapping[_normalize_menu_text(f"↪️ {t('task_notify_mode_forward', candidate_lang)}")] = (
+            "forward"
+        )
         mapping[_normalize_menu_text(f"📋 {t('task_notify_mode_copy', candidate_lang)}")] = "copy"
-        mapping[_normalize_menu_text(f"📝↪️ {t('task_notify_mode_text_and_forward', candidate_lang)}")] = "text_and_forward"
-        mapping[_normalize_menu_text(f"📝📋 {t('task_notify_mode_text_and_copy', candidate_lang)}")] = "text_and_copy"
+        mapping[
+            _normalize_menu_text(f"📝↪️ {t('task_notify_mode_text_and_forward', candidate_lang)}")
+        ] = "text_and_forward"
+        mapping[
+            _normalize_menu_text(f"📝📋 {t('task_notify_mode_text_and_copy', candidate_lang)}")
+        ] = "text_and_copy"
     return mapping
 
 
@@ -334,12 +348,16 @@ def _is_access_gate_btn(message: Message, lang: str) -> bool:
 
 def _is_anti_links_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🔗 {label}") for label in _translated_labels("anti_links"))
+    return any(
+        _text(message).startswith(f"🔗 {label}") for label in _translated_labels("anti_links")
+    )
 
 
 def _is_anti_spam_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🚨 {label}") for label in _translated_labels("anti_spam"))
+    return any(
+        _text(message).startswith(f"🚨 {label}") for label in _translated_labels("anti_spam")
+    )
 
 
 def _is_anti_ads_btn(message: Message, lang: str) -> bool:
@@ -349,27 +367,38 @@ def _is_anti_ads_btn(message: Message, lang: str) -> bool:
 
 def _is_anti_spam_mute_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🔇 {label}") for label in _translated_labels("anti_spam_mute"))
+    return any(
+        _text(message).startswith(f"🔇 {label}") for label in _translated_labels("anti_spam_mute")
+    )
 
 
 def _is_anti_ads_mute_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🔕 {label}") for label in _translated_labels("anti_ads_mute"))
+    return any(
+        _text(message).startswith(f"🔕 {label}") for label in _translated_labels("anti_ads_mute")
+    )
 
 
 def _is_warn_auto_remove_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🚪 {label}") for label in _translated_labels("warn_auto_remove"))
+    return any(
+        _text(message).startswith(f"🚪 {label}") for label in _translated_labels("warn_auto_remove")
+    )
 
 
 def _is_anti_bots_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"🤖 {label}") for label in _translated_labels("anti_bots"))
+    return any(
+        _text(message).startswith(f"🤖 {label}") for label in _translated_labels("anti_bots")
+    )
 
 
 def _is_join_request_verify_btn(message: Message, lang: str) -> bool:
     _ = lang
-    return any(_text(message).startswith(f"📋 {label}") for label in _translated_labels("join_request_verify"))
+    return any(
+        _text(message).startswith(f"📋 {label}")
+        for label in _translated_labels("join_request_verify")
+    )
 
 
 def _is_reset_warnings_btn(message: Message, lang: str) -> bool:
@@ -502,7 +531,9 @@ def _is_help_announcements_btn(message: Message, lang: str) -> bool:
     return _matches_suffix(message, "help_announcements")
 
 
-def _build_access_gate_display_map(candidates: list[dict], selected_tg_group_ids: set[int]) -> dict[str, int]:
+def _build_access_gate_display_map(
+    candidates: list[dict], selected_tg_group_ids: set[int]
+) -> dict[str, int]:
     display_map: dict[str, int] = {}
     for group in candidates:
         tg_id = int(group["tg_group_id"])
@@ -511,7 +542,9 @@ def _build_access_gate_display_map(candidates: list[dict], selected_tg_group_ids
     return display_map
 
 
-def _access_gate_menu_text(lang: str, candidates: list[dict], selected_tg_group_ids: set[int]) -> str:
+def _access_gate_menu_text(
+    lang: str, candidates: list[dict], selected_tg_group_ids: set[int]
+) -> str:
     selected_titles = [
         str(group["title"])
         for group in candidates
@@ -532,7 +565,9 @@ async def _open_group_selector(
 ) -> None:
     lang = await _lang(message)
     async with SessionLocal() as session:
-        groups_page = await GroupService(session).list_admin_groups(message.from_user.id, page=page, page_size=10)
+        groups_page = await GroupService(session).list_admin_groups(
+            message.from_user.id, page=page, page_size=10
+        )
 
     await state.set_state(target_state)
     await state.update_data(group_page=page, group_items=groups_page.items)
@@ -595,7 +630,9 @@ async def _refresh_group_selector(
     )
 
 
-async def _open_categories(message: Message, state: FSMContext, plugin_manager: PluginManager, group_id: int) -> None:
+async def _open_categories(
+    message: Message, state: FSMContext, plugin_manager: PluginManager, group_id: int
+) -> None:
     lang = await _lang(message)
     schema = plugin_manager.get_settings_schema()
     categories = sorted({entry.category for entry in schema.values()})
@@ -603,7 +640,10 @@ async def _open_categories(message: Message, state: FSMContext, plugin_manager: 
 
     await state.set_state(SettingsFlow.selecting_category)
     await state.update_data(selected_group=group_id, category_map=category_map)
-    await message.answer(t("select_category", lang), reply_markup=categories_keyboard(categories, lang, include_tabs=False))
+    await message.answer(
+        t("select_category", lang),
+        reply_markup=categories_keyboard(categories, lang, include_tabs=False),
+    )
 
 
 async def _open_category_settings(
@@ -622,20 +662,32 @@ async def _open_category_settings(
 
     keyboard, mapping = settings_keyboard(schemas, values, lang, include_tabs=False)
     await state.set_state(SettingsFlow.editing_setting)
-    await state.update_data(selected_group=group_id, selected_category=category, setting_map=mapping)
+    await state.update_data(
+        selected_group=group_id, selected_category=category, setting_map=mapping
+    )
     await message.answer(t(category, lang), reply_markup=keyboard)
 
 
 async def _moderation_summary_text(group_id: int, lang: str) -> str:
     async with SessionLocal() as session:
         total_warnings = (
-            await session.execute(select(func.coalesce(func.sum(Warning.count), 0)).where(Warning.group_id == group_id))
+            await session.execute(
+                select(func.coalesce(func.sum(Warning.count), 0)).where(
+                    Warning.group_id == group_id
+                )
+            )
         ).scalar_one()
         warned_users = (
-            await session.execute(select(func.count(func.distinct(Warning.user_id))).where(Warning.group_id == group_id))
+            await session.execute(
+                select(func.count(func.distinct(Warning.user_id))).where(
+                    Warning.group_id == group_id
+                )
+            )
         ).scalar_one()
         actions = (
-            await session.execute(select(func.count(ModerationLog.id)).where(ModerationLog.group_id == group_id))
+            await session.execute(
+                select(func.count(ModerationLog.id)).where(ModerationLog.group_id == group_id)
+            )
         ).scalar_one()
         moderation_settings = await ModerationSettingsStore(session).get_settings(group_id)
 
@@ -706,7 +758,12 @@ async def _open_moderation_menu(message: Message, state: FSMContext, group_id: i
     await state.update_data(selected_group=group_id)
     text = await _moderation_summary_text(group_id, lang)
     toggle_states = await _moderation_toggle_states(group_id)
-    await message.answer(text, reply_markup=moderation_menu_keyboard(lang, include_tabs=False, toggle_states=toggle_states))
+    await message.answer(
+        text,
+        reply_markup=moderation_menu_keyboard(
+            lang, include_tabs=False, toggle_states=toggle_states
+        ),
+    )
 
 
 async def _open_members_menu(message: Message, state: FSMContext, group_id: int) -> None:
@@ -734,7 +791,9 @@ async def _open_tasks_menu(message: Message, state: FSMContext) -> None:
     group_id = int(data["selected_group"])
     group = await _selected_group(group_id)
     executor_type = str(data.get("task_executor_type") or "bot")
-    executor_label = t("task_executor_bot", lang) if executor_type == "bot" else t("task_executor_agent", lang)
+    executor_label = (
+        t("task_executor_bot", lang) if executor_type == "bot" else t("task_executor_agent", lang)
+    )
     if executor_type == "agent":
         agent_map: dict[str, int] = data.get("task_agent_map", {})
         agent_id = data.get("task_agent_id")
@@ -766,7 +825,9 @@ async def _task_catalog_text(lang: str) -> str:
 async def _task_assignments_text(actor_user_id: int, group_id: int, lang: str) -> str:
     group = await _selected_group(group_id)
     async with SessionLocal() as session:
-        assignments = await _task_service(session).list_assignments(actor_user_id=actor_user_id, group_id=group_id)
+        assignments = await _task_service(session).list_assignments(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
     if not assignments:
         return f"{t('task_assignments', lang)}\n\n{group.title if group else '-'}\n\n{t('no_tasks_configured', lang)}"
 
@@ -782,14 +843,18 @@ async def _task_assignments_text(actor_user_id: int, group_id: int, lang: str) -
             template = f"{template} -> {config.get('destination') or '-'}"
         executor = assignment["executor_type"]
         if executor == "agent" and assignment.get("agent_id") is not None:
-            executor = f"agent:{agent_names.get(int(assignment['agent_id']), assignment['agent_id'])}"
+            executor = (
+                f"agent:{agent_names.get(int(assignment['agent_id']), assignment['agent_id'])}"
+            )
         lines.append(f"- {assignment['task_key']} | {executor} | {keyword} -> {template}")
     return "\n".join(lines)
 
 
 async def _task_delete_display_map(actor_user_id: int, group_id: int) -> dict[str, str]:
     async with SessionLocal() as session:
-        assignments = await _task_service(session).list_assignments(actor_user_id=actor_user_id, group_id=group_id)
+        assignments = await _task_service(session).list_assignments(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
         agents = await AgentService(session).list_all_active_agents(actor_user_id=actor_user_id)
     agent_names = {int(agent.id): agent.external_account_id for agent in agents}
     display_map: dict[str, str] = {}
@@ -797,7 +862,9 @@ async def _task_delete_display_map(actor_user_id: int, group_id: int) -> dict[st
         keyword = str((assignment.get("conditions") or {}).get("text_contains") or "any")
         executor = assignment["executor_type"]
         if executor == "agent" and assignment.get("agent_id") is not None:
-            executor = f"agent:{agent_names.get(int(assignment['agent_id']), assignment['agent_id'])}"
+            executor = (
+                f"agent:{agent_names.get(int(assignment['agent_id']), assignment['agent_id'])}"
+            )
         label = f"🗑 {assignment['task_key']} | {executor} | {keyword}"
         if label in display_map:
             label = f"{label} | {assignment['assignment_id'][:6]}"
@@ -805,10 +872,17 @@ async def _task_delete_display_map(actor_user_id: int, group_id: int) -> dict[st
     return display_map
 
 
-async def _task_delete_summary(actor_user_id: int, group_id: int, assignment_id: str, lang: str) -> str:
+async def _task_delete_summary(
+    actor_user_id: int, group_id: int, assignment_id: str, lang: str
+) -> str:
     async with SessionLocal() as session:
-        assignments = await _task_service(session).list_assignments(actor_user_id=actor_user_id, group_id=group_id)
-    match = next((assignment for assignment in assignments if assignment["assignment_id"] == assignment_id), None)
+        assignments = await _task_service(session).list_assignments(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
+    match = next(
+        (assignment for assignment in assignments if assignment["assignment_id"] == assignment_id),
+        None,
+    )
     if match is None:
         return t("task_delete_confirm", lang)
     keyword = str((match.get("conditions") or {}).get("text_contains") or "any")
@@ -817,7 +891,9 @@ async def _task_delete_summary(actor_user_id: int, group_id: int, assignment_id:
 
 async def _active_agent_display_map(actor_user_id: int, group_id: int) -> dict[str, int]:
     async with SessionLocal() as session:
-        agents = await AgentService(session).list_agents(actor_user_id=actor_user_id, group_id=group_id)
+        agents = await AgentService(session).list_agents(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
     display_map: dict[str, int] = {}
     for agent in agents:
         if agent.auth_state != "active":
@@ -834,7 +910,9 @@ async def _all_active_agent_display_map(actor_user_id: int) -> dict[str, int]:
 
 async def _agent_task_group_display_map(actor_user_id: int, agent_id: int) -> dict[str, int]:
     async with SessionLocal() as session:
-        groups = await AgentService(session).list_managed_member_groups(actor_user_id=actor_user_id, agent_id=agent_id)
+        groups = await AgentService(session).list_managed_member_groups(
+            actor_user_id=actor_user_id, agent_id=agent_id
+        )
     return {
         str(group["title"]): {
             "group_id": int(group["id"]) if group.get("id") is not None else None,
@@ -874,7 +952,9 @@ async def _toggle_group_setting(group_id: int, key: str, default: bool) -> None:
 
 async def _selected_group(group_id: int) -> Group | None:
     async with SessionLocal() as session:
-        return (await session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        return (
+            await session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
 
 
 def _display_name(user: object) -> str:
@@ -913,7 +993,13 @@ def _task_group_page(group_map: dict[str, dict[str, int | str | None]], page: in
     return paginate(list(group_map.keys()), page=page, page_size=_TASK_GROUPS_PAGE_SIZE)
 
 
-async def _open_task_group_selection(message: Message, state: FSMContext, group_map: dict[str, dict[str, int | str | None]], *, page: int = 1) -> None:
+async def _open_task_group_selection(
+    message: Message,
+    state: FSMContext,
+    group_map: dict[str, dict[str, int | str | None]],
+    *,
+    page: int = 1,
+) -> None:
     lang = await _lang(message)
     paged_groups = _task_group_page(group_map, page)
     await state.set_state(SettingsFlow.task_target_group_input)
@@ -956,7 +1042,9 @@ async def _member_action_group_tg_id(group_id: int) -> int | None:
     return None if not group else int(group.tg_group_id)
 
 
-async def _search_member_text(message: Message, group_id: int, target_user_id: int, lang: str) -> str:
+async def _search_member_text(
+    message: Message, group_id: int, target_user_id: int, lang: str
+) -> str:
     tg_group_id = await _member_action_group_tg_id(group_id)
     group = await _selected_group(group_id)
     if tg_group_id is None or group is None:
@@ -983,7 +1071,9 @@ async def _search_member_text(message: Message, group_id: int, target_user_id: i
     return "\n".join(lines)
 
 
-async def _set_member_role(message: Message, group_id: int, target_user_id: int, action: str, lang: str) -> str:
+async def _set_member_role(
+    message: Message, group_id: int, target_user_id: int, action: str, lang: str
+) -> str:
     tg_group_id = await _member_action_group_tg_id(group_id)
     if tg_group_id is None:
         return t("unknown_action", lang)
@@ -1023,7 +1113,9 @@ async def _set_member_role(message: Message, group_id: int, target_user_id: int,
     return t("member_promoted" if action == "promote" else "member_demoted", lang)
 
 
-def _parse_cron_field(field: str, *, minimum: int, maximum: int, sunday_alias: bool = False) -> set[int] | None:
+def _parse_cron_field(
+    field: str, *, minimum: int, maximum: int, sunday_alias: bool = False
+) -> set[int] | None:
     values: set[int] = set()
 
     def normalize(token: str) -> int | None:
@@ -1108,7 +1200,9 @@ async def _dispatch_scheduled_message(bot, group_id: int, entry_id: str) -> None
         return
     await bot.send_message(group.tg_group_id, entry["text"])
     async with SessionLocal() as session:
-        updated = await ScheduledMessageService(session).mark_delivered(group_id=group_id, entry_id=entry_id)
+        updated = await ScheduledMessageService(session).mark_delivered(
+            group_id=group_id, entry_id=entry_id
+        )
     if updated and updated.get("cron"):
         _schedule_announcement_task(bot, group_id, entry_id)
 
@@ -1118,11 +1212,17 @@ def _schedule_announcement_task(bot, group_id: int, entry_id: str) -> None:
 
     async def _dispatch() -> None:
         async with SessionLocal() as session:
-            entry = await ScheduledMessageService(session).get_entry(group_id=group_id, entry_id=entry_id)
+            entry = await ScheduledMessageService(session).get_entry(
+                group_id=group_id, entry_id=entry_id
+            )
         if entry is None:
             return
-        delay_seconds = max(0, int((datetime.fromisoformat(entry["send_at"]) - datetime.utcnow()).total_seconds()))
-        schedule_scheduled_announcement(delay_seconds=delay_seconds, group_id=group_id, entry_id=entry_id)
+        delay_seconds = max(
+            0, int((datetime.fromisoformat(entry["send_at"]) - datetime.utcnow()).total_seconds())
+        )
+        schedule_scheduled_announcement(
+            delay_seconds=delay_seconds, group_id=group_id, entry_id=entry_id
+        )
 
     asyncio.create_task(_dispatch())
 
@@ -1155,7 +1255,9 @@ async def _announcement_display_map(group_id: int) -> dict[str, str]:
     return display_map
 
 
-async def _announcement_summary(group_id: int, entry_id: str, lang: str, *, delete_mode: bool = False) -> str:
+async def _announcement_summary(
+    group_id: int, entry_id: str, lang: str, *, delete_mode: bool = False
+) -> str:
     entries = await _announcement_entries(group_id)
     entry = next((item for item in entries if str(item.get("id")) == entry_id), None)
     if entry is None:
@@ -1209,7 +1311,9 @@ async def _send_due_announcements(message: Message, group_id: int) -> int:
 
 def _build_bulk_display_map(groups: list[dict], selected_group_ids: set[int]) -> dict[str, int]:
     return {
-        f"{'✅' if int(group['id']) in selected_group_ids else '☑'} {group['title']}": int(group["id"])
+        f"{'✅' if int(group['id']) in selected_group_ids else '☑'} {group['title']}": int(
+            group["id"]
+        )
         for group in groups
     }
 
@@ -1226,7 +1330,9 @@ async def _open_announcements_menu(message: Message, state: FSMContext, group_id
 
 async def _agents_for_group(actor_user_id: int, group_id: int) -> list[Agent]:
     async with SessionLocal() as session:
-        return await AgentService(session).list_agents(actor_user_id=actor_user_id, group_id=group_id)
+        return await AgentService(session).list_agents(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
 
 
 async def _resolve_agents_group_id(state: FSMContext, actor_user_id: int) -> int | None:
@@ -1234,7 +1340,9 @@ async def _resolve_agents_group_id(state: FSMContext, actor_user_id: int) -> int
     selected_group = data.get("selected_group")
     async with SessionLocal() as session:
         if selected_group is not None:
-            can_manage = await PermissionService(session).can(int(selected_group), actor_user_id, "group.settings.update")
+            can_manage = await PermissionService(session).can(
+                int(selected_group), actor_user_id, "group.settings.update"
+            )
             if can_manage:
                 return int(selected_group)
         groups = await GroupService(session).list_admin_groups(actor_user_id, page=1, page_size=1)
@@ -1303,7 +1411,9 @@ def _agent_summary_text(agent: Agent, lang: str) -> str:
     )
 
 
-async def _open_selected_agent_menu(message: Message, state: FSMContext, agent_id: int, group_id: int) -> None:
+async def _open_selected_agent_menu(
+    message: Message, state: FSMContext, agent_id: int, group_id: int
+) -> None:
     lang = await _lang(message)
     async with SessionLocal() as session:
         agent = await AgentService(session).get_agent(agent_id=agent_id)
@@ -1312,10 +1422,15 @@ async def _open_selected_agent_menu(message: Message, state: FSMContext, agent_i
         return
     await state.set_state(SettingsFlow.agents_selected_menu)
     await state.update_data(selected_group=group_id, selected_agent_id=agent_id)
-    await message.answer(_agent_summary_text(agent, lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+    await message.answer(
+        _agent_summary_text(agent, lang),
+        reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+    )
 
 
-async def _open_unlink_confirm_menu(message: Message, state: FSMContext, agent_id: int, group_id: int) -> None:
+async def _open_unlink_confirm_menu(
+    message: Message, state: FSMContext, agent_id: int, group_id: int
+) -> None:
     lang = await _lang(message)
     async with SessionLocal() as session:
         agent = await AgentService(session).get_agent(agent_id=agent_id)
@@ -1342,9 +1457,7 @@ async def _agent_jobs_text(actor_user_id: int, group_id: int, lang: str) -> str:
         return t("agent_jobs_empty", lang)
     lines = [t("agent_jobs_overview", lang)]
     for job in jobs:
-        lines.append(
-            f"- {agents.get(job.agent_id, job.agent_id)} | {job.job_type} | {job.status}"
-        )
+        lines.append(f"- {agents.get(job.agent_id, job.agent_id)} | {job.job_type} | {job.status}")
     return "\n".join(lines)
 
 
@@ -1391,7 +1504,9 @@ async def _open_bulk_group_selection(message: Message, state: FSMContext, group_
     async with SessionLocal() as session:
         groups = await GroupService(session).list_admin_groups_all(message.from_user.id)
 
-    selected = set(int(x) for x in (await state.get_data()).get("announcement_bulk_groups", [group_id]))
+    selected = set(
+        int(x) for x in (await state.get_data()).get("announcement_bulk_groups", [group_id])
+    )
     display_map = _build_bulk_display_map(groups, selected)
     await state.set_state(SettingsFlow.announcement_bulk_groups)
     await state.update_data(
@@ -1454,17 +1569,24 @@ async def _open_plugins_menu(
     for name, enabled in configured.items():
         available[name] = enabled
 
-    display_map = {f"{'✅' if enabled else '❌'} {name}": name for name, enabled in sorted(available.items())}
+    display_map = {
+        f"{'✅' if enabled else '❌'} {name}": name for name, enabled in sorted(available.items())
+    }
 
     await state.set_state(SettingsFlow.plugins_menu)
     await state.update_data(selected_group=group_id, plugin_display_map=display_map)
-    await message.answer(t("plugins_tab", lang), reply_markup=plugins_menu_keyboard(available, lang, include_tabs=False))
+    await message.answer(
+        t("plugins_tab", lang),
+        reply_markup=plugins_menu_keyboard(available, lang, include_tabs=False),
+    )
 
 
 async def _analytics_text(group_id: int, lang: str) -> str:
     async with SessionLocal() as session:
         settings_count = (
-            await session.execute(select(func.count(GroupSetting.id)).where(GroupSetting.group_id == group_id))
+            await session.execute(
+                select(func.count(GroupSetting.id)).where(GroupSetting.group_id == group_id)
+            )
         ).scalar_one()
         enabled_plugins = (
             await session.execute(
@@ -1475,10 +1597,16 @@ async def _analytics_text(group_id: int, lang: str) -> str:
             )
         ).scalar_one()
         warnings_total = (
-            await session.execute(select(func.coalesce(func.sum(Warning.count), 0)).where(Warning.group_id == group_id))
+            await session.execute(
+                select(func.coalesce(func.sum(Warning.count), 0)).where(
+                    Warning.group_id == group_id
+                )
+            )
         ).scalar_one()
         actions_total = (
-            await session.execute(select(func.count(ModerationLog.id)).where(ModerationLog.group_id == group_id))
+            await session.execute(
+                select(func.count(ModerationLog.id)).where(ModerationLog.group_id == group_id)
+            )
         ).scalar_one()
 
     return (
@@ -1513,7 +1641,9 @@ async def _select_group_in_state(
         await state.clear()
         await message.answer(
             t("main_menu", lang),
-            reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+            reply_markup=main_menu_keyboard(
+                lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+            ),
         )
         return True
     if _is_refresh_btn(message, lang):
@@ -1543,12 +1673,23 @@ async def _select_group_in_state(
             page=page,
             target_state=mapping[target],
             title_key=title_key[target],
-            hide_other_buttons=target in {"settings", "moderation", "members", "analytics", "tasks", "announcements", "agents"},
+            hide_other_buttons=target
+            in {
+                "settings",
+                "moderation",
+                "members",
+                "analytics",
+                "tasks",
+                "announcements",
+                "agents",
+            },
         )
         return True
     if _is_add_group_btn(message, lang):
         me = await message.bot.get_me()
-        await message.answer(f"{t('add_group_help', lang)}\nhttps://t.me/{me.username}?startgroup=true")
+        await message.answer(
+            f"{t('add_group_help', lang)}\nhttps://t.me/{me.username}?startgroup=true"
+        )
         return True
     if _is_prev_btn(message, lang):
         mapping = {
@@ -1577,7 +1718,16 @@ async def _select_group_in_state(
             mapping[target],
             max(1, page - 1),
             title_key[target],
-            hide_other_buttons=target in {"settings", "moderation", "members", "analytics", "tasks", "announcements", "agents"},
+            hide_other_buttons=target
+            in {
+                "settings",
+                "moderation",
+                "members",
+                "analytics",
+                "tasks",
+                "announcements",
+                "agents",
+            },
         )
         return True
     if _is_next_btn(message, lang):
@@ -1607,7 +1757,16 @@ async def _select_group_in_state(
             mapping[target],
             page + 1,
             title_key[target],
-            hide_other_buttons=target in {"settings", "moderation", "members", "analytics", "tasks", "announcements", "agents"},
+            hide_other_buttons=target
+            in {
+                "settings",
+                "moderation",
+                "members",
+                "analytics",
+                "tasks",
+                "announcements",
+                "agents",
+            },
         )
         return True
     if _is_page_label(message, lang):
@@ -1619,7 +1778,9 @@ async def _select_group_in_state(
         return True
 
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(selected["id"], message.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            selected["id"], message.from_user.id, "group.settings.update"
+        )
     if not can_manage:
         await message.answer(t("permission_denied", lang))
         return True
@@ -1645,7 +1806,9 @@ async def _select_group_in_state(
 
 
 @router.message(F.chat.type == "private", F.text)
-async def settings_entrypoint(message: Message, state: FSMContext, plugin_manager: PluginManager) -> None:
+async def settings_entrypoint(
+    message: Message, state: FSMContext, plugin_manager: PluginManager
+) -> None:
     if message.chat.type != "private":
         return
     lang = await _lang(message)
@@ -1684,7 +1847,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         await state.clear()
         await message.answer(
             t("main_menu", lang),
-            reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+            reply_markup=main_menu_keyboard(
+                lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+            ),
         )
         return
     if _is_groups_tab(message, lang):
@@ -1714,7 +1879,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         )
         return
     if _is_plugins_tab(message, lang):
-        await _open_group_selector(message, state, SettingsFlow.plugins_group, 1, "select_group_for_plugins")
+        await _open_group_selector(
+            message, state, SettingsFlow.plugins_group, 1, "select_group_for_plugins"
+        )
         return
     if _is_analytics_tab(message, lang):
         await _open_group_selector(
@@ -1795,7 +1962,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.clear()
             await message.answer(
                 t("main_menu", lang),
-                reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+                reply_markup=main_menu_keyboard(
+                    lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+                ),
             )
             return
         if _is_moderation_tab(message, lang):
@@ -1916,7 +2085,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
 
         key, setting_type = setting
         async with SessionLocal() as session:
-            can_manage = await PermissionService(session).can(group_id, message.from_user.id, "group.settings.update")
+            can_manage = await PermissionService(session).can(
+                group_id, message.from_user.id, "group.settings.update"
+            )
             if not can_manage:
                 await message.answer(t("permission_denied", lang))
                 return
@@ -2057,8 +2228,18 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 reply_markup=members_menu_keyboard(lang, include_tabs=False),
             )
             return
-        if _is_promote_btn(message, lang) or _is_demote_btn(message, lang) or _is_search_user_btn(message, lang):
-            action = "promote" if _is_promote_btn(message, lang) else "demote" if _is_demote_btn(message, lang) else "search"
+        if (
+            _is_promote_btn(message, lang)
+            or _is_demote_btn(message, lang)
+            or _is_search_user_btn(message, lang)
+        ):
+            action = (
+                "promote"
+                if _is_promote_btn(message, lang)
+                else "demote"
+                if _is_demote_btn(message, lang)
+                else "search"
+            )
             await state.set_state(SettingsFlow.members_action_input)
             await state.update_data(selected_group=group_id, members_action=action)
             await message.answer(
@@ -2136,7 +2317,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.update_data(announcement_edit_map=display_map)
             await message.answer(
                 t("announcement_edit_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         if _is_delete_scheduled_message_btn(message, lang):
@@ -2151,13 +2334,19 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.update_data(announcement_delete_map=display_map)
             await message.answer(
                 t("announcement_delete_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         if _is_send_due_messages_btn(message, lang):
             sent = await _send_due_announcements(message, group_id)
             await message.answer(
-                t("announcement_due_none" if sent == 0 else "announcement_due_sent", lang, count=sent),
+                t(
+                    "announcement_due_none" if sent == 0 else "announcement_due_sent",
+                    lang,
+                    count=sent,
+                ),
                 reply_markup=announcements_menu_keyboard(lang, include_tabs=False),
             )
             return
@@ -2173,7 +2362,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 )
                 return
             await state.set_state(SettingsFlow.announcement_bulk_text)
-            await state.update_data(selected_group=group_id, announcement_bulk_groups=selected_groups)
+            await state.update_data(
+                selected_group=group_id, announcement_bulk_groups=selected_groups
+            )
             await message.answer(
                 t("announcement_bulk_prompt", lang),
                 reply_markup=announcements_menu_keyboard(lang, include_tabs=False),
@@ -2237,7 +2428,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.update_data(task_delete_map=display_map)
             await message.answer(
                 t("task_delete_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         await _open_tasks_menu(message, state)
@@ -2254,7 +2447,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if assignment_id is None:
             await message.answer(
                 t("task_delete_invalid", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         await state.set_state(SettingsFlow.task_delete_confirm)
@@ -2274,7 +2469,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.set_state(SettingsFlow.task_delete_select)
             await message.answer(
                 t("task_delete_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         if _is_confirm_btn(message, lang):
@@ -2302,7 +2499,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.clear()
             await message.answer(
                 t("main_menu", lang),
-                reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+                reply_markup=main_menu_keyboard(
+                    lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+                ),
             )
             return
         if _is_task_executor_bot_btn(message, lang):
@@ -2318,16 +2517,29 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if _is_task_executor_agent_btn(message, lang):
             display_map = await _all_active_agent_display_map(message.from_user.id)
             if not display_map:
-                await message.answer(t("task_agent_none", lang), reply_markup=task_executor_keyboard(lang, include_tabs=False))
+                await message.answer(
+                    t("task_agent_none", lang),
+                    reply_markup=task_executor_keyboard(lang, include_tabs=False),
+                )
                 return
             await state.set_state(SettingsFlow.task_reply_agent_input)
-            await state.update_data(task_executor_type="agent", task_agent_map=display_map, task_agent_id=None, task_group_map={})
+            await state.update_data(
+                task_executor_type="agent",
+                task_agent_map=display_map,
+                task_agent_id=None,
+                task_group_map={},
+            )
             await message.answer(
                 t("task_agent_prompt", lang),
-                reply_markup=task_agent_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_agent_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
-        await message.answer(t("task_executor_invalid", lang), reply_markup=task_executor_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("task_executor_invalid", lang),
+            reply_markup=task_executor_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.task_target_group_input.state:
@@ -2341,7 +2553,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 await state.set_state(SettingsFlow.task_reply_agent_input)
                 await message.answer(
                     t("task_agent_prompt", lang),
-                    reply_markup=task_agent_keyboard(list(agent_map.keys()), lang, include_tabs=False),
+                    reply_markup=task_agent_keyboard(
+                        list(agent_map.keys()), lang, include_tabs=False
+                    ),
                 )
             else:
                 await state.set_state(SettingsFlow.tasks_executor_menu)
@@ -2363,7 +2577,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if group_ref is None:
             await message.answer(
                 t("task_group_invalid", lang),
-                reply_markup=task_group_keyboard(_task_group_page(group_map, current_page), lang, include_tabs=False),
+                reply_markup=task_group_keyboard(
+                    _task_group_page(group_map, current_page), lang, include_tabs=False
+                ),
             )
             return
         group_id = group_ref.get("group_id")
@@ -2384,7 +2600,11 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                     )
                 ).scalar_one_or_none()
                 if role is None:
-                    session.add(GroupAdminRole(group_id=group.id, user_id=message.from_user.id, role="admin"))
+                    session.add(
+                        GroupAdminRole(
+                            group_id=group.id, user_id=message.from_user.id, role="admin"
+                        )
+                    )
                 await session.commit()
                 group_id = int(group.id)
                 group_ref["group_id"] = group_id
@@ -2401,26 +2621,39 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await _open_tasks_menu(message, state)
             return
         if not text:
-            await message.answer(t("task_keyword_invalid", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_keyword_invalid", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         if executor_type == "agent":
             await state.set_state(SettingsFlow.task_reply_visibility_input)
-            await state.update_data(selected_group=group_id, task_keyword=text, task_reply_mode=None)
+            await state.update_data(
+                selected_group=group_id, task_keyword=text, task_reply_mode=None
+            )
             await message.answer(
                 t("task_reply_visibility_prompt", lang),
                 reply_markup=task_reply_visibility_keyboard(lang, include_tabs=False),
             )
         else:
             await state.set_state(SettingsFlow.task_reply_template_input)
-            await state.update_data(selected_group=group_id, task_keyword=text, task_reply_mode="public")
-            await message.answer(t("task_template_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await state.update_data(
+                selected_group=group_id, task_keyword=text, task_reply_mode="public"
+            )
+            await message.answer(
+                t("task_template_prompt", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
         return
 
     if current_state == SettingsFlow.task_reply_visibility_input.state:
         data = await state.get_data()
         if _is_back_btn(message, lang):
             await state.set_state(SettingsFlow.task_reply_keyword_input)
-            await message.answer(t("task_keyword_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_keyword_prompt", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         reply_mode: str | None = None
         if _is_task_reply_public_btn(message, lang):
@@ -2435,7 +2668,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             return
         await state.set_state(SettingsFlow.task_reply_template_input)
         await state.update_data(task_reply_mode=reply_mode)
-        await message.answer(t("task_template_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("task_template_prompt", lang),
+            reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.task_reply_agent_input.state:
@@ -2443,15 +2679,28 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         display_map: dict[str, int] = data.get("task_agent_map", {})
         if _is_back_btn(message, lang):
             await state.set_state(SettingsFlow.tasks_executor_menu)
-            await message.answer(t("task_executor_prompt", lang), reply_markup=task_executor_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_executor_prompt", lang),
+                reply_markup=task_executor_keyboard(lang, include_tabs=False),
+            )
             return
         agent_id = display_map.get(text)
         if agent_id is None:
-            await message.answer(t("task_agent_invalid", lang), reply_markup=task_agent_keyboard(list(display_map.keys()), lang, include_tabs=False))
+            await message.answer(
+                t("task_agent_invalid", lang),
+                reply_markup=task_agent_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
+            )
             return
         group_map = await _agent_task_group_display_map(message.from_user.id, agent_id)
         if not group_map:
-            await message.answer(t("task_agent_group_none", lang), reply_markup=task_agent_keyboard(list(display_map.keys()), lang, include_tabs=False))
+            await message.answer(
+                t("task_agent_group_none", lang),
+                reply_markup=task_agent_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
+            )
             return
         await state.update_data(task_agent_id=agent_id, task_group_map=group_map)
         await _open_task_group_selection(message, state, group_map, page=1)
@@ -2473,10 +2722,16 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 )
             else:
                 await state.set_state(SettingsFlow.task_reply_keyword_input)
-                await message.answer(t("task_keyword_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+                await message.answer(
+                    t("task_keyword_prompt", lang),
+                    reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+                )
             return
         if not text:
-            await message.answer(t("task_template_invalid", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_template_invalid", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         async with SessionLocal() as session:
             await _task_service(session).save_assignment(
@@ -2488,7 +2743,11 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 conditions={"text_contains": keyword},
                 config={"message_template": text, "reply_mode": reply_mode},
             )
-        executor_label = t("task_executor_bot", lang) if executor_type == "bot" else t("task_executor_agent", lang)
+        executor_label = (
+            t("task_executor_bot", lang)
+            if executor_type == "bot"
+            else t("task_executor_agent", lang)
+        )
         if executor_type == "agent" and agent_id is not None:
             agent_map: dict[str, int] = data.get("task_agent_map", {})
             for label, mapped_id in agent_map.items():
@@ -2518,7 +2777,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             return
         keywords = _parse_bulk_keywords(text)
         if not keywords:
-            await message.answer(t("task_keyword_invalid", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_keyword_invalid", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await state.set_state(SettingsFlow.task_notify_destination_input)
         await state.update_data(selected_group=group_id, task_keywords=keywords)
@@ -2533,7 +2795,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         group_id = int(data["selected_group"])
         if _is_back_btn(message, lang):
             await state.set_state(SettingsFlow.task_notify_keyword_input)
-            await message.answer(t("task_notify_keyword_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_notify_keyword_prompt", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         if not text:
             await message.answer(
@@ -2569,11 +2834,17 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         await state.update_data(selected_group=group_id, task_notify_delivery_mode=delivery_mode)
         if _notify_delivery_mode_requires_text(delivery_mode):
             await state.set_state(SettingsFlow.task_notify_template_input)
-            await message.answer(t("task_template_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_template_prompt", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await state.set_state(SettingsFlow.task_notify_delete_after_input)
         await state.update_data(task_notify_template=None)
-        await message.answer(t("task_delete_after_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("task_delete_after_prompt", lang),
+            reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.task_notify_template_input.state:
@@ -2587,11 +2858,17 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             )
             return
         if not text:
-            await message.answer(t("task_template_invalid", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_template_invalid", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await state.set_state(SettingsFlow.task_notify_delete_after_input)
         await state.update_data(selected_group=group_id, task_notify_template=text)
-        await message.answer(t("task_delete_after_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("task_delete_after_prompt", lang),
+            reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.task_notify_delete_after_input.state:
@@ -2601,7 +2878,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             delivery_mode = str(data.get("task_notify_delivery_mode") or "text")
             if _notify_delivery_mode_requires_text(delivery_mode):
                 await state.set_state(SettingsFlow.task_notify_template_input)
-                await message.answer(t("task_template_prompt", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+                await message.answer(
+                    t("task_template_prompt", lang),
+                    reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+                )
                 return
             await state.set_state(SettingsFlow.task_notify_delivery_mode_input)
             await message.answer(
@@ -2611,9 +2891,14 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             return
         delete_after_seconds = _parse_delete_after_seconds(text)
         if delete_after_seconds is None:
-            await message.answer(t("task_delete_after_invalid", lang), reply_markup=tasks_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("task_delete_after_invalid", lang),
+                reply_markup=tasks_menu_keyboard(lang, include_tabs=False),
+            )
             return
-        keywords = [str(item).strip() for item in data.get("task_keywords") or [] if str(item).strip()]
+        keywords = [
+            str(item).strip() for item in data.get("task_keywords") or [] if str(item).strip()
+        ]
         keyword_summary = ", ".join(keywords)
         destination = str(data.get("task_notify_destination") or "").strip()
         template = str(data.get("task_notify_template") or "").strip()
@@ -2710,7 +2995,11 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             entry = await ScheduledMessageService(session).save_entry(
                 group_id=group_id,
                 text=str(data["announcement_schedule_text"]),
-                schedule=str(data.get("announcement_schedule_input") or cron_expression or data["announcement_schedule_send_at"]),
+                schedule=str(
+                    data.get("announcement_schedule_input")
+                    or cron_expression
+                    or data["announcement_schedule_send_at"]
+                ),
                 delete_after_seconds=delete_after_seconds,
             )
         if send_at <= datetime.utcnow():
@@ -2735,7 +3024,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if entry_id is None:
             await message.answer(
                 t("announcement_edit_invalid", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         entries = await _announcement_entries(group_id)
@@ -2762,7 +3053,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             display_map: dict[str, str] = data.get("announcement_edit_map", {})
             await message.answer(
                 t("announcement_edit_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         if not text:
@@ -2833,7 +3126,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             entry = await ScheduledMessageService(session).save_entry(
                 group_id=group_id,
                 text=str(data["announcement_schedule_text"]),
-                schedule=str(data.get("announcement_schedule_input") or data["announcement_schedule_send_at"]),
+                schedule=str(
+                    data.get("announcement_schedule_input") or data["announcement_schedule_send_at"]
+                ),
                 entry_id=entry_id,
                 delete_after_seconds=delete_after_seconds,
             )
@@ -2864,7 +3159,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if entry_id is None:
             await message.answer(
                 t("announcement_delete_invalid", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         await state.set_state(SettingsFlow.announcement_delete_confirm)
@@ -2884,12 +3181,16 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.set_state(SettingsFlow.announcement_delete_select)
             await message.answer(
                 t("announcement_delete_prompt", lang),
-                reply_markup=task_delete_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=task_delete_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         if _is_confirm_btn(message, lang):
             async with SessionLocal() as session:
-                await ScheduledMessageService(session).delete_entry(group_id=group_id, entry_id=entry_id)
+                await ScheduledMessageService(session).delete_entry(
+                    group_id=group_id, entry_id=entry_id
+                )
             await state.set_state(SettingsFlow.announcements_menu)
             await state.update_data(announcement_delete_entry_id=None, announcement_delete_map={})
             await message.answer(
@@ -2919,11 +3220,15 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             if not selected_group_ids:
                 await message.answer(
                     t("announcement_bulk_none_selected", lang),
-                    reply_markup=bulk_groups_keyboard(candidates, selected_group_ids, lang, include_tabs=False),
+                    reply_markup=bulk_groups_keyboard(
+                        candidates, selected_group_ids, lang, include_tabs=False
+                    ),
                 )
                 return
             await state.set_state(SettingsFlow.announcement_bulk_text)
-            await state.update_data(selected_group=group_id, announcement_bulk_groups=list(selected_group_ids))
+            await state.update_data(
+                selected_group=group_id, announcement_bulk_groups=list(selected_group_ids)
+            )
             await message.answer(
                 t("announcement_bulk_prompt", lang),
                 reply_markup=announcements_menu_keyboard(lang, include_tabs=False),
@@ -2934,7 +3239,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             if selected_group_id is None:
                 await message.answer(
                     t("unknown_action", lang),
-                    reply_markup=bulk_groups_keyboard(candidates, selected_group_ids, lang, include_tabs=False),
+                    reply_markup=bulk_groups_keyboard(
+                        candidates, selected_group_ids, lang, include_tabs=False
+                    ),
                 )
                 return
             if selected_group_id in selected_group_ids:
@@ -2947,10 +3254,19 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             announcement_bulk_groups=list(selected_group_ids),
             announcement_bulk_display_map=new_display_map,
         )
-        selected_titles = ", ".join(str(group["title"]) for group in candidates if int(group["id"]) in selected_group_ids) or "-"
+        selected_titles = (
+            ", ".join(
+                str(group["title"])
+                for group in candidates
+                if int(group["id"]) in selected_group_ids
+            )
+            or "-"
+        )
         await message.answer(
             f"{t('announcement_bulk_help', lang)}\n\n{t('announcement_bulk_groups_selected', lang, groups=selected_titles)}",
-            reply_markup=bulk_groups_keyboard(candidates, selected_group_ids, lang, include_tabs=False),
+            reply_markup=bulk_groups_keyboard(
+                candidates, selected_group_ids, lang, include_tabs=False
+            ),
         )
         return
 
@@ -2969,8 +3285,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         sent = 0
         async with SessionLocal() as session:
             groups = (
-                await session.execute(select(Group).where(Group.id.in_(group_ids)))
-            ).scalars().all()
+                (await session.execute(select(Group).where(Group.id.in_(group_ids))))
+                .scalars()
+                .all()
+            )
         for group in groups:
             try:
                 await message.bot.send_message(group.tg_group_id, text)
@@ -2994,7 +3312,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if _is_link_account_btn(message, lang):
             await state.set_state(SettingsFlow.agents_phone_input)
             await state.update_data(selected_group=group_id)
-            await message.answer(t("agent_link_prompt", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_link_prompt", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         if _is_my_agents_btn(message, lang):
             await _open_agents_list_menu(message, state, group_id)
@@ -3023,11 +3344,17 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                     auth_service=get_agent_auth_service(),
                 )
         except Exception:
-            await message.answer(t("agent_link_error", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_link_error", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await state.set_state(SettingsFlow.agents_code_input)
         await state.update_data(selected_group=group_id, agent_auth_id=agent.id)
-        await message.answer(t("agent_code_prompt", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("agent_code_prompt", lang),
+            reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.agents_code_input.state:
@@ -3047,19 +3374,34 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 )
         except AgentAuthStateError:
             await _open_agents_menu(message, state, group_id)
-            await message.answer(t("agent_auth_expired", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_auth_expired", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         except AgentTelegramAuthError:
-            await message.answer(t("agent_code_invalid", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_code_invalid", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         if agent.auth_state == "pending_2fa":
             await state.set_state(SettingsFlow.agents_2fa_input)
             await state.update_data(selected_group=group_id, agent_auth_id=agent.id)
-            await message.answer(t("agent_2fa_required", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
-            await message.answer(t("agent_2fa_prompt", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_2fa_required", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
+            await message.answer(
+                t("agent_2fa_prompt", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await _open_agents_menu(message, state, group_id)
-        await message.answer(t("agent_link_success", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("agent_link_success", lang),
+            reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.agents_2fa_input.state:
@@ -3079,13 +3421,22 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 )
         except AgentAuthStateError:
             await _open_agents_menu(message, state, group_id)
-            await message.answer(t("agent_auth_expired", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_auth_expired", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         except AgentTelegramAuthError:
-            await message.answer(t("agent_2fa_invalid", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_2fa_invalid", lang),
+                reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await _open_agents_menu(message, state, group_id)
-        await message.answer(t("agent_link_success", lang), reply_markup=agents_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("agent_link_success", lang),
+            reply_markup=agents_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.agents_list_menu.state:
@@ -3096,19 +3447,28 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.clear()
             await message.answer(
                 t("main_menu", lang),
-                reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+                reply_markup=main_menu_keyboard(
+                    lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+                ),
             )
             return
         if _is_link_account_btn(message, lang):
             await state.set_state(SettingsFlow.agents_phone_input)
             await state.update_data(selected_group=group_id)
-            await message.answer(t("agent_link_prompt", lang), reply_markup=agent_list_keyboard(list(display_map.keys()), lang, include_tabs=False))
+            await message.answer(
+                t("agent_link_prompt", lang),
+                reply_markup=agent_list_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
+            )
             return
         agent_id = display_map.get(text)
         if agent_id is None:
             await message.answer(
                 t("unknown_action", lang),
-                reply_markup=agent_list_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                reply_markup=agent_list_keyboard(
+                    list(display_map.keys()), lang, include_tabs=False
+                ),
             )
             return
         await _open_selected_agent_menu(message, state, agent_id, group_id)
@@ -3128,7 +3488,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         if _is_create_job_btn(message, lang):
             await state.set_state(SettingsFlow.agents_job_create)
             await state.update_data(selected_group=group_id, selected_agent_id=agent_id)
-            await message.answer(t("agent_jobs_prompt", lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_jobs_prompt", lang),
+                reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+            )
             return
         if _is_unlink_account_btn(message, lang):
             await _open_unlink_confirm_menu(message, state, agent_id, group_id)
@@ -3145,13 +3508,17 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             return
         if _is_confirm_btn(message, lang):
             async with SessionLocal() as session:
-                deleted = await AgentService(session).unlink_agent(actor_user_id=message.from_user.id, agent_id=agent_id)
+                deleted = await AgentService(session).unlink_agent(
+                    actor_user_id=message.from_user.id, agent_id=agent_id
+                )
             await _open_agents_list_menu(message, state, group_id)
             if deleted:
                 display_map: dict[str, int] = (await state.get_data()).get("agent_display_map", {})
                 await message.answer(
                     t("agent_unlink_success", lang),
-                    reply_markup=agent_list_keyboard(list(display_map.keys()), lang, include_tabs=False),
+                    reply_markup=agent_list_keyboard(
+                        list(display_map.keys()), lang, include_tabs=False
+                    ),
                 )
             return
         await _open_unlink_confirm_menu(message, state, agent_id, group_id)
@@ -3162,14 +3529,19 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         group_id = data["selected_group"]
         if _is_back_btn(message, lang):
             if data.get("selected_agent_id"):
-                await _open_selected_agent_menu(message, state, int(data["selected_agent_id"]), group_id)
+                await _open_selected_agent_menu(
+                    message, state, int(data["selected_agent_id"]), group_id
+                )
             else:
                 await _open_agents_menu(message, state, group_id)
             return
         if _is_create_job_btn(message, lang):
             await state.set_state(SettingsFlow.agents_job_create)
             await state.update_data(selected_group=group_id)
-            await message.answer(t("agent_jobs_prompt", lang), reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_jobs_prompt", lang),
+                reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False),
+            )
             return
         await message.answer(
             await _agent_jobs_text(message.from_user.id, group_id, lang),
@@ -3182,7 +3554,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         group_id = data["selected_group"]
         if _is_back_btn(message, lang):
             if data.get("selected_agent_id"):
-                await _open_selected_agent_menu(message, state, int(data["selected_agent_id"]), group_id)
+                await _open_selected_agent_menu(
+                    message, state, int(data["selected_agent_id"]), group_id
+                )
             else:
                 await _open_agent_jobs_menu(message, state, group_id)
             return
@@ -3193,7 +3567,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             payload: dict[str, object]
             compact_parts = [part.strip() for part in text.split("|", maxsplit=1)]
             if not compact_parts or not compact_parts[0]:
-                await message.answer(t("agent_jobs_invalid", lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+                await message.answer(
+                    t("agent_jobs_invalid", lang),
+                    reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+                )
                 return
             job_type = compact_parts[0]
             payload = {}
@@ -3201,10 +3578,16 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 try:
                     raw = json.loads(compact_parts[1])
                 except Exception:
-                    await message.answer(t("agent_jobs_invalid", lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+                    await message.answer(
+                        t("agent_jobs_invalid", lang),
+                        reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+                    )
                     return
                 if not isinstance(raw, dict):
-                    await message.answer(t("agent_jobs_invalid", lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+                    await message.answer(
+                        t("agent_jobs_invalid", lang),
+                        reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+                    )
                     return
                 payload = raw
             async with SessionLocal() as session:
@@ -3216,10 +3599,16 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                     job_payload=payload,
                 )
             await _open_selected_agent_menu(message, state, int(selected_agent_id), group_id)
-            await message.answer(t("job_created", lang), reply_markup=agent_actions_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("job_created", lang),
+                reply_markup=agent_actions_keyboard(lang, include_tabs=False),
+            )
             return
         if parsed_job is None:
-            await message.answer(t("agent_jobs_invalid", lang), reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False))
+            await message.answer(
+                t("agent_jobs_invalid", lang),
+                reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False),
+            )
             return
         account_id, job_type, payload = parsed_job
         async with SessionLocal() as session:
@@ -3230,7 +3619,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 external_account_id=account_id,
             )
             if agent is None:
-                await message.answer(t("agent_jobs_invalid", lang), reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False))
+                await message.answer(
+                    t("agent_jobs_invalid", lang),
+                    reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False),
+                )
                 return
             await service.create_job(
                 actor_user_id=message.from_user.id,
@@ -3239,7 +3631,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 job_payload=payload,
             )
         await _open_agent_jobs_menu(message, state, group_id)
-        await message.answer(t("job_created", lang), reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("job_created", lang), reply_markup=agent_jobs_menu_keyboard(lang, include_tabs=False)
+        )
         return
 
     if current_state == SettingsFlow.help_menu.state:
@@ -3247,7 +3641,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.clear()
             await message.answer(
                 t("main_menu", lang),
-                reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+                reply_markup=main_menu_keyboard(
+                    lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+                ),
             )
             return
         section = "overview"
@@ -3257,7 +3653,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             section = "panels"
         elif _is_help_announcements_btn(message, lang):
             section = "announcements"
-        await message.answer(await _help_panel_text(lang, section), reply_markup=help_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            await _help_panel_text(lang, section),
+            reply_markup=help_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.access_gate_menu.state:
@@ -3275,7 +3674,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             async with SessionLocal() as session:
                 await AccessGateService(session).clear_required_groups(group_id)
             cleared_display_map = _build_access_gate_display_map(candidates, set())
-            await state.update_data(access_gate_selected=[], access_gate_display_map=cleared_display_map)
+            await state.update_data(
+                access_gate_selected=[], access_gate_display_map=cleared_display_map
+            )
             await message.answer(
                 f"{t('required_groups_cleared', lang)}\n\n{_access_gate_menu_text(lang, candidates, set())}",
                 reply_markup=access_gate_keyboard(candidates, set(), lang, include_tabs=False),
@@ -3300,7 +3701,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
                 selected.add(required_tg_group_id)
 
         new_display_map = _build_access_gate_display_map(candidates, selected)
-        await state.update_data(access_gate_display_map=new_display_map, access_gate_selected=list(selected))
+        await state.update_data(
+            access_gate_display_map=new_display_map, access_gate_selected=list(selected)
+        )
         await message.answer(
             _access_gate_menu_text(lang, candidates, selected),
             reply_markup=access_gate_keyboard(candidates, selected, lang, include_tabs=False),
@@ -3313,7 +3716,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         display_map: dict[str, str] = data.get("plugin_display_map", {})
 
         if _is_back_btn(message, lang):
-            await _open_group_selector(message, state, SettingsFlow.plugins_group, 1, "select_group_for_plugins")
+            await _open_group_selector(
+                message, state, SettingsFlow.plugins_group, 1, "select_group_for_plugins"
+            )
             return
 
         if _is_refresh_btn(message, lang):
@@ -3322,7 +3727,10 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
 
         plugin_name = display_map.get(text)
         if not plugin_name:
-            await message.answer(t("unknown_action", lang), reply_markup=plugins_menu_keyboard({}, lang, include_tabs=False))
+            await message.answer(
+                t("unknown_action", lang),
+                reply_markup=plugins_menu_keyboard({}, lang, include_tabs=False),
+            )
             return
 
         async with SessionLocal() as session:
@@ -3338,13 +3746,18 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         group_id = data["selected_group"]
 
         if _is_back_btn(message, lang):
-            await _open_group_selector(message, state, SettingsFlow.analytics_group, 1, "select_group_for_analytics")
+            await _open_group_selector(
+                message, state, SettingsFlow.analytics_group, 1, "select_group_for_analytics"
+            )
             return
         if _is_refresh_analytics_btn(message, lang):
             await _open_analytics_menu(message, state, group_id)
             return
 
-        await message.answer(t("unknown_action", lang), reply_markup=analytics_menu_keyboard(lang, include_tabs=False))
+        await message.answer(
+            t("unknown_action", lang),
+            reply_markup=analytics_menu_keyboard(lang, include_tabs=False),
+        )
         return
 
     if current_state == SettingsFlow.language_menu.state:
@@ -3352,7 +3765,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
             await state.clear()
             await message.answer(
                 t("main_menu", lang),
-                reply_markup=main_menu_keyboard(lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+                reply_markup=main_menu_keyboard(
+                    lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+                ),
             )
             return
 
@@ -3375,7 +3790,9 @@ async def settings_entrypoint(message: Message, state: FSMContext, plugin_manage
         await state.clear()
         await message.answer(
             t("language_updated", new_lang),
-            reply_markup=main_menu_keyboard(new_lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)),
+            reply_markup=main_menu_keyboard(
+                new_lang, dashboard_url=(get_settings().webapp_url or get_settings().dashboard_url)
+            ),
         )
         return
 

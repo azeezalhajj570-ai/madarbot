@@ -15,8 +15,19 @@ from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
 from bot.core.runtime.automation import AutomationRuntimeService, TaskFollowUpRequest
 from bot.core.runtime.admin import AdminAutomationRuntimeService
-from bot.core.runtime.moderation import FlaggedMessageModerationRequest, FlaggedWarningModerationRequest, ModerationRuntimeService
-from bot.db.models import Agent, Group, GroupAdminRole, ModerationLog, SubscriptionRequest, SubscriptionStatus
+from bot.core.runtime.moderation import (
+    FlaggedMessageModerationRequest,
+    FlaggedWarningModerationRequest,
+    ModerationRuntimeService,
+)
+from bot.db.models import (
+    Agent,
+    Group,
+    GroupAdminRole,
+    ModerationLog,
+    SubscriptionRequest,
+    SubscriptionStatus,
+)
 from bot.db.session import SessionLocal
 from bot.services.group_service import tg_group_id_candidates
 from bot.services.moderation_settings_store import ModerationSettingsStore
@@ -25,15 +36,14 @@ from bot.services.task_activity_service import TaskActivityService
 from bot.summaries.scheduler import generate_summary_for_group as generate_group_summary_job
 from bot.summaries.scheduler import run_daily_summary_scheduler
 from bot.tasks.membership_tasks import (
-    add_user_to_group,
     add_user_to_group_task,
-    _run_add_user_to_group_task_with_agent,
 )
 from bot.workers.app import redis_broker  # noqa: F401
 
 pipeline = build_default_pipeline()
 
 run_membership_add_job = add_user_to_group_task
+
 
 @dramatiq.actor(queue_name="subscriptions")
 def check_expiring_subscriptions() -> None:
@@ -42,6 +52,7 @@ def check_expiring_subscriptions() -> None:
 
 async def _check_expiring_subscriptions() -> None:
     from bot.services.group_expiry_service import GroupExpiryService
+
     async with SessionLocal() as session:
         service = GroupExpiryService(session)
         await service.check_expiring_subscriptions()
@@ -52,14 +63,18 @@ def run_spam_analysis(chat_id: int, message_id: int, user_id: int, text: str, la
     asyncio.run(_run_spam_analysis(chat_id, message_id, user_id, text, lang))
 
 
-async def _run_spam_analysis(chat_id: int, message_id: int, user_id: int, text: str, lang: str) -> None:
+async def _run_spam_analysis(
+    chat_id: int, message_id: int, user_id: int, text: str, lang: str
+) -> None:
     result = await pipeline.process(text)
     if result.decision == ModerationDecision.ALLOW:
         return
 
     async with SessionLocal() as session:
         group = (
-            await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(chat_id))))
+            await session.execute(
+                select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(chat_id)))
+            )
         ).scalar_one_or_none()
         if not group:
             return
@@ -135,11 +150,16 @@ def aggregate_group_analytics(group_id: int) -> None:
 
 async def _aggregate_group_analytics(group_id: int) -> None:
     from bot.services.admin_activity_service import AdminActivityService
+
     async with SessionLocal() as session:
         service = AdminActivityService(session)
         try:
             overview = await service.build_group_overview(group_id)
-            logger.info("group_analytics_aggregated", group_id=group_id, overview_keys=list(overview.keys()) if overview else None)
+            logger.info(
+                "group_analytics_aggregated",
+                group_id=group_id,
+                overview_keys=list(overview.keys()) if overview else None,
+            )
         except Exception as exc:
             logger.warning("group_analytics_failed", group_id=group_id, error=str(exc))
 
@@ -151,7 +171,7 @@ def cleanup_expired_messages(group_id: int) -> None:
 
 async def _cleanup_expired_messages(group_id: int) -> None:
     from datetime import timedelta
-    from bot.db.models import ModerationLog
+
     cutoff = datetime.utcnow() - timedelta(days=90)
     async with SessionLocal() as session:
         result = await session.execute(
@@ -224,12 +244,18 @@ def schedule_task_follow_up(
     )
 
 
-def schedule_scheduled_announcement(*, delay_seconds: int, group_id: int, entry_id: str, expected_send_at: str | None = None) -> None:
-    run_scheduled_announcement.send_with_options(args=(group_id, entry_id, expected_send_at or ""), delay=max(delay_seconds, 0) * 1000)
+def schedule_scheduled_announcement(
+    *, delay_seconds: int, group_id: int, entry_id: str, expected_send_at: str | None = None
+) -> None:
+    run_scheduled_announcement.send_with_options(
+        args=(group_id, entry_id, expected_send_at or ""), delay=max(delay_seconds, 0) * 1000
+    )
 
 
 def schedule_bot_message_delete(*, delay_seconds: int, chat_id: int, message_id: int) -> None:
-    run_bot_message_delete.send_with_options(args=(chat_id, message_id), delay=max(delay_seconds, 0) * 1000)
+    run_bot_message_delete.send_with_options(
+        args=(chat_id, message_id), delay=max(delay_seconds, 0) * 1000
+    )
 
 
 @dramatiq.actor(queue_name="automation")
@@ -291,9 +317,10 @@ def generate_daily_admin_summary(group_id: int, summary_date: str) -> None:
 
 async def _notify_expiring_subscriptions() -> None:
     from datetime import timedelta
+
     now = datetime.utcnow()
     warning_window = now + timedelta(hours=24)
-    
+
     async with SessionLocal() as session:
         # Find approved subscriptions expiring in the next 24 hours that haven't been notified yet
         # (Assuming we track notification status, but for now just send if expires_at is near)
@@ -303,10 +330,10 @@ async def _notify_expiring_subscriptions() -> None:
             SubscriptionRequest.expires_at <= warning_window,
         )
         expiring = (await session.execute(stmt)).scalars().all()
-        
+
         if not expiring:
             return
-            
+
         bot = Bot(token=get_settings().bot_token)
         try:
             for sub in expiring:
@@ -314,7 +341,7 @@ async def _notify_expiring_subscriptions() -> None:
                     await bot.send_message(
                         sub.tg_user_id,
                         f"Your agent subscription will expire on {sub.expires_at.strftime('%Y-%m-%d %H:%M')}. "
-                        "Redeem a new promo code to maintain access."
+                        "Redeem a new promo code to maintain access.",
                     )
                 except Exception:
                     pass
@@ -324,6 +351,7 @@ async def _notify_expiring_subscriptions() -> None:
 
 async def _deactivate_expired_subscriptions() -> None:
     from bot.db.models import SubscriptionRequest, SubscriptionStatus, Agent
+
     now = datetime.utcnow()
     async with SessionLocal() as session:
         stmt = select(SubscriptionRequest).where(
@@ -383,12 +411,16 @@ async def _run_task_follow_up(
 
     async with SessionLocal() as session:
         if executor_type == "agent" and agent_id is not None:
-            agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
             if agent is None:
                 return
             client = await SessionManager(session_factory=SessionLocal).get_client(agent_id)
             try:
-                await UserAgentExecutor().execute(client=client, payload={"group_id": group_id, "chat_id": chat_id, "text": text})
+                await UserAgentExecutor().execute(
+                    client=client, payload={"group_id": group_id, "chat_id": chat_id, "text": text}
+                )
             finally:
                 await client.disconnect()
         else:
@@ -431,7 +463,9 @@ async def _run_bot_message_delete(chat_id: int, message_id: int) -> None:
         await bot.session.close()
 
 
-async def _run_scheduled_announcement(group_id: int, entry_id: str, expected_send_at: str = "") -> None:
+async def _run_scheduled_announcement(
+    group_id: int, entry_id: str, expected_send_at: str = ""
+) -> None:
     async with SessionLocal() as session:
         service = ScheduledMessageService(session)
         entry = await service.get_entry(group_id=group_id, entry_id=entry_id)
@@ -472,7 +506,9 @@ async def _run_scheduled_announcement(group_id: int, entry_id: str, expected_sen
 
         bot = Bot(token=get_settings().bot_token)
         try:
-            request = await admin_runtime.get_scheduled_message_dispatch_request(group_id=group_id, entry_id=entry_id)
+            request = await admin_runtime.get_scheduled_message_dispatch_request(
+                group_id=group_id, entry_id=entry_id
+            )
             if request is None:
                 return
             await AutomationRuntimeService(

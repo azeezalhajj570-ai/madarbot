@@ -9,8 +9,21 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
-from bot.core.runtime.actions import AddWarningAction, BanUserAction, ClearWarningsAction, DeleteMessageAction, MaybeMuteUserAction, RestrictUserAction, SendNoticeAction
-from bot.core.runtime.audit import AuditEntry, ModerationLogAuditSink, RuntimeAuditService, serialize_guard_result
+from bot.core.runtime.actions import (
+    AddWarningAction,
+    BanUserAction,
+    ClearWarningsAction,
+    DeleteMessageAction,
+    MaybeMuteUserAction,
+    RestrictUserAction,
+    SendNoticeAction,
+)
+from bot.core.runtime.audit import (
+    AuditEntry,
+    ModerationLogAuditSink,
+    RuntimeAuditService,
+    serialize_guard_result,
+)
 from bot.core.runtime.events import RuntimeEvent, RuntimeEventType
 from bot.core.runtime.executors import ActionExecutorRegistry
 from bot.core.runtime.guards import GuardDecision, GuardPipeline, GuardResult
@@ -113,7 +126,9 @@ class FeatureEnabledGuard:
 class TargetNotGroupAdminGuard:
     async def evaluate(self, event: RuntimeEvent, action: Any) -> GuardResult:
         if bool(event.payload.get("target_is_admin")):
-            return GuardResult(decision=GuardDecision.DENY, reason="Target is a group administrator")
+            return GuardResult(
+                decision=GuardDecision.DENY, reason="Target is a group administrator"
+            )
         return GuardResult(decision=GuardDecision.ALLOW)
 
 
@@ -124,7 +139,13 @@ class ModerationRuntimeService:
     async def list_warnings(self, *, group_id: int) -> list[dict[str, Any]]:
         rows = (
             await self.session.execute(
-                select(Warning.user_id, Warning.reason, Warning.count, Warning.issued_by, Warning.created_at)
+                select(
+                    Warning.user_id,
+                    Warning.reason,
+                    Warning.count,
+                    Warning.issued_by,
+                    Warning.created_at,
+                )
                 .where(Warning.group_id == group_id)
                 .order_by(desc(Warning.created_at))
             )
@@ -140,7 +161,9 @@ class ModerationRuntimeService:
             for row in rows
         ]
 
-    async def clear_warnings(self, *, group_id: int, actor_user_id: int, user_id: int) -> dict[str, Any]:
+    async def clear_warnings(
+        self, *, group_id: int, actor_user_id: int, user_id: int
+    ) -> dict[str, Any]:
         result = await self._perform_user_action(
             ModerationActionRequest(
                 group_id=group_id,
@@ -247,7 +270,9 @@ class ModerationRuntimeService:
                 "mute_log_action": request.mute_log_action,
             },
         )
-        guard_result = await GuardPipeline(guards=[GroupExistsGuard(self.session)]).evaluate(event, warning_action)
+        guard_result = await GuardPipeline(guards=[GroupExistsGuard(self.session)]).evaluate(
+            event, warning_action
+        )
         if guard_result.decision == GuardDecision.DENY:
             return {"status": "skipped", "reason": guard_result.reason}
 
@@ -313,11 +338,20 @@ class ModerationRuntimeService:
         event_type: RuntimeEventType,
     ) -> dict[str, Any]:
         permissions = PermissionService(self.session)
-        required_action = "group.moderation.warn" if request.action in {"approve", "clear", "warn"} else "group.moderation.ban"
-        if request.actor_user_id is not None and not await permissions.can(request.group_id, request.actor_user_id, required_action):
+        required_action = (
+            "group.moderation.warn"
+            if request.action in {"approve", "clear", "warn"}
+            else "group.moderation.ban"
+        )
+        if request.actor_user_id is not None and not await permissions.can(
+            request.group_id, request.actor_user_id, required_action
+        ):
             from fastapi import HTTPException, status
 
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User does not have permission for this action")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User does not have permission for this action",
+            )
         group = await self._get_group_or_404(request.group_id)
         event = RuntimeEvent(
             name=event_type,
@@ -326,18 +360,29 @@ class ModerationRuntimeService:
             subject_type="user",
             subject_id=str(request.user_id),
             source=request.source,
-            payload={"reason": request.reason, "action": request.action, "count": request.count, **dict(request.metadata)},
+            payload={
+                "reason": request.reason,
+                "action": request.action,
+                "count": request.count,
+                **dict(request.metadata),
+            },
         )
         bot = Bot(token=get_settings().bot_token)
         try:
             registry = self._build_registry(bot=bot, group=group)
-            action_obj, resolved_audit_action = self._build_user_action(request, audit_action=audit_action)
+            action_obj, resolved_audit_action = self._build_user_action(
+                request, audit_action=audit_action
+            )
             guards = [GroupExistsGuard(self.session)]
             if request.target_is_admin and request.action in {"mute", "ban"}:
                 guards.append(TargetNotGroupAdminGuard())
             guard_result = await GuardPipeline(guards=guards).evaluate(event, action_obj)
             if guard_result.decision == GuardDecision.DENY:
-                return {"status": "skipped", "reason": guard_result.reason, "action": request.action}
+                return {
+                    "status": "skipped",
+                    "reason": guard_result.reason,
+                    "action": request.action,
+                }
             result = await registry.execute(action_obj)
         finally:
             await bot.session.close()
@@ -414,7 +459,9 @@ class ModerationRuntimeService:
         if guard_result.decision == GuardDecision.DENY:
             return {"status": "skipped", "reason": guard_result.reason}
 
-        group = (await self.session.execute(select(Group).where(Group.id == request.group_id))).scalar_one()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == request.group_id))
+        ).scalar_one()
         registry = self._build_registry(bot=bot, group=group)
 
         delete_result = await registry.execute(delete_action)
@@ -423,12 +470,15 @@ class ModerationRuntimeService:
 
         muted = False
         incident_actions = request.incident_actions or (request.delete_log_action,)
-        incident_count = await moderation_incident_count(
-            self.session,
-            group_id=request.group_id,
-            user_id=request.target_user_id or 0,
-            actions=incident_actions,
-        ) + 1
+        incident_count = (
+            await moderation_incident_count(
+                self.session,
+                group_id=request.group_id,
+                user_id=request.target_user_id or 0,
+                actions=incident_actions,
+            )
+            + 1
+        )
         if request.mute_setting_key and request.mute_threshold_key and request.mute_log_action:
             mute_action = MaybeMuteUserAction(
                 kind="maybe_mute_user",
@@ -485,7 +535,9 @@ class ModerationRuntimeService:
                         "delete_message",
                         *(
                             ["maybe_mute_user"]
-                            if request.mute_setting_key and request.mute_threshold_key and request.mute_log_action
+                            if request.mute_setting_key
+                            and request.mute_threshold_key
+                            and request.mute_log_action
                             else []
                         ),
                         *(["send_notice"] if request.notice_key else []),
@@ -509,7 +561,9 @@ class ModerationRuntimeService:
             "notice_sent": notice_sent,
         }
 
-    async def _execute_delete_message(self, action: DeleteMessageAction, *, bot: Bot) -> dict[str, Any]:
+    async def _execute_delete_message(
+        self, action: DeleteMessageAction, *, bot: Bot
+    ) -> dict[str, Any]:
         try:
             await bot.delete_message(chat_id=action.chat_id, message_id=action.message_id)
         except Exception as exc:
@@ -523,7 +577,9 @@ class ModerationRuntimeService:
             return {"sent": False, "error": str(exc)}
         return {"sent": True}
 
-    async def _execute_maybe_mute(self, action: MaybeMuteUserAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_maybe_mute(
+        self, action: MaybeMuteUserAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         muted = await maybe_mute_user(
             self.session,
             group=group,
@@ -543,7 +599,9 @@ class ModerationRuntimeService:
         )
         return {"muted": muted}
 
-    async def _execute_add_warning(self, action: AddWarningAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_add_warning(
+        self, action: AddWarningAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         warning = await add_warning(
             self.session,
             group_id=action.group_id,
@@ -603,7 +661,9 @@ class ModerationRuntimeService:
                 "message_id": action.metadata.get("message_id"),
             },
         )
-        warning_limit = (await ModerationSettingsStore(self.session).get_settings(action.group_id)).warn_limit
+        warning_limit = (
+            await ModerationSettingsStore(self.session).get_settings(action.group_id)
+        ).warn_limit
         return {
             "count": int(warning.count),
             "muted": muted or (mute_limit is not None),
@@ -615,13 +675,24 @@ class ModerationRuntimeService:
 
     async def _execute_clear_warnings(self, action: ClearWarningsAction) -> dict[str, Any]:
         rows = (
-            await self.session.execute(select(Warning).where(Warning.group_id == action.group_id, Warning.user_id == action.target_user_id))
-        ).scalars().all()
+            (
+                await self.session.execute(
+                    select(Warning).where(
+                        Warning.group_id == action.group_id,
+                        Warning.user_id == action.target_user_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         for row in rows:
             await self.session.delete(row)
         return {"deleted": len(rows)}
 
-    async def _execute_restrict_user(self, action: RestrictUserAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_restrict_user(
+        self, action: RestrictUserAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         await bot.restrict_chat_member(
             group.tg_group_id,
             action.target_user_id,
@@ -629,11 +700,15 @@ class ModerationRuntimeService:
         )
         return {"restricted": True}
 
-    async def _execute_ban_user(self, action: BanUserAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_ban_user(
+        self, action: BanUserAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         await bot.ban_chat_member(group.tg_group_id, action.target_user_id)
         return {"banned": True}
 
-    async def _execute_unrestrict_user(self, action: RestrictUserAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_unrestrict_user(
+        self, action: RestrictUserAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         await bot.restrict_chat_member(
             group.tg_group_id,
             action.target_user_id,
@@ -655,7 +730,9 @@ class ModerationRuntimeService:
         )
         return {"unrestricted": True}
 
-    async def _execute_unban_user(self, action: BanUserAction, *, bot: Bot, group: Group) -> dict[str, Any]:
+    async def _execute_unban_user(
+        self, action: BanUserAction, *, bot: Bot, group: Group
+    ) -> dict[str, Any]:
         await bot.unban_chat_member(group.tg_group_id, action.target_user_id)
         return {"unbanned": True}
 
@@ -663,7 +740,9 @@ class ModerationRuntimeService:
         await RuntimeAuditService(ModerationLogAuditSink(self.session)).record(entry)
 
     async def _get_group_or_404(self, group_id: int) -> Group:
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             from fastapi import HTTPException, status
 
@@ -672,15 +751,31 @@ class ModerationRuntimeService:
 
     def _build_registry(self, *, bot: Bot, group: Group) -> ActionExecutorRegistry:
         registry = ActionExecutorRegistry()
-        registry.register("delete_message", lambda action: self._execute_delete_message(action, bot=bot))
+        registry.register(
+            "delete_message", lambda action: self._execute_delete_message(action, bot=bot)
+        )
         registry.register("send_notice", lambda action: self._execute_send_notice(action, bot=bot))
-        registry.register("maybe_mute_user", lambda action: self._execute_maybe_mute(action, bot=bot, group=group))
-        registry.register("add_warning", lambda action: self._execute_add_warning(action, bot=bot, group=group))
+        registry.register(
+            "maybe_mute_user", lambda action: self._execute_maybe_mute(action, bot=bot, group=group)
+        )
+        registry.register(
+            "add_warning", lambda action: self._execute_add_warning(action, bot=bot, group=group)
+        )
         registry.register("clear_warnings", self._execute_clear_warnings)
-        registry.register("restrict_user", lambda action: self._execute_restrict_user(action, bot=bot, group=group))
-        registry.register("unrestrict_user", lambda action: self._execute_unrestrict_user(action, bot=bot, group=group))
-        registry.register("ban_user", lambda action: self._execute_ban_user(action, bot=bot, group=group))
-        registry.register("unban_user", lambda action: self._execute_unban_user(action, bot=bot, group=group))
+        registry.register(
+            "restrict_user",
+            lambda action: self._execute_restrict_user(action, bot=bot, group=group),
+        )
+        registry.register(
+            "unrestrict_user",
+            lambda action: self._execute_unrestrict_user(action, bot=bot, group=group),
+        )
+        registry.register(
+            "ban_user", lambda action: self._execute_ban_user(action, bot=bot, group=group)
+        )
+        registry.register(
+            "unban_user", lambda action: self._execute_unban_user(action, bot=bot, group=group)
+        )
         return registry
 
     def _build_user_action(

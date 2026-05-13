@@ -34,13 +34,21 @@ class NotificationReadiness:
 
 
 class NotificationService:
-    def __init__(self, session: AsyncSession, *, transport: httpx.AsyncBaseTransport | None = None, timeout_seconds: float = 5.0) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        timeout_seconds: float = 5.0,
+    ) -> None:
         self.session = session
         self.transport = transport
         self.timeout_seconds = timeout_seconds
 
     async def get_or_create_settings(self, tenant_id: int) -> NotificationSettings:
-        result = await self.session.execute(select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id))
+        result = await self.session.execute(
+            select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id)
+        )
         settings = result.scalar_one_or_none()
         if settings is None:
             settings = NotificationSettings(
@@ -57,14 +65,18 @@ class NotificationService:
                 await self.session.flush()
             except IntegrityError:
                 await self.session.rollback()
-                result = await self.session.execute(select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id))
+                result = await self.session.execute(
+                    select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id)
+                )
                 existing = result.scalar_one_or_none()
                 if existing is not None:
                     return existing
                 raise
         return settings
 
-    async def update_settings(self, tenant_id: int, payload: dict[str, Any]) -> NotificationSettings:
+    async def update_settings(
+        self, tenant_id: int, payload: dict[str, Any]
+    ) -> NotificationSettings:
         settings = await self.get_or_create_settings(tenant_id)
         mapping = {
             "notifyOnNewLead": "notify_on_new_lead",
@@ -146,13 +158,17 @@ class NotificationService:
         await self.deliver_event(event)
         return event
 
-    async def notify_needs_human(self, tenant_id: int, conversation: Conversation, *, preview_text: str | None = None) -> NotificationEvent:
+    async def notify_needs_human(
+        self, tenant_id: int, conversation: Conversation, *, preview_text: str | None = None
+    ) -> NotificationEvent:
         settings = await self.get_or_create_settings(tenant_id)
         event = await self.create_event(
             tenant_id=tenant_id,
             type="needs_human",
             title="Conversation needs human reply",
-            body=preview_text or conversation.latest_message_text or "A conversation now requires human review.",
+            body=preview_text
+            or conversation.latest_message_text
+            or "A conversation now requires human review.",
             channel=settings.notification_channel,
             target=settings.notification_target,
             related_conversation_id=conversation.id,
@@ -177,7 +193,9 @@ class NotificationService:
         if event.channel == "webhook":
             payload = self._webhook_payload(event)
             try:
-                async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
+                async with httpx.AsyncClient(
+                    timeout=self.timeout_seconds, transport=self.transport
+                ) as client:
                     response = await client.post(str(event.target), json=payload)
                 if 200 <= response.status_code < 300:
                     event.status = "sent"
@@ -201,16 +219,22 @@ class NotificationService:
                 return event
             try:
                 from bot.config import get_settings
+
                 settings = get_settings()
                 bot_token = settings.bot_token
                 text = f"*{event.title}*\n\n{event.body}"
                 url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                async with httpx.AsyncClient(timeout=self.timeout_seconds, transport=self.transport) as client:
-                    response = await client.post(url, json={
-                        "chat_id": int(event.target),
-                        "text": text,
-                        "parse_mode": "Markdown",
-                    })
+                async with httpx.AsyncClient(
+                    timeout=self.timeout_seconds, transport=self.transport
+                ) as client:
+                    response = await client.post(
+                        url,
+                        json={
+                            "chat_id": int(event.target),
+                            "text": text,
+                            "parse_mode": "Markdown",
+                        },
+                    )
                 if 200 <= response.status_code < 300:
                     event.status = "sent"
                     event.sent_at = datetime.now(timezone.utc)
@@ -229,7 +253,10 @@ class NotificationService:
 
         event.status = "skipped"
         event.error = f"{event.channel}_delivery_not_implemented"
-        event.metadata_json = {**(event.metadata_json or {}), "todo": f"{event.channel}_delivery_placeholder"}
+        event.metadata_json = {
+            **(event.metadata_json or {}),
+            "todo": f"{event.channel}_delivery_placeholder",
+        }
         await self.session.flush()
         await self.session.refresh(event)
         return event
@@ -278,7 +305,9 @@ class NotificationService:
             "status": event.status,
             "channel": event.channel,
             "target": event.target,
-            "relatedConversationId": str(event.related_conversation_id) if event.related_conversation_id else None,
+            "relatedConversationId": str(event.related_conversation_id)
+            if event.related_conversation_id
+            else None,
             "relatedLeadId": str(event.related_lead_id) if event.related_lead_id else None,
             "error": event.error,
             "metadata": event.metadata_json,
@@ -314,7 +343,9 @@ class NotificationService:
             "type": event.type,
             "title": event.title,
             "body": event.body,
-            "relatedConversationId": str(event.related_conversation_id) if event.related_conversation_id else None,
+            "relatedConversationId": str(event.related_conversation_id)
+            if event.related_conversation_id
+            else None,
             "relatedLeadId": str(event.related_lead_id) if event.related_lead_id else None,
             "createdAt": event.created_at.isoformat(),
             "metadata": event.metadata_json or {},

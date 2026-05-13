@@ -18,11 +18,16 @@ def _webapp_init_data(*, user_id: int, bot_token: str = "123456:TESTTOKEN") -> s
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
@@ -100,7 +105,9 @@ async def test_webapp_group_tasks_flow(api_client, db_session) -> None:
         {"key": "text_contains", "operator": "contains", "value": "billing"}
     ]
 
-    delete_resp = await api_client.delete(f"/webapp/groups/{group.id}/tasks/{assignment_id}", headers=headers)
+    delete_resp = await api_client.delete(
+        f"/webapp/groups/{group.id}/tasks/{assignment_id}", headers=headers
+    )
     assert delete_resp.status_code == 200
     assert delete_resp.json()["deleted"] is True
 
@@ -201,7 +208,9 @@ async def test_webapp_group_task_delete_survives_notification_failure(
         fail_create_notification,
     )
 
-    delete_resp = await api_client.delete(f"/webapp/groups/{group.id}/tasks/{assignment_id}", headers=headers)
+    delete_resp = await api_client.delete(
+        f"/webapp/groups/{group.id}/tasks/{assignment_id}", headers=headers
+    )
     assert delete_resp.status_code == 200
     assert delete_resp.json()["deleted"] is True
 
@@ -276,5 +285,7 @@ async def test_webapp_group_tasks_requires_group_admin(api_client, db_session) -
     list_resp = await api_client.get(f"/webapp/groups/{group.id}/tasks", headers=headers)
     assert list_resp.status_code == 403
 
-    delete_resp = await api_client.delete(f"/webapp/groups/{group.id}/tasks/missing-task", headers=headers)
+    delete_resp = await api_client.delete(
+        f"/webapp/groups/{group.id}/tasks/missing-task", headers=headers
+    )
     assert delete_resp.status_code == 403

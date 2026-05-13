@@ -45,15 +45,22 @@ def _webapp_init_data(*, user_id: int, bot_token: str = "123456:TESTTOKEN") -> s
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
-def _telegram_login_payload(*, user_id: int, auth_date: int | None = None, bot_token: str = "123456:TESTTOKEN") -> dict[str, str]:
+def _telegram_login_payload(
+    *, user_id: int, auth_date: int | None = None, bot_token: str = "123456:TESTTOKEN"
+) -> dict[str, str]:
     payload = {
         "id": str(user_id),
         "username": f"user{user_id}",
@@ -62,7 +69,9 @@ def _telegram_login_payload(*, user_id: int, auth_date: int | None = None, bot_t
     }
     data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(payload.items()))
     secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return payload
 
 
@@ -151,14 +160,18 @@ async def test_webapp_auth_me_requires_valid_init_data(api_client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browser_telegram_login_returns_jwt_and_loads_dashboard_profile(api_client, db_session) -> None:
+async def test_browser_telegram_login_returns_jwt_and_loads_dashboard_profile(
+    api_client, db_session
+) -> None:
     group = Group(tg_group_id=-1008801, title="Browser Group", is_active=True)
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=8123, role="owner"))
     await db_session.commit()
 
-    login = await api_client.post("/auth/telegram/login", json=_telegram_login_payload(user_id=8123))
+    login = await api_client.post(
+        "/auth/telegram/login", json=_telegram_login_payload(user_id=8123)
+    )
     assert login.status_code == 200
     token = login.json()["token"]
 
@@ -175,7 +188,9 @@ async def test_browser_telegram_login_returns_jwt_and_loads_dashboard_profile(ap
         }
     ]
 
-    user = (await db_session.execute(select(User).where(User.tg_user_id == 8123))).scalar_one_or_none()
+    user = (
+        await db_session.execute(select(User).where(User.tg_user_id == 8123))
+    ).scalar_one_or_none()
     assert user is not None
     assert user.username == "user8123"
 
@@ -218,6 +233,7 @@ async def test_admin_routes_require_admin_boundary(api_client, db_session) -> No
     await db_session.flush()
 
     from bot.db.models.subscription import SubscriptionRequest
+
     db_session.add(SubscriptionRequest(tg_user_id=8452, status="approved", plan="pro"))
 
     group = Group(tg_group_id=-1008811, title="Admin Boundary Group", is_active=True)
@@ -247,7 +263,9 @@ async def test_admin_routes_require_admin_boundary(api_client, db_session) -> No
 
 
 @pytest.mark.asyncio
-async def test_agents_routes_require_agents_boundary(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_agents_routes_require_agents_boundary(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "8453")
     get_settings.cache_clear()
 
@@ -329,7 +347,9 @@ async def test_email_password_login_returns_jwt_and_loads_dashboard_profile(
     db_session.add(GroupAdminRole(group_id=group.id, user_id=8127, role="owner"))
     await db_session.commit()
 
-    login = await api_client.post("/auth/email/login", json={"email": "owner@example.com", "password": "secret123"})
+    login = await api_client.post(
+        "/auth/email/login", json={"email": "owner@example.com", "password": "secret123"}
+    )
     assert login.status_code == 200
     token = login.json()["token"]
 
@@ -365,7 +385,9 @@ async def test_email_password_login_accepts_configured_username(
     )
     get_settings.cache_clear()
 
-    login = await api_client.post("/auth/email/login", json={"email": "owner", "password": "secret123"})
+    login = await api_client.post(
+        "/auth/email/login", json={"email": "owner", "password": "secret123"}
+    )
     assert login.status_code == 200
     assert login.json()["token"]
 
@@ -395,10 +417,14 @@ async def test_removed_api_auth_compatibility_login_routes_return_not_found(
     )
     get_settings.cache_clear()
 
-    login = await api_client.post("/api/auth/login", json={"username": "owner", "password": "secret123"})
+    login = await api_client.post(
+        "/api/auth/login", json={"username": "owner", "password": "secret123"}
+    )
     assert login.status_code == 404
 
-    telegram_login = await api_client.post("/api/auth/telegram-login", json=_telegram_login_payload(user_id=9002))
+    telegram_login = await api_client.post(
+        "/api/auth/telegram-login", json=_telegram_login_payload(user_id=9002)
+    )
     assert telegram_login.status_code == 404
 
     miniapp_token = await api_client.post(
@@ -415,7 +441,9 @@ async def test_removed_api_auth_compatibility_login_routes_return_not_found(
     assert miniapp_login.status_code == 200
     assert miniapp_login.json()["token"]
 
-    email_login = await api_client.post("/api/auth/email/login", json={"email": "owner", "password": "secret123"})
+    email_login = await api_client.post(
+        "/api/auth/email/login", json={"email": "owner", "password": "secret123"}
+    )
     assert email_login.status_code == 200
     assert email_login.json()["token"]
 
@@ -438,7 +466,9 @@ async def test_owner_routes_accept_browser_jwt(api_client, monkeypatch: pytest.M
     monkeypatch.setenv("BOT_OWNER_IDS", "8126")
     get_settings.cache_clear()
 
-    login = await api_client.post("/auth/telegram/login", json=_telegram_login_payload(user_id=8126))
+    login = await api_client.post(
+        "/auth/telegram/login", json=_telegram_login_payload(user_id=8126)
+    )
     assert login.status_code == 200
 
     response = await api_client.get(
@@ -486,7 +516,9 @@ async def test_owner_subscription_update_accepts_legacy_action_payload(
 
 
 @pytest.mark.asyncio
-async def test_webapp_notification_reports_returns_logged_notify_entries(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_notification_reports_returns_logged_notify_entries(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9911")
     get_settings.cache_clear()
 
@@ -521,7 +553,9 @@ async def test_webapp_notification_reports_returns_logged_notify_entries(api_cli
     await db_session.commit()
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=9911)}
-    response = await api_client.get(f"/webapp/groups/{group.id}/notification-reports", headers=headers)
+    response = await api_client.get(
+        f"/webapp/groups/{group.id}/notification-reports", headers=headers
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -532,7 +566,9 @@ async def test_webapp_notification_reports_returns_logged_notify_entries(api_cli
 
 
 @pytest.mark.asyncio
-async def test_webapp_notification_reports_reply_sends_message(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_notification_reports_reply_sends_message(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9912")
     get_settings.cache_clear()
 
@@ -571,7 +607,9 @@ async def test_webapp_notification_reports_reply_sends_message(api_client, db_se
         def __init__(self, *args, **kwargs) -> None:
             self.session = SimpleNamespace(close=self._close)
 
-        async def send_message(self, chat_id: int, text: str, reply_to_message_id: int | None = None):
+        async def send_message(
+            self, chat_id: int, text: str, reply_to_message_id: int | None = None
+        ):
             sent_calls.append(
                 {
                     "chat_id": chat_id,
@@ -602,13 +640,17 @@ async def test_webapp_notification_reports_reply_sends_message(api_client, db_se
         }
     ]
     rows = (
-        await db_session.execute(
-            select(ModerationLog).where(
-                ModerationLog.group_id == group.id,
-                ModerationLog.action == "notification_report_reply",
+        (
+            await db_session.execute(
+                select(ModerationLog).where(
+                    ModerationLog.group_id == group.id,
+                    ModerationLog.action == "notification_report_reply",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].details["source_log_id"] == log_entry.id
 
@@ -645,7 +687,9 @@ async def test_webapp_auth_me_backfills_admin_role_from_telegram(
 
     role = (
         await db_session.execute(
-            select(GroupAdminRole).where(GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 4444)
+            select(GroupAdminRole).where(
+                GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 4444
+            )
         )
     ).scalar_one_or_none()
     assert role is not None
@@ -674,7 +718,9 @@ async def test_webapp_auth_me_backfills_group_from_install_candidates(
     monkeypatch.setattr("bot.core.runtime.moderation.Bot", lambda token: fake_bot)
     monkeypatch.setattr("bot.core.runtime.moderation.Bot", lambda token: fake_bot)
     monkeypatch.setattr("bot.dashboard.api.dependencies.Bot", lambda token: fake_bot)
-    monkeypatch.setattr("bot.dashboard.api.dependencies.list_identity_bot_install_groups", fake_candidates)
+    monkeypatch.setattr(
+        "bot.dashboard.api.dependencies.list_identity_bot_install_groups", fake_candidates
+    )
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=4545)}
 
     response = await api_client.get("/webapp/auth/me", headers=headers)
@@ -690,11 +736,15 @@ async def test_webapp_auth_me_backfills_group_from_install_candidates(
         }
     ]
 
-    group = (await db_session.execute(select(Group).where(Group.tg_group_id == -10084545))).scalar_one_or_none()
+    group = (
+        await db_session.execute(select(Group).where(Group.tg_group_id == -10084545))
+    ).scalar_one_or_none()
     assert group is not None
     role = (
         await db_session.execute(
-            select(GroupAdminRole).where(GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 4545)
+            select(GroupAdminRole).where(
+                GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 4545
+            )
         )
     ).scalar_one_or_none()
     assert role is not None
@@ -702,7 +752,9 @@ async def test_webapp_auth_me_backfills_group_from_install_candidates(
 
 
 @pytest.mark.asyncio
-async def test_webapp_group_settings_flow(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_group_settings_flow(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "4444")
     get_settings.cache_clear()
 
@@ -747,7 +799,9 @@ async def test_webapp_forbids_non_admin_access(api_client, db_session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_webapp_auth_me_marks_bot_owner(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_auth_me_marks_bot_owner(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9090")
     get_settings.cache_clear()
     group = Group(tg_group_id=-1007990, title="Owner Group", is_active=True)
@@ -872,7 +926,9 @@ async def test_webapp_bot_install_groups_returns_session_candidates(
             },
         ]
 
-    monkeypatch.setattr("bot.dashboard.api.routers.auth.list_identity_bot_install_groups", fake_candidates)
+    monkeypatch.setattr(
+        "bot.dashboard.api.routers.auth.list_identity_bot_install_groups", fake_candidates
+    )
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=4444)}
 
     response = await api_client.get("/webapp/bot/install-groups", headers=headers)
@@ -924,7 +980,9 @@ async def test_webapp_bot_install_links_accepts_session_groups(
             },
         ]
 
-    monkeypatch.setattr("bot.dashboard.api.routers.auth.list_identity_bot_install_groups", fake_candidates)
+    monkeypatch.setattr(
+        "bot.dashboard.api.routers.auth.list_identity_bot_install_groups", fake_candidates
+    )
     monkeypatch.setattr("bot.dashboard.api.dependencies.Bot", lambda token: fake_bot)
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=4444)}
 
@@ -1014,7 +1072,9 @@ async def test_owner_subscriptions_flow(
     assert update_resp.status_code == 200
     assert update_resp.json()["status"] == "approved"
     assert update_resp.json()["response"] == "Welcome aboard"
-    assert fake_bot.sent_messages == [(2222, "Your subscription request was approved.\nNote: Welcome aboard")]
+    assert fake_bot.sent_messages == [
+        (2222, "Your subscription request was approved.\nNote: Welcome aboard")
+    ]
 
     cancel_resp = await api_client.post(
         f"/webapp/owner/subscriptions/{request.id}",
@@ -1024,7 +1084,10 @@ async def test_owner_subscriptions_flow(
     assert cancel_resp.status_code == 200
     assert cancel_resp.json()["status"] == "cancelled"
     assert cancel_resp.json()["response"] == "Access removed"
-    assert fake_bot.sent_messages[-1] == (2222, "Your subscription was cancelled.\nNote: Access removed")
+    assert fake_bot.sent_messages[-1] == (
+        2222,
+        "Your subscription was cancelled.\nNote: Access removed",
+    )
 
 
 @pytest.mark.asyncio
@@ -1058,12 +1121,16 @@ async def test_owner_private_access_gate_flow(
     assert update_resp.json()["required_group_tg_ids"] == [second.tg_group_id]
 
     rows = (
-        await db_session.execute(
-            select(PrivateAccessRequirement.required_group_tg_id).order_by(
-                PrivateAccessRequirement.required_group_tg_id.asc()
+        (
+            await db_session.execute(
+                select(PrivateAccessRequirement.required_group_tg_id).order_by(
+                    PrivateAccessRequirement.required_group_tg_id.asc()
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert rows == [second.tg_group_id]
 
 
@@ -1081,9 +1148,20 @@ async def test_owner_groups_and_actions_flow(
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=501, role="owner"))
     db_session.add(GroupSetting(group_id=group.id, key="anti_spam", value={"value": True}))
-    db_session.add(PluginEnabled(group_id=group.id, plugin_name="anti_links", enabled=True, config={}))
+    db_session.add(
+        PluginEnabled(group_id=group.id, plugin_name="anti_links", enabled=True, config={})
+    )
     db_session.add(Warning(group_id=group.id, user_id=77, issued_by=501, reason="spam", count=2))
-    db_session.add(ModerationLog(group_id=group.id, action="warn", target_user_id=77, admin_user_id=501, reason="spam", details={}))
+    db_session.add(
+        ModerationLog(
+            group_id=group.id,
+            action="warn",
+            target_user_id=77,
+            admin_user_id=501,
+            reason="spam",
+            details={},
+        )
+    )
     await db_session.commit()
 
     monkeypatch.setattr("bot.dashboard.api.owner.Bot", lambda token: fake_bot)
@@ -1104,7 +1182,9 @@ async def test_owner_groups_and_actions_flow(
     assert detail["settings"][0]["key"] == "anti_spam"
     assert detail["plugins"][0]["plugin_name"] == "anti_links"
 
-    disable_resp = await api_client.post(f"/webapp/owner/groups/{group.id}/disable", headers=headers)
+    disable_resp = await api_client.post(
+        f"/webapp/owner/groups/{group.id}/disable", headers=headers
+    )
     assert disable_resp.status_code == 200
     assert disable_resp.json()["group"]["is_active"] is False
 
@@ -1135,14 +1215,21 @@ async def test_webapp_agents_flow(api_client, db_session, monkeypatch: pytest.Mo
     async def fake_dispatch_agent_job(job_id: int) -> None:
         _ = job_id
 
-    monkeypatch.setattr("bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job)
+    monkeypatch.setattr(
+        "bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job
+    )
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=6666), "X-App-Boundary": "agents"}
 
     link_resp = await api_client.post(
         "/webapp/agents/link",
         headers=headers,
-        json={"group_id": group.id, "name": "Sales Bot", "phone_number": "+15550001111", "metadata": {"source": "webapp"}},
+        json={
+            "group_id": group.id,
+            "name": "Sales Bot",
+            "phone_number": "+15550001111",
+            "metadata": {"source": "webapp"},
+        },
     )
     assert link_resp.status_code == 200
     agent_id = link_resp.json()["agent"]["id"]
@@ -1173,7 +1260,9 @@ async def test_webapp_agents_flow(api_client, db_session, monkeypatch: pytest.Mo
     assert invalid_phone_resp.status_code == 422
     assert "international format" in invalid_phone_resp.json()["detail"]
 
-    stored_agent = (await db_session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one()
+    stored_agent = (
+        await db_session.execute(select(Agent).where(Agent.id == agent_id))
+    ).scalar_one()
     stored_agent.status = "active"
     stored_agent.auth_state = "active"
     stored_agent.session_string = "session:active"
@@ -1211,7 +1300,9 @@ async def test_webapp_agents_flow_without_group_uses_hidden_workspace(
     async def fake_dispatch_agent_job(job_id: int) -> None:
         _ = job_id
 
-    monkeypatch.setattr("bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job)
+    monkeypatch.setattr(
+        "bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job
+    )
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=7666), "X-App-Boundary": "agents"}
 
@@ -1231,7 +1322,9 @@ async def test_webapp_agents_flow_without_group_uses_hidden_workspace(
     assert payload[0]["id"] == agent["id"]
     assert payload[0]["group_id"] == agent["group_id"]
 
-    workspace_group = (await db_session.execute(select(Group).where(Group.id == agent["group_id"]))).scalar_one()
+    workspace_group = (
+        await db_session.execute(select(Group).where(Group.id == agent["group_id"]))
+    ).scalar_one()
     assert workspace_group.title == "Agents Workspace"
     assert workspace_group.is_active is False
 
@@ -1257,7 +1350,9 @@ async def test_webapp_group_member_search_uses_admin_member_service(
 
     captured: dict[str, int | str | None] = {}
 
-    async def fake_search_group_members(self, *, actor_user_id: int, group_id: int, query: str | None = None, limit: int = 25):
+    async def fake_search_group_members(
+        self, *, actor_user_id: int, group_id: int, query: str | None = None, limit: int = 25
+    ):
         captured.update(
             {
                 "actor_user_id": actor_user_id,
@@ -1281,7 +1376,9 @@ async def test_webapp_group_member_search_uses_admin_member_service(
     )
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=6667)}
-    response = await api_client.get(f"/api/admin/groups/{group.id}/member-search?q=mem&limit=12", headers=headers)
+    response = await api_client.get(
+        f"/api/admin/groups/{group.id}/member-search?q=mem&limit=12", headers=headers
+    )
 
     assert response.status_code == 200
     assert response.json()[0]["username"] == "member_one"
@@ -1312,7 +1409,9 @@ async def test_api_admin_member_search_translates_admin_boundary_errors(
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.id, role="owner"))
     await db_session.commit()
 
-    async def fake_search_group_members(self, *, actor_user_id: int, group_id: int, query: str | None = None, limit: int = 25):
+    async def fake_search_group_members(
+        self, *, actor_user_id: int, group_id: int, query: str | None = None, limit: int = 25
+    ):
         _ = (self, actor_user_id, group_id, query, limit)
         raise AdminGroupMemberSearchRateLimitedError(45)
 
@@ -1322,14 +1421,18 @@ async def test_api_admin_member_search_translates_admin_boundary_errors(
     )
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=6669)}
-    response = await api_client.get(f"/api/admin/groups/{group.id}/member-search?q=mem&limit=12", headers=headers)
+    response = await api_client.get(
+        f"/api/admin/groups/{group.id}/member-search?q=mem&limit=12", headers=headers
+    )
 
     assert response.status_code == 429
     assert response.json()["detail"] == "Linked account is rate limited. Retry after 45s."
 
 
 @pytest.mark.asyncio
-async def test_webapp_set_member_role_uses_admin_role_service(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_set_member_role_uses_admin_role_service(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "6670")
     get_settings.cache_clear()
 
@@ -1440,8 +1543,12 @@ async def test_webapp_agent_group_and_member_search(
     groups_captured: dict[str, int] = {}
     members_captured: dict[str, int | str | None] = {}
 
-    async def fake_list_managed_member_groups(self, *, actor_user_id: int, agent_id: int, query: str | None = None):
-        groups_captured.update({"actor_user_id": actor_user_id, "agent_id": agent_id, "query": query})
+    async def fake_list_managed_member_groups(
+        self, *, actor_user_id: int, agent_id: int, query: str | None = None
+    ):
+        groups_captured.update(
+            {"actor_user_id": actor_user_id, "agent_id": agent_id, "query": query}
+        )
         return [{"tg_group_id": -1009001, "title": "Remote Group"}]
 
     member_messages_captured: dict[str, int] = {}
@@ -1690,23 +1797,31 @@ async def test_webapp_agent_notifications_flow(api_client, db_session) -> None:
     await db_session.commit()
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=6673), "X-App-Boundary": "agents"}
-    list_response = await api_client.get(f"/webapp/agents/{agent.id}/notifications?limit=20", headers=headers)
+    list_response = await api_client.get(
+        f"/webapp/agents/{agent.id}/notifications?limit=20", headers=headers
+    )
 
     assert list_response.status_code == 200
     assert list_response.json()["unseen_count"] == 1
     assert len(list_response.json()["items"]) == 2
 
-    mark_seen_response = await api_client.post(f"/webapp/agents/{agent.id}/notifications/mark-seen", headers=headers)
+    mark_seen_response = await api_client.post(
+        f"/webapp/agents/{agent.id}/notifications/mark-seen", headers=headers
+    )
     assert mark_seen_response.status_code == 200
     assert mark_seen_response.json()["updated"] == 1
 
-    refreshed = await api_client.get(f"/webapp/agents/{agent.id}/notifications?limit=20", headers=headers)
+    refreshed = await api_client.get(
+        f"/webapp/agents/{agent.id}/notifications?limit=20", headers=headers
+    )
     assert refreshed.status_code == 200
     assert refreshed.json()["unseen_count"] == 0
 
 
 @pytest.mark.asyncio
-async def test_webapp_group_overview_includes_scraped_counts(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_group_overview_includes_scraped_counts(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "6680")
     get_settings.cache_clear()
 
@@ -1723,11 +1838,30 @@ async def test_webapp_group_overview_includes_scraped_counts(api_client, db_sess
     await db_session.flush()
     db_session.add_all(
         [
-            ScrapedMember(scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, tg_user_id=1, full_name="One"),
-            ScrapedMember(scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, tg_user_id=2, full_name="Two"),
-            ScrapedMember(scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, tg_user_id=3, full_name="Three"),
-            ScrapedMessage(scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, message_id=10),
-            ScrapedMessage(scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, message_id=11),
+            ScrapedMember(
+                scraped_group_id=scraped_group.id,
+                tg_group_id=group.tg_group_id,
+                tg_user_id=1,
+                full_name="One",
+            ),
+            ScrapedMember(
+                scraped_group_id=scraped_group.id,
+                tg_group_id=group.tg_group_id,
+                tg_user_id=2,
+                full_name="Two",
+            ),
+            ScrapedMember(
+                scraped_group_id=scraped_group.id,
+                tg_group_id=group.tg_group_id,
+                tg_user_id=3,
+                full_name="Three",
+            ),
+            ScrapedMessage(
+                scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, message_id=10
+            ),
+            ScrapedMessage(
+                scraped_group_id=scraped_group.id, tg_group_id=group.tg_group_id, message_id=11
+            ),
         ]
     )
     await db_session.commit()
@@ -1774,14 +1908,21 @@ async def test_webapp_agent_job_dispatches(
     async def fake_dispatch_agent_job(job_id: int) -> None:
         dispatch_called.append(job_id)
 
-    monkeypatch.setattr("bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job)
+    monkeypatch.setattr(
+        "bot.dashboard.api.routers.agents.dispatch_agent_job", fake_dispatch_agent_job
+    )
 
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=6669), "X-App-Boundary": "agents"}
     response = await api_client.post(
         f"/webapp/agents/{agent.id}/jobs",
         json={
             "job_type": "group_member_broadcast",
-            "job_payload": {"source_group_id": "-1000001", "message": "Hi", "threshold": 1, "interval_seconds": 0},
+            "job_payload": {
+                "source_group_id": "-1000001",
+                "message": "Hi",
+                "threshold": 1,
+                "interval_seconds": 0,
+            },
         },
         headers=headers,
     )
@@ -1791,9 +1932,10 @@ async def test_webapp_agent_job_dispatches(
     assert dispatch_called, "dispatch_agent_job should be invoked after job creation"
 
 
-
 @pytest.mark.asyncio
-async def test_webapp_scheduled_messages_flow(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_scheduled_messages_flow(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     group = Group(tg_group_id=-1007004, title="Scheduled Group", is_active=True)
     db_session.add(group)
     await db_session.flush()
@@ -1803,7 +1945,9 @@ async def test_webapp_scheduled_messages_flow(api_client, db_session, monkeypatc
     scheduled_calls: list[tuple[int, int, str]] = []
     monkeypatch.setattr(
         "bot.dashboard.api.routers.admin_automation.schedule_scheduled_announcement",
-        lambda *, delay_seconds, group_id, entry_id: scheduled_calls.append((delay_seconds, group_id, entry_id)),
+        lambda *, delay_seconds, group_id, entry_id: scheduled_calls.append(
+            (delay_seconds, group_id, entry_id)
+        ),
     )
     headers = {"X-Telegram-Init-Data": _webapp_init_data(user_id=7770)}
 
@@ -1816,11 +1960,15 @@ async def test_webapp_scheduled_messages_flow(api_client, db_session, monkeypatc
     entry_id = create_resp.json()["scheduled_message"]["id"]
     assert scheduled_calls
 
-    api_list_resp = await api_client.get(f"/api/admin/groups/{group.id}/scheduled-messages", headers=headers)
+    api_list_resp = await api_client.get(
+        f"/api/admin/groups/{group.id}/scheduled-messages", headers=headers
+    )
     assert api_list_resp.status_code == 200
     assert api_list_resp.json()[0]["text"] == "Deploy reminder"
 
-    list_resp = await api_client.get(f"/webapp/groups/{group.id}/scheduled-messages", headers=headers)
+    list_resp = await api_client.get(
+        f"/webapp/groups/{group.id}/scheduled-messages", headers=headers
+    )
     assert list_resp.status_code == 200
     assert list_resp.json()[0]["text"] == "Deploy reminder"
     assert list_resp.json()[0]["delete_after_seconds"] == 45
@@ -1828,19 +1976,27 @@ async def test_webapp_scheduled_messages_flow(api_client, db_session, monkeypatc
     update_resp = await api_client.patch(
         f"/webapp/groups/{group.id}/scheduled-messages/{entry_id}",
         headers=headers,
-        json={"text": "Updated deploy reminder", "schedule": "*/15 * * * *", "delete_after_seconds": 90},
+        json={
+            "text": "Updated deploy reminder",
+            "schedule": "*/15 * * * *",
+            "delete_after_seconds": 90,
+        },
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["scheduled_message"]["cron"] == "*/15 * * * *"
     assert update_resp.json()["scheduled_message"]["delete_after_seconds"] == 90
 
-    delete_resp = await api_client.delete(f"/webapp/groups/{group.id}/scheduled-messages/{entry_id}", headers=headers)
+    delete_resp = await api_client.delete(
+        f"/webapp/groups/{group.id}/scheduled-messages/{entry_id}", headers=headers
+    )
     assert delete_resp.status_code == 200
     assert delete_resp.json()["deleted"] is True
 
 
 @pytest.mark.asyncio
-async def test_webapp_moderation_actions_flow(api_client, db_session, monkeypatch: pytest.MonkeyPatch, fake_bot) -> None:
+async def test_webapp_moderation_actions_flow(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch, fake_bot
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "8881")
     get_settings.cache_clear()
 
@@ -1886,26 +2042,33 @@ async def test_webapp_moderation_actions_flow(api_client, db_session, monkeypatc
     )
     assert ban_resp.status_code == 200
 
-    warnings_resp = await api_client.get(f"/webapp/groups/{group.id}/moderation/warnings", headers=headers)
+    warnings_resp = await api_client.get(
+        f"/webapp/groups/{group.id}/moderation/warnings", headers=headers
+    )
     assert warnings_resp.status_code == 200
     assert warnings_resp.json()[0]["count"] == 1
     assert fake_bot.muted_members == [(group.tg_group_id, 555)]
     assert fake_bot.banned_members == [(group.tg_group_id, 555)]
 
     logs = (
-        await db_session.execute(ModerationLog.__table__.select().where(ModerationLog.group_id == group.id))
+        await db_session.execute(
+            ModerationLog.__table__.select().where(ModerationLog.group_id == group.id)
+        )
     ).all()
     actions = {row.action for row in logs}
     assert {"approve_warning", "warn", "mute_user", "ban_user"}.issubset(actions)
 
 
 @pytest.mark.asyncio
-async def test_webapp_moderation_actions_enforce_permissions(api_client, db_session, monkeypatch: pytest.MonkeyPatch, fake_bot) -> None:
+async def test_webapp_moderation_actions_enforce_permissions(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch, fake_bot
+) -> None:
     user = User(tg_user_id=8882, username="user8882")
     db_session.add(user)
     await db_session.flush()
 
     from bot.db.models.subscription import SubscriptionRequest
+
     db_session.add(SubscriptionRequest(tg_user_id=8882, status="approved", plan="pro"))
 
     group = Group(tg_group_id=-1007006, title="Permission Group", is_active=True)
@@ -1933,7 +2096,9 @@ async def test_webapp_moderation_actions_enforce_permissions(api_client, db_sess
 
 
 @pytest.mark.asyncio
-async def test_webapp_set_member_role_accepts_json_body(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_webapp_set_member_role_accepts_json_body(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "8883")
     get_settings.cache_clear()
 
@@ -1957,7 +2122,9 @@ async def test_webapp_set_member_role_accepts_json_body(api_client, db_session, 
     assert response.status_code == 200
     updated_role = (
         await db_session.execute(
-            select(GroupAdminRole).where(GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 777)
+            select(GroupAdminRole).where(
+                GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == 777
+            )
         )
     ).scalar_one()
     assert updated_role.role == "admin"

@@ -10,7 +10,11 @@ from typing import Any
 from fastapi import Header, HTTPException, Query, status
 
 from bot.config import DashboardBrowserUser, get_settings
-from bot.services.telegram_webapp_auth import TelegramWebAppAuthError, TelegramWebAppIdentity, validate_init_data
+from bot.services.telegram_webapp_auth import (
+    TelegramWebAppAuthError,
+    TelegramWebAppIdentity,
+    validate_init_data,
+)
 from bot.services.user_service import UserService
 
 
@@ -37,8 +41,12 @@ def _b64url_decode(value: str) -> bytes:
 
 def _encode_jwt(payload: dict[str, Any], *, secret: str) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
-    encoded_header = _b64url_encode(json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8"))
-    encoded_payload = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+    encoded_header = _b64url_encode(
+        json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    )
+    encoded_payload = _b64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    )
     signature_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
     signature = hmac.new(secret.encode("utf-8"), signature_input, hashlib.sha256).digest()
     return f"{encoded_header}.{encoded_payload}.{_b64url_encode(signature)}"
@@ -108,7 +116,9 @@ def decode_dashboard_jwt(token: str, *, now: int | None = None) -> TelegramWebAp
     )
 
 
-def verify_telegram_login(payload: dict[str, Any], *, bot_token: str, max_age_seconds: int) -> TelegramWebAppIdentity:
+def verify_telegram_login(
+    payload: dict[str, Any], *, bot_token: str, max_age_seconds: int
+) -> TelegramWebAppIdentity:
     data = {key: value for key, value in payload.items() if value is not None}
     incoming_hash = str(data.pop("hash", "") or "")
     if not incoming_hash:
@@ -125,7 +135,9 @@ def verify_telegram_login(payload: dict[str, Any], *, bot_token: str, max_age_se
 
     secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
     data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(data.items()))
-    expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    expected_hash = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     if not hmac.compare_digest(expected_hash, incoming_hash):
         raise TelegramWebAppAuthError("Invalid Telegram login signature")
 
@@ -195,11 +207,15 @@ async def issue_dashboard_token_for_browser_credentials(
 
     settings = get_settings()
     identity = browser_user_identity(matched_user)
-    full_name = " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    full_name = (
+        " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    )
     user_service = UserService(session)
     await user_service.set_language(
         tg_user_id=identity.user_id,
-        language_code=await user_service.resolve_language(identity.user_id, fallback=settings.default_language),
+        language_code=await user_service.resolve_language(
+            identity.user_id, fallback=settings.default_language
+        ),
         username=identity.username or matched_user.email,
         full_name=full_name,
     )
@@ -221,11 +237,15 @@ async def issue_dashboard_token_for_telegram_login(
         ),
         failure_message="No Telegram bot token configured for login verification",
     )
-    full_name = " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    full_name = (
+        " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    )
     user_service = UserService(session)
     await user_service.set_language(
         tg_user_id=identity.user_id,
-        language_code=await user_service.resolve_language(identity.user_id, fallback=settings.default_language),
+        language_code=await user_service.resolve_language(
+            identity.user_id, fallback=settings.default_language
+        ),
         username=identity.username,
         full_name=full_name,
     )
@@ -247,7 +267,9 @@ def verify_telegram_init_data_identity(init_data: str) -> TelegramWebAppIdentity
 
 def issue_dashboard_token_for_init_data(init_data: str) -> tuple[str, TelegramWebAppIdentity]:
     identity = verify_telegram_init_data_identity(init_data)
-    token = create_dashboard_jwt(identity, expires_in_seconds=get_settings().dashboard_jwt_exp_seconds)
+    token = create_dashboard_jwt(
+        identity, expires_in_seconds=get_settings().dashboard_jwt_exp_seconds
+    )
     return token, identity
 
 
@@ -261,7 +283,9 @@ async def extract_dashboard_identity(
         if token.lower().startswith("bearer "):
             token = token[7:].strip()
         if not token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token"
+            )
         try:
             return decode_dashboard_jwt(token)
         except DashboardJWTError as exc:
@@ -269,9 +293,11 @@ async def extract_dashboard_identity(
 
     value = x_telegram_init_data or init_data
     if not value:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authentication")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authentication"
+        )
 
-    settings = get_settings()
+    get_settings()
     try:
         return verify_telegram_init_data_identity(value)
     except TelegramWebAppAuthError as exc:

@@ -51,13 +51,9 @@ class JoinRequestService:
         user_tg_id: int | None = None,
     ) -> list[JoinRequestApproval]:
         """Find pending approvals, optionally filtered."""
-        stmt = select(JoinRequestApproval).where(
-            JoinRequestApproval.status == "pending"
-        )
+        stmt = select(JoinRequestApproval).where(JoinRequestApproval.status == "pending")
         if protected_group_tg_id is not None:
-            stmt = stmt.where(
-                JoinRequestApproval.protected_group_tg_id == protected_group_tg_id
-            )
+            stmt = stmt.where(JoinRequestApproval.protected_group_tg_id == protected_group_tg_id)
         if user_tg_id is not None:
             stmt = stmt.where(JoinRequestApproval.user_tg_id == user_tg_id)
         stmt = stmt.order_by(JoinRequestApproval.created_at.desc())
@@ -71,9 +67,7 @@ class JoinRequestService:
         """Find a single approval by ID."""
         return (
             await self.session.execute(
-                select(JoinRequestApproval).where(
-                    JoinRequestApproval.id == approval_id
-                )
+                select(JoinRequestApproval).where(JoinRequestApproval.id == approval_id)
             )
         ).scalar_one_or_none()
 
@@ -188,9 +182,7 @@ def build_pending_list_text(
 
         verified_set = set()
         if approval.verified_group_tg_ids:
-            verified_set = {
-                int(x) for x in approval.verified_group_tg_ids.split(",") if x.strip()
-            }
+            verified_set = {int(x) for x in approval.verified_group_tg_ids.split(",") if x.strip()}
 
         status_icons = []
         for rg_id in all_required_tg_ids:
@@ -218,14 +210,10 @@ async def build_verify_keyboard(
     kb = InlineKeyboardBuilder()
     required_ids = set()
     if approval.required_group_tg_ids:
-        required_ids = {
-            int(x) for x in approval.required_group_tg_ids.split(",") if x.strip()
-        }
+        required_ids = {int(x) for x in approval.required_group_tg_ids.split(",") if x.strip()}
     verified_ids = set()
     if approval.verified_group_tg_ids:
-        verified_ids = {
-            int(x) for x in approval.verified_group_tg_ids.split(",") if x.strip()
-        }
+        verified_ids = {int(x) for x in approval.verified_group_tg_ids.split(",") if x.strip()}
     missing_ids = required_ids - verified_ids
 
     for rg_id in missing_ids:
@@ -299,9 +287,7 @@ async def verify_membership(
     """Check which required groups the user is actually a member of. Returns verified TG IDs."""
     required_ids: set[int] = set()
     if approval.required_group_tg_ids:
-        required_ids = {
-            int(x) for x in approval.required_group_tg_ids.split(",") if x.strip()
-        }
+        required_ids = {int(x) for x in approval.required_group_tg_ids.split(",") if x.strip()}
     verified: list[int] = []
     for rg_id in required_ids:
         if await _is_group_member(bot, rg_id, approval.user_tg_id):
@@ -338,10 +324,10 @@ async def resolve_group_by_tg_id(
         candidate_ids.append(int(f"-100{abs(tg_group_id)}"))
 
     rows = (
-        await session.execute(
-            select(Group).where(Group.tg_group_id.in_(candidate_ids))
-        )
-    ).scalars().all()
+        (await session.execute(select(Group).where(Group.tg_group_id.in_(candidate_ids))))
+        .scalars()
+        .all()
+    )
     if not rows:
         return None
     for group in rows:

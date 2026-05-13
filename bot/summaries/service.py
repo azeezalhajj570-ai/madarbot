@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.models import DailyGroupSummary, Group, GroupSummarySettings
 from bot.summaries.collector import collect_group_activity
 from bot.summaries.delivery import send_daily_summary
-from bot.summaries.generator import DeterministicSummaryGenerator, build_summary_generator, generate_with_fallback
+from bot.summaries.generator import (
+    DeterministicSummaryGenerator,
+    build_summary_generator,
+    generate_with_fallback,
+)
 
 
 def _settings_timezone(settings: GroupSummarySettings) -> ZoneInfo:
@@ -20,11 +24,15 @@ def _settings_timezone(settings: GroupSummarySettings) -> ZoneInfo:
         return ZoneInfo("Asia/Aden")
 
 
-def _summary_window(settings: GroupSummarySettings, summary_date: date) -> tuple[datetime, datetime]:
+def _summary_window(
+    settings: GroupSummarySettings, summary_date: date
+) -> tuple[datetime, datetime]:
     tz = _settings_timezone(settings)
     start_local = datetime.combine(summary_date, time.min, tzinfo=tz)
     end_local = start_local + timedelta(days=1)
-    return start_local.astimezone(timezone.utc).replace(tzinfo=None), end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_local.astimezone(timezone.utc).replace(tzinfo=None), end_local.astimezone(
+        timezone.utc
+    ).replace(tzinfo=None)
 
 
 class DailyAdminSummaryService:
@@ -36,7 +44,9 @@ class DailyAdminSummaryService:
 
     async def get_settings(self, group_id: int) -> GroupSummarySettings:
         existing = (
-            await self.session.execute(select(GroupSummarySettings).where(GroupSummarySettings.group_id == group_id))
+            await self.session.execute(
+                select(GroupSummarySettings).where(GroupSummarySettings.group_id == group_id)
+            )
         ).scalar_one_or_none()
         if existing is not None:
             return existing
@@ -47,11 +57,15 @@ class DailyAdminSummaryService:
         except IntegrityError:
             await self.session.rollback()
             return (
-                await self.session.execute(select(GroupSummarySettings).where(GroupSummarySettings.group_id == group_id))
+                await self.session.execute(
+                    select(GroupSummarySettings).where(GroupSummarySettings.group_id == group_id)
+                )
             ).scalar_one()
         return settings
 
-    async def update_settings(self, group_id: int, payload: dict[str, object]) -> GroupSummarySettings:
+    async def update_settings(
+        self, group_id: int, payload: dict[str, object]
+    ) -> GroupSummarySettings:
         settings = await self.get_settings(group_id)
         for field, value in payload.items():
             if hasattr(settings, field) and value is not None:
@@ -62,13 +76,17 @@ class DailyAdminSummaryService:
 
     async def list_summaries(self, group_id: int, *, limit: int = 30) -> list[DailyGroupSummary]:
         return (
-            await self.session.execute(
-                select(DailyGroupSummary)
-                .where(DailyGroupSummary.group_id == group_id)
-                .order_by(DailyGroupSummary.summary_date.desc(), DailyGroupSummary.id.desc())
-                .limit(limit)
+            (
+                await self.session.execute(
+                    select(DailyGroupSummary)
+                    .where(DailyGroupSummary.group_id == group_id)
+                    .order_by(DailyGroupSummary.summary_date.desc(), DailyGroupSummary.id.desc())
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     async def generate_summary_for_group(
         self,
@@ -100,7 +118,9 @@ class DailyAdminSummaryService:
         )
 
         if isinstance(self.generator, DeterministicSummaryGenerator):
-            result = await self.generator.generate_daily_summary(group, settings, activity, moderation_events=activity.moderation_highlights)
+            result = await self.generator.generate_daily_summary(
+                group, settings, activity, moderation_events=activity.moderation_highlights
+            )
         else:
             result = await generate_with_fallback(
                 primary=self.generator,
@@ -144,7 +164,9 @@ class DailyAdminSummaryService:
 
         if deliver:
             try:
-                summary.status = await send_daily_summary(self.session, group=group, summary=summary, settings=settings, bot=self.bot)
+                summary.status = await send_daily_summary(
+                    self.session, group=group, summary=summary, settings=settings, bot=self.bot
+                )
                 summary.error_message = None
             except Exception as exc:
                 summary.status = "failed"
@@ -152,15 +174,21 @@ class DailyAdminSummaryService:
             await self.session.commit()
         return summary
 
-    async def run_due_summaries(self, *, now_utc: datetime | None = None) -> list[DailyGroupSummary]:
+    async def run_due_summaries(
+        self, *, now_utc: datetime | None = None
+    ) -> list[DailyGroupSummary]:
         now = now_utc or datetime.utcnow()
         rows = (
-            await self.session.execute(
-                select(GroupSummarySettings)
-                .join(Group, Group.id == GroupSummarySettings.group_id)
-                .where(GroupSummarySettings.enabled.is_(True), Group.is_active.is_(True))
+            (
+                await self.session.execute(
+                    select(GroupSummarySettings)
+                    .join(Group, Group.id == GroupSummarySettings.group_id)
+                    .where(GroupSummarySettings.enabled.is_(True), Group.is_active.is_(True))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         generated: list[DailyGroupSummary] = []
         for settings in rows:
             tz = _settings_timezone(settings)
@@ -168,5 +196,7 @@ class DailyAdminSummaryService:
             if local_now.strftime("%H:%M") != (settings.summary_time or "21:00"):
                 continue
             target_date = (local_now - timedelta(days=1)).date()
-            generated.append(await self.generate_summary_for_group(settings.group_id, target_date, deliver=True))
+            generated.append(
+                await self.generate_summary_for_group(settings.group_id, target_date, deliver=True)
+            )
         return generated

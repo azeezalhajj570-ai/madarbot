@@ -78,7 +78,11 @@ class AntiLinksPlugin:
 
         async with SessionLocal() as session:
             group = (
-                await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id)))))
+                await session.execute(
+                    select(Group).where(
+                        Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id)))
+                    )
+                )
             ).scalar_one_or_none()
             if not group:
                 logger.info(

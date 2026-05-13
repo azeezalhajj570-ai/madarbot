@@ -16,7 +16,7 @@ from bot.services.subscription_service import SubscriptionService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import get_identity
-from .auth_boundary import require_agents_boundary, require_any_boundary, require_admin_boundary
+from .auth_boundary import require_agents_boundary, require_any_boundary
 from ._shared import RedeemCodeRequest
 
 router = APIRouter(tags=["subscription"])
@@ -52,8 +52,14 @@ def _fallback_agents_url() -> str:
     return settings.agents_webapp_url or settings.webapp_url or settings.dashboard_url or ""
 
 
-@router.get("/api/agents/subscription/status", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
-@router.get("/webapp/agents/subscription/status", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+@router.get(
+    "/api/agents/subscription/status",
+    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
+)
+@router.get(
+    "/webapp/agents/subscription/status",
+    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
+)
 async def webapp_subscription_status(
     request: Request,
     identity: TelegramWebAppIdentity = Depends(get_identity),
@@ -111,8 +117,12 @@ async def webapp_redeem_promo(
     }
 
 
-@router.post("/api/agents/subscription/checkout/stripe", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/subscription/checkout/stripe", dependencies=[Depends(require_agents_boundary)])
+@router.post(
+    "/api/agents/subscription/checkout/stripe", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/subscription/checkout/stripe", dependencies=[Depends(require_agents_boundary)]
+)
 async def webapp_agents_stripe_checkout(
     payload: AgentStripeCheckoutRequest,
     identity: TelegramWebAppIdentity = Depends(get_identity),
@@ -180,7 +190,9 @@ async def webapp_cancel_subscription(
         bot_kind="agents",
     )
     if not cancelled:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found"
+        )
     return {"status": "ok", "message": "Subscription cancelled"}
 
 

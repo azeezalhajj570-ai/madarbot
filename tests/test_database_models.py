@@ -4,7 +4,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, GroupSetting, PluginEnabled, User, Warning
+from bot.db.models import (
+    Agent,
+    AgentJob,
+    Group,
+    GroupAdminRole,
+    GroupSetting,
+    PluginEnabled,
+    User,
+    Warning,
+)
 
 
 @pytest.mark.asyncio
@@ -22,7 +31,9 @@ async def test_user_group_and_role_relationship_persistence(db_session) -> None:
 
     row = (
         await db_session.execute(
-            select(GroupAdminRole).where(GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == user.tg_user_id)
+            select(GroupAdminRole).where(
+                GroupAdminRole.group_id == group.id, GroupAdminRole.user_id == user.tg_user_id
+            )
         )
     ).scalar_one()
     assert row.role == "owner"
@@ -51,15 +62,33 @@ async def test_group_tg_id_is_unique_per_owner_scope(db_session) -> None:
 
     db_session.add_all(
         [
-            Group(tg_group_id=-100777001, title="Owner One Group", owner_user_id=owner_one.id, is_active=True),
-            Group(tg_group_id=-100777001, title="Owner Two Group", owner_user_id=owner_two.id, is_active=True),
+            Group(
+                tg_group_id=-100777001,
+                title="Owner One Group",
+                owner_user_id=owner_one.id,
+                is_active=True,
+            ),
+            Group(
+                tg_group_id=-100777001,
+                title="Owner Two Group",
+                owner_user_id=owner_two.id,
+                is_active=True,
+            ),
         ]
     )
     await db_session.commit()
 
     rows = (
-        await db_session.execute(select(Group).where(Group.tg_group_id == -100777001).order_by(Group.owner_user_id.asc()))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(Group)
+                .where(Group.tg_group_id == -100777001)
+                .order_by(Group.owner_user_id.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert [row.owner_user_id for row in rows] == [owner_one.id, owner_two.id]
 
 
@@ -69,10 +98,19 @@ async def test_group_tg_id_cannot_repeat_for_same_owner_scope(db_session) -> Non
     db_session.add(owner)
     await db_session.flush()
 
-    db_session.add(Group(tg_group_id=-100777002, title="Scoped Group", owner_user_id=owner.id, is_active=True))
+    db_session.add(
+        Group(tg_group_id=-100777002, title="Scoped Group", owner_user_id=owner.id, is_active=True)
+    )
     await db_session.commit()
 
-    db_session.add(Group(tg_group_id=-100777002, title="Scoped Group Duplicate", owner_user_id=owner.id, is_active=True))
+    db_session.add(
+        Group(
+            tg_group_id=-100777002,
+            title="Scoped Group Duplicate",
+            owner_user_id=owner.id,
+            is_active=True,
+        )
+    )
     with pytest.raises(IntegrityError):
         await db_session.commit()
 
@@ -83,19 +121,25 @@ async def test_plugin_enabled_and_warnings_rows(db_session) -> None:
     db_session.add(group)
     await db_session.flush()
 
-    db_session.add(PluginEnabled(group_id=group.id, plugin_name="anti_links", enabled=True, config={}))
+    db_session.add(
+        PluginEnabled(group_id=group.id, plugin_name="anti_links", enabled=True, config={})
+    )
     db_session.add(Warning(group_id=group.id, user_id=777, issued_by=1, reason="link", count=1))
     await db_session.commit()
 
     plugin = (
         await db_session.execute(
-            select(PluginEnabled).where(PluginEnabled.group_id == group.id, PluginEnabled.plugin_name == "anti_links")
+            select(PluginEnabled).where(
+                PluginEnabled.group_id == group.id, PluginEnabled.plugin_name == "anti_links"
+            )
         )
     ).scalar_one()
     assert plugin.enabled is True
 
     warning = (
-        await db_session.execute(select(Warning).where(Warning.group_id == group.id, Warning.user_id == 777))
+        await db_session.execute(
+            select(Warning).where(Warning.group_id == group.id, Warning.user_id == 777)
+        )
     ).scalar_one()
     assert warning.reason == "link"
 
@@ -106,13 +150,25 @@ async def test_agent_and_agent_job_relationship(db_session) -> None:
     db_session.add(group)
     await db_session.flush()
 
-    agent = Agent(group_id=group.id, telegram_user_id=1234, external_account_id="support-bot", status="active", details={})
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=1234,
+        external_account_id="support-bot",
+        status="active",
+        details={},
+    )
     db_session.add(agent)
     await db_session.flush()
-    db_session.add(AgentJob(agent_id=agent.id, job_type="sync", job_payload={"scope": "full"}, status="pending"))
+    db_session.add(
+        AgentJob(
+            agent_id=agent.id, job_type="sync", job_payload={"scope": "full"}, status="pending"
+        )
+    )
     await db_session.commit()
 
     row = (await db_session.execute(select(Agent).where(Agent.id == agent.id))).scalar_one()
     assert row.external_account_id == "support-bot"
-    job = (await db_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))).scalar_one()
+    job = (
+        await db_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))
+    ).scalar_one()
     assert job.job_payload["scope"] == "full"

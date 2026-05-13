@@ -50,7 +50,9 @@ class RuntimeReplayService:
         self.session = session
 
     async def get_record(self, *, log_id: int) -> RuntimeReplayRecord | None:
-        row = (await self.session.execute(select(ModerationLog).where(ModerationLog.id == log_id))).scalar_one_or_none()
+        row = (
+            await self.session.execute(select(ModerationLog).where(ModerationLog.id == log_id))
+        ).scalar_one_or_none()
         if row is None:
             return None
         return self._to_record(row)
@@ -64,7 +66,11 @@ class RuntimeReplayService:
                 .limit(limit)
             )
         ).scalars()
-        return [self._to_record(row) for row in rows if parse_runtime_audit_compatibility(row).is_runtime_audit]
+        return [
+            self._to_record(row)
+            for row in rows
+            if parse_runtime_audit_compatibility(row).is_runtime_audit
+        ]
 
     def _to_record(self, row: ModerationLog) -> RuntimeReplayRecord:
         audit = parse_runtime_audit_compatibility(row)

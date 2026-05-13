@@ -9,6 +9,7 @@ def _get_fernet():
         return None
     try:
         from cryptography.fernet import Fernet
+
         return Fernet(key.encode() if isinstance(key, str) else key)
     except (ImportError, ValueError):
         return None

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
 from urllib.parse import urlencode
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,8 +25,11 @@ class GroupPaymentService:
         self.session = session
         self.subscription_service = GroupSubscriptionService(session)
 
-    async def create_manual_payment(self, group_id: int, user_id: int, plan_id: int) -> PaymentRecord:
+    async def create_manual_payment(
+        self, group_id: int, user_id: int, plan_id: int
+    ) -> PaymentRecord:
         from sqlalchemy import select
+
         plan_stmt = select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
         plan = (await self.session.execute(plan_stmt)).scalar_one()
 
@@ -43,23 +45,35 @@ class GroupPaymentService:
         self.session.add(payment)
         await self.session.flush()
         await self.subscription_service.log_event(
-            group_id, user_id, "manual_payment_created", {"payment_id": payment.id},
+            group_id,
+            user_id,
+            "manual_payment_created",
+            {"payment_id": payment.id},
         )
         return payment
 
-    async def mark_paid(self, payment_id: int, reference: str | None = None) -> PaymentRecord | None:
+    async def mark_paid(
+        self, payment_id: int, reference: str | None = None
+    ) -> PaymentRecord | None:
         return await self.subscription_service.confirm_payment(payment_id, reference)
 
     async def create_stripe_checkout_session(
-        self, group_id: int, user_id: int, plan_id: int, success_url: str, cancel_url: str,
+        self,
+        group_id: int,
+        user_id: int,
+        plan_id: int,
+        success_url: str,
+        cancel_url: str,
     ) -> dict | None:
         settings = get_settings()
         if not settings.stripe_api_key:
             raise ValueError("Stripe is not configured. Set STRIPE_API_KEY.")
 
         from sqlalchemy import select
+
         plan_stmt = select(SubscriptionPlan).where(
-            SubscriptionPlan.id == plan_id, SubscriptionPlan.group_id == group_id,
+            SubscriptionPlan.id == plan_id,
+            SubscriptionPlan.group_id == group_id,
         )
         plan = (await self.session.execute(plan_stmt)).scalar_one_or_none()
         if not plan:
@@ -68,6 +82,7 @@ class GroupPaymentService:
             raise ValueError("Plan is disabled.")
 
         import stripe as stripe_lib
+
         stripe_lib.api_key = settings.stripe_api_key
 
         if plan.stripe_price_id:
@@ -86,18 +101,23 @@ class GroupPaymentService:
         else:
             session = stripe_lib.checkout.Session.create(
                 mode="subscription" if plan.duration_days >= 30 else "payment",
-                line_items=[{
-                    "price_data": {
-                        "currency": plan.currency.lower() or "usd",
-                        "product_data": {
-                            "name": plan.name or "Group Access Plan",
-                            "description": plan.description or f"{plan.duration_days}-day access",
+                line_items=[
+                    {
+                        "price_data": {
+                            "currency": plan.currency.lower() or "usd",
+                            "product_data": {
+                                "name": plan.name or "Group Access Plan",
+                                "description": plan.description
+                                or f"{plan.duration_days}-day access",
+                            },
+                            "unit_amount": plan.price_amount,
+                            "recurring": {"interval": "month"}
+                            if plan.duration_days >= 30
+                            else None,
                         },
-                        "unit_amount": plan.price_amount,
-                        "recurring": {"interval": "month"} if plan.duration_days >= 30 else None,
-                    },
-                    "quantity": 1,
-                }],
+                        "quantity": 1,
+                    }
+                ],
                 metadata={
                     "group_id": str(group_id),
                     "user_id": str(user_id),
@@ -119,7 +139,9 @@ class GroupPaymentService:
 
         try:
             event = stripe_lib.Webhook.construct_event(
-                payload, signature, settings.stripe_webhook_secret,
+                payload,
+                signature,
+                settings.stripe_webhook_secret,
             )
         except (ValueError, stripe_lib.error.SignatureVerificationError) as exc:
             logger.error("stripe_webhook_verification_failed", error=str(exc))
@@ -150,12 +172,15 @@ class GroupPaymentService:
             return {"status": "missing_metadata"}
 
         from sqlalchemy import select
-        existing = (await self.session.execute(
-            select(PaymentRecord).where(
-                PaymentRecord.provider == GroupPaymentMode.STRIPE,
-                PaymentRecord.provider_reference == session_id,
+
+        existing = (
+            await self.session.execute(
+                select(PaymentRecord).where(
+                    PaymentRecord.provider == GroupPaymentMode.STRIPE,
+                    PaymentRecord.provider_reference == session_id,
+                )
             )
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
         if existing:
             return {"status": "already_processed", "payment_id": existing.id}
 
@@ -173,7 +198,9 @@ class GroupPaymentService:
         self.session.add(payment)
         await self.session.flush()
         await self.subscription_service.activate_subscription(
-            group_id, user_id, plan_id,
+            group_id,
+            user_id,
+            plan_id,
             provider=GroupPaymentMode.STRIPE,
             reference=session_id,
         )

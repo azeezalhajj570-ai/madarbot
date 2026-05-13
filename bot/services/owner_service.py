@@ -5,7 +5,16 @@ from typing import Any
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, GroupSetting, ModerationLog, PluginEnabled, Warning
+from bot.db.models import (
+    Agent,
+    AgentJob,
+    Group,
+    GroupAdminRole,
+    GroupSetting,
+    ModerationLog,
+    PluginEnabled,
+    Warning,
+)
 from bot.services.settings_service import SettingsService
 
 
@@ -73,13 +82,17 @@ class OwnerService:
                 "warning_count": int(row.warning_count or 0),
                 "plugin_count": int(row.plugin_count or 0),
                 "agent_count": int(row.agent_count or 0),
-                "last_activity_at": row.last_activity_at.isoformat() if row.last_activity_at else None,
+                "last_activity_at": row.last_activity_at.isoformat()
+                if row.last_activity_at
+                else None,
             }
             for row in rows
         ]
 
     async def get_group_details(self, group_id: int) -> dict[str, Any] | None:
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             return None
 
@@ -210,20 +223,30 @@ class OwnerService:
     async def stats(self) -> dict[str, int]:
         total_groups = (await self.session.execute(select(func.count(Group.id)))).scalar_one()
         active_groups = (
-            await self.session.execute(select(func.count(Group.id)).where(Group.is_active.is_(True)))
+            await self.session.execute(
+                select(func.count(Group.id)).where(Group.is_active.is_(True))
+            )
         ).scalar_one()
-        total_users = (await self.session.execute(select(func.count(func.distinct(GroupAdminRole.user_id))))).scalar_one()
-        moderation_actions = (await self.session.execute(select(func.count(ModerationLog.id)))).scalar_one()
+        total_users = (
+            await self.session.execute(select(func.count(func.distinct(GroupAdminRole.user_id))))
+        ).scalar_one()
+        moderation_actions = (
+            await self.session.execute(select(func.count(ModerationLog.id)))
+        ).scalar_one()
         open_warnings = (
             await self.session.execute(select(func.coalesce(func.sum(Warning.count), 0)))
         ).scalar_one()
         enabled_plugins = (
-            await self.session.execute(select(func.count(PluginEnabled.id)).where(PluginEnabled.enabled.is_(True)))
+            await self.session.execute(
+                select(func.count(PluginEnabled.id)).where(PluginEnabled.enabled.is_(True))
+            )
         ).scalar_one()
         linked_agents = (await self.session.execute(select(func.count(Agent.id)))).scalar_one()
         pending_agent_jobs = (
             await self.session.execute(
-                select(func.count(AgentJob.id)).where(AgentJob.status.in_(("pending", "queued", "running")))
+                select(func.count(AgentJob.id)).where(
+                    AgentJob.status.in_(("pending", "queued", "running"))
+                )
             )
         ).scalar_one()
 
@@ -239,7 +262,9 @@ class OwnerService:
         }
 
     async def disable_group(self, group_id: int) -> dict[str, Any] | None:
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             return None
         group.is_active = False

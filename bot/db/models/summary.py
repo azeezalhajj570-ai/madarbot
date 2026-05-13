@@ -5,7 +5,19 @@ from typing import Optional
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -88,4 +100,6 @@ class GroupMessageActivity(Base):
     is_question: Mapped[bool] = mapped_column(Boolean, default=False)
     is_forwarded: Mapped[bool] = mapped_column(Boolean, default=False)
     reply_to_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, index=True
+    )

@@ -36,18 +36,36 @@ async def _required_group_titles(session, required_group_tg_ids: list[int]) -> l
     titles: list[str] = []
     for required_group_tg_id in required_group_tg_ids:
         rows = (
-            await session.execute(select(Group.title).where(Group.tg_group_id.in_(tg_group_id_candidates(required_group_tg_id))))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Group.title).where(
+                        Group.tg_group_id.in_(tg_group_id_candidates(required_group_tg_id))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         titles.append(str(rows[0]) if rows else str(required_group_tg_id))
     return titles
 
 
-async def _required_group_targets(bot, session, required_group_tg_ids: list[int]) -> list[tuple[str, str]]:
+async def _required_group_targets(
+    bot, session, required_group_tg_ids: list[int]
+) -> list[tuple[str, str]]:
     targets: list[tuple[str, str]] = []
     for required_group_tg_id in required_group_tg_ids:
         rows = (
-            await session.execute(select(Group.title).where(Group.tg_group_id.in_(tg_group_id_candidates(required_group_tg_id))))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Group.title).where(
+                        Group.tg_group_id.in_(tg_group_id_candidates(required_group_tg_id))
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         title = str(rows[0]) if rows else str(required_group_tg_id)
         url: str | None = None
         for candidate_id in _chat_id_candidates(required_group_tg_id):
@@ -78,7 +96,9 @@ async def enforce_private_access_gate(message: Message, lang: str) -> bool:
         return False
 
     async with SessionLocal() as session:
-        required_groups = await PrivateAccessRequirementService(session).list_required_group_tg_ids()
+        required_groups = await PrivateAccessRequirementService(
+            session
+        ).list_required_group_tg_ids()
         if not required_groups:
             return False
 
@@ -100,12 +120,15 @@ async def enforce_private_access_gate(message: Message, lang: str) -> bool:
             return False
 
         required_group_titles = await _required_group_titles(session, missing_required_groups)
-        required_group_targets = await _required_group_targets(message.bot, session, missing_required_groups)
+        required_group_targets = await _required_group_targets(
+            message.bot, session, missing_required_groups
+        )
         await message.answer(
             build_private_access_gate_notice(
                 lang,
                 required_group_titles,
-                member_name=getattr(message.from_user, "full_name", None) or getattr(message.from_user, "first_name", None),
+                member_name=getattr(message.from_user, "full_name", None)
+                or getattr(message.from_user, "first_name", None),
             ),
             reply_markup=build_access_gate_buttons(required_group_targets),
         )

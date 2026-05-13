@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from bot.mcp.context import resolve_mcp_context
 from bot.mcp.tools.accounts import register_account_tools
 from bot.mcp.tools.analytics import register_analytics_tools
 from bot.mcp.tools.groups import register_group_tools

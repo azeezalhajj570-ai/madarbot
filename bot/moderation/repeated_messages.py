@@ -9,7 +9,9 @@ from bot.moderation.schemas import ModerationAction, ModerationCategory, Moderat
 
 
 class RepeatedMessageDetector:
-    def __init__(self, redis_client: Any | None = None, window_seconds: int = 300, threshold: int = 3) -> None:
+    def __init__(
+        self, redis_client: Any | None = None, window_seconds: int = 300, threshold: int = 3
+    ) -> None:
         self.redis = redis_client
         self.window_seconds = window_seconds
         self.threshold = threshold
@@ -67,7 +69,9 @@ class RepeatedMessageDetector:
                 confidence=0.8 + min(0.19, (count - self.threshold) * 0.05),
                 reason=f"repeated_message_count_{count}",
                 matched_signals=[f"repeat_count:{count}"],
-                recommended_action=ModerationAction.REVIEW if count < self.threshold + 2 else ModerationAction.DELETE,
+                recommended_action=ModerationAction.REVIEW
+                if count < self.threshold + 2
+                else ModerationAction.DELETE,
             )
 
         return ModerationDecision(ModerationCategory.SAFE, 0.0, "clean")

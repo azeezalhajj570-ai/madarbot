@@ -10,7 +10,6 @@ from sqlalchemy import select
 from bot.config import get_settings
 from bot.db.models import (
     GroupSubscriber,
-    GroupSubscriptionSettings,
     SubscriptionPlan,
     PaymentRecord,
 )
@@ -22,7 +21,11 @@ from ..dependencies import get_identity, ensure_group_admin
 from .auth_boundary import require_admin_boundary
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/api/groups/{group_id}/subscriptions", tags=["subscriptions"], dependencies=[Depends(require_admin_boundary)])
+router = APIRouter(
+    prefix="/api/groups/{group_id}/subscriptions",
+    tags=["subscriptions"],
+    dependencies=[Depends(require_admin_boundary)],
+)
 logger = logging.getLogger(__name__)
 
 
@@ -90,10 +93,10 @@ async def update_subscription_settings(
     await ensure_group_admin(group_id, session, identity)
     service = GroupSubscriptionService(session)
     settings = await service.get_settings(group_id)
-    
+
     for key, value in payload.dict(exclude_unset=True).items():
         setattr(settings, key, value)
-    
+
     await session.commit()
     return {"status": "ok"}
 
@@ -128,9 +131,7 @@ async def create_subscription_plan(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
-    plan = await GroupSubscriptionService(session).create_plan(
-        group_id, **payload.dict()
-    )
+    plan = await GroupSubscriptionService(session).create_plan(group_id, **payload.dict())
     await session.commit()
     return {"status": "ok", "plan_id": plan.id}
 
@@ -144,14 +145,16 @@ async def update_subscription_plan(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
-    stmt = select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id, SubscriptionPlan.group_id == group_id)
+    stmt = select(SubscriptionPlan).where(
+        SubscriptionPlan.id == plan_id, SubscriptionPlan.group_id == group_id
+    )
     plan = (await session.execute(stmt)).scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     for key, value in payload.dict(exclude_unset=True).items():
         setattr(plan, key, value)
-    
+
     await session.commit()
     return {"status": "ok"}
 
@@ -214,7 +217,9 @@ async def mark_payment_paid(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
-    stmt = select(PaymentRecord).where(PaymentRecord.id == payment_id, PaymentRecord.group_id == group_id)
+    stmt = select(PaymentRecord).where(
+        PaymentRecord.id == payment_id, PaymentRecord.group_id == group_id
+    )
     payment = (await session.execute(stmt)).scalar_one_or_none()
     if not payment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")

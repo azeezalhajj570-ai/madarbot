@@ -7,9 +7,7 @@ from bot.moderation.schemas import ModerationAction, ModerationCategory, Moderat
 
 
 def decide_action(
-    decision: ModerationDecision,
-    settings: ModerationSetting,
-    context: dict[str, Any]
+    decision: ModerationDecision, settings: ModerationSetting, context: dict[str, Any]
 ) -> ModerationAction:
     # 1. Check if global flag or group setting is disabled
     if not context.get("global_enabled", True):
@@ -25,7 +23,7 @@ def decide_action(
 
     # 3. Allow if confidence is below review threshold
     review_threshold = settings.review_threshold if settings.review_threshold is not None else 0.65
-    
+
     # Check domains escalation/downgrade
     found_domains = context.get("detected_domains", [])
     blocked_match = any(d in (settings.blocked_domains or []) for d in found_domains)
@@ -35,12 +33,14 @@ def decide_action(
         # Escalation: ensure at least REVIEW even if confidence is low
         if decision.confidence < review_threshold:
             decision.confidence = review_threshold
-    
+
     if allowlisted_match:
         # Downgrade: never auto-delete/mute/ban
         if settings.safe_mode:
             return ModerationAction.REVIEW
-        return ModerationAction.REVIEW # Force review for allowlisted domains instead of destructive action
+        return (
+            ModerationAction.REVIEW
+        )  # Force review for allowlisted domains instead of destructive action
 
     if decision.confidence < review_threshold:
         return ModerationAction.ALLOW
@@ -70,7 +70,9 @@ def decide_action(
     # 6. Threshold-based actions (when safe_mode is False)
     ban_threshold = settings.ban_threshold if settings.ban_threshold is not None else 0.98
     mute_threshold = settings.mute_threshold if settings.mute_threshold is not None else 0.95
-    auto_delete_threshold = settings.auto_delete_threshold if settings.auto_delete_threshold is not None else 0.92
+    auto_delete_threshold = (
+        settings.auto_delete_threshold if settings.auto_delete_threshold is not None else 0.92
+    )
 
     if decision.confidence >= ban_threshold:
         return ModerationAction.BAN
@@ -78,5 +80,5 @@ def decide_action(
         return ModerationAction.MUTE
     if decision.confidence >= auto_delete_threshold:
         return ModerationAction.DELETE
-    
+
     return ModerationAction.REVIEW

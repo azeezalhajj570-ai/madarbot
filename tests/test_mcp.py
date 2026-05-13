@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import pytest
 
@@ -34,6 +33,7 @@ def _mcp_env(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestMcpAuth:
     def test_verify_auth_with_token(self):
         from bot.mcp.auth import verify_mcp_auth
+
         ok, _ = verify_mcp_auth("test-token-123")
         assert ok is True
         ok, _ = verify_mcp_auth("wrong-token")
@@ -45,6 +45,7 @@ class TestMcpAuth:
         monkeypatch.setenv("MCP_AUTH_TOKEN", "")
         get_settings.cache_clear()
         from bot.mcp.auth import verify_mcp_auth
+
         ok, _ = verify_mcp_auth("anything")
         assert ok is True
         ok, _ = verify_mcp_auth(None)
@@ -54,6 +55,7 @@ class TestMcpAuth:
 class TestMcpContext:
     def test_resolve_context(self):
         from bot.mcp.context import resolve_mcp_context
+
         ctx = resolve_mcp_context()
         assert ctx.actor_user_id == 1001
         assert ctx.readonly is True
@@ -62,6 +64,7 @@ class TestMcpContext:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.context import resolve_mcp_context
+
         ctx = resolve_mcp_context()
         assert ctx.readonly is False
 
@@ -69,6 +72,7 @@ class TestMcpContext:
         monkeypatch.delenv("MCP_DEFAULT_ACTOR_USER_ID", raising=False)
         get_settings.cache_clear()
         from bot.mcp.context import resolve_mcp_context
+
         with pytest.raises(RuntimeError, match="MCP_DEFAULT_ACTOR_USER_ID"):
             resolve_mcp_context()
 
@@ -111,6 +115,7 @@ class TestMcpStructuredResponse:
     @pytest.mark.asyncio
     async def test_error_response_structure(self):
         from bot.mcp.tools.accounts import madarbot_delete_account
+
         result = _parse_result(await madarbot_delete_account(agent_id=1))
         assert "content" in result
         assert "structuredContent" in result
@@ -136,6 +141,7 @@ class TestMcpReadonly:
     @pytest.mark.asyncio
     async def test_delete_account_blocked_in_readonly(self):
         from bot.mcp.tools.accounts import madarbot_delete_account
+
         result = _parse_result(await madarbot_delete_account(agent_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
@@ -143,13 +149,17 @@ class TestMcpReadonly:
     @pytest.mark.asyncio
     async def test_update_account_blocked_in_readonly(self):
         from bot.mcp.tools.accounts import madarbot_update_account
-        result = _parse_result(await madarbot_update_account(agent_id=1, external_account_id="test"))
+
+        result = _parse_result(
+            await madarbot_update_account(agent_id=1, external_account_id="test")
+        )
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
 
     @pytest.mark.asyncio
     async def test_delete_task_blocked_in_readonly(self):
         from bot.mcp.tools.tasks import madarbot_delete_task
+
         result = _parse_result(await madarbot_delete_task(group_id=1, assignment_id="abc"))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
@@ -157,6 +167,7 @@ class TestMcpReadonly:
     @pytest.mark.asyncio
     async def test_delete_lead_blocked_in_readonly(self):
         from bot.mcp.tools.leads import madarbot_delete_lead
+
         result = _parse_result(await madarbot_delete_lead(lead_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
@@ -164,6 +175,7 @@ class TestMcpReadonly:
     @pytest.mark.asyncio
     async def test_mark_notifications_blocked_in_readonly(self):
         from bot.mcp.tools.notifications import madarbot_mark_notifications_seen
+
         result = _parse_result(await madarbot_mark_notifications_seen())
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
@@ -171,6 +183,7 @@ class TestMcpReadonly:
     @pytest.mark.asyncio
     async def test_cancel_subscription_blocked_in_readonly(self):
         from bot.mcp.tools.subscriptions import madarbot_cancel_subscription
+
         result = _parse_result(await madarbot_cancel_subscription(tg_user_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "READONLY_MODE"
@@ -182,6 +195,7 @@ class TestMcpConfirmation:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.accounts import madarbot_delete_account
+
         result = _parse_result(await madarbot_delete_account(agent_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "CONFIRMATION_REQUIRED"
@@ -191,6 +205,7 @@ class TestMcpConfirmation:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.leads import madarbot_delete_lead
+
         result = _parse_result(await madarbot_delete_lead(lead_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "CONFIRMATION_REQUIRED"
@@ -200,6 +215,7 @@ class TestMcpConfirmation:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.subscriptions import madarbot_cancel_subscription
+
         result = _parse_result(await madarbot_cancel_subscription(tg_user_id=1))
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "CONFIRMATION_REQUIRED"
@@ -211,10 +227,13 @@ class TestMcpSafety:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.analytics import madarbot_update_safety_settings
-        result = _parse_result(await madarbot_update_safety_settings(
-            agent_id=1,
-            safety_mode_enabled=False,
-        ))
+
+        result = _parse_result(
+            await madarbot_update_safety_settings(
+                agent_id=1,
+                safety_mode_enabled=False,
+            )
+        )
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "VALIDATION_ERROR"
 
@@ -223,10 +242,13 @@ class TestMcpSafety:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.analytics import madarbot_update_safety_settings
-        result = _parse_result(await madarbot_update_safety_settings(
-            agent_id=1,
-            max_actions_per_hour=99999,
-        ))
+
+        result = _parse_result(
+            await madarbot_update_safety_settings(
+                agent_id=1,
+                max_actions_per_hour=99999,
+            )
+        )
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "VALIDATION_ERROR"
 
@@ -235,10 +257,13 @@ class TestMcpSafety:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.analytics import madarbot_update_safety_settings
-        result = _parse_result(await madarbot_update_safety_settings(
-            agent_id=1,
-            max_messages_per_day=99999,
-        ))
+
+        result = _parse_result(
+            await madarbot_update_safety_settings(
+                agent_id=1,
+                max_messages_per_day=99999,
+            )
+        )
         assert "structuredContent" in result
         assert result["structuredContent"]["error"]["code"] == "VALIDATION_ERROR"
 
@@ -249,7 +274,10 @@ class TestMcpScrapeLimits:
         monkeypatch.setenv("MCP_READONLY", "false")
         get_settings.cache_clear()
         from bot.mcp.tools.groups import madarbot_start_group_sync
-        result = _parse_result(await madarbot_start_group_sync(agent_id=1, tg_group_id=-100, limit=100000))
+
+        result = _parse_result(
+            await madarbot_start_group_sync(agent_id=1, tg_group_id=-100, limit=100000)
+        )
         assert "structuredContent" in result
         assert "error" in result["structuredContent"]
 
@@ -257,6 +285,7 @@ class TestMcpScrapeLimits:
 class TestMcpServer:
     def test_create_server_registers_tools(self):
         from bot.mcp.server import create_mcp_server
+
         server = create_mcp_server()
         tools = server._tool_manager.list_tools()
         tool_names = {t.name for t in tools}
@@ -283,7 +312,9 @@ class TestMcpServer:
         tools = server._tool_manager.list_tools()
 
         for tool in tools:
-            assert tool.name in TOOL_OUTPUT_SCHEMAS, f"Tool '{tool.name}' missing from TOOL_OUTPUT_SCHEMAS"
+            assert tool.name in TOOL_OUTPUT_SCHEMAS, (
+                f"Tool '{tool.name}' missing from TOOL_OUTPUT_SCHEMAS"
+            )
             schema = TOOL_OUTPUT_SCHEMAS[tool.name]
             assert "properties" in schema
             assert "content" in schema["properties"]

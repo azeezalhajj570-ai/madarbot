@@ -63,8 +63,16 @@ class ScraperService:
                 entity = dialog.entity
                 title = getattr(entity, "title", None)
                 username = getattr(entity, "username", None)
-                group_type = "channel" if getattr(entity, "broadcast", False) else "supergroup" if getattr(entity, "megagroup", False) else "group"
-                member_count = getattr(entity, "participants_count", None) or getattr(entity, "user_count", None)
+                group_type = (
+                    "channel"
+                    if getattr(entity, "broadcast", False)
+                    else "supergroup"
+                    if getattr(entity, "megagroup", False)
+                    else "group"
+                )
+                member_count = getattr(entity, "participants_count", None) or getattr(
+                    entity, "user_count", None
+                )
 
                 raw_data = {
                     "id": getattr(entity, "id", None),
@@ -96,7 +104,9 @@ class ScraperService:
                 with suppress(Exception):
                     await managed_client.disconnect()
 
-    async def scrape_group_info(self, *, agent_id: int, tg_group_id: int, client: Any | None = None) -> Any | None:
+    async def scrape_group_info(
+        self, *, agent_id: int, tg_group_id: int, client: Any | None = None
+    ) -> Any | None:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
             return None
@@ -112,11 +122,21 @@ class ScraperService:
                 return None
 
         try:
-            entity = await entity_resolver.resolve_group_entity(managed_client, int(tg_group_id), self.session)
+            entity = await entity_resolver.resolve_group_entity(
+                managed_client, int(tg_group_id), self.session
+            )
             title = getattr(entity, "title", None)
             username = getattr(entity, "username", None)
-            group_type = "channel" if getattr(entity, "broadcast", False) else "supergroup" if getattr(entity, "megagroup", False) else "group"
-            member_count = getattr(entity, "participants_count", None) or getattr(entity, "user_count", None)
+            group_type = (
+                "channel"
+                if getattr(entity, "broadcast", False)
+                else "supergroup"
+                if getattr(entity, "megagroup", False)
+                else "group"
+            )
+            member_count = getattr(entity, "participants_count", None) or getattr(
+                entity, "user_count", None
+            )
             description = getattr(entity, "about", None) if hasattr(entity, "about") else None
 
             raw_data = {
@@ -136,15 +156,24 @@ class ScraperService:
                 session=self.session,
             )
         except Exception as exc:
-            logger.exception("scrape_group_info_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
+            logger.exception(
+                "scrape_group_info_failed",
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                error=str(exc),
+            )
             return None
         finally:
             if should_disconnect:
                 with suppress(Exception):
                     await managed_client.disconnect()
 
-    async def _scrape_group_info_dict(self, *, agent_id: int, tg_group_id: int, client: Any | None = None) -> dict | None:
-        group = await self.scrape_group_info(agent_id=agent_id, tg_group_id=tg_group_id, client=client)
+    async def _scrape_group_info_dict(
+        self, *, agent_id: int, tg_group_id: int, client: Any | None = None
+    ) -> dict | None:
+        group = await self.scrape_group_info(
+            agent_id=agent_id, tg_group_id=tg_group_id, client=client
+        )
         if group is None:
             return None
         return {
@@ -180,9 +209,14 @@ class ScraperService:
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
-                client=managed_client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
+                client=managed_client,
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(managed_client, int(tg_group_id), self.session)
+            entity = await entity_resolver.resolve_group_entity(
+                managed_client, int(tg_group_id), self.session
+            )
             success_count = 0
             error_count = 0
             total_scraped = 0
@@ -193,13 +227,16 @@ class ScraperService:
             admin_roles: dict[int, str] = {}
             try:
                 from telethon.tl.functions.channels import GetParticipantsRequest
-                admin_result = await managed_client(GetParticipantsRequest(
-                    channel=entity,
-                    filter=ChannelParticipantsAdmins(),
-                    offset=0,
-                    limit=100,
-                    hash=0,
-                ))
+
+                admin_result = await managed_client(
+                    GetParticipantsRequest(
+                        channel=entity,
+                        filter=ChannelParticipantsAdmins(),
+                        offset=0,
+                        limit=100,
+                        hash=0,
+                    )
+                )
                 admin_users_by_id = {u.id: u for u in admin_result.users}
                 for admin_participant in admin_result.participants:
                     admin_user_id = getattr(admin_participant, "user_id", None)
@@ -214,7 +251,10 @@ class ScraperService:
                     role = "member"
                     if hasattr(admin_participant, "creator") and admin_participant.creator:
                         role = "creator"
-                    elif hasattr(admin_participant, "admin_rights") and admin_participant.admin_rights:
+                    elif (
+                        hasattr(admin_participant, "admin_rights")
+                        and admin_participant.admin_rights
+                    ):
                         role = "admin"
                     admin_row["role"] = role
                     admin_roles[int(admin_user_id)] = role
@@ -225,12 +265,24 @@ class ScraperService:
                 if member_batch:
                     await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
                     member_batch = []
-                logger.info("admins_fetched_first", agent_id=agent_id, tg_group_id=tg_group_id, admin_count=len(admin_result.participants))
+                logger.info(
+                    "admins_fetched_first",
+                    agent_id=agent_id,
+                    tg_group_id=tg_group_id,
+                    admin_count=len(admin_result.participants),
+                )
             except Exception as exc:
-                logger.warning("admin_fetch_failed_proceeding", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
+                logger.warning(
+                    "admin_fetch_failed_proceeding",
+                    agent_id=agent_id,
+                    tg_group_id=tg_group_id,
+                    error=str(exc),
+                )
 
             seen = 0
-            async for participant in managed_client.iter_participants(entity=entity, limit=limit + max(0, offset)):
+            async for participant in managed_client.iter_participants(
+                entity=entity, limit=limit + max(0, offset)
+            ):
                 if seen < max(0, offset):
                     seen += 1
                     continue
@@ -255,7 +307,12 @@ class ScraperService:
                     success_count += 1
                 except Exception as exc:
                     error_count += 1
-                    logger.warning("scrape_member_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
+                    logger.warning(
+                        "scrape_member_failed",
+                        agent_id=agent_id,
+                        tg_group_id=tg_group_id,
+                        error=str(exc),
+                    )
 
             if member_batch:
                 await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
@@ -264,18 +321,28 @@ class ScraperService:
                 scraped_group.member_count = success_count
             scraped_group.updated_at = datetime.utcnow()
             await self.session.commit()
-            return {"success_count": success_count, "error_count": error_count, "total_scraped": total_scraped}
+            return {
+                "success_count": success_count,
+                "error_count": error_count,
+                "total_scraped": total_scraped,
+            }
         except Exception as exc:
             await self.session.rollback()
-            logger.exception("scrape_members_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
+            logger.exception(
+                "scrape_members_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc)
+            )
             return {"success_count": 0, "error_count": 0, "total_scraped": 0}
         finally:
             if should_disconnect:
                 with suppress(Exception):
                     await managed_client.disconnect()
 
-    def _build_member_row_from_participant(self, participant: Any, scraped_group_id: int, canonical_group_id: int, user_id: int) -> dict[str, Any]:
-        return serializers.build_member_row_from_participant(participant, scraped_group_id, canonical_group_id, user_id)
+    def _build_member_row_from_participant(
+        self, participant: Any, scraped_group_id: int, canonical_group_id: int, user_id: int
+    ) -> dict[str, Any]:
+        return serializers.build_member_row_from_participant(
+            participant, scraped_group_id, canonical_group_id, user_id
+        )
 
     async def scrape_messages(
         self,
@@ -291,7 +358,12 @@ class ScraperService:
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0}
+            return {
+                "success_count": 0,
+                "error_count": 0,
+                "total_scraped": 0,
+                "member_success_count": 0,
+            }
 
         managed_client = client
         should_disconnect = False
@@ -301,13 +373,23 @@ class ScraperService:
                 should_disconnect = True
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
-                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0}
+                return {
+                    "success_count": 0,
+                    "error_count": 0,
+                    "total_scraped": 0,
+                    "member_success_count": 0,
+                }
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
-                client=managed_client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
+                client=managed_client,
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(managed_client, int(tg_group_id), self.session)
+            entity = await entity_resolver.resolve_group_entity(
+                managed_client, int(tg_group_id), self.session
+            )
             success_count = 0
             error_count = 0
             total_scraped = 0
@@ -324,9 +406,15 @@ class ScraperService:
                 else None
             )
 
-            async for message in managed_client.iter_messages(entity=entity, limit=limit, offset_id=offset_id, min_id=min_id, max_id=max_id):
+            async for message in managed_client.iter_messages(
+                entity=entity, limit=limit, offset_id=offset_id, min_id=min_id, max_id=max_id
+            ):
                 message_date = getattr(message, "date", None)
-                if isinstance(message_date, datetime) and min_message_date is not None and message_date.replace(tzinfo=None) < min_message_date:
+                if (
+                    isinstance(message_date, datetime)
+                    and min_message_date is not None
+                    and message_date.replace(tzinfo=None) < min_message_date
+                ):
                     break
                 total_scraped += 1
                 try:
@@ -334,13 +422,23 @@ class ScraperService:
                     if message_id is None:
                         continue
 
-                    sender_user_id, sender_username, sender_first_name, sender_last_name, sender_raw_data = (
-                        await entity_resolver.extract_message_sender_data(message)
-                    )
+                    (
+                        sender_user_id,
+                        sender_username,
+                        sender_first_name,
+                        sender_last_name,
+                        sender_raw_data,
+                    ) = await entity_resolver.extract_message_sender_data(message)
 
                     msg_row = serializers.build_message_row_from_msg(
-                        message, scraped_group.id, canonical_group_id, int(message_id),
-                        sender_user_id, sender_username, sender_first_name, sender_last_name,
+                        message,
+                        scraped_group.id,
+                        canonical_group_id,
+                        int(message_id),
+                        sender_user_id,
+                        sender_username,
+                        sender_first_name,
+                        sender_last_name,
                     )
                     message_batch.append(msg_row)
 
@@ -348,8 +446,13 @@ class ScraperService:
                         uid = int(sender_user_id)
                         sender_role = existing_admin_roles.get(uid)
                         member_row = serializers.build_member_row_from_sender(
-                            scraped_group.id, canonical_group_id, uid,
-                            sender_username, sender_first_name, sender_last_name, sender_raw_data,
+                            scraped_group.id,
+                            canonical_group_id,
+                            uid,
+                            sender_username,
+                            sender_first_name,
+                            sender_last_name,
+                            sender_raw_data,
                             role=sender_role,
                         )
                         member_batch.append(member_row)
@@ -372,7 +475,13 @@ class ScraperService:
                     success_count += 1
                 except Exception as exc:
                     error_count += 1
-                    logger.warning("scrape_message_failed", agent_id=agent_id, tg_group_id=tg_group_id, message_id=getattr(message, "id", "unknown"), error=str(exc))
+                    logger.warning(
+                        "scrape_message_failed",
+                        agent_id=agent_id,
+                        tg_group_id=tg_group_id,
+                        message_id=getattr(message, "id", "unknown"),
+                        error=str(exc),
+                    )
 
             if message_batch:
                 await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
@@ -394,23 +503,60 @@ class ScraperService:
             }
         except Exception as exc:
             await self.session.rollback()
-            logger.exception("scrape_messages_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0}
+            logger.exception(
+                "scrape_messages_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc)
+            )
+            return {
+                "success_count": 0,
+                "error_count": 0,
+                "total_scraped": 0,
+                "member_success_count": 0,
+            }
         finally:
             if should_disconnect:
                 with suppress(Exception):
                     await managed_client.disconnect()
 
-    def _build_message_row_from_msg(self, message, scraped_group_id, canonical_group_id, message_id, sender_user_id, sender_username, sender_first_name, sender_last_name):
+    def _build_message_row_from_msg(
+        self,
+        message,
+        scraped_group_id,
+        canonical_group_id,
+        message_id,
+        sender_user_id,
+        sender_username,
+        sender_first_name,
+        sender_last_name,
+    ):
         return serializers.build_message_row_from_msg(
-            message, scraped_group_id, canonical_group_id, message_id,
-            sender_user_id, sender_username, sender_first_name, sender_last_name,
+            message,
+            scraped_group_id,
+            canonical_group_id,
+            message_id,
+            sender_user_id,
+            sender_username,
+            sender_first_name,
+            sender_last_name,
         )
 
-    def _build_member_row_from_sender(self, scraped_group_id, canonical_group_id, sender_user_id, sender_username, sender_first_name, sender_last_name, sender_raw_data):
+    def _build_member_row_from_sender(
+        self,
+        scraped_group_id,
+        canonical_group_id,
+        sender_user_id,
+        sender_username,
+        sender_first_name,
+        sender_last_name,
+        sender_raw_data,
+    ):
         return serializers.build_member_row_from_sender(
-            scraped_group_id, canonical_group_id, sender_user_id,
-            sender_username, sender_first_name, sender_last_name, sender_raw_data,
+            scraped_group_id,
+            canonical_group_id,
+            sender_user_id,
+            sender_username,
+            sender_first_name,
+            sender_last_name,
+            sender_raw_data,
         )
 
     async def scrape_messages_checkpointed(
@@ -425,7 +571,14 @@ class ScraperService:
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
+            return {
+                "success_count": 0,
+                "error_count": 0,
+                "total_scraped": 0,
+                "member_success_count": 0,
+                "batches": 0,
+                "completed": False,
+            }
 
         managed_client = client
         should_disconnect = False
@@ -435,13 +588,25 @@ class ScraperService:
                 should_disconnect = True
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
-                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
+                return {
+                    "success_count": 0,
+                    "error_count": 0,
+                    "total_scraped": 0,
+                    "member_success_count": 0,
+                    "batches": 0,
+                    "completed": False,
+                }
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
-                client=managed_client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
+                client=managed_client,
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(managed_client, int(tg_group_id), self.session)
+            entity = await entity_resolver.resolve_group_entity(
+                managed_client, int(tg_group_id), self.session
+            )
 
             checkpoint = (scraped_group.scrape_state or {}).get("messages", {})
             last_offset_id = checkpoint.get("last_scraped_message_id", 0)
@@ -477,23 +642,41 @@ class ScraperService:
 
                 async for message in managed_client.iter_messages(**iterator_args):
                     msg_date = getattr(message, "date", None)
-                    if isinstance(msg_date, datetime) and min_date is not None and msg_date.replace(tzinfo=None) < min_date:
+                    if (
+                        isinstance(msg_date, datetime)
+                        and min_date is not None
+                        and msg_date.replace(tzinfo=None) < min_date
+                    ):
                         reached_end = True
                         break
                     batch_scraped += 1
                     msg_id = getattr(message, "id", None)
                     if msg_id is not None:
-                        lowest_id = min(lowest_id or msg_id, msg_id) if lowest_id is not None else msg_id
+                        lowest_id = (
+                            min(lowest_id or msg_id, msg_id) if lowest_id is not None else msg_id
+                        )
                     try:
                         if msg_id is None:
                             continue
 
                         sender_data = await entity_resolver.extract_message_sender_data(message)
-                        sender_user_id, sender_username, sender_first_name, sender_last_name, sender_raw_data = sender_data
+                        (
+                            sender_user_id,
+                            sender_username,
+                            sender_first_name,
+                            sender_last_name,
+                            sender_raw_data,
+                        ) = sender_data
 
                         msg_row = serializers.build_message_row_from_msg(
-                            message, scraped_group.id, canonical_group_id, int(msg_id),
-                            sender_user_id, sender_username, sender_first_name, sender_last_name,
+                            message,
+                            scraped_group.id,
+                            canonical_group_id,
+                            int(msg_id),
+                            sender_user_id,
+                            sender_username,
+                            sender_first_name,
+                            sender_last_name,
                         )
                         message_batch.append(msg_row)
 
@@ -501,8 +684,13 @@ class ScraperService:
                             uid = int(sender_user_id)
                             sender_role = existing_admin_roles.get(uid)
                             member_row = serializers.build_member_row_from_sender(
-                                scraped_group.id, canonical_group_id, uid,
-                                sender_username, sender_first_name, sender_last_name, sender_raw_data,
+                                scraped_group.id,
+                                canonical_group_id,
+                                uid,
+                                sender_username,
+                                sender_first_name,
+                                sender_last_name,
+                                sender_raw_data,
                                 role=sender_role,
                             )
                             member_batch.append(member_row)
@@ -513,7 +701,13 @@ class ScraperService:
                         batch_success += 1
                     except Exception as exc:
                         batch_errors += 1
-                        logger.warning("checkpoint_message_failed", agent_id=agent_id, tg_group_id=tg_group_id, message_id=msg_id, error=str(exc))
+                        logger.warning(
+                            "checkpoint_message_failed",
+                            agent_id=agent_id,
+                            tg_group_id=tg_group_id,
+                            message_id=msg_id,
+                            error=str(exc),
+                        )
 
                 if not batch_scraped:
                     reached_end = True
@@ -564,8 +758,20 @@ class ScraperService:
             }
         except Exception as exc:
             await self.session.rollback()
-            logger.exception("checkpoint_scrape_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
-            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False}
+            logger.exception(
+                "checkpoint_scrape_failed",
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                error=str(exc),
+            )
+            return {
+                "success_count": 0,
+                "error_count": 0,
+                "total_scraped": 0,
+                "member_success_count": 0,
+                "batches": 0,
+                "completed": False,
+            }
         finally:
             if should_disconnect:
                 with suppress(Exception):
@@ -644,18 +850,35 @@ class ScraperService:
                 return {
                     "group_info": None,
                     "members": {"success_count": 0, "error_count": 0, "total_scraped": 0},
-                    "messages": {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0},
+                    "messages": {
+                        "success_count": 0,
+                        "error_count": 0,
+                        "total_scraped": 0,
+                        "member_success_count": 0,
+                    },
                 }
 
         try:
-            group_info = await self._scrape_group_info_dict(agent_id=agent_id, tg_group_id=tg_group_id, client=managed_client)
+            group_info = await self._scrape_group_info_dict(
+                agent_id=agent_id, tg_group_id=tg_group_id, client=managed_client
+            )
             results = {
                 "group_info": group_info,
                 "members": {"success_count": 0, "error_count": 0, "total_scraped": 0},
-                "messages": {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0},
+                "messages": {
+                    "success_count": 0,
+                    "error_count": 0,
+                    "total_scraped": 0,
+                    "member_success_count": 0,
+                },
             }
             if scrape_members:
-                results["members"] = await self.scrape_members(agent_id=agent_id, tg_group_id=tg_group_id, limit=member_limit, client=managed_client)
+                results["members"] = await self.scrape_members(
+                    agent_id=agent_id,
+                    tg_group_id=tg_group_id,
+                    limit=member_limit,
+                    client=managed_client,
+                )
             if scrape_messages:
                 if scan_strategy == "checkpoint":
                     results["messages"] = await self.scrape_messages_checkpointed(
@@ -699,15 +922,32 @@ class ScraperService:
     async def _get_active_agent(self, agent_id: int) -> Agent | None:
         return await entity_resolver.get_active_agent(agent_id, self.session)
 
-    async def _get_or_create_group_from_client(self, *, client, agent_id: int, tg_group_id: int) -> Any:
+    async def _get_or_create_group_from_client(
+        self, *, client, agent_id: int, tg_group_id: int
+    ) -> Any:
         return await entity_resolver.get_or_create_group_from_client(
-            client=client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
+            client=client,
+            agent_id=agent_id,
+            tg_group_id=tg_group_id,
+            session=self.session,
         )
 
     async def _resolve_group_entity(self, client: Any, tg_group_id: int) -> Any:
         return await entity_resolver.resolve_group_entity(client, tg_group_id, self.session)
 
-    async def _get_or_create_scraped_group(self, *, tg_group_id: int, last_agent_id: int | None = None, title: str | None = None, username: str | None = None, group_type: str = "group", member_count: int | None = None, description: str | None = None, raw_data: dict | None = None, commit: bool = True) -> Any:
+    async def _get_or_create_scraped_group(
+        self,
+        *,
+        tg_group_id: int,
+        last_agent_id: int | None = None,
+        title: str | None = None,
+        username: str | None = None,
+        group_type: str = "group",
+        member_count: int | None = None,
+        description: str | None = None,
+        raw_data: dict | None = None,
+        commit: bool = True,
+    ) -> Any:
         return await entity_resolver.get_or_create_scraped_group(
             tg_group_id=tg_group_id,
             last_agent_id=last_agent_id,
@@ -799,7 +1039,14 @@ class ScraperService:
     async def _bulk_upsert_scraped_messages(self, rows: list[dict[str, Any]]) -> None:
         await bulk_upsert.bulk_upsert_scraped_messages(rows, self.session)
 
-    async def _build_upsert_statement(self, *, model, rows: list[dict[str, Any]], index_elements: list[str], update_columns: list[str]):
+    async def _build_upsert_statement(
+        self,
+        *,
+        model,
+        rows: list[dict[str, Any]],
+        index_elements: list[str],
+        update_columns: list[str],
+    ):
         return await bulk_upsert.build_upsert_statement(
             model=model,
             rows=rows,
@@ -820,7 +1067,9 @@ class ScraperService:
     def _extract_peer_id(peer: Any) -> int | None:
         return entity_resolver.extract_peer_id(peer)
 
-    async def _extract_message_sender_data(self, message: Any) -> tuple[int | None, str | None, str | None, str | None, dict[str, Any]]:
+    async def _extract_message_sender_data(
+        self, message: Any
+    ) -> tuple[int | None, str | None, str | None, str | None, dict[str, Any]]:
         return await entity_resolver.extract_message_sender_data(message)
 
     def _is_missing_scraper_table_error(self, exc: Exception) -> bool:
@@ -877,18 +1126,21 @@ class ScraperService:
             "total": total,
             "page": page,
             "page_size": page_size,
-            "messages": [{
-                "id": m.id,
-                "message_id": m.message_id,
-                "sender_user_id": m.sender_user_id,
-                "sender_username": m.sender_username,
-                "sender_first_name": m.sender_first_name,
-                "sender_last_name": m.sender_last_name,
-                "message_text": m.message_text,
-                "message_date": m.message_date.isoformat() if m.message_date else None,
-                "message_type": m.message_type,
-                "reply_to_message_id": m.reply_to_message_id,
-            } for m in rows],
+            "messages": [
+                {
+                    "id": m.id,
+                    "message_id": m.message_id,
+                    "sender_user_id": m.sender_user_id,
+                    "sender_username": m.sender_username,
+                    "sender_first_name": m.sender_first_name,
+                    "sender_last_name": m.sender_last_name,
+                    "message_text": m.message_text,
+                    "message_date": m.message_date.isoformat() if m.message_date else None,
+                    "message_type": m.message_type,
+                    "reply_to_message_id": m.reply_to_message_id,
+                }
+                for m in rows
+            ],
         }
 
     async def export_group_data(
@@ -902,55 +1154,81 @@ class ScraperService:
         canonical_group_id = canonical_tg_group_id(int(tg_group_id))
 
         if data_type == "members":
-            stmt = select(ScrapedMember).where(
-                ScrapedMember.tg_group_id == canonical_group_id,
-            ).limit(limit)
+            stmt = (
+                select(ScrapedMember)
+                .where(
+                    ScrapedMember.tg_group_id == canonical_group_id,
+                )
+                .limit(limit)
+            )
             rows = (await self.session.execute(stmt)).scalars().all()
-            records = [{
-                "tg_user_id": m.tg_user_id,
-                "username": m.username,
-                "first_name": m.first_name,
-                "last_name": m.last_name,
-                "full_name": m.full_name,
-                "phone": m.phone,
-                "is_bot": m.is_bot,
-                "is_premium": m.is_premium,
-                "role": m.role,
-                "joined_date": m.joined_date.isoformat() if m.joined_date else None,
-            } for m in rows]
+            records = [
+                {
+                    "tg_user_id": m.tg_user_id,
+                    "username": m.username,
+                    "first_name": m.first_name,
+                    "last_name": m.last_name,
+                    "full_name": m.full_name,
+                    "phone": m.phone,
+                    "is_bot": m.is_bot,
+                    "is_premium": m.is_premium,
+                    "role": m.role,
+                    "joined_date": m.joined_date.isoformat() if m.joined_date else None,
+                }
+                for m in rows
+            ]
         elif data_type == "conversations":
-            stmt = select(ScrapedConversation).where(
-                ScrapedConversation.tg_group_id == canonical_group_id,
-            ).order_by(desc(ScrapedConversation.last_message_at)).limit(limit)
+            stmt = (
+                select(ScrapedConversation)
+                .where(
+                    ScrapedConversation.tg_group_id == canonical_group_id,
+                )
+                .order_by(desc(ScrapedConversation.last_message_at))
+                .limit(limit)
+            )
             rows = (await self.session.execute(stmt)).scalars().all()
-            records = [{
-                "id": c.id,
-                "title": c.title,
-                "root_sender_name": c.root_sender_name,
-                "participant_count": c.participant_count,
-                "message_count": c.message_count,
-                "first_message_at": c.first_message_at.isoformat() if c.first_message_at else None,
-                "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
-                "is_topic": c.is_topic,
-            } for c in rows]
+            records = [
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "root_sender_name": c.root_sender_name,
+                    "participant_count": c.participant_count,
+                    "message_count": c.message_count,
+                    "first_message_at": c.first_message_at.isoformat()
+                    if c.first_message_at
+                    else None,
+                    "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
+                    "is_topic": c.is_topic,
+                }
+                for c in rows
+            ]
         else:
-            stmt = select(ScrapedMessage).where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-            ).order_by(desc(ScrapedMessage.message_date)).limit(limit)
+            stmt = (
+                select(ScrapedMessage)
+                .where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                )
+                .order_by(desc(ScrapedMessage.message_date))
+                .limit(limit)
+            )
             rows = (await self.session.execute(stmt)).scalars().all()
-            records = [{
-                "message_id": m.message_id,
-                "sender_username": m.sender_username,
-                "sender_first_name": m.sender_first_name,
-                "message_text": m.message_text,
-                "message_date": m.message_date.isoformat() if m.message_date else None,
-                "message_type": m.message_type,
-                "reply_to_message_id": m.reply_to_message_id,
-            } for m in rows]
+            records = [
+                {
+                    "message_id": m.message_id,
+                    "sender_username": m.sender_username,
+                    "sender_first_name": m.sender_first_name,
+                    "message_text": m.message_text,
+                    "message_date": m.message_date.isoformat() if m.message_date else None,
+                    "message_type": m.message_type,
+                    "reply_to_message_id": m.reply_to_message_id,
+                }
+                for m in rows
+            ]
 
         if format == "csv":
             import csv
             import io
+
             output = io.StringIO()
             if records:
                 writer = csv.DictWriter(output, fieldnames=records[0].keys())
@@ -959,6 +1237,7 @@ class ScraperService:
             return output.getvalue()
         else:
             import json
+
             return json.dumps(records, ensure_ascii=False, indent=2)
 
     async def get_member_leaderboard(
@@ -971,32 +1250,40 @@ class ScraperService:
         canonical_group_id = canonical_tg_group_id(int(tg_group_id))
         since = datetime.utcnow() - timedelta(days=max(1, int(days)))
 
-        rows = (await self.session.execute(
-            select(
-                ScrapedMessage.sender_user_id,
-                func.count(ScrapedMessage.id).label("message_count"),
-                func.max(ScrapedMessage.message_date).label("last_active"),
+        rows = (
+            await self.session.execute(
+                select(
+                    ScrapedMessage.sender_user_id,
+                    func.count(ScrapedMessage.id).label("message_count"),
+                    func.max(ScrapedMessage.message_date).label("last_active"),
+                )
+                .where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                    ScrapedMessage.sender_user_id.is_not(None),
+                    ScrapedMessage.message_date >= since,
+                )
+                .group_by(ScrapedMessage.sender_user_id)
+                .order_by(desc("message_count"))
+                .limit(limit)
             )
-            .where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-                ScrapedMessage.sender_user_id.is_not(None),
-                ScrapedMessage.message_date >= since,
-            )
-            .group_by(ScrapedMessage.sender_user_id)
-            .order_by(desc("message_count"))
-            .limit(limit)
-        )).all()
+        ).all()
 
         user_ids = [int(row[0]) for row in rows if row[0] is not None]
 
         member_info: dict[int, dict[str, Any]] = {}
         if user_ids:
-            member_rows = (await self.session.execute(
-                select(ScrapedMember).where(
-                    ScrapedMember.tg_group_id == canonical_group_id,
-                    ScrapedMember.tg_user_id.in_(user_ids),
+            member_rows = (
+                (
+                    await self.session.execute(
+                        select(ScrapedMember).where(
+                            ScrapedMember.tg_group_id == canonical_group_id,
+                            ScrapedMember.tg_user_id.in_(user_ids),
+                        )
+                    )
                 )
-            )).scalars().all()
+                .scalars()
+                .all()
+            )
             for m in member_rows:
                 member_info[int(m.tg_user_id)] = {
                     "username": m.username,
@@ -1013,18 +1300,20 @@ class ScraperService:
                 continue
             uid = int(row[0])
             info = member_info.get(uid, {})
-            leaderboard.append({
-                "user_id": uid,
-                "username": info.get("username"),
-                "first_name": info.get("first_name"),
-                "last_name": info.get("last_name"),
-                "full_name": info.get("full_name"),
-                "is_bot": info.get("is_bot", False),
-                "role": info.get("role"),
-                "message_count": int(row[1] or 0),
-                "last_active": row[2].isoformat() if row[2] else None,
-                "score": min(100, int(row[1] or 0)),
-            })
+            leaderboard.append(
+                {
+                    "user_id": uid,
+                    "username": info.get("username"),
+                    "first_name": info.get("first_name"),
+                    "last_name": info.get("last_name"),
+                    "full_name": info.get("full_name"),
+                    "is_bot": info.get("is_bot", False),
+                    "role": info.get("role"),
+                    "message_count": int(row[1] or 0),
+                    "last_active": row[2].isoformat() if row[2] else None,
+                    "score": min(100, int(row[1] or 0)),
+                }
+            )
 
         total_messages = sum(item["message_count"] for item in leaderboard)
         for item in leaderboard:
@@ -1041,21 +1330,40 @@ class ScraperService:
         canonical_group_id = canonical_tg_group_id(int(tg_group_id))
 
         patterns = [
-            ("buying_intent", [r"buy\b|purchase\b|how much|price|cost|offer|discount", r"interested|want|looking for|need"]),
+            (
+                "buying_intent",
+                [
+                    r"buy\b|purchase\b|how much|price|cost|offer|discount",
+                    r"interested|want|looking for|need",
+                ],
+            ),
             ("contact_request", [r"contact me|DM me|PM me|whatsapp|email|call me|phone number"]),
             ("support_need", [r"help|not working|broken|issue|error|bug|can't|won't"]),
-            ("hiring", [r"hiring|looking for.*developer|looking for.*designer|job|freelance|recruit"]),
+            (
+                "hiring",
+                [r"hiring|looking for.*developer|looking for.*designer|job|freelance|recruit"],
+            ),
             ("partnership", [r"partnership|collab|sponsor|partner|work together|affiliate"]),
         ]
 
         import re
-        messages = (await self.session.execute(
-            select(ScrapedMessage).where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-                ScrapedMessage.message_text.is_not(None),
-                ScrapedMessage.sender_user_id.is_not(None),
-            ).order_by(desc(ScrapedMessage.message_date)).limit(limit)
-        )).scalars().all()
+
+        messages = (
+            (
+                await self.session.execute(
+                    select(ScrapedMessage)
+                    .where(
+                        ScrapedMessage.tg_group_id == canonical_group_id,
+                        ScrapedMessage.message_text.is_not(None),
+                        ScrapedMessage.sender_user_id.is_not(None),
+                    )
+                    .order_by(desc(ScrapedMessage.message_date))
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         leads_found = 0
         for m in messages:
@@ -1065,21 +1373,27 @@ class ScraperService:
                 if not matched:
                     continue
 
-                existing = (await self.session.execute(
-                    select(ScrapedLead).where(
-                        ScrapedLead.source_message_id == m.message_id,
-                        ScrapedLead.scraped_group_id == m.scraped_group_id,
+                existing = (
+                    await self.session.execute(
+                        select(ScrapedLead).where(
+                            ScrapedLead.source_message_id == m.message_id,
+                            ScrapedLead.scraped_group_id == m.scraped_group_id,
+                        )
                     )
-                )).scalar_one_or_none()
+                ).scalar_one_or_none()
                 if existing:
                     continue
 
-                contact_match = re.search(r"(@\w+|[\w\.-]+@[\w\.-]+|\+?\d{7,15})", (m.message_text or ""))
+                contact_match = re.search(
+                    r"(@\w+|[\w\.-]+@[\w\.-]+|\+?\d{7,15})", (m.message_text or "")
+                )
                 lead = ScrapedLead(
                     scraped_group_id=m.scraped_group_id,
                     source_message_id=m.message_id,
                     sender_user_id=m.sender_user_id,
-                    sender_name=(m.sender_first_name or m.sender_username or f"User {m.sender_user_id}"),
+                    sender_name=(
+                        m.sender_first_name or m.sender_username or f"User {m.sender_user_id}"
+                    ),
                     signal=signal,
                     excerpt=(m.message_text or "")[:500],
                     contact_info=contact_match.group(1) if contact_match else None,
@@ -1091,13 +1405,17 @@ class ScraperService:
         if leads_found:
             await self.session.commit()
 
-        total = (await self.session.execute(
-            select(func.count(ScrapedLead.id)).where(
-                ScrapedLead.scraped_group_id.in_(
-                    select(ScrapedGroup.id).where(ScrapedGroup.tg_group_id == canonical_group_id)
+        total = (
+            await self.session.execute(
+                select(func.count(ScrapedLead.id)).where(
+                    ScrapedLead.scraped_group_id.in_(
+                        select(ScrapedGroup.id).where(
+                            ScrapedGroup.tg_group_id == canonical_group_id
+                        )
+                    )
                 )
             )
-        )).scalar_one()
+        ).scalar_one()
 
         return {"leads_found": leads_found, "total_leads": int(total or 0)}
 
@@ -1110,9 +1428,11 @@ class ScraperService:
         page_size: int = 50,
     ) -> dict[str, Any]:
         canonical_group_id = canonical_tg_group_id(int(tg_group_id))
-        scraped_group = (await self.session.execute(
-            select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical_group_id)
-        )).scalar_one_or_none()
+        scraped_group = (
+            await self.session.execute(
+                select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical_group_id)
+            )
+        ).scalar_one_or_none()
 
         if scraped_group is None:
             return {"total": 0, "page": page, "page_size": page_size, "leads": []}
@@ -1120,29 +1440,40 @@ class ScraperService:
         stmt = select(ScrapedLead).where(ScrapedLead.scraped_group_id == scraped_group.id)
         if status:
             stmt = stmt.where(ScrapedLead.status == status)
-        stmt = stmt.order_by(desc(ScrapedLead.detected_at)).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(desc(ScrapedLead.detected_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
 
         rows = (await self.session.execute(stmt)).scalars().all()
-        total = (await self.session.execute(
-            select(func.count(ScrapedLead.id)).where(ScrapedLead.scraped_group_id == scraped_group.id)
-        )).scalar_one()
+        total = (
+            await self.session.execute(
+                select(func.count(ScrapedLead.id)).where(
+                    ScrapedLead.scraped_group_id == scraped_group.id
+                )
+            )
+        ).scalar_one()
 
         return {
             "total": total,
             "page": page,
             "page_size": page_size,
-            "leads": [{
-                "id": l.id,
-                "source_message_id": l.source_message_id,
-                "sender_user_id": l.sender_user_id,
-                "sender_name": l.sender_name,
-                "signal": l.signal,
-                "excerpt": l.excerpt,
-                "contact_info": l.contact_info,
-                "status": l.status,
-                "confidence": l.confidence,
-                "detected_at": l.detected_at.isoformat() if l.detected_at else None,
-            } for l in rows],
+            "leads": [
+                {
+                    "id": l.id,
+                    "source_message_id": l.source_message_id,
+                    "sender_user_id": l.sender_user_id,
+                    "sender_name": l.sender_name,
+                    "signal": l.signal,
+                    "excerpt": l.excerpt,
+                    "contact_info": l.contact_info,
+                    "status": l.status,
+                    "confidence": l.confidence,
+                    "detected_at": l.detected_at.isoformat() if l.detected_at else None,
+                }
+                for l in rows
+            ],
         }
 
     async def get_nudge_suggestions(
@@ -1153,11 +1484,16 @@ class ScraperService:
         canonical_group_id = canonical_tg_group_id(int(tg_group_id))
         now = datetime.utcnow()
 
-        latest_msg = (await self.session.execute(
-            select(ScrapedMessage.message_date).where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-            ).order_by(desc(ScrapedMessage.message_date)).limit(1)
-        )).scalar_one_or_none()
+        latest_msg = (
+            await self.session.execute(
+                select(ScrapedMessage.message_date)
+                .where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                )
+                .order_by(desc(ScrapedMessage.message_date))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
 
         last_message_days = None
         if latest_msg:
@@ -1165,55 +1501,67 @@ class ScraperService:
             last_message_days = delta.days
 
         last_24h = now - timedelta(days=1)
-        msgs_24h = (await self.session.execute(
-            select(func.count(ScrapedMessage.id)).where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-                ScrapedMessage.message_date >= last_24h,
+        msgs_24h = (
+            await self.session.execute(
+                select(func.count(ScrapedMessage.id)).where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                    ScrapedMessage.message_date >= last_24h,
+                )
             )
-        )).scalar_one() or 0
+        ).scalar_one() or 0
 
         last_7d = now - timedelta(days=7)
-        msgs_7d = (await self.session.execute(
-            select(func.count(ScrapedMessage.id)).where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-                ScrapedMessage.message_date >= last_7d,
+        msgs_7d = (
+            await self.session.execute(
+                select(func.count(ScrapedMessage.id)).where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                    ScrapedMessage.message_date >= last_7d,
+                )
             )
-        )).scalar_one() or 0
+        ).scalar_one() or 0
 
         suggestions = []
 
         if last_message_days is not None and last_message_days >= 3:
-            suggestions.append({
-                "type": "inactivity_warning",
-                "severity": "high" if last_message_days >= 7 else "medium",
-                "message": f"Group has been inactive for {last_message_days} days. Consider sending a poll or discussion prompt.",
-                "action": "send_poll",
-            })
+            suggestions.append(
+                {
+                    "type": "inactivity_warning",
+                    "severity": "high" if last_message_days >= 7 else "medium",
+                    "message": f"Group has been inactive for {last_message_days} days. Consider sending a poll or discussion prompt.",
+                    "action": "send_poll",
+                }
+            )
 
         if msgs_24h == 0 and msgs_7d > 0:
-            suggestions.append({
-                "type": "quiet_today",
-                "severity": "low",
-                "message": "No messages in the last 24 hours. Group may need re-engagement.",
-                "action": "engagement_prompt",
-            })
+            suggestions.append(
+                {
+                    "type": "quiet_today",
+                    "severity": "low",
+                    "message": "No messages in the last 24 hours. Group may need re-engagement.",
+                    "action": "engagement_prompt",
+                }
+            )
 
         if last_message_days is None:
-            suggestions.append({
-                "type": "no_data",
-                "severity": "info",
-                "message": "No scraped messages found. Trigger a scrape to get activity insights.",
-                "action": "scrape_now",
-            })
+            suggestions.append(
+                {
+                    "type": "no_data",
+                    "severity": "info",
+                    "message": "No scraped messages found. Trigger a scrape to get activity insights.",
+                    "action": "scrape_now",
+                }
+            )
 
         peak_hours = await self._get_peak_activity_hours(canonical_group_id)
         if peak_hours:
-            suggestions.append({
-                "type": "peak_activity",
-                "severity": "info",
-                "message": f"Peak activity: {', '.join(f'{h}:00 ({c} msgs)' for h, c in peak_hours[:3])}",
-                "action": "none",
-            })
+            suggestions.append(
+                {
+                    "type": "peak_activity",
+                    "severity": "info",
+                    "message": f"Peak activity: {', '.join(f'{h}:00 ({c} msgs)' for h, c in peak_hours[:3])}",
+                    "action": "none",
+                }
+            )
 
         return {
             "last_message_days": last_message_days,
@@ -1224,20 +1572,23 @@ class ScraperService:
         }
 
     async def _get_peak_activity_hours(self, canonical_group_id: int) -> list[tuple[int, int]]:
-        from sqlalchemy import extract, literal_column
-        rows = (await self.session.execute(
-            select(
-                extract("hour", ScrapedMessage.message_date).label("hour"),
-                func.count(ScrapedMessage.id).label("cnt"),
+        from sqlalchemy import extract
+
+        rows = (
+            await self.session.execute(
+                select(
+                    extract("hour", ScrapedMessage.message_date).label("hour"),
+                    func.count(ScrapedMessage.id).label("cnt"),
+                )
+                .where(
+                    ScrapedMessage.tg_group_id == canonical_group_id,
+                    ScrapedMessage.message_date >= datetime.utcnow() - timedelta(days=30),
+                )
+                .group_by("hour")
+                .order_by(desc("cnt"))
+                .limit(5)
             )
-            .where(
-                ScrapedMessage.tg_group_id == canonical_group_id,
-                ScrapedMessage.message_date >= datetime.utcnow() - timedelta(days=30),
-            )
-            .group_by("hour")
-            .order_by(desc("cnt"))
-            .limit(5)
-        )).all()
+        ).all()
         return [(int(row[0]), int(row[1])) for row in rows]
 
     async def get_scraped_member_activity(
@@ -1246,7 +1597,9 @@ class ScraperService:
         tg_group_id: int,
         user_ids: list[int],
     ) -> dict[int, dict[str, Any]]:
-        deduped_user_ids = list(dict.fromkeys(int(user_id) for user_id in user_ids if int(user_id) > 0))
+        deduped_user_ids = list(
+            dict.fromkeys(int(user_id) for user_id in user_ids if int(user_id) > 0)
+        )
         if not deduped_user_ids:
             return {}
 
@@ -1313,7 +1666,9 @@ class ScraperService:
                     "message_id": int(row.message_id),
                     "message_text": str(row.message_text or "").strip() or None,
                     "message_type": str(row.message_type or "text"),
-                    "message_date": row.message_date.isoformat() if row.message_date is not None else None,
+                    "message_date": row.message_date.isoformat()
+                    if row.message_date is not None
+                    else None,
                 }
             )
         return scraped_data

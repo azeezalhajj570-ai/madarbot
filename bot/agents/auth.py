@@ -97,7 +97,11 @@ class AgentTelegramAuthService:
             await client.disconnect()
 
     def _build_result(self, *, me, session) -> AgentTelegramAuthResult:
-        full_name = " ".join(part for part in [getattr(me, "first_name", None), getattr(me, "last_name", None)] if part).strip()
+        full_name = " ".join(
+            part
+            for part in [getattr(me, "first_name", None), getattr(me, "last_name", None)]
+            if part
+        ).strip()
         return AgentTelegramAuthResult(
             telegram_user_id=int(me.id),
             phone_number=str(getattr(me, "phone", "") or ""),

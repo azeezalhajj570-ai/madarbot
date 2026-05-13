@@ -7,7 +7,13 @@ from sqlalchemy import select
 
 from bot.core.event_bus import EventBus
 from bot.db.models import GroupSetting
-from bot.handlers.menu.settings import apply_slider, open_category, open_group, open_slider, toggle_setting
+from bot.handlers.menu.settings import (
+    apply_slider,
+    open_category,
+    open_group,
+    open_slider,
+    toggle_setting,
+)
 from bot.services.settings_service import SettingsService
 
 
@@ -123,7 +129,11 @@ async def test_category_navigation_then_setting_render(
 
     assert host_message.log.edits[0]["text"] == "Select Category"
     assert host_message.log.edits[1]["text"] == "Moderation"
-    labels = [button.text for row in host_message.log.edits[1]["reply_markup"].inline_keyboard for button in row]
+    labels = [
+        button.text
+        for row in host_message.log.edits[1]["reply_markup"].inline_keyboard
+        for button in row
+    ]
     assert any(label.startswith("Anti Links:") for label in labels)
     assert any(label.startswith("Anti-Spam:") for label in labels)
     assert any(label.startswith("Anti Ads:") for label in labels)

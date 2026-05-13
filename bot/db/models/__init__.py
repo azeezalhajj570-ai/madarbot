@@ -17,7 +17,11 @@ from bot.db.models.billing import (
     Subscription,
     SubscriptionItem,
 )
-from bot.db.models.bulk_messaging import BulkMessageBatch, BulkMessageRecipient, MessagingSuppression
+from bot.db.models.bulk_messaging import (
+    BulkMessageBatch,
+    BulkMessageRecipient,
+    MessagingSuppression,
+)
 from bot.db.models.faq import (
     FAQEntry,
     FAQInteraction,
@@ -57,7 +61,15 @@ from bot.db.models.messaging import (
     Tenant,
 )
 from bot.db.models.moderation import ModerationEvent, ModerationLog, ModerationSetting, Warning
-from bot.db.models.scraper import GroupKnowledge, ScrapedConversation, ScrapedDailySummary, ScrapedGroup, ScrapedLead, ScrapedMember, ScrapedMessage
+from bot.db.models.scraper import (
+    GroupKnowledge,
+    ScrapedConversation,
+    ScrapedDailySummary,
+    ScrapedGroup,
+    ScrapedLead,
+    ScrapedMember,
+    ScrapedMessage,
+)
 from bot.db.models.subscription import PromotionCode, PromotionCodeRedemption, SubscriptionRequest
 from bot.db.models.summary import DailyGroupSummary, GroupMessageActivity, GroupSummarySettings
 from bot.db.models.task import Task, TaskGroup, TaskRun

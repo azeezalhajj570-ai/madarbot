@@ -38,15 +38,29 @@ class TaskAssignmentStore:
                     conditions=dict(item.get("conditions") or {}),
                     config=dict(item.get("config") or {}),
                     agent_id=int(item["agent_id"]) if item.get("agent_id") is not None else None,
-                    group_ids=[int(value) for value in list(item.get("group_ids") or []) if value not in {None, ""}],
-                    group_tg_ids=[int(value) for value in list(item.get("group_tg_ids") or []) if value not in {None, ""}],
-                    group_titles=[str(value).strip() for value in list(item.get("group_titles") or []) if str(value or "").strip()],
+                    group_ids=[
+                        int(value)
+                        for value in list(item.get("group_ids") or [])
+                        if value not in {None, ""}
+                    ],
+                    group_tg_ids=[
+                        int(value)
+                        for value in list(item.get("group_tg_ids") or [])
+                        if value not in {None, ""}
+                    ],
+                    group_titles=[
+                        str(value).strip()
+                        for value in list(item.get("group_titles") or [])
+                        if str(value or "").strip()
+                    ],
                 )
             )
         return assignments
 
     async def save_assignments(self, group_id: int, assignments: list[TaskAssignment]) -> None:
-        await self.settings.set_value(group_id, TASKS_SETTING_KEY, [self.serialize_assignment(item) for item in assignments])
+        await self.settings.set_value(
+            group_id, TASKS_SETTING_KEY, [self.serialize_assignment(item) for item in assignments]
+        )
 
     async def upsert_assignment(self, group_id: int, assignment: TaskAssignment) -> TaskAssignment:
         assignments = await self.list_assignments(group_id)
@@ -61,7 +75,9 @@ class TaskAssignmentStore:
 
     async def delete_assignment(self, group_id: int, assignment_id: str) -> bool:
         assignments = await self.list_assignments(group_id)
-        filtered = [assignment for assignment in assignments if assignment.assignment_id != assignment_id]
+        filtered = [
+            assignment for assignment in assignments if assignment.assignment_id != assignment_id
+        ]
         if len(filtered) == len(assignments):
             return False
         await self.save_assignments(group_id, filtered)
@@ -71,8 +87,9 @@ class TaskAssignmentStore:
         _assignments: list[TaskAssignment] = []
         rows = (
             await self.session.execute(
-                select(GroupSetting.group_id, GroupSetting.value)
-                .where(GroupSetting.key == TASKS_SETTING_KEY)
+                select(GroupSetting.group_id, GroupSetting.value).where(
+                    GroupSetting.key == TASKS_SETTING_KEY
+                )
             )
         ).all()
         canonical_chat_id = canonical_tg_group_id(int(chat_id))
@@ -92,9 +109,13 @@ class TaskAssignmentStore:
                 task_key = str(item.get("task_key") or "").strip()
                 if not task_key or not assignment_id:
                     continue
-                group_tg_ids = [int(v) for v in list(item.get("group_tg_ids") or []) if v not in {None, ""}]
+                group_tg_ids = [
+                    int(v) for v in list(item.get("group_tg_ids") or []) if v not in {None, ""}
+                ]
                 if group_tg_ids:
-                    if not any(canonical_tg_group_id(tg_id) == canonical_chat_id for tg_id in group_tg_ids):
+                    if not any(
+                        canonical_tg_group_id(tg_id) == canonical_chat_id for tg_id in group_tg_ids
+                    ):
                         continue
                 _assignments.append(
                     TaskAssignment(
@@ -104,16 +125,26 @@ class TaskAssignmentStore:
                         enabled=True,
                         conditions=dict(item.get("conditions") or {}),
                         config=dict(item.get("config") or {}),
-                        agent_id=int(item["agent_id"]) if item.get("agent_id") is not None else None,
-                        group_ids=[int(v) for v in list(item.get("group_ids") or []) if v not in {None, ""}],
+                        agent_id=int(item["agent_id"])
+                        if item.get("agent_id") is not None
+                        else None,
+                        group_ids=[
+                            int(v) for v in list(item.get("group_ids") or []) if v not in {None, ""}
+                        ],
                         group_tg_ids=group_tg_ids,
-                        group_titles=[str(v).strip() for v in list(item.get("group_titles") or []) if str(v or "").strip()],
+                        group_titles=[
+                            str(v).strip()
+                            for v in list(item.get("group_titles") or [])
+                            if str(v or "").strip()
+                        ],
                     )
                 )
         return _assignments
 
     @staticmethod
-    def serialize_assignment(assignment: TaskAssignment, *, group_id: int | None = None) -> dict[str, object]:
+    def serialize_assignment(
+        assignment: TaskAssignment, *, group_id: int | None = None
+    ) -> dict[str, object]:
         return {
             "assignment_id": assignment.assignment_id,
             "task_key": assignment.task_key,

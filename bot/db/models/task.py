@@ -21,7 +21,7 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.db.base import Base
@@ -39,6 +39,7 @@ class Task(Base):
       target_id     = generic target reference
       channel_account_id = for messaging-platform tasks (WhatsApp, etc.)
     """
+
     __tablename__ = "tasks_v2"
     __table_args__ = (
         UniqueConstraint("tenant_id", "assignment_id", name="uq_task_tenant_assignment"),
@@ -48,29 +49,41 @@ class Task(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
 
     # --- Product & trigger ---
-    product_code: Mapped[str] = mapped_column(String(32), nullable=False, default="madarbot", index=True)
+    product_code: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="madarbot", index=True
+    )
     # madarbot, modbot, connexaxbot
-    trigger_source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual", index=True)
+    trigger_source: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="manual", index=True
+    )
     # manual, cron, event, api, checkout, system
 
     # --- Executor (generic) ---
-    executor_type: Mapped[str] = mapped_column(String(32), nullable=False, default="linked_account", index=True)
+    executor_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="linked_account", index=True
+    )
     # linked_account, bot, system, channel
     executor_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # ID of the specific executor (linked_account.id, bot user id, etc.)
     linked_account_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("linked_accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+        ForeignKey("linked_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # --- Target (generic) ---
-    target_type: Mapped[str] = mapped_column(String(32), nullable=False, default="group", index=True)
+    target_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="group", index=True
+    )
     # group, channel, conversation, member, user, broadcast
     target_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # Generic target reference — complements task_groups_v2 for multi-target tasks
 
     # --- Channel (for messaging tasks) ---
     channel_account_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("channel_accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+        ForeignKey("channel_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # --- Identity ---
@@ -103,10 +116,14 @@ class Task(Base):
 
     # --- Timestamps ---
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
 
@@ -116,10 +133,9 @@ class TaskGroup(Base):
     For multi-group tasks like broadcast or bulk scrape.
     Single-group tasks can use Task.target_type/target_id directly.
     """
+
     __tablename__ = "task_groups_v2"
-    __table_args__ = (
-        UniqueConstraint("task_id", "group_id", name="uq_task_group_v2"),
-    )
+    __table_args__ = (UniqueConstraint("task_id", "group_id", name="uq_task_group_v2"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks_v2.id", ondelete="CASCADE"), index=True)
@@ -129,23 +145,32 @@ class TaskGroup(Base):
 
 class TaskRun(Base):
     """Execution record for a task run."""
+
     __tablename__ = "task_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks_v2.id", ondelete="CASCADE"), index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     linked_account_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("linked_accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+        ForeignKey("linked_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     group_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True,
+        ForeignKey("groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     channel_account_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("channel_accounts.id", ondelete="SET NULL"), nullable=True, index=True,
+        ForeignKey("channel_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     # pending, running, completed, failed, cancelled
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     result_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

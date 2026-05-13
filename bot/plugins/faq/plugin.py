@@ -21,6 +21,7 @@ from .schema import SETTINGS_SCHEMA
 
 logger = structlog.get_logger(__name__)
 
+
 class FAQPlugin:
     manifest = PluginManifest(
         name="faq",
@@ -45,30 +46,40 @@ class FAQPlugin:
         message_id = event.payload.get("message_id")
         user_id = event.user_id
         username = event.payload.get("username", "")
-        
-        if not text or bot is None or message_id is None or event.group_id is None or user_id is None:
+
+        if (
+            not text
+            or bot is None
+            or message_id is None
+            or event.group_id is None
+            or user_id is None
+        ):
             return
 
         async with SessionLocal() as session:
             # Resolve group and check if plugin is enabled
             group = (
                 await session.execute(
-                    select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id))))
+                    select(Group).where(
+                        Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id)))
+                    )
                 )
             ).scalar_one_or_none()
-            
+
             if group is None:
                 return
-                
+
             if not await self._is_enabled(session, group.id):
                 return
-            
+
             # Check if user is admin
             is_admin = False
             try:
                 is_admin = await is_chat_admin(bot, int(event.group_id), user_id)
             except Exception:
-                logger.warning("faq_admin_check_failed", group_tg_id=event.group_id, user_id=user_id)
+                logger.warning(
+                    "faq_admin_check_failed", group_tg_id=event.group_id, user_id=user_id
+                )
 
             service = FAQService(session)
             result = await service.process_message(
@@ -78,12 +89,12 @@ class FAQPlugin:
                 username=username,
                 text=text,
                 is_admin=is_admin,
-                global_enabled=get_settings().faq_auto_answer_enabled
+                global_enabled=get_settings().faq_auto_answer_enabled,
             )
-            
+
             if not result:
                 return
-                
+
             if result.action == FAQAction.AUTO_REPLY and result.answer:
                 try:
                     await bot.send_message(
@@ -97,7 +108,7 @@ class FAQPlugin:
                         "faq_auto_reply_failed",
                         group_tg_id=event.group_id,
                         message_id=message_id,
-                        error=str(exc)
+                        error=str(exc),
                     )
             elif result.action == FAQAction.SUGGEST_TO_ADMIN:
                 await self._notify_admins(session, group, text, result, username, message_id)
@@ -105,13 +116,19 @@ class FAQPlugin:
             elif result.action == FAQAction.LOG_UNANSWERED:
                 await session.commit()
 
-    async def _notify_admins(self, session, group, user_question: str, result, username, message_id):
+    async def _notify_admins(
+        self, session, group, user_question: str, result, username, message_id
+    ):
         """Send FAQ suggestion to all group admins via DM."""
         admin_user_ids = (
-            await session.execute(
-                select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group.id)
+            (
+                await session.execute(
+                    select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not admin_user_ids:
             logger.info("faq_no_admins_to_notify", group_id=group.id)
@@ -121,6 +138,7 @@ class FAQPlugin:
         matched_question = ""
         if result.faq_entry_id:
             from bot.db.models.faq import FAQEntry
+
             entry = await session.get(FAQEntry, result.faq_entry_id)
             if entry:
                 matched_question = entry.question
@@ -160,5 +178,6 @@ class FAQPlugin:
             )
         ).scalar_one_or_none()
         return bool(enabled) if enabled is not None else False
+
 
 plugin = FAQPlugin()

@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from bot.automation.conditions import ConditionEvaluator
-from bot.automation.models import TaskAssignment, TaskDefinition, TaskEvent, TaskExecutionContext, TaskPlan
+from bot.automation.models import (
+    TaskAssignment,
+    TaskDefinition,
+    TaskEvent,
+    TaskExecutionContext,
+    TaskPlan,
+)
 
 
 class RulesPlanner:
     def __init__(self, condition_evaluator: ConditionEvaluator | None = None) -> None:
         self.condition_evaluator = condition_evaluator or ConditionEvaluator()
 
-    def plan(self, *, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent) -> TaskPlan | None:
+    def plan(
+        self, *, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent
+    ) -> TaskPlan | None:
         trigger = task.trigger_rule
         if trigger is None or trigger.event_name != event.name:
             return None

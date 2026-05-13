@@ -64,13 +64,12 @@ class SettingsService:
         adapters: dict[str, GroupSettingAdapter[Any]],
     ) -> dict[str, Any]:
         values = await self.get_all(group_id)
-        return {
-            key: adapters[key].read(values.get(key))
-            for key in adapters
-        }
+        return {key: adapters[key].read(values.get(key)) for key in adapters}
 
     async def get_one(self, group_id: int, key: str) -> Any:
-        stmt = select(GroupSetting.value).where(GroupSetting.group_id == group_id, GroupSetting.key == key)
+        stmt = select(GroupSetting.value).where(
+            GroupSetting.group_id == group_id, GroupSetting.key == key
+        )
         value = (await self.session.execute(stmt)).scalar_one_or_none()
         return self.unwrap_value(value) if value is not None else None
 
@@ -78,7 +77,9 @@ class SettingsService:
         return adapter.read(await self.get_one(group_id, key))
 
     async def set_value(self, group_id: int, key: str, value: Any) -> None:
-        stmt = select(GroupSetting).where(GroupSetting.group_id == group_id, GroupSetting.key == key)
+        stmt = select(GroupSetting).where(
+            GroupSetting.group_id == group_id, GroupSetting.key == key
+        )
         existing = (await self.session.execute(stmt)).scalar_one_or_none()
         if existing:
             existing.value = {"value": value}

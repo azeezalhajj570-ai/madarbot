@@ -12,7 +12,11 @@ from bot.db.models import Group, ModerationLog
 from bot.db.session import SessionLocal
 from bot.handlers.menu.states import SettingsFlow
 from bot.services.group_service import GroupService
-from bot.services.moderation_enforcement_service import add_warning, maybe_mute_user_on_warning_limit, maybe_remove_user_on_warning_limit
+from bot.services.moderation_enforcement_service import (
+    add_warning,
+    maybe_mute_user_on_warning_limit,
+    maybe_remove_user_on_warning_limit,
+)
 from bot.services.permission_service import PermissionService
 from bot.services.settings_service import SettingsService
 from bot.utils.i18n import t
@@ -52,7 +56,9 @@ async def _resolve_moderation_group(
     selected_group_id = data.get("selected_group")
     async with SessionLocal() as session:
         if selected_group_id is None:
-            groups = await GroupService(session).list_admin_groups(call.from_user.id, page=1, page_size=1)
+            groups = await GroupService(session).list_admin_groups(
+                call.from_user.id, page=1, page_size=1
+            )
             if not groups.items:
                 return None
             selected_group_id = groups.items[0]["id"]
@@ -68,7 +74,9 @@ async def _resolve_moderation_group(
 @router.callback_query(F.data == "menu:settings")
 async def menu_settings(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
     async with SessionLocal() as session:
-        groups_page = await GroupService(session).list_admin_groups(call.from_user.id, page=1, page_size=10)
+        groups_page = await GroupService(session).list_admin_groups(
+            call.from_user.id, page=1, page_size=10
+        )
     lang = _lang(call)
     await state.set_state(SettingsFlow.selecting_group)
     await state.update_data(group_page=1)
@@ -124,7 +132,10 @@ async def _agent_jobs_text(user_id: int, group_id: int, lang: str) -> str:
     async with SessionLocal() as session:
         service = AgentService(session)
         jobs = await service.list_jobs(actor_user_id=user_id, group_id=group_id, limit=5)
-        agents = {agent.id: agent.external_account_id for agent in await service.list_agents(actor_user_id=user_id, group_id=group_id)}
+        agents = {
+            agent.id: agent.external_account_id
+            for agent in await service.list_agents(actor_user_id=user_id, group_id=group_id)
+        }
     if not jobs:
         return t("agent_jobs_empty", lang)
     lines = [t("agent_jobs_overview", lang)]
@@ -133,7 +144,9 @@ async def _agent_jobs_text(user_id: int, group_id: int, lang: str) -> str:
     return "\n".join(lines)
 
 
-async def _open_agents_panel(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, group_id: int) -> None:
+async def _open_agents_panel(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, group_id: int
+) -> None:
     lang = _lang(call)
     await state.set_state(SettingsFlow.agents_menu)
     await state.update_data(selected_group=group_id)
@@ -149,10 +162,14 @@ async def _resolve_agents_group_id(call: CallbackQuery, state: FSMContext) -> in
     selected_group_id = data.get("selected_group")
     async with SessionLocal() as session:
         if selected_group_id is not None:
-            can_manage = await PermissionService(session).can(int(selected_group_id), call.from_user.id, "group.settings.update")
+            can_manage = await PermissionService(session).can(
+                int(selected_group_id), call.from_user.id, "group.settings.update"
+            )
             if can_manage:
                 return int(selected_group_id)
-        groups = await GroupService(session).list_admin_groups(call.from_user.id, page=1, page_size=1)
+        groups = await GroupService(session).list_admin_groups(
+            call.from_user.id, page=1, page_size=1
+        )
     if not groups.items:
         return None
     group_id = int(groups.items[0]["id"])
@@ -209,7 +226,9 @@ async def menu_moderation(call: CallbackQuery, menu_engine: MenuEngine) -> None:
 async def groups_page(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
     page = int(call.data.split(":", maxsplit=1)[1])
     async with SessionLocal() as session:
-        groups_page_data = await GroupService(session).list_admin_groups(call.from_user.id, page=page, page_size=10)
+        groups_page_data = await GroupService(session).list_admin_groups(
+            call.from_user.id, page=page, page_size=10
+        )
     lang = _lang(call)
     if groups_page_data.total == 0:
         add_group_url = await _group_add_url(call)
@@ -220,15 +239,21 @@ async def groups_page(call: CallbackQuery, state: FSMContext, menu_engine: MenuE
         await call.answer()
         return
     await state.update_data(group_page=page)
-    await call.message.edit_reply_markup(reply_markup=menu_engine.group_selector(groups_page_data, lang))
+    await call.message.edit_reply_markup(
+        reply_markup=menu_engine.group_selector(groups_page_data, lang)
+    )
     await call.answer()
 
 
 @router.callback_query(F.data.startswith("agent-groups:"))
-async def agent_groups_page(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def agent_groups_page(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     page = int(call.data.split(":", maxsplit=1)[1])
     async with SessionLocal() as session:
-        groups_page_data = await GroupService(session).list_admin_groups(call.from_user.id, page=page, page_size=10)
+        groups_page_data = await GroupService(session).list_admin_groups(
+            call.from_user.id, page=page, page_size=10
+        )
     lang = _lang(call)
     if groups_page_data.total == 0:
         add_group_url = await _group_add_url(call)
@@ -247,10 +272,14 @@ async def agent_groups_page(call: CallbackQuery, state: FSMContext, menu_engine:
 
 
 @router.callback_query(F.data.startswith("group:") & F.data.endswith(":open"))
-async def open_group(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def open_group(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     group_id = int(call.data.split(":")[1])
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(group_id, call.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            group_id, call.from_user.id, "group.settings.update"
+        )
     if not can_manage:
         await call.answer(t("permission_denied", _lang(call)), show_alert=True)
         return
@@ -271,7 +300,9 @@ async def open_group(call: CallbackQuery, state: FSMContext, menu_engine: MenuEn
 async def open_agent_group(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
     group_id = int(call.data.split(":")[1])
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(group_id, call.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            group_id, call.from_user.id, "group.settings.update"
+        )
     if not can_manage:
         await call.answer(t("permission_denied", _lang(call)), show_alert=True)
         return
@@ -279,7 +310,9 @@ async def open_agent_group(call: CallbackQuery, state: FSMContext, menu_engine: 
 
 
 @router.callback_query(F.data == "agents:panel")
-async def reopen_agents_panel(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def reopen_agents_panel(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     data = await state.get_data()
     group_id = data.get("selected_group")
     if group_id is None:
@@ -298,7 +331,9 @@ async def agents_link(call: CallbackQuery, state: FSMContext, menu_engine: MenuE
     lang = _lang(call)
     await state.set_state(SettingsFlow.agents_phone_input)
     await state.update_data(selected_group=int(group_id))
-    await call.message.edit_text(t("agent_link_prompt", lang), reply_markup=menu_engine.agents_menu(lang))
+    await call.message.edit_text(
+        t("agent_link_prompt", lang), reply_markup=menu_engine.agents_menu(lang)
+    )
     await call.answer()
 
 
@@ -335,7 +370,9 @@ async def agents_jobs(call: CallbackQuery, state: FSMContext, menu_engine: MenuE
 
 
 @router.callback_query(F.data == "agents:create-job")
-async def agents_create_job(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def agents_create_job(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     data = await state.get_data()
     group_id = data.get("selected_group")
     if group_id is None:
@@ -352,7 +389,9 @@ async def agents_create_job(call: CallbackQuery, state: FSMContext, menu_engine:
 
 
 @router.callback_query(F.data.startswith("category:"))
-async def open_category(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def open_category(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     category = call.data.split(":", maxsplit=1)[1]
     data = await state.get_data()
     group_id = data["selected_group"]
@@ -373,11 +412,15 @@ async def open_category(call: CallbackQuery, state: FSMContext, menu_engine: Men
 
 
 @router.callback_query(F.data == "menu:categories")
-async def reopen_categories(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def reopen_categories(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     data = await state.get_data()
     group_id = data["selected_group"]
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(group_id, call.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            group_id, call.from_user.id, "group.settings.update"
+        )
     if not can_manage:
         await call.answer(t("permission_denied", _lang(call)), show_alert=True)
         return
@@ -393,7 +436,9 @@ async def reopen_categories(call: CallbackQuery, state: FSMContext, menu_engine:
 
 
 @router.callback_query(F.data.startswith("setting:") & F.data.endswith(":toggle"))
-async def toggle_setting(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def toggle_setting(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     key = call.data.split(":")[1]
     data = await state.get_data()
     group_id = data["selected_group"]
@@ -401,7 +446,9 @@ async def toggle_setting(call: CallbackQuery, state: FSMContext, menu_engine: Me
     schema_map = plugin_manager.get_settings_schema()
 
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(group_id, call.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            group_id, call.from_user.id, "group.settings.update"
+        )
         if not can_manage:
             await call.answer(t("permission_denied", _lang(call)), show_alert=True)
             return
@@ -412,12 +459,16 @@ async def toggle_setting(call: CallbackQuery, state: FSMContext, menu_engine: Me
 
     schemas = [entry for entry in schema_map.values() if entry.category == category]
     lang = _lang(call)
-    await call.message.edit_reply_markup(reply_markup=menu_engine.settings_for_category(schemas, values, lang))
+    await call.message.edit_reply_markup(
+        reply_markup=menu_engine.settings_for_category(schemas, values, lang)
+    )
     await call.answer()
 
 
 @router.callback_query(F.data.startswith("setting:") & F.data.endswith(":slider"))
-async def open_slider(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def open_slider(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     key = call.data.split(":")[1]
     schema = plugin_manager.get_settings_schema()[key]
     data = await state.get_data()
@@ -436,7 +487,9 @@ async def open_slider(call: CallbackQuery, state: FSMContext, menu_engine: MenuE
 
 
 @router.callback_query(F.data.startswith("slider:"))
-async def apply_slider(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def apply_slider(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     _, key, value = call.data.split(":")
     next_value = int(value)
     data = await state.get_data()
@@ -445,7 +498,9 @@ async def apply_slider(call: CallbackQuery, state: FSMContext, menu_engine: Menu
     lang = _lang(call)
 
     async with SessionLocal() as session:
-        can_manage = await PermissionService(session).can(group_id, call.from_user.id, "group.settings.update")
+        can_manage = await PermissionService(session).can(
+            group_id, call.from_user.id, "group.settings.update"
+        )
         if not can_manage:
             await call.answer(t("permission_denied", lang), show_alert=True)
             return
@@ -459,7 +514,9 @@ async def apply_slider(call: CallbackQuery, state: FSMContext, menu_engine: Menu
 
 
 @router.callback_query(F.data == "menu:category")
-async def reopen_category(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager) -> None:
+async def reopen_category(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine, plugin_manager: PluginManager
+) -> None:
     data = await state.get_data()
     group_id = data["selected_group"]
     category = data["selected_category"]
@@ -481,7 +538,9 @@ async def noop(call: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("quick:"))
-async def quick_action_prompt(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def quick_action_prompt(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     _, action, user_id = call.data.split(":")
     await state.update_data(moderation_target_user_id=int(user_id))
     lang = _lang(call)
@@ -493,7 +552,9 @@ async def quick_action_prompt(call: CallbackQuery, state: FSMContext, menu_engin
 
 
 @router.callback_query(F.data.startswith("mod:"))
-async def moderation_action_prompt(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def moderation_action_prompt(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     action = call.data.split(":", maxsplit=1)[1]
     lang = _lang(call)
     data = await state.get_data()
@@ -509,7 +570,9 @@ async def moderation_action_prompt(call: CallbackQuery, state: FSMContext, menu_
 
 
 @router.callback_query(F.data.startswith("confirm:"))
-async def moderation_action_confirm(call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine) -> None:
+async def moderation_action_confirm(
+    call: CallbackQuery, state: FSMContext, menu_engine: MenuEngine
+) -> None:
     _, action, target_raw = call.data.split(":")
     target_user_id = int(target_raw)
     lang = _lang(call)
@@ -522,7 +585,9 @@ async def moderation_action_confirm(call: CallbackQuery, state: FSMContext, menu
 
     required_permission = MOD_PERMISSION_MAP.get(action, "group.settings.update")
     async with SessionLocal() as session:
-        allowed = await PermissionService(session).can(group_id, call.from_user.id, required_permission)
+        allowed = await PermissionService(session).can(
+            group_id, call.from_user.id, required_permission
+        )
         if not allowed:
             await call.answer(t("permission_denied", lang), show_alert=True)
             return
@@ -617,7 +682,9 @@ async def moderation_action_confirm(call: CallbackQuery, state: FSMContext, menu
         await session.commit()
 
     await call.message.edit_text(
-        t("action_completed", lang) if details["telegram_applied"] else t("action_logged_only", lang),
+        t("action_completed", lang)
+        if details["telegram_applied"]
+        else t("action_logged_only", lang),
         reply_markup=menu_engine.moderation_actions_menu(lang),
     )
     await call.answer()

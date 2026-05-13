@@ -6,7 +6,18 @@ from datetime import datetime
 from strenum import StrEnum
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.db.base import Base
@@ -49,10 +60,14 @@ class FAQSettings(Base):
     __tablename__ = "faq_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), unique=True, index=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"), unique=True, index=True
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     safe_mode: Mapped[bool] = mapped_column(Boolean, default=True)
-    default_mode: Mapped[FAQMode] = mapped_column(String(32), default=FAQMode.ADMIN_SUGGESTION.value)
+    default_mode: Mapped[FAQMode] = mapped_column(
+        String(32), default=FAQMode.ADMIN_SUGGESTION.value
+    )
     auto_reply_threshold: Mapped[float] = mapped_column(Float, default=0.85)
     suggestion_threshold: Mapped[float] = mapped_column(Float, default=0.60)
     max_replies_per_user_per_hour: Mapped[int] = mapped_column(Integer, default=3)
@@ -62,9 +77,7 @@ class FAQSettings(Base):
     require_admin_approved_sources: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
     group: Mapped[Group] = relationship("Group")
@@ -80,16 +93,18 @@ class FAQEntry(Base):
     keywords: Mapped[list[str]] = mapped_column(JSON, default=list)
     language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    source_type: Mapped[FAQSourceType] = mapped_column(String(32), default=FAQSourceType.MANUAL.value)
+    source_type: Mapped[FAQSourceType] = mapped_column(
+        String(32), default=FAQSourceType.MANUAL.value
+    )
     source_ref: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
     group: Mapped[Group] = relationship("Group")
@@ -99,7 +114,9 @@ class FAQEntry(Base):
 
 class FAQInteraction(Base):
     __tablename__ = "faq_interactions"
-    __table_args__ = (UniqueConstraint("group_id", "message_id", name="uq_faq_interaction_group_message"),)
+    __table_args__ = (
+        UniqueConstraint("group_id", "message_id", name="uq_faq_interaction_group_message"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
@@ -108,19 +125,18 @@ class FAQInteraction(Base):
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     user_question_preview: Mapped[str] = mapped_column(Text)
     matched_faq_entry_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("faq_entries.id", ondelete="SET NULL"), 
-        nullable=True
+        ForeignKey("faq_entries.id", ondelete="SET NULL"), nullable=True
     )
     confidence: Mapped[float] = mapped_column(Float)
-    mode: Mapped[str] = mapped_column(String(32))  # auto_reply, admin_suggestion, unanswered, skipped
+    mode: Mapped[str] = mapped_column(
+        String(32)
+    )  # auto_reply, admin_suggestion, unanswered, skipped
     answer_preview: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[FAQInteractionStatus] = mapped_column(String(32))
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
     group: Mapped[Group] = relationship("Group")
@@ -129,7 +145,11 @@ class FAQInteraction(Base):
 
 class UnansweredQuestion(Base):
     __tablename__ = "unanswered_questions"
-    __table_args__ = (UniqueConstraint("group_id", "normalized_question_hash", name="uq_unanswered_question_group_hash"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id", "normalized_question_hash", name="uq_unanswered_question_group_hash"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
@@ -141,14 +161,11 @@ class UnansweredQuestion(Base):
     normalized_question_hash: Mapped[str] = mapped_column(String(64))
     frequency_count: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[UnansweredQuestionStatus] = mapped_column(
-        String(32), 
-        default=UnansweredQuestionStatus.NEW.value
+        String(32), default=UnansweredQuestionStatus.NEW.value
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 

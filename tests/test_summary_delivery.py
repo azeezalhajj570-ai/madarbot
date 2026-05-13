@@ -9,7 +9,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from bot.db.base import Base
-from bot.db.models import DailyGroupSummary, Group, GroupAdminRole, GroupMessageActivity, GroupSummarySettings, ModerationLog, User
+from bot.db.models import (
+    DailyGroupSummary,
+    Group,
+    GroupAdminRole,
+    GroupMessageActivity,
+    GroupSummarySettings,
+    ModerationLog,
+    User,
+)
 from bot.summaries.delivery import send_daily_summary
 from bot.summaries.service import DailyAdminSummaryService
 
@@ -109,7 +117,9 @@ async def _seed_group(db_session, *, tg_group_id: int) -> Group:
     owner = User(tg_user_id=8101, username="owner", full_name="Owner", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=tg_group_id, title="Delivery Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=tg_group_id, title="Delivery Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -121,9 +131,13 @@ async def _seed_group(db_session, *, tg_group_id: int) -> Group:
 async def test_dashboard_only_delivery_does_not_send_message(db_session, fake_bot) -> None:
     group = await _seed_group(db_session, tg_group_id=-100881)
     settings = GroupSummarySettings(group_id=group.id, delivery_mode="dashboard_only")
-    summary = DailyGroupSummary(group_id=group.id, summary_date=date(2026, 4, 26), summary_text="hello")
+    summary = DailyGroupSummary(
+        group_id=group.id, summary_date=date(2026, 4, 26), summary_text="hello"
+    )
 
-    status = await send_daily_summary(db_session, group=group, summary=summary, settings=settings, bot=fake_bot)
+    status = await send_daily_summary(
+        db_session, group=group, summary=summary, settings=settings, bot=fake_bot
+    )
 
     assert status == "generated"
     assert fake_bot.sent_messages == []
@@ -132,10 +146,16 @@ async def test_dashboard_only_delivery_does_not_send_message(db_session, fake_bo
 @pytest.mark.asyncio
 async def test_admin_dm_delivery_sends_to_admin_chat(db_session, fake_bot) -> None:
     group = await _seed_group(db_session, tg_group_id=-100882)
-    settings = GroupSummarySettings(group_id=group.id, delivery_mode="admin_dm", admin_chat_id=998877)
-    summary = DailyGroupSummary(group_id=group.id, summary_date=date(2026, 4, 26), summary_text="delivery text")
+    settings = GroupSummarySettings(
+        group_id=group.id, delivery_mode="admin_dm", admin_chat_id=998877
+    )
+    summary = DailyGroupSummary(
+        group_id=group.id, summary_date=date(2026, 4, 26), summary_text="delivery text"
+    )
 
-    status = await send_daily_summary(db_session, group=group, summary=summary, settings=settings, bot=fake_bot)
+    status = await send_daily_summary(
+        db_session, group=group, summary=summary, settings=settings, bot=fake_bot
+    )
 
     assert status == "sent"
     assert fake_bot.sent_messages[0] == (998877, "delivery text")

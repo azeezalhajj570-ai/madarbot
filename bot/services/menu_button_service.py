@@ -46,7 +46,11 @@ def resolve_webapp_url(app_kind: AppKind | None = None) -> str | None:
 
     explicit_url = configured_url.strip().rstrip("/")
     normalized_path = urlsplit(explicit_url).path.rstrip("/")
-    if normalized_path.endswith("/webapp/admin") or normalized_path.endswith("/webapp/modbot") or normalized_path.endswith("/webapp/agents"):
+    if (
+        normalized_path.endswith("/webapp/admin")
+        or normalized_path.endswith("/webapp/modbot")
+        or normalized_path.endswith("/webapp/agents")
+    ):
         return explicit_url
     if normalized_path.endswith("/webapp/agents-app"):
         return explicit_url[: -len("/agents-app")] + "/agents"
@@ -55,7 +59,9 @@ def resolve_webapp_url(app_kind: AppKind | None = None) -> str | None:
     return f"{base_url}/{suffix}"
 
 
-async def configure_private_chat_menu_button(*, bot: Bot, user_id: int, enabled: bool, app_kind: AppKind | None = None) -> None:
+async def configure_private_chat_menu_button(
+    *, bot: Bot, user_id: int, enabled: bool, app_kind: AppKind | None = None
+) -> None:
     webapp_url = resolve_webapp_url(app_kind)
     if enabled and webapp_url:
         await bot.set_chat_menu_button(

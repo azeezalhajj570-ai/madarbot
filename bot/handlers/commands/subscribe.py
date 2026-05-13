@@ -27,6 +27,7 @@ def _normalize_message(text: str | None, limit: int = 1000) -> str | None:
         normalized = normalized[:limit].rstrip()
     return normalized or None
 
+
 @router.message(Command("subscribe"))
 async def request_subscription(message: Message, state: FSMContext) -> None:
     if not message.from_user:
@@ -68,4 +69,7 @@ async def request_subscription(message: Message, state: FSMContext) -> None:
         try:
             await message.bot.send_message(owner_id, notification, disable_web_page_preview=True)
         except Exception as exc:  # pragma: no cover
-            logger.warning("failed to notify owner about subscription request", extra={"owner_id": owner_id, "error": str(exc)})
+            logger.warning(
+                "failed to notify owner about subscription request",
+                extra={"owner_id": owner_id, "error": str(exc)},
+            )

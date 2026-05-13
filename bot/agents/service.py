@@ -6,7 +6,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.agents.contracts import AccountGroupVisibility, AccountSessionState, AgentJobOwnership, LinkedAccountIdentity
+from bot.agents.contracts import (
+    AccountGroupVisibility,
+    AccountSessionState,
+    AgentJobOwnership,
+    LinkedAccountIdentity,
+)
 from bot.agents.account_group_membership_service import AccountGroupMembershipService
 from bot.agents.account_session_service import AccountSessionService
 from bot.agents.agent_job_service import AgentJobService
@@ -100,7 +105,9 @@ class AgentService:
         result: AgentTelegramAuthResult,
         actor_user_id: int,
     ) -> None:
-        await self.account_sessions._finalize_agent_auth(agent=agent, result=result, actor_user_id=actor_user_id)
+        await self.account_sessions._finalize_agent_auth(
+            agent=agent, result=result, actor_user_id=actor_user_id
+        )
 
     async def update_agent(
         self,
@@ -120,16 +127,24 @@ class AgentService:
         )
 
     async def unlink_agent(self, *, actor_user_id: int, agent_id: int) -> bool:
-        return await self.linked_accounts.unlink_agent(actor_user_id=actor_user_id, agent_id=agent_id)
+        return await self.linked_accounts.unlink_agent(
+            actor_user_id=actor_user_id, agent_id=agent_id
+        )
 
     async def list_agents(self, *, actor_user_id: int, group_id: int) -> list[Agent]:
-        return await self.linked_accounts.list_agents(actor_user_id=actor_user_id, group_id=group_id)
+        return await self.linked_accounts.list_agents(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
 
     async def list_all_active_agents(self, *, actor_user_id: int) -> list[Agent]:
         return await self.linked_accounts.list_all_active_agents(actor_user_id=actor_user_id)
 
-    async def list_managed_member_groups(self, *, actor_user_id: int, agent_id: int) -> list[dict[str, Any]]:
-        return await self.memberships.list_managed_member_groups(actor_user_id=actor_user_id, agent_id=agent_id)
+    async def list_managed_member_groups(
+        self, *, actor_user_id: int, agent_id: int
+    ) -> list[dict[str, Any]]:
+        return await self.memberships.list_managed_member_groups(
+            actor_user_id=actor_user_id, agent_id=agent_id
+        )
 
     async def search_agent_member_group_members(
         self,
@@ -209,14 +224,24 @@ class AgentService:
             job_payload=job_payload,
         )
 
-    async def list_jobs(self, *, actor_user_id: int, group_id: int, limit: int = 20) -> list[AgentJob]:
-        return await self.jobs.list_jobs(actor_user_id=actor_user_id, group_id=group_id, limit=limit)
+    async def list_jobs(
+        self, *, actor_user_id: int, group_id: int, limit: int = 20
+    ) -> list[AgentJob]:
+        return await self.jobs.list_jobs(
+            actor_user_id=actor_user_id, group_id=group_id, limit=limit
+        )
 
-    async def list_agent_jobs(self, *, actor_user_id: int, agent_id: int, limit: int = 20) -> list[AgentJob]:
-        return await self.jobs.list_agent_jobs(actor_user_id=actor_user_id, agent_id=agent_id, limit=limit)
+    async def list_agent_jobs(
+        self, *, actor_user_id: int, agent_id: int, limit: int = 20
+    ) -> list[AgentJob]:
+        return await self.jobs.list_agent_jobs(
+            actor_user_id=actor_user_id, agent_id=agent_id, limit=limit
+        )
 
     async def update_job_status(self, *, actor_user_id: int, job_id: int, status: str) -> AgentJob:
-        return await self.jobs.update_job_status(actor_user_id=actor_user_id, job_id=job_id, status=status)
+        return await self.jobs.update_job_status(
+            actor_user_id=actor_user_id, job_id=job_id, status=status
+        )
 
     async def delete_job(self, *, actor_user_id: int, job_id: int) -> bool:
         return await self.jobs.delete_job(actor_user_id=actor_user_id, job_id=job_id)
@@ -227,8 +252,12 @@ class AgentService:
     async def get_account_session_state(self, *, agent_id: int) -> AccountSessionState | None:
         return await self.account_sessions.get_account_session_state(agent_id=agent_id)
 
-    async def list_account_group_visibility(self, *, actor_user_id: int, agent_id: int) -> list[AccountGroupVisibility]:
-        return await self.memberships.list_account_group_visibility(actor_user_id=actor_user_id, agent_id=agent_id)
+    async def list_account_group_visibility(
+        self, *, actor_user_id: int, agent_id: int
+    ) -> list[AccountGroupVisibility]:
+        return await self.memberships.list_account_group_visibility(
+            actor_user_id=actor_user_id, agent_id=agent_id
+        )
 
     async def queue_automation_task_job(
         self,

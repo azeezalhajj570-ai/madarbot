@@ -28,7 +28,9 @@ async def test_warn_confirmation_executes_and_logs(
         text="mod",
     )
 
-    prompt = fake_callback_factory(data="mod:warn", from_user_id=seeded_group["user_id"], message=host_message)
+    prompt = fake_callback_factory(
+        data="mod:warn", from_user_id=seeded_group["user_id"], message=host_message
+    )
     await moderation_action_prompt(prompt, state, menu_engine)
 
     confirm = fake_callback_factory(
@@ -40,14 +42,19 @@ async def test_warn_confirmation_executes_and_logs(
 
     warning = (
         await db_session.execute(
-            select(Warning).where(Warning.group_id == seeded_group["group_id"], Warning.user_id == 5555)
+            select(Warning).where(
+                Warning.group_id == seeded_group["group_id"], Warning.user_id == 5555
+            )
         )
     ).scalar_one()
     assert warning.count == 1
 
     log = (
         await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"], ModerationLog.action == "warn_user")
+            select(ModerationLog).where(
+                ModerationLog.group_id == seeded_group["group_id"],
+                ModerationLog.action == "warn_user",
+            )
         )
     ).scalar_one()
     assert log.target_user_id == 5555
@@ -73,7 +80,9 @@ async def test_toggle_anti_links_confirmation_updates_setting_and_logs(
         text="mod",
     )
 
-    prompt = fake_callback_factory(data="mod:anti_links", from_user_id=seeded_group["user_id"], message=host_message)
+    prompt = fake_callback_factory(
+        data="mod:anti_links", from_user_id=seeded_group["user_id"], message=host_message
+    )
     await moderation_action_prompt(prompt, state, menu_engine)
 
     confirm = fake_callback_factory(
@@ -117,7 +126,9 @@ async def test_toggle_anti_ads_confirmation_updates_setting_and_logs(
         text="mod",
     )
 
-    prompt = fake_callback_factory(data="mod:anti_ads", from_user_id=seeded_group["user_id"], message=host_message)
+    prompt = fake_callback_factory(
+        data="mod:anti_ads", from_user_id=seeded_group["user_id"], message=host_message
+    )
     await moderation_action_prompt(prompt, state, menu_engine)
 
     confirm = fake_callback_factory(

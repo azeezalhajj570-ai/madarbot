@@ -9,7 +9,6 @@ from bot.agents.account_group_membership_service import AccountGroupMembershipSe
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -23,7 +22,6 @@ def register_group_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_visible_groups(agent_id: int | None = None) -> str:
         """List groups visible to the MCP actor's linked accounts."""
@@ -44,12 +42,14 @@ def register_group_tools(server: FastMCP) -> None:
                 for m in memberships:
                     if m.tg_group_id not in seen_tg_ids:
                         seen_tg_ids.add(m.tg_group_id)
-                        all_groups.append({
-                            "agent_id": m.agent_id,
-                            "group_id": m.group_id,
-                            "tg_group_id": m.tg_group_id,
-                            "title": m.title,
-                        })
+                        all_groups.append(
+                            {
+                                "agent_id": m.agent_id,
+                                "group_id": m.group_id,
+                                "tg_group_id": m.tg_group_id,
+                                "title": m.title,
+                            }
+                        )
             result = success_response(
                 content=f"Found {len(all_groups)} visible group{'s' if len(all_groups) != 1 else ''}",
                 data={"groups": all_groups, "total": len(all_groups)},
@@ -58,7 +58,6 @@ def register_group_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_group_members(
         tg_group_id: int,
@@ -95,7 +94,6 @@ def register_group_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_start_group_sync(
         agent_id: int,
@@ -162,11 +160,10 @@ def register_group_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_sync_status(tg_group_id: int) -> str:
         """Get the last sync status for a group."""
-        ctx = resolve_mcp_context()
+        resolve_mcp_context()
         last_sync = _SYNC_COOLDOWNS.get(tg_group_id, 0)
         if last_sync > 0:
             result = success_response(
@@ -174,7 +171,9 @@ def register_group_tools(server: FastMCP) -> None:
                 data={
                     "tg_group_id": tg_group_id,
                     "last_sync_at": last_sync,
-                    "cooldown_remaining": max(0, int(_SYNC_COOLDOWN_SECONDS - (time.time() - last_sync))),
+                    "cooldown_remaining": max(
+                        0, int(_SYNC_COOLDOWN_SECONDS - (time.time() - last_sync))
+                    ),
                 },
             )
             return to_mcp_text(result)
@@ -186,7 +185,6 @@ def register_group_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_member_messages(
         agent_id: int,

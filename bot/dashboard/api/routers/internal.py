@@ -60,11 +60,18 @@ async def group_warnings(
 ) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
-            select(Warning.user_id, Warning.reason, Warning.count, Warning.created_at).where(Warning.group_id == group_id)
+            select(Warning.user_id, Warning.reason, Warning.count, Warning.created_at).where(
+                Warning.group_id == group_id
+            )
         )
     ).all()
     return [
-        {"user_id": row.user_id, "reason": row.reason, "count": row.count, "created_at": row.created_at.isoformat()}
+        {
+            "user_id": row.user_id,
+            "reason": row.reason,
+            "count": row.count,
+            "created_at": row.created_at.isoformat(),
+        }
         for row in rows
     ]
 
@@ -77,9 +84,12 @@ async def group_logs(
 ) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
-            select(ModerationLog.action, ModerationLog.target_user_id, ModerationLog.reason, ModerationLog.created_at).where(
-                ModerationLog.group_id == group_id
-            )
+            select(
+                ModerationLog.action,
+                ModerationLog.target_user_id,
+                ModerationLog.reason,
+                ModerationLog.created_at,
+            ).where(ModerationLog.group_id == group_id)
         )
     ).all()
     return [
@@ -124,7 +134,9 @@ async def group_plugins(
 ) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
-            select(PluginEnabled.plugin_name, PluginEnabled.enabled).where(PluginEnabled.group_id == group_id)
+            select(PluginEnabled.plugin_name, PluginEnabled.enabled).where(
+                PluginEnabled.group_id == group_id
+            )
         )
     ).all()
     return [{"plugin_name": row.plugin_name, "enabled": row.enabled} for row in rows]
@@ -144,7 +156,9 @@ async def group_settings(
 ) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
-            select(GroupSetting.key, GroupSetting.value, GroupSetting.updated_at).where(GroupSetting.group_id == group_id)
+            select(GroupSetting.key, GroupSetting.value, GroupSetting.updated_at).where(
+                GroupSetting.group_id == group_id
+            )
         )
     ).all()
     return [

@@ -3,7 +3,7 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -13,7 +13,9 @@ class Tenant(Base):
     __tablename__ = "tenants"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -30,7 +32,9 @@ class Tenant(Base):
 class ChannelAccount(Base):
     __tablename__ = "channel_accounts"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "type", "display_name", name="uq_channel_accounts_tenant_type_display_name"),
+        UniqueConstraint(
+            "tenant_id", "type", "display_name", name="uq_channel_accounts_tenant_type_display_name"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -38,10 +42,14 @@ class ChannelAccount(Base):
     type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     external_account_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="disconnected", index=True)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="disconnected", index=True
+    )
     qr_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     credentials_encrypted: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -63,7 +71,9 @@ class Contact(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
-    channel_account_id: Mapped[int] = mapped_column(ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True)
+    channel_account_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True
+    )
     external_contact_id: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -88,13 +98,19 @@ class Conversation(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
-    channel_account_id: Mapped[int] = mapped_column(ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True)
+    channel_account_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True
+    )
     channel: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    contact_id: Mapped[int] = mapped_column(
+        ForeignKey("contacts.id", ondelete="CASCADE"), index=True
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ai_active", index=True)
     latest_message_text: Mapped[str] = mapped_column(Text, default="")
     unread_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -106,20 +122,31 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "channel_account_id", "external_message_id", name="uq_messages_tenant_channel_external"),
+        UniqueConstraint(
+            "tenant_id",
+            "channel_account_id",
+            "external_message_id",
+            name="uq_messages_tenant_channel_external",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
-    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
-    channel_account_id: Mapped[int] = mapped_column(ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    channel_account_id: Mapped[int] = mapped_column(
+        ForeignKey("channel_accounts.id", ondelete="CASCADE"), index=True
+    )
     direction: Mapped[str] = mapped_column(String(32), nullable=False)
     sender_type: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="sent", index=True)
     text: Mapped[str] = mapped_column(Text, default="")
     raw_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     external_message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, index=True
+    )
 
 
 class Lead(Base):
@@ -127,7 +154,9 @@ class Lead(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
-    conversation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    conversation_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     service: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -144,9 +173,7 @@ class Lead(Base):
 
 class NotificationSettings(Base):
     __tablename__ = "notification_settings"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", name="uq_notification_settings_tenant"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_notification_settings_tenant"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
@@ -187,15 +214,15 @@ class NotificationEvent(Base):
     )
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, index=True
+    )
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Automation(Base):
     __tablename__ = "automations"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "slug", name="uq_automations_tenant_slug"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "slug", name="uq_automations_tenant_slug"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
@@ -215,9 +242,7 @@ class Automation(Base):
 
 class Skill(Base):
     __tablename__ = "skills"
-    __table_args__ = (
-        UniqueConstraint("slug", name="uq_skills_slug"),
-    )
+    __table_args__ = (UniqueConstraint("slug", name="uq_skills_slug"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -234,9 +259,13 @@ class SkillRun(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), index=True)
-    conversation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversation_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     input: Mapped[dict] = mapped_column(JSON, default=dict)
     output: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, index=True
+    )

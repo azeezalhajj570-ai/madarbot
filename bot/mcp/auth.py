@@ -35,7 +35,7 @@ async def verify_mcp_auth_async(token: str | None) -> tuple[bool, int | None]:
             token_hash = _hash_token(token)
             stmt = select(MCPToken).where(
                 MCPToken.token_hash == token_hash,
-                MCPToken.is_active == True,
+                MCPToken.is_active,
             )
             result = await session.execute(stmt)
             record = result.scalar_one_or_none()
@@ -46,7 +46,12 @@ async def verify_mcp_auth_async(token: str | None) -> tuple[bool, int | None]:
                 if record.expires_at and record.expires_at < now:
                     logger.warning("MCP auth: token expired id=%s", record.id)
                 else:
-                    logger.info("MCP auth: token verified id=%s name=%s tg_user_id=%s", record.id, record.name, record.tg_user_id)
+                    logger.info(
+                        "MCP auth: token verified id=%s name=%s tg_user_id=%s",
+                        record.id,
+                        record.name,
+                        record.tg_user_id,
+                    )
                     return True, int(record.tg_user_id)
     except Exception as exc:
         logger.error("MCP auth error: %s", exc)

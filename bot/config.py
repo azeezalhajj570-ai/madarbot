@@ -43,8 +43,12 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
     gemini_model_premium: str = Field(default="gemini-1.5-pro", alias="GEMINI_MODEL_PREMIUM")
     openrouter_model: str = Field(default="google/gemini-2.0-flash-001", alias="OPENROUTER_MODEL")
-    openrouter_model_bulk: str = Field(default="google/gemini-2.0-flash-001", alias="OPENROUTER_MODEL_BULK")
-    openrouter_model_premium: str = Field(default="openai/gpt-4.1", alias="OPENROUTER_MODEL_PREMIUM")
+    openrouter_model_bulk: str = Field(
+        default="google/gemini-2.0-flash-001", alias="OPENROUTER_MODEL_BULK"
+    )
+    openrouter_model_premium: str = Field(
+        default="openai/gpt-4.1", alias="OPENROUTER_MODEL_PREMIUM"
+    )
     knowledge_extraction_enabled: bool = Field(default=False, alias="KNOWLEDGE_EXTRACTION_ENABLED")
     daily_summary_enabled: bool = Field(default=False, alias="DAILY_SUMMARY_ENABLED")
     ai_extraction_chunk_size: int = Field(default=8000, alias="AI_EXTRACTION_CHUNK_SIZE")
@@ -57,10 +61,14 @@ class Settings(BaseSettings):
     agents_webapp_url: str | None = Field(default=None, alias="AGENTS_WEBAPP_URL")
     telegram_api_id: int | None = Field(default=None, alias="TELEGRAM_API_ID")
     telegram_api_hash: str | None = Field(default=None, alias="TELEGRAM_API_HASH")
-    telegram_webapp_auth_max_age_seconds: int = Field(default=86_400, alias="TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS")
+    telegram_webapp_auth_max_age_seconds: int = Field(
+        default=86_400, alias="TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS"
+    )
     dashboard_jwt_secret: str | None = Field(default=None, alias="DASHBOARD_JWT_SECRET")
     dashboard_jwt_exp_seconds: int = Field(default=3600, alias="DASHBOARD_JWT_EXP_SECONDS")
-    telegram_login_bot_username: str | None = Field(default=None, alias="TELEGRAM_LOGIN_BOT_USERNAME")
+    telegram_login_bot_username: str | None = Field(
+        default=None, alias="TELEGRAM_LOGIN_BOT_USERNAME"
+    )
     dashboard_browser_users_raw: str = Field(default="", alias="DASHBOARD_BROWSER_USERS")
     ads_classifier_url: str | None = Field(default=None, alias="ADS_CLASSIFIER_URL")
     ads_classifier_timeout: float = Field(default=3.0, alias="ADS_CLASSIFIER_TIMEOUT")
@@ -86,7 +94,9 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
     rate_limit_requests_per_minute: int = Field(default=100, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")
     rate_limit_burst: int = Field(default=25, alias="RATE_LIMIT_BURST")
-    automation_rate_limit_per_group_minute: int = Field(default=10, alias="AUTOMATION_RATE_LIMIT_PER_GROUP_MINUTE")
+    automation_rate_limit_per_group_minute: int = Field(
+        default=10, alias="AUTOMATION_RATE_LIMIT_PER_GROUP_MINUTE"
+    )
     mcp_enabled: bool = Field(default=False, alias="MCP_ENABLED")
     mcp_readonly: bool = Field(default=True, alias="MCP_READONLY")
     mcp_auth_token: str | None = Field(default=None, alias="MCP_AUTH_TOKEN")

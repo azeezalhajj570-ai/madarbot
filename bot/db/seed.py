@@ -90,8 +90,18 @@ async def seed() -> None:
         await session.execute(
             insert(GroupSetting),
             [
-                {"group_id": 1, "key": "anti_links", "value": {"value": True}, "updated_at": datetime.utcnow()},
-                {"group_id": 1, "key": "warn_limit", "value": {"value": 3}, "updated_at": datetime.utcnow()},
+                {
+                    "group_id": 1,
+                    "key": "anti_links",
+                    "value": {"value": True},
+                    "updated_at": datetime.utcnow(),
+                },
+                {
+                    "group_id": 1,
+                    "key": "warn_limit",
+                    "value": {"value": 3},
+                    "updated_at": datetime.utcnow(),
+                },
             ],
         )
 

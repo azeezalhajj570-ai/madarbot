@@ -17,7 +17,9 @@ logger = structlog.get_logger(__name__)
 
 async def dispatch_agent_job(job_id: int) -> None:
     async with SessionLocal() as session:
-        job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+        job = (
+            await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
         if job is None:
             logger.bind(job_id=job_id).warning("agent_job_missing_for_dispatch")
             return
@@ -32,5 +34,6 @@ async def dispatch_agent_job(job_id: int) -> None:
                 )
             )
         except RedisError as exc:
-            logger.bind(job_id=job.id, agent_id=job.agent_id, error=str(exc)).warning("agent_job_enqueue_failed")
-
+            logger.bind(job_id=job.id, agent_id=job.agent_id, error=str(exc)).warning(
+                "agent_job_enqueue_failed"
+            )

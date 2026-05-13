@@ -6,7 +6,12 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import PromotionCode, PromotionCodeRedemption, SubscriptionRequest, SubscriptionStatus
+from bot.db.models import (
+    PromotionCode,
+    PromotionCodeRedemption,
+    SubscriptionRequest,
+    SubscriptionStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +24,9 @@ class PromotionService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def redeem_code(self, *, tg_user_id: int, code: str, bot_kind: str | None = None) -> SubscriptionRequest:
+    async def redeem_code(
+        self, *, tg_user_id: int, code: str, bot_kind: str | None = None
+    ) -> SubscriptionRequest:
         """
         Redeem a promotion code for a user.
         If bot_kind is provided, the promo code's bot_kind must match (or be null/any).
@@ -34,7 +41,7 @@ class PromotionService:
 
         if bot_kind and promo.bot_kind and promo.bot_kind != bot_kind:
             raise PromotionError("This promotion code is not valid for this bot.")
-            
+
         # 2. Validate active, not expired, and under max_uses
         now = datetime.now(timezone.utc)
         if not promo.is_active:
@@ -43,7 +50,7 @@ class PromotionService:
             raise PromotionError("This promotion code has expired.")
         if promo.max_uses is not None and promo.used_count >= promo.max_uses:
             raise PromotionError("This promotion code has reached its maximum usage limit.")
-            
+
         # 3. Check if user has already redeemed it
         history_stmt = select(PromotionCodeRedemption).where(
             PromotionCodeRedemption.promo_code_id == promo.id,
@@ -58,19 +65,26 @@ class PromotionService:
                     SubscriptionRequest.status == SubscriptionStatus.APPROVED.value,
                 )
                 existing_sub = (await self.session.execute(sub_stmt)).scalar_one_or_none()
-                if existing_sub and (existing_sub.expires_at is None or existing_sub.expires_at > now):
+                if existing_sub and (
+                    existing_sub.expires_at is None or existing_sub.expires_at > now
+                ):
                     return existing_sub
             # Subscription expired or missing — allow re-redeeming
-            
+
         # 4. Find active approved subscription for user
-        sub_stmt = select(SubscriptionRequest).where(
-            SubscriptionRequest.tg_user_id == tg_user_id,
-            SubscriptionRequest.status == SubscriptionStatus.APPROVED.value,
-        ).order_by(SubscriptionRequest.id.desc()).limit(1)
+        sub_stmt = (
+            select(SubscriptionRequest)
+            .where(
+                SubscriptionRequest.tg_user_id == tg_user_id,
+                SubscriptionRequest.status == SubscriptionStatus.APPROVED.value,
+            )
+            .order_by(SubscriptionRequest.id.desc())
+            .limit(1)
+        )
         subscription = (await self.session.execute(sub_stmt)).scalar_one_or_none()
-        
+
         duration = timedelta(days=promo.duration_days)
-        
+
         if subscription:
             # If lifetime subscription exists, do not shorten it.
             if subscription.expires_at is None:
@@ -109,10 +123,10 @@ class PromotionService:
                 subscription_request_id=subscription.id,
             )
             self.session.add(redemption)
-        
+
         # 6. Increment used_count
         promo.used_count += 1
-        
+
         await self.session.commit()
         await self.session.refresh(subscription)
         return subscription

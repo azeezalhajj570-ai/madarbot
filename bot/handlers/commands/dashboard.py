@@ -11,7 +11,12 @@ from aiogram.types import Message, ReplyKeyboardRemove
 from bot.config import get_settings
 from bot.db.session import SessionLocal
 from bot.keyboards.inline import open_dashboard_inline_keyboard
-from bot.keyboards.reply import empty_groups_keyboard, groups_keyboard, language_keyboard, main_menu_keyboard
+from bot.keyboards.reply import (
+    empty_groups_keyboard,
+    groups_keyboard,
+    language_keyboard,
+    main_menu_keyboard,
+)
 from bot.services.chat_member_service import is_group_admin
 from bot.services.group_service import GroupService
 from bot.services.menu_button_service import configure_private_chat_menu_button, resolve_webapp_url
@@ -74,7 +79,14 @@ def _group_member_hide_markup(message: Message, show_buttons: bool):
     return ReplyKeyboardRemove()
 
 
-def _main_menu_markup(message: Message, *, lang: str, show_buttons: bool, dashboard_url: str | None, app_kind: str | None = None):
+def _main_menu_markup(
+    message: Message,
+    *,
+    lang: str,
+    show_buttons: bool,
+    dashboard_url: str | None,
+    app_kind: str | None = None,
+):
     if not show_buttons or message.chat.type != "private":
         return ReplyKeyboardRemove()
     return main_menu_keyboard(lang, dashboard_url=dashboard_url, app_kind=app_kind)
@@ -87,7 +99,9 @@ async def _can_show_dashboard(message: Message) -> bool:
 
     settings = get_settings()
     async with SessionLocal() as session:
-        is_subscribed = await SubscriptionService(session).has_active_subscription(tg_user_id=message.from_user.id)
+        is_subscribed = await SubscriptionService(session).has_active_subscription(
+            tg_user_id=message.from_user.id
+        )
     allowed = is_subscribed or message.from_user.id in set(settings.bot_owner_ids)
     await configure_private_chat_menu_button(
         bot=message.bot,
@@ -100,7 +114,9 @@ async def _can_show_dashboard(message: Message) -> bool:
 
 async def _open_private_settings(message: Message, state: FSMContext, *, lang: str) -> None:
     async with SessionLocal() as session:
-        groups_page = await GroupService(session).list_admin_groups(message.from_user.id, page=1, page_size=10)
+        groups_page = await GroupService(session).list_admin_groups(
+            message.from_user.id, page=1, page_size=10
+        )
 
     await state.set_state(SettingsFlow.selecting_group)
     await state.update_data(group_page=1, group_items=groups_page.items)
@@ -237,7 +253,9 @@ async def help_handler(message: Message, state: FSMContext) -> None:
     show_buttons = await _can_show_dashboard(message)
     help_key = "agents_help_text" if settings.bot_app_kind == "agents" else "help_text"
     await message.answer(
-        t(help_key, lang) if show_buttons or message.chat.type != "private" else t("subscription_mandate_prompt", lang),
+        t(help_key, lang)
+        if show_buttons or message.chat.type != "private"
+        else t("subscription_mandate_prompt", lang),
         reply_markup=_main_menu_markup(
             message,
             lang=lang,
@@ -260,7 +278,9 @@ async def language_handler(message: Message, state: FSMContext) -> None:
         await state.clear()
         await message.answer(
             t("language_updated", selected),
-            reply_markup=main_menu_keyboard(selected, dashboard_url=_webapp_url()) if message.chat.type == "private" else ReplyKeyboardRemove(),
+            reply_markup=main_menu_keyboard(selected, dashboard_url=_webapp_url())
+            if message.chat.type == "private"
+            else ReplyKeyboardRemove(),
         )
         return
 

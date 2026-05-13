@@ -9,7 +9,9 @@ from bot.services.scraper_service import ScraperService
 
 @pytest.mark.asyncio
 async def test_scraper_bulk_upserts_replace_existing_rows_without_duplicates(db_session) -> None:
-    scraped_group = ScrapedGroup(tg_group_id=-1007001, title="Scraper Group", group_type="supergroup")
+    scraped_group = ScrapedGroup(
+        tg_group_id=-1007001, title="Scraper Group", group_type="supergroup"
+    )
     db_session.add(scraped_group)
     await db_session.commit()
 
@@ -75,26 +77,34 @@ async def test_scraper_bulk_upserts_replace_existing_rows_without_duplicates(db_
     await db_session.commit()
 
     members = (
-        await db_session.execute(
-            select(ScrapedMember).where(
-                ScrapedMember.tg_group_id == scraped_group.tg_group_id,
-                ScrapedMember.tg_user_id == 501,
+        (
+            await db_session.execute(
+                select(ScrapedMember).where(
+                    ScrapedMember.tg_group_id == scraped_group.tg_group_id,
+                    ScrapedMember.tg_user_id == 501,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(members) == 1
     assert members[0].username == "second-pass"
     assert members[0].role == "admin"
     assert members[0].raw_data["source"] == "updated"
 
     messages = (
-        await db_session.execute(
-            select(ScrapedMessage).where(
-                ScrapedMessage.tg_group_id == scraped_group.tg_group_id,
-                ScrapedMessage.message_id == 9001,
+        (
+            await db_session.execute(
+                select(ScrapedMessage).where(
+                    ScrapedMessage.tg_group_id == scraped_group.tg_group_id,
+                    ScrapedMessage.message_id == 9001,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(messages) == 1
     assert messages[0].sender_username == "second-pass"
     assert messages[0].message_text == "second"

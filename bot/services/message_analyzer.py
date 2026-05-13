@@ -1,4 +1,5 @@
 """AI-powered message analysis: extract FAQ from scraped group messages."""
+
 from __future__ import annotations
 
 import json
@@ -20,8 +21,8 @@ SYSTEM_PROMPT = (
     "- Questions that received detailed answers\n"
     "- Recurring topics discussed in the group\n"
     "- Support/help questions and resolutions\n\n"
-    "Return a JSON list of FAQ entries: [{\"question\": \"...\", \"answer\": \"...\", "
-    "\"keywords\": [\"kw1\", \"kw2\"], \"category\": \"general\"}]\n"
+    'Return a JSON list of FAQ entries: [{"question": "...", "answer": "...", '
+    '"keywords": ["kw1", "kw2"], "category": "general"}]\n'
     "Only include entries where a clear question AND answer can be extracted. "
     "Keep answers concise (max 500 chars). Do not include entries without clear answers."
 )
@@ -33,12 +34,17 @@ async def _call_openai(messages_text: str, settings: Any) -> list[dict]:
         "model": settings.openai_model,
         "input": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Analyze these group messages for FAQ extraction:\n\n{messages_text}"},
+            {
+                "role": "user",
+                "content": f"Analyze these group messages for FAQ extraction:\n\n{messages_text}",
+            },
         ],
         "text": {"format": {"type": "json_object"}},
     }
     async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds) as client:
-        resp = await client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
+        resp = await client.post(
+            "https://api.openai.com/v1/responses", headers=headers, json=payload
+        )
     if resp.status_code >= 400:
         raise RuntimeError(f"openai_error_{resp.status_code}")
     data = resp.json()
@@ -107,7 +113,10 @@ async def _call_openrouter(messages_text: str, settings: Any) -> list[dict]:
         "model": settings.openrouter_model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Analyze these group messages for FAQ extraction. Return only valid JSON:\n\n{messages_text}"},
+            {
+                "role": "user",
+                "content": f"Analyze these group messages for FAQ extraction. Return only valid JSON:\n\n{messages_text}",
+            },
         ],
         "temperature": 0.3,
         "response_format": {"type": "json_object"},
@@ -167,7 +176,9 @@ async def analyze_group_messages(
     provider = settings.ai_provider.lower()
 
     if provider not in ("openai", "gemini", "openrouter"):
-        return {"error": "AI provider not configured. Set AI_PROVIDER to openai, gemini, or openrouter."}
+        return {
+            "error": "AI provider not configured. Set AI_PROVIDER to openai, gemini, or openrouter."
+        }
 
     if provider == "openai" and not settings.openai_api_key:
         return {"error": "OPENAI_API_KEY not configured."}
@@ -176,28 +187,34 @@ async def analyze_group_messages(
     if provider == "openrouter" and not settings.openrouter_api_key:
         return {"error": "OPENROUTER_API_KEY not configured."}
 
-    group = (await session.execute(
-        select(ScrapedGroup).where(ScrapedGroup.tg_group_id == tg_group_id)
-    )).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.tg_group_id == tg_group_id))
+    ).scalar_one_or_none()
 
     if group is None:
         return {"error": f"No scraped group found for tg_group_id={tg_group_id}"}
 
-    managed_group = (await session.execute(
-        select(Group).where(Group.tg_group_id == tg_group_id)
-    )).scalar_one_or_none()
+    managed_group = (
+        await session.execute(select(Group).where(Group.tg_group_id == tg_group_id))
+    ).scalar_one_or_none()
 
     managed_group_id = managed_group.id if managed_group else None
 
-    messages = (await session.execute(
-        select(ScrapedMessage)
-        .where(
-            ScrapedMessage.tg_group_id == tg_group_id,
-            ScrapedMessage.message_text.is_not(None),
+    messages = (
+        (
+            await session.execute(
+                select(ScrapedMessage)
+                .where(
+                    ScrapedMessage.tg_group_id == tg_group_id,
+                    ScrapedMessage.message_text.is_not(None),
+                )
+                .order_by(ScrapedMessage.message_date.desc())
+                .limit(max_messages)
+            )
         )
-        .order_by(ScrapedMessage.message_date.desc())
-        .limit(max_messages)
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
 
     if not messages:
         return {"error": "No messages found for analysis. Scrape the group first."}
@@ -236,24 +253,32 @@ async def analyze_group_messages(
         if isinstance(keywords, str):
             keywords = [k.strip() for k in keywords.split(",") if k.strip()]
 
-        existing = (await session.execute(
-            select(FAQEntry).where(
-                FAQEntry.group_id == managed_group_id,
-                FAQEntry.question.ilike(f"%{question[:30]}%"),
-            )
-        )).scalar_one_or_none() if managed_group_id else None
+        existing = (
+            (
+                await session.execute(
+                    select(FAQEntry).where(
+                        FAQEntry.group_id == managed_group_id,
+                        FAQEntry.question.ilike(f"%{question[:30]}%"),
+                    )
+                )
+            ).scalar_one_or_none()
+            if managed_group_id
+            else None
+        )
         if existing:
             continue
 
-        session.add(FAQEntry(
-            group_id=managed_group_id or 0,
-            question=question,
-            answer=answer,
-            keywords=keywords,
-            category=str(entry.get("category") or "general")[:50],
-            source_type=FAQSourceType.IMPORTED,
-            enabled=True,
-        ))
+        session.add(
+            FAQEntry(
+                group_id=managed_group_id or 0,
+                question=question,
+                answer=answer,
+                keywords=keywords,
+                category=str(entry.get("category") or "general")[:50],
+                source_type=FAQSourceType.IMPORTED,
+                enabled=True,
+            )
+        )
         saved_count += 1
 
     await session.commit()

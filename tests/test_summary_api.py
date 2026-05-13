@@ -15,7 +15,15 @@ from sqlalchemy.pool import StaticPool
 
 from bot.dashboard.api.main import app
 from bot.db.base import Base
-from bot.db.models import DailyGroupSummary, Group, GroupAdminRole, GroupMessageActivity, GroupSummarySettings, ModerationLog, User
+from bot.db.models import (
+    DailyGroupSummary,
+    Group,
+    GroupAdminRole,
+    GroupMessageActivity,
+    GroupSummarySettings,
+    ModerationLog,
+    User,
+)
 
 
 class AsyncSessionAdapter:
@@ -120,11 +128,16 @@ def _webapp_init_data(*, user_id: int, bot_token: str = "123456:TESTTOKEN") -> s
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
@@ -193,10 +206,18 @@ async def test_summary_settings_endpoint_round_trip(api_client, db_session) -> N
 
     put_response = await api_client.put(
         f"/api/admin/groups/{group.id}/summaries/settings",
-        json={"enabled": True, "summary_time": "20:30", "timezone": "Asia/Aden", "delivery_mode": "dashboard_only", "max_message_samples": 250},
+        json={
+            "enabled": True,
+            "summary_time": "20:30",
+            "timezone": "Asia/Aden",
+            "delivery_mode": "dashboard_only",
+            "max_message_samples": 250,
+        },
         headers=headers,
     )
-    get_response = await api_client.get(f"/api/admin/groups/{group.id}/summaries/settings", headers=headers)
+    get_response = await api_client.get(
+        f"/api/admin/groups/{group.id}/summaries/settings", headers=headers
+    )
 
     assert put_response.status_code == 200
     assert get_response.status_code == 200

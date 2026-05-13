@@ -15,10 +15,14 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
+    tg_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger, unique=True, index=True, nullable=True
+    )
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, index=True, nullable=True
+    )
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
     language_code: Mapped[str] = mapped_column(String(8), default="en", index=True)

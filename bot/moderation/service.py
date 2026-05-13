@@ -61,7 +61,7 @@ class ModerationService:
     ) -> ModerationDecision | None:
         settings = get_settings()
         global_enabled = getattr(settings, "ai_spam_detection_enabled", False)
-        
+
         # 1. Resolve internal group ID
         group_stmt = select(Group).where(Group.tg_group_id == chat_id)
         group = (await self.session.execute(group_stmt)).scalar_one_or_none()
@@ -70,31 +70,37 @@ class ModerationService:
 
         # 2. Get moderation settings
         mod_settings = await self._get_or_create_settings(group.id)
-        
+
         # 3. Fast exit if disabled
         if not global_enabled or not mod_settings.enabled:
             return None
 
         # 4. Classification
         heuristic_decision = await self.heuristic.classify(text)
-        
+
         # Check repeats
         repeat_decision = ModerationDecision(ModerationCategory.SAFE, 0.0, "clean")
         if user_id:
             repeat_decision = await self.repeats.check(group.id, user_id, text)
 
         # Combine decisions
-        if repeat_decision.category != ModerationCategory.SAFE and repeat_decision.confidence > heuristic_decision.confidence:
+        if (
+            repeat_decision.category != ModerationCategory.SAFE
+            and repeat_decision.confidence > heuristic_decision.confidence
+        ):
             final_decision = repeat_decision
         else:
             final_decision = heuristic_decision
 
         # Optional LLM fallback if uncertainty exists and configured
-        
+
         # Extract domains for policy logic
         detected_domains = []
         try:
-            detected_domains = re.findall(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]", text.lower())
+            detected_domains = re.findall(
+                r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]",
+                text.lower(),
+            )
         except Exception:
             pass
 
@@ -102,13 +108,17 @@ class ModerationService:
         policy_context = {
             "global_enabled": global_enabled,
             "sender_user_id": user_id,
-            "sender_is_admin": context_overrides.get("is_admin", False) if context_overrides else False,
-            "sender_is_owner": context_overrides.get("is_owner", False) if context_overrides else False,
+            "sender_is_admin": context_overrides.get("is_admin", False)
+            if context_overrides
+            else False,
+            "sender_is_owner": context_overrides.get("is_owner", False)
+            if context_overrides
+            else False,
             "detected_domains": detected_domains,
         }
-        
+
         action = decide_action(final_decision, mod_settings, policy_context)
-        
+
         # 6. Execute Action
         status = "allowed"
         error_message = None
@@ -141,7 +151,7 @@ class ModerationService:
             status=status,
             error_message=error_message,
         )
-        
+
         await self.session.flush()
         return final_decision
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import structlog
 
@@ -12,10 +12,8 @@ from bot.services.join_request_service import (
     JoinRequestService,
     _chat_id_candidates,
     build_verify_keyboard,
-    resolve_group_by_tg_id,
     verify_membership,
 )
-from bot.services.permission_service import PermissionService
 from bot.utils.i18n import t
 
 router = Router(name="join_request_callbacks")
@@ -195,8 +193,7 @@ async def _handle_verify(
         f"🔍 {approval.first_name or approval.user_tg_id}"
         f"{' (@' + approval.username + ')' if approval.username else ''}\n"
         f"{t('joinreq_verification_status', lang)}\n"
-        f"{verified_count}/{total_count}\n\n"
-        + "\n".join(status_lines)
+        f"{verified_count}/{total_count}\n\n" + "\n".join(status_lines)
     )
 
     # Check if all required groups are joined
@@ -231,8 +228,8 @@ async def _handle_refresh(
         required_ids = {int(x) for x in approval.required_group_tg_ids.split(",") if x.strip()}
 
     missing_ids = required_ids - set(verified_ids)
-    verified_count = len(verified_ids)
-    total_count = len(required_ids)
+    len(verified_ids)
+    len(required_ids)
 
     if not missing_ids:
         # All groups joined — send success message

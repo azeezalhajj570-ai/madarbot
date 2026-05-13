@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, exists, or_, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import SubscriptionRequest, SubscriptionStatus
@@ -49,11 +49,15 @@ class SubscriptionService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def has_active_subscription(self, *, tg_user_id: int, bot_kind: str | None = None) -> bool:
+    async def has_active_subscription(
+        self, *, tg_user_id: int, bot_kind: str | None = None
+    ) -> bool:
         sub = await self.get_active_subscription(tg_user_id=tg_user_id, bot_kind=bot_kind)
         return sub is not None
 
-    async def get_active_subscription(self, *, tg_user_id: int, bot_kind: str | None = None) -> SubscriptionRequest | None:
+    async def get_active_subscription(
+        self, *, tg_user_id: int, bot_kind: str | None = None
+    ) -> SubscriptionRequest | None:
         now = datetime.now(timezone.utc)
         stmt = (
             select(SubscriptionRequest)
@@ -77,7 +81,15 @@ class SubscriptionService:
             )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
-    async def ensure_free_plan(self, *, tg_user_id: int, username: str | None, full_name: str | None, language_code: str | None, bot_kind: str | None = None) -> SubscriptionRequest:
+    async def ensure_free_plan(
+        self,
+        *,
+        tg_user_id: int,
+        username: str | None,
+        full_name: str | None,
+        language_code: str | None,
+        bot_kind: str | None = None,
+    ) -> SubscriptionRequest:
         existing = await self.get_active_subscription(tg_user_id=tg_user_id, bot_kind=bot_kind)
         if existing is not None:
             return existing
@@ -122,10 +134,14 @@ class SubscriptionService:
 
     async def list_requests(self) -> list[SubscriptionRequest]:
         rows = (
-            await self.session.execute(
-                select(SubscriptionRequest).order_by(desc(SubscriptionRequest.created_at))
+            (
+                await self.session.execute(
+                    select(SubscriptionRequest).order_by(desc(SubscriptionRequest.created_at))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return rows
 
     async def get_latest_request(self, *, tg_user_id: int) -> SubscriptionRequest | None:
@@ -187,7 +203,9 @@ class SubscriptionService:
         await self.session.refresh(request)
         return request
 
-    async def list_active_subscriptions(self, bot_kind: str | None = None) -> list[SubscriptionRequest]:
+    async def list_active_subscriptions(
+        self, bot_kind: str | None = None
+    ) -> list[SubscriptionRequest]:
         now = datetime.now(timezone.utc)
         stmt = (
             select(SubscriptionRequest)
@@ -229,9 +247,7 @@ class SubscriptionService:
                         SubscriptionRequest.bot_kind.is_(None),
                     )
                 )
-            other_approved = (
-                await self.session.execute(supersede_stmt)
-            ).scalars().all()
+            other_approved = (await self.session.execute(supersede_stmt)).scalars().all()
             for row in other_approved:
                 row.status = SubscriptionStatus.SUPERSEDED.value
                 row.response = row.response or supersede_note
@@ -245,7 +261,9 @@ class SubscriptionService:
         await self.session.refresh(request)
         return request
 
-    async def cancel_subscription(self, *, tg_user_id: int, responder_id: int | None = None, bot_kind: str | None = None) -> bool:
+    async def cancel_subscription(
+        self, *, tg_user_id: int, responder_id: int | None = None, bot_kind: str | None = None
+    ) -> bool:
         active = await self.get_active_subscription(tg_user_id=tg_user_id, bot_kind=bot_kind)
         if active is None:
             return False

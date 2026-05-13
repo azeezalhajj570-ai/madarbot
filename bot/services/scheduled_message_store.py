@@ -63,7 +63,9 @@ class ScheduledMessageStore:
                     status=status,
                     cron=str(item.get("cron") or "").strip() or None,
                     sent_at=str(item.get("sent_at") or "").strip() or None,
-                    delete_after_seconds=int(delete_after_raw) if delete_after_raw not in (None, "") else None,
+                    delete_after_seconds=int(delete_after_raw)
+                    if delete_after_raw not in (None, "")
+                    else None,
                 )
             )
         return entries
@@ -75,9 +77,13 @@ class ScheduledMessageStore:
         return None
 
     async def replace_entries(self, group_id: int, entries: list[ScheduledMessageEntry]) -> None:
-        await self.settings.set_value(group_id, SCHEDULED_MESSAGES_SETTING_KEY, [entry.to_dict() for entry in entries])
+        await self.settings.set_value(
+            group_id, SCHEDULED_MESSAGES_SETTING_KEY, [entry.to_dict() for entry in entries]
+        )
 
-    async def save_entry(self, group_id: int, entry: ScheduledMessageEntry) -> ScheduledMessageEntry:
+    async def save_entry(
+        self, group_id: int, entry: ScheduledMessageEntry
+    ) -> ScheduledMessageEntry:
         entries = await self.list_entries(group_id)
         for index, existing in enumerate(entries):
             if existing.id == entry.id:

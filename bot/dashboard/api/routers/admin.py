@@ -87,12 +87,22 @@ async def webapp_group_overview(
     id_type: str = Query(default="group", alias="id_type"),
 ) -> dict[str, Any]:
     if id_type == "scraped":
-        scraped = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+        scraped = (
+            await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+        ).scalar_one_or_none()
         if scraped is None:
             raise HTTPException(status_code=404, detail="Scraped group not found")
-        admin_group = (await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(int(scraped.tg_group_id)))))).scalar_one_or_none()
+        admin_group = (
+            await session.execute(
+                select(Group).where(
+                    Group.tg_group_id.in_(tg_group_id_candidates(int(scraped.tg_group_id)))
+                )
+            )
+        ).scalar_one_or_none()
         if admin_group is None:
-            raise HTTPException(status_code=404, detail="No admin group found for this scraped group")
+            raise HTTPException(
+                status_code=404, detail="No admin group found for this scraped group"
+            )
         group_id = admin_group.id
     await ensure_group_admin(group_id, session, identity)
     return await AdminActivityService(session).build_group_overview(group_id=group_id)
@@ -118,7 +128,9 @@ async def webapp_group_notification_reports(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     await ensure_group_admin(group_id, session, identity)
-    return await AdminActivityService(session).list_notification_reports(group_id=group_id, limit=limit)
+    return await AdminActivityService(session).list_notification_reports(
+        group_id=group_id, limit=limit
+    )
 
 
 @router.post("/api/admin/groups/{group_id}/notification-reports/{log_id}/reply")
@@ -164,7 +176,11 @@ async def webapp_group_access_gate(
         await session.execute(
             select(Group.id, Group.title, Group.tg_group_id, GroupAdminRole.role)
             .join(GroupAdminRole, GroupAdminRole.group_id == Group.id)
-            .where(GroupAdminRole.user_id == identity.user_id, Group.is_active.is_(True), Group.id != group_id)
+            .where(
+                GroupAdminRole.user_id == identity.user_id,
+                Group.is_active.is_(True),
+                Group.id != group_id,
+            )
             .order_by(Group.title.asc())
         )
     ).all()
@@ -192,7 +208,11 @@ async def webapp_update_group_access_gate(
             await session.execute(
                 select(Group.tg_group_id)
                 .join(GroupAdminRole, GroupAdminRole.group_id == Group.id)
-                .where(GroupAdminRole.user_id == identity.user_id, Group.is_active.is_(True), Group.id != group_id)
+                .where(
+                    GroupAdminRole.user_id == identity.user_id,
+                    Group.is_active.is_(True),
+                    Group.id != group_id,
+                )
             )
         ).scalars()
     )
@@ -228,7 +248,10 @@ async def webapp_patch_group_settings(
         if not isinstance(key, str) or not key.strip():
             continue
         if isinstance(value, str) and len(value) > 2_000:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Setting {key} is too long")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Setting {key} is too long",
+            )
         await service.set_value(group_id, key.strip(), value)
         changed[key.strip()] = value
 
@@ -308,12 +331,19 @@ async def webapp_restricted_users(
 ) -> list[dict[str, Any]]:
     await ensure_group_admin(group_id, session, identity)
     from sqlalchemy import desc, func
-    mute_actions = {"mute_user", "mute_warn_limit", "mute_ad_user", "mute_spam_user", "mute_unauthorized_command_user"}
+
+    mute_actions = {
+        "mute_user",
+        "mute_warn_limit",
+        "mute_ad_user",
+        "mute_spam_user",
+        "mute_unauthorized_command_user",
+    }
     ban_actions = {"ban_user", "remove_warn_limit", "ban_unauthorized_command_user"}
     un_actions = {"unmute_user", "unban_user"}
     restricted_actions = mute_actions | ban_actions
 
-    subq = (
+    (
         select(
             ModerationLog.target_user_id,
             ModerationLog.action,
@@ -342,7 +372,6 @@ async def webapp_restricted_users(
         .order_by(desc(ModerationLog.created_at))
     ).subquery()
 
-    from sqlalchemy import and_
     rows = (
         await session.execute(
             select(
@@ -363,9 +392,21 @@ async def webapp_restricted_users(
         if uid in restricted_users:
             continue
         if row.action in mute_actions:
-            restricted_users[uid] = {"user_id": uid, "type": "mute", "reason": row.reason, "created_at": str(row.created_at), "details": row.details}
+            restricted_users[uid] = {
+                "user_id": uid,
+                "type": "mute",
+                "reason": row.reason,
+                "created_at": str(row.created_at),
+                "details": row.details,
+            }
         elif row.action in ban_actions:
-            restricted_users[uid] = {"user_id": uid, "type": "ban", "reason": row.reason, "created_at": str(row.created_at), "details": row.details}
+            restricted_users[uid] = {
+                "user_id": uid,
+                "type": "ban",
+                "reason": row.reason,
+                "created_at": str(row.created_at),
+                "details": row.details,
+            }
 
     return list(restricted_users.values())
 
@@ -399,11 +440,14 @@ async def webapp_members(
         .join(User, User.tg_user_id == GroupMember.tg_user_id, isouter=True)
         .join(
             GroupAdminRole,
-            (GroupAdminRole.group_id == GroupMember.group_id) & (GroupAdminRole.user_id == GroupMember.tg_user_id),
+            (GroupAdminRole.group_id == GroupMember.group_id)
+            & (GroupAdminRole.user_id == GroupMember.tg_user_id),
             isouter=True,
         )
         .where(GroupMember.group_id == group_id)
-        .order_by(GroupMember.full_name.asc(), GroupMember.username.asc(), GroupMember.tg_user_id.asc())
+        .order_by(
+            GroupMember.full_name.asc(), GroupMember.username.asc(), GroupMember.tg_user_id.asc()
+        )
     )
     rows = (await session.execute(stmt)).all()
     scraped_by_user_id = await ScraperService(session).get_scraped_member_activity(
@@ -414,7 +458,11 @@ async def webapp_members(
     for row in rows:
         username = row.member_username or row.user_username or ""
         full_name = row.member_full_name or row.user_full_name or ""
-        if normalized_query and normalized_query not in username.lower() and normalized_query not in full_name.lower():
+        if (
+            normalized_query
+            and normalized_query not in username.lower()
+            and normalized_query not in full_name.lower()
+        ):
             continue
         created_at = row.member_created_at or row.role_created_at
         scraped_payload = scraped_by_user_id.get(int(row.user_id), {})
@@ -426,7 +474,9 @@ async def webapp_members(
                 "full_name": full_name or None,
                 "created_at": created_at.isoformat() if created_at is not None else None,
                 "scraped_message_count": int(scraped_payload.get("scraped_message_count") or 0),
-                "scraped_messages_preview": list(scraped_payload.get("scraped_messages_preview") or []),
+                "scraped_messages_preview": list(
+                    scraped_payload.get("scraped_messages_preview") or []
+                ),
             }
         )
     return result
@@ -459,9 +509,13 @@ async def webapp_group_member_search(
     except AdminGroupMemberSearchConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AdminGroupMemberSearchUnavailableError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.post("/api/admin/groups/{group_id}/members/{user_id}/role")
@@ -508,6 +562,7 @@ async def webapp_group_notifications(
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
     from bot.agents.agent_notification_service import AgentNotificationService
+
     return await AgentNotificationService(session).list_notifications(
         actor_user_id=identity.user_id,
         group_id=group_id,
@@ -524,6 +579,7 @@ async def webapp_mark_group_notifications_seen(
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
     from bot.agents.agent_notification_service import AgentNotificationService
+
     updated = await AgentNotificationService(session).mark_all_seen(
         actor_user_id=identity.user_id,
         group_id=group_id,
@@ -533,6 +589,7 @@ async def webapp_mark_group_notifications_seen(
 
 # ─── Subscription management (owner only) ────────────────────────────────────
 
+
 @router.get("/api/admin/subscriptions")
 @router.get("/webapp/subscriptions")
 async def webapp_list_subscriptions(
@@ -541,6 +598,7 @@ async def webapp_list_subscriptions(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     from bot.services.subscription_service import SubscriptionService
+
     subs = await SubscriptionService(session).list_active_subscriptions(bot_kind=bot_kind)
     return [
         {
@@ -572,6 +630,7 @@ async def webapp_set_user_plan(
 
     from bot.services.subscription_service import SubscriptionService
     from bot.services.user_service import UserService
+
     user = await UserService(session).get_by_tg_id(tg_user_id=tg_user_id)
     sub = await SubscriptionService(session).set_user_plan(
         tg_user_id=tg_user_id,
@@ -603,6 +662,7 @@ async def webapp_cancel_subscription(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     from bot.services.subscription_service import SubscriptionService
+
     cancelled = await SubscriptionService(session).cancel_subscription(
         tg_user_id=tg_user_id,
         responder_id=identity.user_id,

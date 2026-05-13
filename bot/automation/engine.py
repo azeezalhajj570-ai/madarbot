@@ -26,7 +26,9 @@ class TaskEngine:
         self._rate_limiter = rate_limiter
         self._rate_limit_per_group_minute = rate_limit_per_group_minute or 0
 
-    async def process(self, assignments: list[TaskAssignment], event: TaskEvent, executors: dict[str, object]) -> list[TaskExecutionResult]:
+    async def process(
+        self, assignments: list[TaskAssignment], event: TaskEvent, executors: dict[str, object]
+    ) -> list[TaskExecutionResult]:
         group_id = event.group_id
         if self._rate_limiter is not None and self._rate_limit_per_group_minute > 0 and group_id:
             key = f"automation:group:{group_id}"

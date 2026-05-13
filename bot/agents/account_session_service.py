@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.agents.auth import AgentTelegramAuthError, AgentTelegramAuthResult, AgentTelegramAuthService, AgentTelegramTwoFactorRequired
+from bot.agents.auth import (
+    AgentTelegramAuthError,
+    AgentTelegramAuthResult,
+    AgentTelegramAuthService,
+    AgentTelegramTwoFactorRequired,
+)
 from bot.agents.contracts import AccountSessionState
 from bot.agents.session import SessionManager
 from bot.core.event_bus import EventBus
@@ -16,7 +21,12 @@ from .service_support import AgentServiceSupport
 
 
 class AccountSessionService(AgentServiceSupport):
-    def __init__(self, session: AsyncSession, event_bus: EventBus | None = None, session_manager: SessionManager | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        event_bus: EventBus | None = None,
+        session_manager: SessionManager | None = None,
+    ) -> None:
         super().__init__(session, event_bus)
         self.session_manager = session_manager or SessionManager()
 
@@ -54,7 +64,9 @@ class AccountSessionService(AgentServiceSupport):
                 (
                     agent
                     for agent in matching_agents
-                    if agent.id != target_agent.id and agent.auth_state == "active" and agent.session_string
+                    if agent.id != target_agent.id
+                    and agent.auth_state == "active"
+                    and agent.session_string
                 ),
                 None,
             )
@@ -62,7 +74,11 @@ class AccountSessionService(AgentServiceSupport):
                 raise ValueError("Phone number is already linked for this subscription")
 
         active_agent = next(
-            (agent for agent in matching_agents if agent.auth_state == "active" and agent.session_string),
+            (
+                agent
+                for agent in matching_agents
+                if agent.auth_state == "active" and agent.session_string
+            ),
             None,
         )
         agent = target_agent or active_agent or (matching_agents[0] if matching_agents else None)
@@ -80,7 +96,13 @@ class AccountSessionService(AgentServiceSupport):
         auth_service = auth_service or AgentTelegramAuthService()
         auth_session = await auth_service.start_login(phone_number=normalized_phone)
         if agent is None:
-            resolved_group_id = group_id if group_id else await LinkedAccountService(self.session).ensure_agents_workspace_group(actor_user_id=actor_user_id)
+            resolved_group_id = (
+                group_id
+                if group_id
+                else await LinkedAccountService(self.session).ensure_agents_workspace_group(
+                    actor_user_id=actor_user_id
+                )
+            )
             agent = Agent(
                 telegram_user_id=None,
                 linked_by_user_id=actor_user_id,
@@ -117,7 +139,12 @@ class AccountSessionService(AgentServiceSupport):
         if agent is None:
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
-        if agent.auth_state != "pending_code" or not agent.phone_number or not agent.phone_code_hash or not agent.session_string:
+        if (
+            agent.auth_state != "pending_code"
+            or not agent.phone_number
+            or not agent.phone_code_hash
+            or not agent.session_string
+        ):
             raise AgentAuthStateError("Agent is not waiting for a login code")
         auth_service = auth_service or AgentTelegramAuthService()
         try:
@@ -159,7 +186,9 @@ class AccountSessionService(AgentServiceSupport):
             raise AgentAuthStateError("Agent is not waiting for a 2FA password")
         auth_service = auth_service or AgentTelegramAuthService()
         try:
-            result = await auth_service.verify_password(password=password, session_string=agent.session_string)
+            result = await auth_service.verify_password(
+                password=password, session_string=agent.session_string
+            )
         except AgentTelegramAuthError:
             agent.auth_state = "failed"
             agent.status = "failed"

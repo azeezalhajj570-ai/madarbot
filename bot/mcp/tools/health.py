@@ -16,7 +16,9 @@ OUTPUT_SCHEMA = OUTPUT_SCHEMA_BASE
 
 def register_health_tools(server: FastMCP) -> None:
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
+    )
     async def madarbot_health() -> str:
         """Check MadarBot MCP server health and configuration."""
         ctx = resolve_mcp_context()

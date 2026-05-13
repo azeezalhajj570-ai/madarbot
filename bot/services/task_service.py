@@ -45,7 +45,9 @@ class TaskService:
         self.store = TaskAssignmentStore(session)
 
     async def _ensure_group_admin(self, group_id: int, actor_user_id: int) -> None:
-        can_manage = await PermissionService(self.session).can(group_id, actor_user_id, "group.settings.update")
+        can_manage = await PermissionService(self.session).can(
+            group_id, actor_user_id, "group.settings.update"
+        )
         if not can_manage:
             raise PermissionError("User does not have permission to manage tasks for this group")
 
@@ -61,12 +63,16 @@ class TaskService:
                 "title": definition.title,
                 "description": definition.description,
                 "trigger": definition.trigger,
-                "task_trigger": {"event_name": definition.trigger_rule.event_name} if definition.trigger_rule is not None else None,
+                "task_trigger": {"event_name": definition.trigger_rule.event_name}
+                if definition.trigger_rule is not None
+                else None,
                 "planner": definition.planner_key,
                 "action_template": {
                     "kind": definition.action_template.kind,
                     "metadata": dict(definition.action_template.metadata),
-                } if definition.action_template is not None else None,
+                }
+                if definition.action_template is not None
+                else None,
                 "config_schema": definition.config_schema,
             }
             for definition in self.registry.list()
@@ -75,7 +81,10 @@ class TaskService:
     async def list_assignments(self, *, actor_user_id: int, group_id: int) -> list[dict[str, Any]]:
         await self._ensure_group_admin(group_id, actor_user_id)
         bound_group = await self._get_group(group_id)
-        return [self._dump_assignment(assignment, group=bound_group) for assignment in await self.store.list_assignments(group_id)]
+        return [
+            self._dump_assignment(assignment, group=bound_group)
+            for assignment in await self.store.list_assignments(group_id)
+        ]
 
     async def save_assignment(
         self,
@@ -101,11 +110,15 @@ class TaskService:
         if executor_type == "agent" and agent_id is None:
             raise ValueError("agent_id is required for agent tasks")
         if agent_id is not None:
-            agent = (await self.session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+            agent = (
+                await self.session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
             if agent is None:
                 raise ValueError("Assigned agent was not found")
             if executor_type == "agent" and agent_id is not None:
-                if agent.linked_by_user_id is not None and int(agent.linked_by_user_id) != int(actor_user_id):
+                if agent.linked_by_user_id is not None and int(agent.linked_by_user_id) != int(
+                    actor_user_id
+                ):
                     raise ValueError("Assigned agent does not belong to your account")
 
         bound_group = await self._get_group(group_id)
@@ -125,11 +138,15 @@ class TaskService:
         await self.store.upsert_assignment(group_id, normalized)
         return self._dump_assignment(normalized, group=bound_group)
 
-    async def delete_assignment(self, *, actor_user_id: int, group_id: int, assignment_id: str) -> bool:
+    async def delete_assignment(
+        self, *, actor_user_id: int, group_id: int, assignment_id: str
+    ) -> bool:
         await self._ensure_group_admin(group_id, actor_user_id)
         return await self.store.delete_assignment(group_id, assignment_id)
 
-    async def handle_event(self, *, event_name: str, group_id: int, user_id: int | None, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    async def handle_event(
+        self, *, event_name: str, group_id: int, user_id: int | None, payload: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         assignments = await self.store.list_assignments(group_id)
         chat_id = int(payload.get("chat_id") or 0)
         if chat_id:
@@ -165,11 +182,15 @@ class TaskService:
             if assignment.executor_type == "agent"
             and assignment.agent_id == int(agent_id)
             and (
-                any(canonical_tg_group_id(int(group_tg_id)) == canonical_source_chat_id for group_tg_id in assignment.group_tg_ids)
+                any(
+                    canonical_tg_group_id(int(group_tg_id)) == canonical_source_chat_id
+                    for group_tg_id in assignment.group_tg_ids
+                )
                 or (
                     not assignment.group_tg_ids
                     and bound_group is not None
-                    and canonical_tg_group_id(int(bound_group.tg_group_id)) == canonical_source_chat_id
+                    and canonical_tg_group_id(int(bound_group.tg_group_id))
+                    == canonical_source_chat_id
                 )
             )
         ]
@@ -203,7 +224,9 @@ class TaskService:
         executors = {
             "bot": BotTaskExecutor(
                 dispatch_delete_message=self.dispatch_delete_message,
-                automation_runtime=AutomationRuntimeService(self.session, dispatch_delete_message=self.dispatch_delete_message),
+                automation_runtime=AutomationRuntimeService(
+                    self.session, dispatch_delete_message=self.dispatch_delete_message
+                ),
             ),
             "agent": AgentJobExecutor(AgentService(self.session), self.dispatch_agent_job),
         }
@@ -244,10 +267,16 @@ class TaskService:
                     agent_id=result.assignment.agent_id,
                     destination=approval_request.get("chat_id", group_id),
                     prompt_text=str(approval_request.get("prompt_text") or "").strip(),
-                    private_reply_text=str(approval_request.get("private_reply_text") or "").strip(),
+                    private_reply_text=str(
+                        approval_request.get("private_reply_text") or ""
+                    ).strip(),
                     target_user_id=int(target_user_id),
-                    source_group_title=str(approval_request.get("source_group_title") or "").strip(),
-                    original_message_text=str(approval_request.get("original_message_text") or "").strip(),
+                    source_group_title=str(
+                        approval_request.get("source_group_title") or ""
+                    ).strip(),
+                    original_message_text=str(
+                        approval_request.get("original_message_text") or ""
+                    ).strip(),
                     source_chat_id=approval_request.get("source_chat_id"),
                     source_message_id=approval_request.get("source_message_id"),
                     bot=payload["bot"],
@@ -261,7 +290,9 @@ class TaskService:
                         task_key=result.assignment.task_key,
                         assignment_id=result.assignment.assignment_id,
                         metadata=metadata,
-                        reason=str(metadata.get("lead_label") or metadata.get("capture_type") or ""),
+                        reason=str(
+                            metadata.get("lead_label") or metadata.get("capture_type") or ""
+                        ),
                     )
                 if result.assignment.task_key == "lead_capture":
                     await self._persist_bot_lead(
@@ -297,11 +328,19 @@ class TaskService:
             normalized_results.append(output)
         return normalized_results
 
-    async def handle_message_event(self, *, group_id: int, user_id: int | None, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        return await self.handle_event(event_name="message.received", group_id=group_id, user_id=user_id, payload=payload)
+    async def handle_message_event(
+        self, *, group_id: int, user_id: int | None, payload: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return await self.handle_event(
+            event_name="message.received", group_id=group_id, user_id=user_id, payload=payload
+        )
 
-    async def handle_member_join_event(self, *, group_id: int, user_id: int | None, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        return await self.handle_event(event_name="member.joined", group_id=group_id, user_id=user_id, payload=payload)
+    async def handle_member_join_event(
+        self, *, group_id: int, user_id: int | None, payload: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return await self.handle_event(
+            event_name="member.joined", group_id=group_id, user_id=user_id, payload=payload
+        )
 
     async def _load_assignments(self, group_id: int) -> list[TaskAssignment]:
         return await self.store.list_assignments(group_id)
@@ -326,7 +365,9 @@ class TaskService:
                 tg_user_id=user_id,
                 username=str(event.payload.get("username") or ""),
                 first_name=str(event.payload.get("first_name") or ""),
-                last_name=str(event.payload.get("full_name") or "").split()[-1] if event.payload.get("full_name") else None,
+                last_name=str(event.payload.get("full_name") or "").split()[-1]
+                if event.payload.get("full_name")
+                else None,
                 source_group_tg_id=event.payload.get("chat_id") or event.group_id,
                 source_group_title=str(event.payload.get("group_title") or ""),
                 source_message_id=event.payload.get("message_id"),
@@ -338,7 +379,9 @@ class TaskService:
             logger.exception("bot_lead_capture_persistence_failed", group_id=group_id)
 
     async def _get_group(self, group_id: int) -> Group | None:
-        return (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        return (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
 
     async def _can_assign_agent_to_group(
         self,
@@ -394,7 +437,11 @@ class TaskService:
                 for group in managed_groups
                 if group.get("tg_group_id") is not None
             )
-        invalid_group_tg_ids = [group_tg_id for group_tg_id in normalized_group_tg_ids if group_tg_id not in allowed_group_tg_ids]
+        invalid_group_tg_ids = [
+            group_tg_id
+            for group_tg_id in normalized_group_tg_ids
+            if group_tg_id not in allowed_group_tg_ids
+        ]
         if invalid_group_tg_ids:
             raise ValueError("Assigned agent must belong to the selected group")
 
@@ -421,22 +468,36 @@ class TaskService:
             return [str(bound_group.title)]
         return []
 
-    def _dump_assignment(self, assignment: TaskAssignment, *, group: Group | None = None) -> dict[str, Any]:
+    def _dump_assignment(
+        self, assignment: TaskAssignment, *, group: Group | None = None
+    ) -> dict[str, Any]:
         group_id = int(group.id) if group is not None else None
         group_tg_id = int(group.tg_group_id) if group is not None else None
         group_title = str(group.title) if group is not None and group.title is not None else None
-        assignment_group_ids = list(assignment.group_ids or ([] if group_id is None else [group_id]))
-        assignment_group_tg_ids = list(assignment.group_tg_ids or ([] if group_tg_id is None else [group_tg_id]))
-        assignment_group_titles = list(assignment.group_titles or ([] if group_title is None else [group_title]))
-        
+        assignment_group_ids = list(
+            assignment.group_ids or ([] if group_id is None else [group_id])
+        )
+        assignment_group_tg_ids = list(
+            assignment.group_tg_ids or ([] if group_tg_id is None else [group_tg_id])
+        )
+        assignment_group_titles = list(
+            assignment.group_titles or ([] if group_title is None else [group_title])
+        )
+
         payload = TaskAssignmentStore.serialize_assignment(assignment, group_id=group_id)
-        payload.update({
-            "group_ids": assignment_group_ids,
-            "group_tg_ids": assignment_group_tg_ids,
-            "group_titles": assignment_group_titles,
-            "group_tg_id": assignment_group_tg_ids[0] if assignment_group_tg_ids else group_tg_id,
-            "group_title": assignment_group_titles[0] if assignment_group_titles else group_title,
-        })
+        payload.update(
+            {
+                "group_ids": assignment_group_ids,
+                "group_tg_ids": assignment_group_tg_ids,
+                "group_titles": assignment_group_titles,
+                "group_tg_id": assignment_group_tg_ids[0]
+                if assignment_group_tg_ids
+                else group_tg_id,
+                "group_title": assignment_group_titles[0]
+                if assignment_group_titles
+                else group_title,
+            }
+        )
         payload["condition_rules"] = [
             {
                 "key": condition.key,

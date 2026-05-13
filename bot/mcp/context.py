@@ -5,7 +5,9 @@ from dataclasses import dataclass
 
 from bot.config import get_settings
 
-_mcp_actor_user_id: contextvars.ContextVar[int | None] = contextvars.ContextVar("mcp_actor_user_id", default=None)
+_mcp_actor_user_id: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "mcp_actor_user_id", default=None
+)
 
 
 @dataclass

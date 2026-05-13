@@ -20,6 +20,7 @@ class Registry:
     def list(self) -> list[TaskDefinition]:
         return list(self._definitions.values())
 
+
 def build_default_registry() -> Registry:
     registry = Registry()
     for definition in build_builtin_task_definitions():

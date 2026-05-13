@@ -75,7 +75,9 @@ async def _configure_bot_commands(bot: Bot, app_kind: AppKind = "admin") -> None
 async def run_bot() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
-    logging.getLogger("aiogram").setLevel(getattr(logging, settings.aiogram_log_level.upper(), logging.WARNING))
+    logging.getLogger("aiogram").setLevel(
+        getattr(logging, settings.aiogram_log_level.upper(), logging.WARNING)
+    )
 
     if settings.sentry_dsn:
         sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1)

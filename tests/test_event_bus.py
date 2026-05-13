@@ -19,7 +19,9 @@ async def test_event_bus_emits_to_all_subscribers() -> None:
     bus.subscribe("MessageReceived", handler_a)
     bus.subscribe("MessageReceived", handler_b)
 
-    await bus.publish(Event(name="MessageReceived", group_id=1, user_id=2, payload={"text": "hello"}))
+    await bus.publish(
+        Event(name="MessageReceived", group_id=1, user_id=2, payload={"text": "hello"})
+    )
 
     assert "a:hello" in received
     assert "b:hello" in received

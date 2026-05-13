@@ -7,7 +7,18 @@ from datetime import datetime
 from strenum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -46,7 +57,9 @@ class GroupSubscriptionSettings(Base):
     __tablename__ = "group_subscription_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True, unique=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"), index=True, unique=True
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     payment_mode: Mapped[str] = mapped_column(String(32), default=GroupPaymentMode.MANUAL)
     default_currency: Mapped[str] = mapped_column(String(8), default="USD")
@@ -100,8 +113,12 @@ class GroupSubscriber(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default=GroupSubscriberStatus.PENDING, index=True)
-    plan_id: Mapped[int] = mapped_column(ForeignKey("group_subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default=GroupSubscriberStatus.PENDING, index=True
+    )
+    plan_id: Mapped[int] = mapped_column(
+        ForeignKey("group_subscription_plans.id", ondelete="SET NULL"), nullable=True
+    )
     starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
@@ -121,12 +138,16 @@ class PaymentRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    plan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("group_subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    plan_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("group_subscription_plans.id", ondelete="SET NULL"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(32))
     amount: Mapped[int] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(8))
     status: Mapped[str] = mapped_column(String(32), default=GroupPaymentStatus.PENDING, index=True)
-    provider_reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    provider_reference: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

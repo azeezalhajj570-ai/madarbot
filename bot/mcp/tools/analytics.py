@@ -7,7 +7,6 @@ from bot.agents.service import AgentService
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -23,7 +22,6 @@ def register_analytics_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_analytics(agent_id: int | None = None) -> str:
         """Get analytics summary for the MCP actor."""
@@ -56,7 +54,6 @@ def register_analytics_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_safety_settings(agent_id: int) -> str:
         """Get safety settings for a specific agent."""
@@ -87,14 +84,15 @@ def register_analytics_tools(server: FastMCP) -> None:
                     "max_messages_per_day": agent.max_messages_per_day,
                     "min_delay_seconds": agent.min_delay_seconds,
                     "cooldown_minutes": agent.cooldown_minutes,
-                    "safety_mode_until": agent.safety_mode_until.isoformat() if agent.safety_mode_until else None,
+                    "safety_mode_until": agent.safety_mode_until.isoformat()
+                    if agent.safety_mode_until
+                    else None,
                 },
             )
             return to_mcp_text(result)
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_update_safety_settings(
         agent_id: int,

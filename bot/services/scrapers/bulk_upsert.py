@@ -31,7 +31,9 @@ async def build_upsert_statement(
     elif dialect_name == "sqlite":
         statement = sqlite_insert(model).values(rows)
     else:
-        raise RuntimeError(f"Unsupported database dialect for scraper upsert: {dialect_name or 'unknown'}")
+        raise RuntimeError(
+            f"Unsupported database dialect for scraper upsert: {dialect_name or 'unknown'}"
+        )
 
     return statement.on_conflict_do_update(
         index_elements=index_elements,

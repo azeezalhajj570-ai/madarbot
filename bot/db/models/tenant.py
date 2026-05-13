@@ -15,7 +15,7 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -26,6 +26,7 @@ class TenantMembership(Base):
 
     A user can belong to multiple tenants (e.g., admin for multiple businesses).
     """
+
     __tablename__ = "tenant_memberships"
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", name="uq_tenant_membership_tenant_user"),
@@ -40,7 +41,9 @@ class TenantMembership(Base):
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
 
@@ -52,6 +55,7 @@ class UserIdentity(Base):
 
     Replaces the tg_user_id unique constraint on users.
     """
+
     __tablename__ = "user_identities"
     __table_args__ = (
         UniqueConstraint("provider", "provider_user_id", name="uq_user_identity_provider_user"),
@@ -66,8 +70,12 @@ class UserIdentity(Base):
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )

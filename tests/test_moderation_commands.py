@@ -35,7 +35,9 @@ async def test_ban_command_bans_replied_user(
         "bot.handlers.commands.moderation.schedule_bot_message_delete",
         lambda **kwargs: scheduled_deletes.append(kwargs),
     )
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -50,10 +52,22 @@ async def test_ban_command_bans_replied_user(
     assert fake_bot.banned_members == [(seeded_group["tg_group_id"], 9999)]
     assert message.log.answers[-1]["text"] == t("ban_done", "ar")
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"]))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert any(log.action == "ban_user" and log.target_user_id == 9999 for log in logs)
-    assert scheduled_deletes == [{"delay_seconds": 60, "chat_id": seeded_group["tg_group_id"], "message_id": message.message_id}]
+    assert scheduled_deletes == [
+        {
+            "delay_seconds": 60,
+            "chat_id": seeded_group["tg_group_id"],
+            "message_id": message.message_id,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -63,7 +77,9 @@ async def test_unban_command_unbans_replied_user(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -92,7 +108,9 @@ async def test_mute_and_unmute_commands_apply_restrictions(
         "bot.handlers.commands.moderation.schedule_bot_message_delete",
         lambda **kwargs: scheduled_deletes.append(kwargs),
     )
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
 
     mute_message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
@@ -117,7 +135,13 @@ async def test_mute_and_unmute_commands_apply_restrictions(
     assert fake_bot.muted_members == [(seeded_group["tg_group_id"], 9999)]
     assert len(fake_bot.unmuted_members) == 1
     assert unmute_message.log.answers[-1]["text"] == t("unmute_done", "ar")
-    assert scheduled_deletes == [{"delay_seconds": 60, "chat_id": seeded_group["tg_group_id"], "message_id": mute_message.message_id}]
+    assert scheduled_deletes == [
+        {
+            "delay_seconds": 60,
+            "chat_id": seeded_group["tg_group_id"],
+            "message_id": mute_message.message_id,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -127,7 +151,9 @@ async def test_purge_command_deletes_requested_count(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -156,7 +182,9 @@ async def test_non_admin_cannot_use_moderation_commands(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="member")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="member"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -172,9 +200,19 @@ async def test_non_admin_cannot_use_moderation_commands(
     assert fake_bot.muted_members == []
     assert message.log.answers[-1]["text"] == t("registergroup_admin_only", "ar")
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"]))
-    ).scalars().all()
-    assert any(log.action == "unauthorized_moderation_command" and log.target_user_id == seeded_group["user_id"] for log in logs)
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert any(
+        log.action == "unauthorized_moderation_command"
+        and log.target_user_id == seeded_group["user_id"]
+        for log in logs
+    )
 
 
 @pytest.mark.asyncio
@@ -185,7 +223,9 @@ async def test_non_admin_is_muted_after_three_unauthorized_moderation_attempts(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="member")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="member"
+    )
 
     for _ in range(3):
         message = fake_message_factory(
@@ -201,10 +241,20 @@ async def test_non_admin_is_muted_after_three_unauthorized_moderation_attempts(
     assert fake_bot.muted_members == [(seeded_group["tg_group_id"], seeded_group["user_id"])]
     assert fake_bot.banned_members == []
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"]))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert sum(1 for log in logs if log.action == "unauthorized_moderation_command") == 3
-    assert any(log.action == "mute_unauthorized_command_user" and log.target_user_id == seeded_group["user_id"] for log in logs)
+    assert any(
+        log.action == "mute_unauthorized_command_user"
+        and log.target_user_id == seeded_group["user_id"]
+        for log in logs
+    )
 
 
 @pytest.mark.asyncio
@@ -215,7 +265,9 @@ async def test_non_admin_is_banned_after_five_unauthorized_moderation_attempts(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="member")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="member"
+    )
 
     for _ in range(5):
         message = fake_message_factory(
@@ -231,10 +283,20 @@ async def test_non_admin_is_banned_after_five_unauthorized_moderation_attempts(
     assert fake_bot.muted_members == [(seeded_group["tg_group_id"], seeded_group["user_id"])]
     assert fake_bot.banned_members == [(seeded_group["tg_group_id"], seeded_group["user_id"])]
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"]))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert sum(1 for log in logs if log.action == "unauthorized_moderation_command") == 5
-    assert any(log.action == "ban_unauthorized_command_user" and log.target_user_id == seeded_group["user_id"] for log in logs)
+    assert any(
+        log.action == "ban_unauthorized_command_user"
+        and log.target_user_id == seeded_group["user_id"]
+        for log in logs
+    )
 
 
 @pytest.mark.asyncio
@@ -244,7 +306,9 @@ async def test_ban_command_requires_reply(
     fake_message_factory,
     fake_bot,
 ) -> None:
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -267,8 +331,12 @@ async def test_plain_text_ban_reply_alias_bans_user(
     fake_bot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("bot.handlers.commands.moderation.schedule_bot_message_delete", lambda **_: None)
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    monkeypatch.setattr(
+        "bot.handlers.commands.moderation.schedule_bot_message_delete", lambda **_: None
+    )
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",
@@ -291,8 +359,12 @@ async def test_plain_text_arabic_mute_reply_alias_mutes_user(
     fake_bot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("bot.handlers.commands.moderation.schedule_bot_message_delete", lambda **_: None)
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    monkeypatch.setattr(
+        "bot.handlers.commands.moderation.schedule_bot_message_delete", lambda **_: None
+    )
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
         chat_type="supergroup",

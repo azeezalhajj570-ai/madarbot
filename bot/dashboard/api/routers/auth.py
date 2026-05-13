@@ -77,7 +77,9 @@ async def telegram_login_payload(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     try:
-        token, identity = await issue_dashboard_token_for_telegram_login(session=session, payload=payload)
+        token, identity = await issue_dashboard_token_for_telegram_login(
+            session=session, payload=payload
+        )
         return {
             "token": token,
             "access_token": token,
@@ -113,7 +115,9 @@ async def email_login_payload(
             },
         }
     except DashboardJWTError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password") from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password"
+        ) from exc
 
 
 async def miniapp_token_payload(
@@ -138,7 +142,9 @@ async def miniapp_token_payload(
         }
 
     try:
-        context = await MessagingService(session).authenticate_telegram(init_data, app_boundary=app_boundary)
+        context = await MessagingService(session).authenticate_telegram(
+            init_data, app_boundary=app_boundary
+        )
         return {
             "token": context.access_token,
             "access_token": context.access_token,
@@ -171,7 +177,9 @@ async def set_identity_language_payload(
     identity: TelegramWebAppIdentity,
     session: AsyncSession,
 ) -> dict[str, str]:
-    full_name = " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    full_name = (
+        " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    )
     await UserService(session).set_language(
         tg_user_id=identity.user_id,
         language_code=language_code,
@@ -195,7 +203,9 @@ async def bot_install_links_payload(
     identity: TelegramWebAppIdentity,
     session: AsyncSession,
 ) -> dict[str, Any]:
-    invalid_permissions = [item for item in payload.permissions if item not in BOT_INSTALL_PERMISSION_KEYS]
+    invalid_permissions = [
+        item for item in payload.permissions if item not in BOT_INSTALL_PERMISSION_KEYS
+    ]
     if invalid_permissions:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -243,10 +253,16 @@ async def bot_install_links_payload(
             )
         ).all()
         groups_by_id = {
-            int(row.id): {"group_id": int(row.id), "tg_group_id": int(row.tg_group_id), "title": row.title}
+            int(row.id): {
+                "group_id": int(row.id),
+                "tg_group_id": int(row.tg_group_id),
+                "title": row.title,
+            }
             for row in rows
         }
-        missing_group_ids = [group_id for group_id in unique_group_ids if group_id not in groups_by_id]
+        missing_group_ids = [
+            group_id for group_id in unique_group_ids if group_id not in groups_by_id
+        ]
         if missing_group_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -288,7 +304,9 @@ async def email_password_login(
     payload: EmailPasswordLoginRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    return await email_login_payload(email=payload.email, password=payload.password, session=session)
+    return await email_login_payload(
+        email=payload.email, password=payload.password, session=session
+    )
 
 
 @router.post("/auth/miniapp/token")

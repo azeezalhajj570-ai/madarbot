@@ -4,11 +4,10 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
-from bot.mcp.context import resolve_mcp_context
 from bot.mcp.server import create_mcp_server
-from bot.mcp.structured_response import success_response, error_response, to_mcp_text, OUTPUT_SCHEMA_BASE
+from bot.mcp.structured_response import success_response, error_response, OUTPUT_SCHEMA_BASE
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 

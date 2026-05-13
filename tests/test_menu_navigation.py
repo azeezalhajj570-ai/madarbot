@@ -21,8 +21,21 @@ from bot.utils.pagination import paginate
 
 from sqlalchemy import select
 
-from bot.db.models import Agent, Group, GroupAccessRequirement, GroupAdminRole, SubscriptionRequest, SubscriptionStatus
-from bot.handlers.commands.dashboard import dashboard_handler, help_handler, language_handler, scraper_handler, settings_handler
+from bot.db.models import (
+    Agent,
+    Group,
+    GroupAccessRequirement,
+    GroupAdminRole,
+    SubscriptionRequest,
+    SubscriptionStatus,
+)
+from bot.handlers.commands.dashboard import (
+    dashboard_handler,
+    help_handler,
+    language_handler,
+    scraper_handler,
+    settings_handler,
+)
 from bot.handlers.commands.start import start_handler
 from bot.handlers.menu import reply_settings
 from bot.handlers.menu.settings import menu_moderation, menu_settings
@@ -34,7 +47,9 @@ from bot.utils.i18n import t
 
 class FakeTelegramAgentAuthService:
     async def start_login(self, *, phone_number: str) -> AgentTelegramAuthSession:
-        return AgentTelegramAuthSession(phone_number=phone_number, session_string="session:pending", phone_code_hash="hash-1")
+        return AgentTelegramAuthSession(
+            phone_number=phone_number, session_string="session:pending", phone_code_hash="hash-1"
+        )
 
     async def verify_code(
         self,
@@ -56,7 +71,9 @@ class FakeTelegramAgentAuthService:
             session_string="session:active",
         )
 
-    async def verify_password(self, *, password: str, session_string: str) -> AgentTelegramAuthResult:
+    async def verify_password(
+        self, *, password: str, session_string: str
+    ) -> AgentTelegramAuthResult:
         raise AssertionError("2FA should not be requested in this test")
 
 
@@ -78,7 +95,12 @@ async def test_private_main_menu_buttons_follow_saved_english_language(
         )
     )
     from bot.db.models import User as UserModel
-    user = (await db_session.execute(select(UserModel).where(UserModel.tg_user_id == seeded_group["user_id"]))).scalar_one()
+
+    user = (
+        await db_session.execute(
+            select(UserModel).where(UserModel.tg_user_id == seeded_group["user_id"])
+        )
+    ).scalar_one()
     assert user is not None
     user.language_code = "ar"
     await db_session.commit()
@@ -130,7 +152,9 @@ async def test_start_command_preserves_saved_language(
 
     from bot.db.models import User as UserModel
 
-    db_session.add(UserModel(tg_user_id=2223, username="tester_en", full_name="Test User", language_code="en"))
+    db_session.add(
+        UserModel(tg_user_id=2223, username="tester_en", full_name="Test User", language_code="en")
+    )
     await db_session.commit()
 
     state = fsm_context_factory(user_id=2223, chat_id=7005)
@@ -139,7 +163,9 @@ async def test_start_command_preserves_saved_language(
     await start_handler(message, state)
 
     assert message.log.answers[0]["text"] == t("main_menu", "en")
-    labels = [button.text for row in message.log.answers[0]["reply_markup"].keyboard for button in row]
+    labels = [
+        button.text for row in message.log.answers[0]["reply_markup"].keyboard for button in row
+    ]
     assert f"⚙ {t('settings', 'en')}" in labels
     assert f"❓ {t('help', 'en')}" in labels
 
@@ -165,7 +191,9 @@ async def test_start_command_clears_stale_state_before_private_keyboard_navigati
     state = fsm_context_factory(user_id=2224, chat_id=2224)
     await state.set_state(SettingsFlow.announcement_schedule_text)
 
-    start_message = fake_message_factory(chat_id=2224, chat_type="private", user_id=2224, text="/start")
+    start_message = fake_message_factory(
+        chat_id=2224, chat_type="private", user_id=2224, text="/start"
+    )
     await start_handler(start_message, state)
     assert await state.get_state() is None
 
@@ -222,7 +250,9 @@ async def test_language_command_opens_private_language_keyboard(
     await language_handler(message, state)
 
     assert message.log.answers[-1]["text"] == t("choose_language", "ar")
-    labels = [button.text for row in message.log.answers[-1]["reply_markup"].keyboard for button in row]
+    labels = [
+        button.text for row in message.log.answers[-1]["reply_markup"].keyboard for button in row
+    ]
     assert f"🇺🇸 {t('language_en', 'ar')}" in labels
     assert f"🇸🇦 {t('language_ar', 'ar')}" in labels
     assert await state.get_state() == SettingsFlow.language_menu.state
@@ -248,13 +278,19 @@ async def test_language_command_accepts_direct_language_argument(
     await language_handler(message, state)
 
     assert message.log.answers[-1]["text"] == t("language_updated", "en")
-    labels = [button.text for row in message.log.answers[-1]["reply_markup"].keyboard for button in row]
+    labels = [
+        button.text for row in message.log.answers[-1]["reply_markup"].keyboard for button in row
+    ]
     assert f"⚙ {t('settings', 'en')}" in labels
     assert await state.get_state() is None
 
     from bot.db.models import User as UserModel
 
-    user = (await db_session.execute(select(UserModel).where(UserModel.tg_user_id == seeded_group["user_id"]))).scalar_one()
+    user = (
+        await db_session.execute(
+            select(UserModel).where(UserModel.tg_user_id == seeded_group["user_id"])
+        )
+    ).scalar_one()
     assert user.language_code == "en"
 
 
@@ -395,7 +431,10 @@ async def test_start_command_uses_agents_webapp_for_agents_bot(
     open_app_button = keyboard_rows[0][0]
     assert open_app_button.web_app.url == "https://example.com/webapp/agents"
     assert open_app_button.text == f"🤖 {t('open_agents_miniapp', 'ar')}"
-    assert message.bot.chat_menu_buttons[-1]["menu_button"].web_app.url == "https://example.com/webapp/agents"
+    assert (
+        message.bot.chat_menu_buttons[-1]["menu_button"].web_app.url
+        == "https://example.com/webapp/agents"
+    )
 
     get_settings.cache_clear()
 
@@ -608,6 +647,7 @@ async def test_private_settings_command_opens_group_selector(
     assert message.log.answers[0]["text"] == t("select_group", "ar")
     assert await state.get_state() == SettingsFlow.selecting_group.state
 
+
 @pytest.mark.asyncio
 async def test_settings_button_loads_group_selector(
     patch_db_dependencies,
@@ -735,7 +775,9 @@ def test_task_executor_keyboard_is_standalone() -> None:
 
 
 def test_task_group_keyboard_is_standalone() -> None:
-    markup = task_group_keyboard(paginate(["Group A", "Group B"], page=1, page_size=10), "en", include_tabs=False)
+    markup = task_group_keyboard(
+        paginate(["Group A", "Group B"], page=1, page_size=10), "en", include_tabs=False
+    )
     labels = [button.text for row in markup.keyboard for button in row]
 
     assert labels == ["Group A", "Group B", "Page 1/1", "⬅ Back"]
@@ -772,7 +814,11 @@ def test_task_agent_keyboard_lists_agents() -> None:
 
 
 def test_task_group_keyboard_lists_groups_with_pagination() -> None:
-    markup = task_group_keyboard(paginate([f"Group {index}" for index in range(1, 12)], page=2, page_size=10), "en", include_tabs=False)
+    markup = task_group_keyboard(
+        paginate([f"Group {index}" for index in range(1, 12)], page=2, page_size=10),
+        "en",
+        include_tabs=False,
+    )
     labels = [button.text for row in markup.keyboard for button in row]
 
     assert "Group 11" in labels
@@ -859,7 +905,9 @@ async def test_tasks_flow_can_save_reply_task_for_bot(
     assert "price -> Pricing team will reply soon." in list_message.log.answers[-1]["text"]
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -953,7 +1001,9 @@ async def test_tasks_flow_can_save_notify_task(
     assert t("task_notify_saved", "ar") in delete_after_message.log.answers[-1]["text"]
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -995,7 +1045,9 @@ async def test_tasks_flow_can_save_notify_task_with_copy_only_mode(
         await settings_entrypoint(message, state, plugin_manager)
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -1036,7 +1088,9 @@ async def test_tasks_flow_can_save_notify_task_with_forward_only_mode(
         await settings_entrypoint(message, state, plugin_manager)
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -1073,7 +1127,9 @@ async def test_tasks_flow_can_save_reply_task_for_agent(
     async def _fake_agent_map(_actor_user_id: int) -> dict[str, int]:
         return {"👤 sales-bot": agent.id}
 
-    async def _fake_group_map(_actor_user_id: int, _agent_id: int) -> dict[str, dict[str, int | str | None]]:
+    async def _fake_group_map(
+        _actor_user_id: int, _agent_id: int
+    ) -> dict[str, dict[str, int | str | None]]:
         return {
             "QA Group": {
                 "group_id": seeded_group["group_id"],
@@ -1107,7 +1163,9 @@ async def test_tasks_flow_can_save_reply_task_for_agent(
         await settings_entrypoint(message, state, plugin_manager)
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -1155,7 +1213,9 @@ async def test_tasks_flow_paginates_bot_groups(
     )
     await settings_entrypoint(choose_bot, state, plugin_manager)
 
-    first_page_labels = [button.text for row in choose_bot.log.answers[-1]["reply_markup"].keyboard for button in row]
+    first_page_labels = [
+        button.text for row in choose_bot.log.answers[-1]["reply_markup"].keyboard for button in row
+    ]
     assert "Group 01" in first_page_labels
     assert "Group 10" in first_page_labels
     assert "Group 11" not in first_page_labels
@@ -1169,7 +1229,9 @@ async def test_tasks_flow_paginates_bot_groups(
     )
     await settings_entrypoint(next_page, state, plugin_manager)
 
-    second_page_labels = [button.text for row in next_page.log.answers[-1]["reply_markup"].keyboard for button in row]
+    second_page_labels = [
+        button.text for row in next_page.log.answers[-1]["reply_markup"].keyboard for button in row
+    ]
     assert "Group 11" in second_page_labels
     assert "Group 12" in second_page_labels
     assert "Group 10" not in second_page_labels
@@ -1201,7 +1263,9 @@ async def test_tasks_flow_paginates_agent_groups(
     async def _fake_agent_map(_actor_user_id: int) -> dict[str, int]:
         return {"👤 ops-bot": agent.id}
 
-    async def _fake_group_map(_actor_user_id: int, _agent_id: int) -> dict[str, dict[str, int | str | None]]:
+    async def _fake_group_map(
+        _actor_user_id: int, _agent_id: int
+    ) -> dict[str, dict[str, int | str | None]]:
         return {
             f"Agent Group {index:02d}": {
                 "group_id": None,
@@ -1233,7 +1297,11 @@ async def test_tasks_flow_paginates_agent_groups(
     )
     await settings_entrypoint(choose_agent, state, plugin_manager)
 
-    first_page_labels = [button.text for row in choose_agent.log.answers[-1]["reply_markup"].keyboard for button in row]
+    first_page_labels = [
+        button.text
+        for row in choose_agent.log.answers[-1]["reply_markup"].keyboard
+        for button in row
+    ]
     assert "Agent Group 01" in first_page_labels
     assert "Agent Group 10" in first_page_labels
     assert "Agent Group 11" not in first_page_labels
@@ -1247,7 +1315,9 @@ async def test_tasks_flow_paginates_agent_groups(
     )
     await settings_entrypoint(next_page, state, plugin_manager)
 
-    second_page_labels = [button.text for row in next_page.log.answers[-1]["reply_markup"].keyboard for button in row]
+    second_page_labels = [
+        button.text for row in next_page.log.answers[-1]["reply_markup"].keyboard for button in row
+    ]
     assert "Agent Group 11" in second_page_labels
     assert "Agent Group 12" in second_page_labels
     assert "Agent Group 10" not in second_page_labels
@@ -1309,7 +1379,9 @@ async def test_tasks_flow_can_delete_task_with_confirmation(
     assert confirm_delete.log.answers[-1]["text"] == t("task_deleted", "ar")
 
     async with session_factory() as session:
-        assignments = await TaskService(session, dispatch_agent_job=lambda _job_id: None).list_assignments(
+        assignments = await TaskService(
+            session, dispatch_agent_job=lambda _job_id: None
+        ).list_assignments(
             actor_user_id=seeded_group["user_id"],
             group_id=seeded_group["group_id"],
         )
@@ -1317,14 +1389,24 @@ async def test_tasks_flow_can_delete_task_with_confirmation(
 
 
 @pytest.mark.asyncio
-async def test_moderation_menu_buttons(menu_engine, fake_message_factory, fake_callback_factory) -> None:
-    host_message = fake_message_factory(chat_id=1001, chat_type="private", user_id=1001, text="open")
-    callback = fake_callback_factory(data="menu:moderation", from_user_id=1001, message=host_message)
+async def test_moderation_menu_buttons(
+    menu_engine, fake_message_factory, fake_callback_factory
+) -> None:
+    host_message = fake_message_factory(
+        chat_id=1001, chat_type="private", user_id=1001, text="open"
+    )
+    callback = fake_callback_factory(
+        data="menu:moderation", from_user_id=1001, message=host_message
+    )
 
     await menu_moderation(callback, menu_engine)
 
     assert host_message.log.edits[-1]["text"] == t("moderation_panel", "en")
-    buttons = [btn.text for row in host_message.log.edits[-1]["reply_markup"].inline_keyboard for btn in row]
+    buttons = [
+        btn.text
+        for row in host_message.log.edits[-1]["reply_markup"].inline_keyboard
+        for btn in row
+    ]
     assert "🚫 Ban User" in buttons
     assert "⏳ Mute User" in buttons
     assert "⚠ Warnings" in buttons
@@ -1340,7 +1422,9 @@ async def test_agents_panel_group_then_link_account(
     plugin_manager,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(reply_settings, "get_agent_auth_service", lambda: FakeTelegramAgentAuthService())
+    monkeypatch.setattr(
+        reply_settings, "get_agent_auth_service", lambda: FakeTelegramAgentAuthService()
+    )
     state = fsm_context_factory(user_id=seeded_group["user_id"], chat_id=seeded_group["user_id"])
 
     agents_click = fake_message_factory(
@@ -1394,7 +1478,9 @@ async def test_agents_panel_group_then_link_account(
         text="12345",
     )
     await settings_entrypoint(code_submit, state, plugin_manager)
-    assert any(answer["text"] == t("agent_link_success", "ar") for answer in code_submit.log.answers)
+    assert any(
+        answer["text"] == t("agent_link_success", "ar") for answer in code_submit.log.answers
+    )
 
     agents_list_open = fake_message_factory(
         chat_id=seeded_group["user_id"],
@@ -1403,7 +1489,9 @@ async def test_agents_panel_group_then_link_account(
         text=f"🤖 {t('agents', 'ar')}",
     )
     await settings_entrypoint(agents_list_open, state, plugin_manager)
-    labels = [b.text for row in agents_list_open.log.answers[-1]["reply_markup"].keyboard for b in row]
+    labels = [
+        b.text for row in agents_list_open.log.answers[-1]["reply_markup"].keyboard for b in row
+    ]
     assert any("salesbot" in label for label in labels)
 
     select_agent = fake_message_factory(
@@ -1414,7 +1502,9 @@ async def test_agents_panel_group_then_link_account(
     )
     await settings_entrypoint(select_agent, state, plugin_manager)
     assert t("agent_selected_title", "ar") in select_agent.log.answers[-1]["text"]
-    action_labels = [b.text for row in select_agent.log.answers[-1]["reply_markup"].keyboard for b in row]
+    action_labels = [
+        b.text for row in select_agent.log.answers[-1]["reply_markup"].keyboard for b in row
+    ]
     assert f"⚙ {t('agent_jobs', 'ar')}" in action_labels
     assert f"➕ {t('create_job', 'ar')}" in action_labels
     assert f"🔌 {t('unlink_account', 'ar')}" in action_labels
@@ -1435,7 +1525,9 @@ async def test_agents_panel_group_then_link_account(
         text=f"✅ {t('confirm', 'ar')}",
     )
     await settings_entrypoint(confirm_unlink, state, plugin_manager)
-    assert any(answer["text"] == t("agent_unlink_success", "ar") for answer in confirm_unlink.log.answers)
+    assert any(
+        answer["text"] == t("agent_unlink_success", "ar") for answer in confirm_unlink.log.answers
+    )
 
 
 def test_group_selector_hides_other_buttons() -> None:
@@ -1687,7 +1779,9 @@ async def test_announcements_panel_schedule_and_bulk_send(
     extra_group = Group(tg_group_id=-1007788001, title="Bulk Group", is_active=True)
     db_session.add(extra_group)
     await db_session.flush()
-    db_session.add(GroupAdminRole(group_id=extra_group.id, user_id=seeded_group["user_id"], role="owner"))
+    db_session.add(
+        GroupAdminRole(group_id=extra_group.id, user_id=seeded_group["user_id"], role="owner")
+    )
     await db_session.commit()
 
     state = fsm_context_factory(user_id=seeded_group["user_id"], chat_id=seeded_group["user_id"])
@@ -1841,7 +1935,12 @@ async def test_announcements_flow_can_delete_scheduled_message(
     assert confirm_delete.log.answers[-1]["text"] == t("announcement_deleted", "ar")
 
     async with session_factory() as session:
-        assert await reply_settings.ScheduledMessageService(session).list_entries(group_id=seeded_group["group_id"]) == []
+        assert (
+            await reply_settings.ScheduledMessageService(session).list_entries(
+                group_id=seeded_group["group_id"]
+            )
+            == []
+        )
 
 
 @pytest.mark.asyncio
@@ -1917,7 +2016,9 @@ def test_send_due_announcements_keeps_recurring_cron_entries(monkeypatch) -> Non
         def __init__(self, session: Any) -> None:
             self.session = session
 
-        async def mark_delivered(self, *, group_id: int, entry_id: str, delivered_at: datetime | None = None) -> dict[str, Any] | None:
+        async def mark_delivered(
+            self, *, group_id: int, entry_id: str, delivered_at: datetime | None = None
+        ) -> dict[str, Any] | None:
             assert entry_id == entry["id"]
             return {
                 "id": entry_id,
@@ -1931,7 +2032,9 @@ def test_send_due_announcements_keeps_recurring_cron_entries(monkeypatch) -> Non
     monkeypatch.setattr(reply_settings, "_announcement_entries", fake_entries)
     monkeypatch.setattr(reply_settings, "_save_announcement_entries", fake_save)
     monkeypatch.setattr(reply_settings, "_selected_group", fake_selected_group)
-    monkeypatch.setattr(reply_settings, "_schedule_announcement_task", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        reply_settings, "_schedule_announcement_task", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(reply_settings, "ScheduledMessageService", FakeScheduledMessageService)
 
     class FakeBot:
@@ -1972,7 +2075,9 @@ async def test_access_gate_menu_shows_blocked_user_message_preview(
     required_group = Group(tg_group_id=-100778899, title="Required Group", is_active=True)
     db_session.add(required_group)
     await db_session.flush()
-    db_session.add(GroupAdminRole(group_id=required_group.id, user_id=seeded_group["user_id"], role="owner"))
+    db_session.add(
+        GroupAdminRole(group_id=required_group.id, user_id=seeded_group["user_id"], role="owner")
+    )
     db_session.add(
         GroupAccessRequirement(
             protected_group_id=seeded_group["group_id"],
@@ -2013,7 +2118,9 @@ async def test_moderation_menu_shows_default_group_settings_status(
 ) -> None:
     state = fsm_context_factory(user_id=seeded_group["user_id"], chat_id=seeded_group["user_id"])
     await state.set_state(SettingsFlow.moderation_group)
-    await state.update_data(group_items=[{"id": seeded_group["group_id"], "title": "QA Group"}], group_page=1)
+    await state.update_data(
+        group_items=[{"id": seeded_group["group_id"], "title": "QA Group"}], group_page=1
+    )
 
     message = fake_message_factory(
         chat_id=seeded_group["user_id"],

@@ -13,7 +13,13 @@ from sqlalchemy import select
 
 from bot.config import get_settings
 from bot.dashboard.api.main import app
-from bot.db.models import Group, OwnerAuditLog, PrivateAccessRequirement, SubscriptionRequest, SubscriptionStatus
+from bot.db.models import (
+    Group,
+    OwnerAuditLog,
+    PrivateAccessRequirement,
+    SubscriptionRequest,
+    SubscriptionStatus,
+)
 
 
 @pytest_asyncio.fixture
@@ -28,16 +34,23 @@ def _webapp_init_data(*, user_id: int) -> str:
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
 @pytest.mark.asyncio
-async def test_disable_group_creates_owner_audit_log(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_disable_group_creates_owner_audit_log(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9092")
     get_settings.cache_clear()
     group = Group(tg_group_id=-1009001, title="Audited Group", is_active=True)
@@ -48,7 +61,11 @@ async def test_disable_group_creates_owner_audit_log(api_client, db_session, mon
     response = await api_client.post(f"/webapp/owner/groups/{group.id}/disable", headers=headers)
 
     assert response.status_code == 200
-    rows = (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc()))).scalars().all()
+    rows = (
+        (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc())))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_id == 9092
     assert rows[0].action == "disable_group"
@@ -85,7 +102,11 @@ async def test_approve_subscription_creates_owner_audit_log(
     )
 
     assert response.status_code == 200
-    rows = (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc()))).scalars().all()
+    rows = (
+        (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc())))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_id == owner_id
     assert rows[0].action == "approve_subscription"
@@ -122,7 +143,11 @@ async def test_cancel_subscription_creates_owner_audit_log(
     )
 
     assert response.status_code == 200
-    rows = (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc()))).scalars().all()
+    rows = (
+        (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc())))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_id == owner_id
     assert rows[0].action == "cancel_subscription"
@@ -131,14 +156,20 @@ async def test_cancel_subscription_creates_owner_audit_log(
 
 
 @pytest.mark.asyncio
-async def test_owner_audit_log_returns_descending_entries(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_owner_audit_log_returns_descending_entries(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9093")
     get_settings.cache_clear()
     db_session.add(
-        OwnerAuditLog(actor_id=9093, action="first", target_type="group", target_id="1", detail=None)
+        OwnerAuditLog(
+            actor_id=9093, action="first", target_type="group", target_id="1", detail=None
+        )
     )
     db_session.add(
-        OwnerAuditLog(actor_id=9093, action="second", target_type="subscription", target_id="2", detail=None)
+        OwnerAuditLog(
+            actor_id=9093, action="second", target_type="subscription", target_id="2", detail=None
+        )
     )
     await db_session.commit()
 
@@ -152,7 +183,9 @@ async def test_owner_audit_log_returns_descending_entries(api_client, db_session
 
 
 @pytest.mark.asyncio
-async def test_update_private_access_gate_creates_owner_audit_log(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_update_private_access_gate_creates_owner_audit_log(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "9094")
     get_settings.cache_clear()
     group = Group(tg_group_id=-1009002, title="Gate Group", is_active=True)
@@ -168,7 +201,11 @@ async def test_update_private_access_gate_creates_owner_audit_log(api_client, db
     )
 
     assert response.status_code == 200
-    rows = (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc()))).scalars().all()
+    rows = (
+        (await db_session.execute(select(OwnerAuditLog).order_by(OwnerAuditLog.id.asc())))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_id == 9094
     assert rows[0].action == "update_private_access_gate"
@@ -185,7 +222,9 @@ async def test_non_owner_cannot_access_owner_audit_log(api_client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_owner_route_uses_shared_identity_extraction(api_client, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_owner_route_uses_shared_identity_extraction(
+    api_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BOT_OWNER_IDS", "777001")
     get_settings.cache_clear()
 

@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any
-
-from bot.config import get_settings
 
 
 class AgentRateLimiter:
@@ -23,7 +20,9 @@ class AgentRateLimiter:
     def _cooldown_key(self, agent_id: int) -> str:
         return f"agent:{agent_id}:cooldown"
 
-    async def check_and_increment(self, agent_id: int, max_per_hour: int | None) -> tuple[bool, int]:
+    async def check_and_increment(
+        self, agent_id: int, max_per_hour: int | None
+    ) -> tuple[bool, int]:
         if max_per_hour is None or max_per_hour <= 0:
             return True, 0
         now = int(time.time())
@@ -48,7 +47,9 @@ class AgentRateLimiter:
         await self._redis.set(key, str(now), ex=max(7200, int(min_delay_seconds * 4)))
         return 0.0
 
-    async def is_in_cooldown(self, agent_id: int, cooldown_minutes: int | None, agent_created_at: datetime | None = None) -> tuple[bool, float]:
+    async def is_in_cooldown(
+        self, agent_id: int, cooldown_minutes: int | None, agent_created_at: datetime | None = None
+    ) -> tuple[bool, float]:
         if cooldown_minutes is None or cooldown_minutes <= 0:
             return False, 0.0
         key = self._cooldown_key(agent_id)
@@ -63,7 +64,9 @@ class AgentRateLimiter:
         key = self._cooldown_key(agent_id)
         await self._redis.set(key, "1", ex=cooldown_minutes * 60)
 
-    async def check_safety_mode(self, agent_id: int, safety_mode_enabled: bool, safety_mode_until: datetime | None) -> bool:
+    async def check_safety_mode(
+        self, agent_id: int, safety_mode_enabled: bool, safety_mode_until: datetime | None
+    ) -> bool:
         if not safety_mode_enabled or safety_mode_until is None:
             return False
         now = datetime.now(timezone.utc)
@@ -78,6 +81,7 @@ class AgentRateLimiter:
 
     def _daily_key(self, agent_id: int) -> str:
         from datetime import datetime, timezone
+
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return f"agent:{agent_id}:daily:{today}"
 

@@ -19,11 +19,16 @@ def _webapp_init_data(*, user_id: int, bot_token: str = "123456:TESTTOKEN") -> s
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
@@ -56,7 +61,9 @@ async def test_api_auth_me_alias_returns_identity_profile(api_client, db_session
 
 
 @pytest.mark.asyncio
-async def test_boundary_miniapp_token_uses_telegram_identity(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_boundary_miniapp_token_uses_telegram_identity(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("AGENTS_BOT_TOKEN", "123456:AGENTSTOKEN")
     get_settings.cache_clear()
 
@@ -117,8 +124,12 @@ async def test_canonical_and_api_auth_routes_share_provider_and_login_contracts(
     assert legacy_providers.status_code == 200
     assert canonical_providers.json() == legacy_providers.json()
 
-    canonical_login = await api_client.post("/auth/email/login", json={"email": "owner", "password": "secret123"})
-    boundary_login = await api_client.post("/api/auth/email/login", json={"email": "owner", "password": "secret123"})
+    canonical_login = await api_client.post(
+        "/auth/email/login", json={"email": "owner", "password": "secret123"}
+    )
+    boundary_login = await api_client.post(
+        "/api/auth/email/login", json={"email": "owner", "password": "secret123"}
+    )
     assert canonical_login.status_code == 200
     assert boundary_login.status_code == 200
     assert canonical_login.json().keys() == boundary_login.json().keys()
@@ -127,7 +138,9 @@ async def test_canonical_and_api_auth_routes_share_provider_and_login_contracts(
 
 
 @pytest.mark.asyncio
-async def test_shared_auth_boundary_routes_remain_mounted(api_client, db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_shared_auth_boundary_routes_remain_mounted(
+    api_client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("TELEGRAM_LOGIN_BOT_USERNAME", "combot_test_bot")
     monkeypatch.setenv("BOT_OWNER_IDS", "9911")
     get_settings.cache_clear()
@@ -165,7 +178,9 @@ async def test_shared_auth_boundary_routes_remain_mounted(api_client, db_session
     assert install_groups.status_code == 200
     assert install_groups.json()[0]["tg_group_id"] == group.tg_group_id
 
-    removed_login = await api_client.post("/api/auth/login", json={"email": "owner", "password": "secret123"})
+    removed_login = await api_client.post(
+        "/api/auth/login", json={"email": "owner", "password": "secret123"}
+    )
     assert removed_login.status_code == 401
     get_settings.cache_clear()
 
@@ -200,7 +215,9 @@ async def test_api_admin_overview_alias_returns_group_stats(api_client, db_sessi
 
 
 @pytest.mark.asyncio
-async def test_api_admin_moderation_actions_alias_uses_runtime_service(api_client, db_session, monkeypatch, fake_bot) -> None:
+async def test_api_admin_moderation_actions_alias_uses_runtime_service(
+    api_client, db_session, monkeypatch, fake_bot
+) -> None:
     group = Group(tg_group_id=-10099104, title="Admin Moderation Group", is_active=True)
     db_session.add(group)
     await db_session.flush()

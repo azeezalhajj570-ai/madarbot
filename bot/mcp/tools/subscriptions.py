@@ -6,7 +6,6 @@ from mcp.types import ToolAnnotations
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -32,7 +31,6 @@ def register_subscription_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_subscription(tg_user_id: int | None = None) -> str:
         """Get the active subscription for a user. Defaults to MCP actor if not specified."""
@@ -58,11 +56,10 @@ def register_subscription_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_subscriptions() -> str:
         """List all active subscriptions for the agents miniapp."""
-        ctx = resolve_mcp_context()
+        resolve_mcp_context()
         async with SessionLocal() as session:
             service = SubscriptionService(session)
             subs = await service.list_active_subscriptions(bot_kind="agents")
@@ -77,7 +74,6 @@ def register_subscription_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
-
     )
     async def madarbot_grant_subscription(
         tg_user_id: int,
@@ -94,6 +90,7 @@ def register_subscription_tools(server: FastMCP) -> None:
             )
             return to_mcp_text(result)
         from datetime import datetime, timezone
+
         async with SessionLocal() as session:
             service = SubscriptionService(session)
             expires = None
@@ -114,7 +111,6 @@ def register_subscription_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
-
     )
     async def madarbot_cancel_subscription(tg_user_id: int, confirm: bool = False) -> str:
         """Cancel a subscription. Requires confirmation and MCP_READONLY=false."""

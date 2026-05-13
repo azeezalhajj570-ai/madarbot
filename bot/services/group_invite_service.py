@@ -44,16 +44,15 @@ class GroupInviteService:
             link = await self.bot.create_chat_invite_link(**kwargs)
             return link.invite_link
         except TelegramBadRequest as exc:
-            logger.error("failed_to_create_invite_link", extra={
-                "chat_id": chat_id,
-                "error": str(exc)
-            })
+            logger.error(
+                "failed_to_create_invite_link", extra={"chat_id": chat_id, "error": str(exc)}
+            )
             return None
         except Exception as exc:
-            logger.exception("unexpected_error_creating_invite_link", extra={
-                "chat_id": chat_id,
-                "error": str(exc)
-            })
+            logger.exception(
+                "unexpected_error_creating_invite_link",
+                extra={"chat_id": chat_id, "error": str(exc)},
+            )
             return None
 
     async def revoke_invite_link(self, chat_id: int, invite_link: str) -> bool:
@@ -61,8 +60,7 @@ class GroupInviteService:
             await self.bot.revoke_chat_invite_link(chat_id=chat_id, invite_link=invite_link)
             return True
         except Exception as exc:
-            logger.error("failed_to_revoke_invite_link", extra={
-                "chat_id": chat_id,
-                "error": str(exc)
-            })
+            logger.error(
+                "failed_to_revoke_invite_link", extra={"chat_id": chat_id, "error": str(exc)}
+            )
             return False

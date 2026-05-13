@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 
 import dramatiq
 from dramatiq.middleware.current_message import CurrentMessage
@@ -10,7 +9,12 @@ import structlog
 from sqlalchemy import select
 
 from bot.agents.agent_notification_service import AgentNotificationService
-from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError, AgentSessionError, AgentSessionRevokedError
+from bot.agents.exceptions import (
+    AgentBannedError,
+    AgentFloodWaitError,
+    AgentSessionError,
+    AgentSessionRevokedError,
+)
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
@@ -19,7 +23,12 @@ from bot.agents.jobs import (
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
 )
-from bot.agents.runtime import AddContactRuntime, AgentTaskRuntime, GroupMemberBroadcastRuntime, ScraperRuntime
+from bot.agents.runtime import (
+    AddContactRuntime,
+    AgentTaskRuntime,
+    GroupMemberBroadcastRuntime,
+    ScraperRuntime,
+)
 from bot.agents.session import SessionManager
 from bot.automation.registry import build_default_registry
 from bot.db import session as db_session
@@ -50,12 +59,16 @@ def _trim_message(value: str, limit: int = 96) -> str:
     return f"{text[: limit - 3].rstrip()}..."
 
 
-def _build_job_notification(job: AgentJob, *, status: str, result: dict | None = None, error: str | None = None) -> tuple[str, str, str, dict[str, object]] | None:
+def _build_job_notification(
+    job: AgentJob, *, status: str, result: dict | None = None, error: str | None = None
+) -> tuple[str, str, str, dict[str, object]] | None:
     payload = dict(job.job_payload or {})
     result_payload = dict(result or payload.get("result") or {})
 
     if job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
-        group_title = str(result_payload.get("source_group_title") or payload.get("source_group_title") or "").strip()
+        group_title = str(
+            result_payload.get("source_group_title") or payload.get("source_group_title") or ""
+        ).strip()
         sent_count = int(result_payload.get("sent_count") or 0)
         attempted_count = int(result_payload.get("attempted_count") or 0)
         failed_count = int(result_payload.get("failed_count") or 0)
@@ -77,11 +90,26 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
             return ("bulk_message_completed", "Bulk message sent", body, notification_payload)
         if status == "failed":
             prefix = f"{group_title}: " if group_title else ""
-            return ("bulk_message_failed", "Bulk message failed", f"{prefix}{_trim_message(error or 'The bulk message could not be sent.')}", notification_payload)
+            return (
+                "bulk_message_failed",
+                "Bulk message failed",
+                f"{prefix}{_trim_message(error or 'The bulk message could not be sent.')}",
+                notification_payload,
+            )
         return None
 
     if job.job_type == ADD_CONTACT_JOB_TYPE:
-        full_name = " ".join(part for part in [str(result_payload.get("first_name") or ""), str(result_payload.get("last_name") or "")] if part).strip() or "User"
+        full_name = (
+            " ".join(
+                part
+                for part in [
+                    str(result_payload.get("first_name") or ""),
+                    str(result_payload.get("last_name") or ""),
+                ]
+                if part
+            ).strip()
+            or "User"
+        )
         user_id = str(result_payload.get("user_id") or payload.get("user_id") or "unknown")
         notification_payload = {
             "job_type": job.job_type,
@@ -89,9 +117,19 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
             "full_name": full_name,
         }
         if status == "completed":
-            return ("contact_saved", "Contact saved", f"{full_name} ({user_id}) has been added to your Telegram contacts.", notification_payload)
+            return (
+                "contact_saved",
+                "Contact saved",
+                f"{full_name} ({user_id}) has been added to your Telegram contacts.",
+                notification_payload,
+            )
         if status == "failed":
-            return ("contact_save_failed", "Failed to save contact", f"Could not save {full_name} ({user_id}) to contacts: {error}", notification_payload)
+            return (
+                "contact_save_failed",
+                "Failed to save contact",
+                f"Could not save {full_name} ({user_id}) to contacts: {error}",
+                notification_payload,
+            )
         return None
 
     if job.job_type == "send_lead_message":
@@ -113,7 +151,12 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
                 body = f"Contact sent to user {tg_user_id}."
             return ("lead_message_sent", "Lead contacted", body, notification_payload)
         if status == "failed":
-            return ("lead_message_failed", "Failed to contact lead", _trim_message(error or "Could not send lead message."), notification_payload)
+            return (
+                "lead_message_failed",
+                "Failed to contact lead",
+                _trim_message(error or "Could not send lead message."),
+                notification_payload,
+            )
         return None
 
     if job.job_type == "automation_task":
@@ -133,7 +176,7 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
         if status == "completed":
             body = f"{_task_label(task_key).title()} executed."
             if keyword:
-                body = f"{_task_label(task_key).title()} ran for \"{_trim_message(keyword, 40)}\"."
+                body = f'{_task_label(task_key).title()} ran for "{_trim_message(keyword, 40)}".'
             elif group_title:
                 body = f"{_task_label(task_key).title()} executed for {group_title}."
             return ("task_completed", "Task executed", body, notification_payload)
@@ -146,18 +189,29 @@ def _build_job_notification(job: AgentJob, *, status: str, result: dict | None =
             )
         return None
 
-    if job.job_type in {SCRAPER_GROUP_INFO_JOB_TYPE, SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_MESSAGES_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
+    if job.job_type in {
+        SCRAPER_GROUP_INFO_JOB_TYPE,
+        SCRAPER_MEMBERS_JOB_TYPE,
+        SCRAPER_MESSAGES_JOB_TYPE,
+        SCRAPER_FULL_GROUP_JOB_TYPE,
+    }:
         group_info = dict(result_payload.get("group_info") or {})
         members = dict(result_payload.get("members") or {})
         messages = dict(result_payload.get("messages") or {})
         group_title = str(group_info.get("title") or payload.get("group_title") or "").strip()
-        
+
         # members_count should include those from member list AND those found in messages
-        members_direct = int(result_payload.get("success_count") or members.get("success_count") or 0)
-        members_from_messages = int(result_payload.get("member_success_count") or messages.get("member_success_count") or 0)
+        members_direct = int(
+            result_payload.get("success_count") or members.get("success_count") or 0
+        )
+        members_from_messages = int(
+            result_payload.get("member_success_count") or messages.get("member_success_count") or 0
+        )
         members_count = members_direct + members_from_messages
-        
-        messages_count = int(result_payload.get("messages_count") or messages.get("success_count") or 0)
+
+        messages_count = int(
+            result_payload.get("messages_count") or messages.get("success_count") or 0
+        )
         notification_payload = {
             "job_type": job.job_type,
             "group_title": group_title,
@@ -211,7 +265,9 @@ async def _create_job_notification(
         if details is None:
             return
         kind, title, body, payload = details
-        agent = (await session.execute(select(Agent).where(Agent.id == job.agent_id))).scalar_one_or_none()
+        agent = (
+            await session.execute(select(Agent).where(Agent.id == job.agent_id))
+        ).scalar_one_or_none()
         if agent is None:
             return
         await AgentNotificationService(session).create_notification(
@@ -239,7 +295,9 @@ async def _set_job_state(
     error: str | None = None,
 ) -> AgentJob | None:
     try:
-        job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+        job = (
+            await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
         if job is None:
             return None
         payload = dict(job.job_payload or {})
@@ -274,13 +332,21 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
 
     if mode == "forward":
         if not source_group_tg_id or not source_message_id:
-            raise ValueError("source_group_tg_id and source_message_id are required for forward mode")
+            raise ValueError(
+                "source_group_tg_id and source_message_id are required for forward mode"
+            )
         sent = await client.forward_messages(
             entity=tg_user_id,
             messages=source_message_id,
             from_peer=source_group_tg_id,
         )
-        result = {"sent": True, "forwarded": True, "message_ids": sent if isinstance(sent, list) else [sent.id], "chat_id": tg_user_id, "mode": "forward"}
+        result = {
+            "sent": True,
+            "forwarded": True,
+            "message_ids": sent if isinstance(sent, list) else [sent.id],
+            "chat_id": tg_user_id,
+            "mode": "forward",
+        }
         if message:
             follow_up = await client.send_message(tg_user_id, message)
             result["follow_up_message_id"] = follow_up.id
@@ -323,7 +389,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     contact_runtime = AddContactRuntime()
 
     async with _session_local_factory()() as session:
-        job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+        job = (
+            await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
         if job is None:
             bound_logger.warning("agent_job_missing")
             return
@@ -337,18 +405,24 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         try:
             client = await session_manager.get_client(agent_id)
             try:
-                agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+                agent = (
+                    await session.execute(select(Agent).where(Agent.id == agent_id))
+                ).scalar_one_or_none()
                 if agent is None:
                     bound_logger.warning("agent_missing")
                     return
                 handled = False
                 if job.job_type == "automation_task":
-                    handled = await runtime.execute(client=client, agent=agent, job=job, session=session)
+                    handled = await runtime.execute(
+                        client=client, agent=agent, job=job, session=session
+                    )
                     if handled:
                         await _set_job_state(session, job_id, "completed")
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
-                    result = await broadcast_runtime.execute(client=client, agent=agent, payload=broadcast_payload)
+                    result = await broadcast_runtime.execute(
+                        client=client, agent=agent, payload=broadcast_payload
+                    )
                     progress = result.pop("_progress", None) if isinstance(result, dict) else None
                     if progress and progress.get("stopped_at") is not None:
                         broadcast_payload["progress"] = {
@@ -365,24 +439,38 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         job.job_payload = broadcast_payload
                         await session.commit()
                         delay_sec = max(5, int(progress.get("retry_after", 60)))
-                        execute_agent_job.send_with_options(args=(agent_id, job_id), delay=delay_sec * 1000)
-                        bound_logger.info("agent_broadcast_partial_rescheduled",
-                            agent_id=agent_id, job_id=job_id,
+                        execute_agent_job.send_with_options(
+                            args=(agent_id, job_id), delay=delay_sec * 1000
+                        )
+                        bound_logger.info(
+                            "agent_broadcast_partial_rescheduled",
+                            agent_id=agent_id,
+                            job_id=job_id,
                             sent=progress.get("success_count", 0),
-                            reason=progress.get("stop_reason"))
+                            reason=progress.get("stop_reason"),
+                        )
                         handled = True
                         return
                     await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
-                    result = await contact_runtime.execute(client=client, agent=agent, payload=dict(job.job_payload or {}))
+                    result = await contact_runtime.execute(
+                        client=client, agent=agent, payload=dict(job.job_payload or {})
+                    )
                     await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 elif job.job_type == "send_lead_message":
-                    result = await _handle_send_lead_message(client=client, session=session, job=job)
+                    result = await _handle_send_lead_message(
+                        client=client, session=session, job=job
+                    )
                     await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
-                elif job.job_type in {SCRAPER_GROUP_INFO_JOB_TYPE, SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_MESSAGES_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
+                elif job.job_type in {
+                    SCRAPER_GROUP_INFO_JOB_TYPE,
+                    SCRAPER_MEMBERS_JOB_TYPE,
+                    SCRAPER_MESSAGES_JOB_TYPE,
+                    SCRAPER_FULL_GROUP_JOB_TYPE,
+                }:
                     result = await scraper_runtime.execute(
                         client=client,
                         agent=agent,
@@ -392,16 +480,22 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     await _set_job_state(session, job_id, "completed", result=result)
                     handled = True
                 if not handled:
-                    await _set_job_state(session, job_id, "failed", error=f"Unhandled job type: {job.job_type}")
+                    await _set_job_state(
+                        session, job_id, "failed", error=f"Unhandled job type: {job.job_type}"
+                    )
                     bound_logger.warning("agent_job_unhandled", job_type=job.job_type)
                     return
             finally:
                 await client.disconnect()
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
-            await _set_job_state(session, job_id, "pending", error=f"Flood wait for {exc.retry_after} seconds")
+            await _set_job_state(
+                session, job_id, "pending", error=f"Flood wait for {exc.retry_after} seconds"
+            )
             bound_logger.warning("agent_job_flood_wait", retry_after=exc.retry_after)
-            execute_agent_job.send_with_options(args=(agent_id, job_id), delay=exc.retry_after * 1000)
+            execute_agent_job.send_with_options(
+                args=(agent_id, job_id), delay=exc.retry_after * 1000
+            )
             return
         except AgentSessionError as exc:
             if isinstance(exc, AgentSessionRevokedError):
@@ -411,7 +505,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
             return
         except AgentBannedError:
             await session_manager.mark_banned(agent_id)
-            agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
             if agent is not None:
                 agent.status = "banned"
                 agent.auth_state = "banned"

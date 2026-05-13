@@ -14,7 +14,11 @@ router = Router(name="register_group")
 @router.message(Command("registergroup"))
 async def register_group(message: Message) -> None:
     if message.chat.type not in {"group", "supergroup"}:
-        lang = message.from_user.language_code if message.from_user and message.from_user.language_code else "en"
+        lang = (
+            message.from_user.language_code
+            if message.from_user and message.from_user.language_code
+            else "en"
+        )
         await message.answer(t("registergroup_group_only", lang))
         return
 
@@ -36,7 +40,9 @@ async def register_group(message: Message) -> None:
         )
         if group.registered_by_user_id is None:
             group.registered_by_user_id = message.from_user.id
-        await sync_group_admin_roles(session, bot=message.bot, group=group, fallback_actor=message.from_user)
+        await sync_group_admin_roles(
+            session, bot=message.bot, group=group, fallback_actor=message.from_user
+        )
         await session.commit()
 
     await message.answer(t("registergroup_done", lang))

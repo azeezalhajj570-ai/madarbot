@@ -50,10 +50,14 @@ async def test_register_group_syncs_all_current_admins(
 
     await register_group(message)
 
-    group = (await db_session.execute(select(Group).where(Group.tg_group_id == -100555))).scalar_one()
+    group = (
+        await db_session.execute(select(Group).where(Group.tg_group_id == -100555))
+    ).scalar_one()
     roles = (
         await db_session.execute(
-            select(GroupAdminRole.user_id, GroupAdminRole.role).where(GroupAdminRole.group_id == group.id)
+            select(GroupAdminRole.user_id, GroupAdminRole.role).where(
+                GroupAdminRole.group_id == group.id
+            )
         )
     ).all()
 
@@ -107,10 +111,14 @@ async def test_my_chat_member_refresh_registers_group_for_current_admins(
 
     await fallback.my_chat_member_fallback(event)
 
-    group = (await db_session.execute(select(Group).where(Group.tg_group_id == -100777))).scalar_one()
+    group = (
+        await db_session.execute(select(Group).where(Group.tg_group_id == -100777))
+    ).scalar_one()
     roles = (
         await db_session.execute(
-            select(GroupAdminRole.user_id, GroupAdminRole.role).where(GroupAdminRole.group_id == group.id)
+            select(GroupAdminRole.user_id, GroupAdminRole.role).where(
+                GroupAdminRole.group_id == group.id
+            )
         )
     ).all()
 
@@ -164,10 +172,14 @@ async def test_my_chat_member_refresh_registers_channel_for_current_admins(
 
     await fallback.my_chat_member_fallback(event)
 
-    group = (await db_session.execute(select(Group).where(Group.tg_group_id == -100888))).scalar_one()
+    group = (
+        await db_session.execute(select(Group).where(Group.tg_group_id == -100888))
+    ).scalar_one()
     roles = (
         await db_session.execute(
-            select(GroupAdminRole.user_id, GroupAdminRole.role).where(GroupAdminRole.group_id == group.id)
+            select(GroupAdminRole.user_id, GroupAdminRole.role).where(
+                GroupAdminRole.group_id == group.id
+            )
         )
     ).all()
 

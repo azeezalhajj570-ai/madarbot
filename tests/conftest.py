@@ -17,7 +17,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, MenuButtonCommands, Message, Update, User
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -237,8 +236,12 @@ class FakeTelegramBot:
     async def leave_chat(self, chat_id: int) -> None:
         self.left_chats.append(chat_id)
 
-    async def set_chat_menu_button(self, *, chat_id: int | None = None, menu_button: Any | None = None) -> bool:
-        self.chat_menu_buttons.append({"chat_id": chat_id, "menu_button": menu_button or MenuButtonCommands()})
+    async def set_chat_menu_button(
+        self, *, chat_id: int | None = None, menu_button: Any | None = None
+    ) -> bool:
+        self.chat_menu_buttons.append(
+            {"chat_id": chat_id, "menu_button": menu_button or MenuButtonCommands()}
+        )
         return True
 
     async def set_my_commands(self, commands: list[Any], **_kwargs: Any) -> bool:
@@ -357,16 +360,17 @@ async def sync_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     database_url = f"sqlite+aiosqlite:///{db_path}"
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
-    
+
     from sqlalchemy.ext.asyncio import create_async_engine
+
     engine = create_async_engine(
         database_url,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    
+
     await ensure_schema(engine)
-    
+
     try:
         yield engine
     finally:
@@ -378,11 +382,14 @@ async def sync_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.fixture
 def sync_session_maker(sync_engine) -> async_sessionmaker[AsyncSession]:
     from sqlalchemy.ext.asyncio import async_sessionmaker
+
     return async_sessionmaker(bind=sync_engine, expire_on_commit=False, autoflush=False)
 
 
 @pytest_asyncio.fixture
-async def db_session(sync_session_maker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
+async def db_session(
+    sync_session_maker: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
     async with sync_session_maker() as session:
         yield session
 
@@ -468,14 +475,18 @@ def callback_update_factory() -> Callable[..., Update]:
             message_id=message_id,
             date=0,
             chat=Chat(id=chat_id, type="private"),
-            from_user=User(id=user_id, is_bot=False, first_name="Tester", language_code=language_code),
+            from_user=User(
+                id=user_id, is_bot=False, first_name="Tester", language_code=language_code
+            ),
             text="inline",
         )
         return Update(
             update_id=message_id,
             callback_query=CallbackQuery(
                 id=str(message_id),
-                from_user=User(id=user_id, is_bot=False, first_name="Tester", language_code=language_code),
+                from_user=User(
+                    id=user_id, is_bot=False, first_name="Tester", language_code=language_code
+                ),
                 chat_instance="ci",
                 message=msg,
                 data=data,
@@ -497,7 +508,9 @@ def fsm_context_factory() -> Callable[..., FSMContext]:
 
 
 @pytest_asyncio.fixture
-async def patch_db_dependencies(monkeypatch: pytest.MonkeyPatch, session_factory: SessionContextFactory) -> None:
+async def patch_db_dependencies(
+    monkeypatch: pytest.MonkeyPatch, session_factory: SessionContextFactory
+) -> None:
     from bot.dashboard.api import main as api_main
     from bot.dashboard.api import owner as owner_api
     from bot.handlers.commands import dashboard, moderation, register_group, start, subscribe
@@ -505,6 +518,7 @@ async def patch_db_dependencies(monkeypatch: pytest.MonkeyPatch, session_factory
     from bot.handlers.menu import reply_settings, settings
     from bot.plugins.anti_links import plugin as anti_links_plugin
     from bot.services import private_access_gate_service
+
     semantic_assistant_plugin = importlib.import_module("bot.plugins.semantic_assistant.plugin")
 
     monkeypatch.setattr("bot.db.session.SessionLocal", session_factory)
@@ -531,7 +545,9 @@ async def patch_db_dependencies(monkeypatch: pytest.MonkeyPatch, session_factory
 
 
 @pytest_asyncio.fixture
-async def patch_moderation_events_session(monkeypatch: pytest.MonkeyPatch, session_factory: SessionContextFactory) -> None:
+async def patch_moderation_events_session(
+    monkeypatch: pytest.MonkeyPatch, session_factory: SessionContextFactory
+) -> None:
     from bot.handlers.moderation import events
     from bot.services import private_access_gate_service
 

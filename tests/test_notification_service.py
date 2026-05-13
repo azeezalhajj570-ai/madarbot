@@ -12,7 +12,9 @@ from bot.services.notification_service import NotificationService
 
 @pytest.mark.asyncio
 async def test_default_notification_settings_are_created(db_session) -> None:
-    context = await MessagingService(db_session).register_user(name="Owner", email="notify@example.com", password="secret123")
+    context = await MessagingService(db_session).register_user(
+        name="Owner", email="notify@example.com", password="secret123"
+    )
     service = NotificationService(db_session)
     settings = await service.get_or_create_settings(context.tenant.id)
 
@@ -29,7 +31,9 @@ async def test_webhook_delivery_posts_expected_payload(db_session) -> None:
         captured.append(json.loads(request.content.decode("utf-8")))
         return Response(200, json={"ok": True})
 
-    context = await MessagingService(db_session).register_user(name="Webhook", email="webhook@example.com", password="secret123")
+    context = await MessagingService(db_session).register_user(
+        name="Webhook", email="webhook@example.com", password="secret123"
+    )
     service = NotificationService(db_session, transport=MockTransport(handler))
     settings = await service.update_settings(
         context.tenant.id,
@@ -40,7 +44,15 @@ async def test_webhook_delivery_posts_expected_payload(db_session) -> None:
     )
     assert settings.notification_channel == "webhook"
 
-    lead = Lead(tenant_id=context.tenant.id, conversation_id=None, name="Mia", phone="+1555", service="Whitening", status="new", source="whatsapp")
+    lead = Lead(
+        tenant_id=context.tenant.id,
+        conversation_id=None,
+        name="Mia",
+        phone="+1555",
+        service="Whitening",
+        status="new",
+        source="whatsapp",
+    )
     db_session.add(lead)
     await db_session.flush()
 
@@ -52,9 +64,19 @@ async def test_webhook_delivery_posts_expected_payload(db_session) -> None:
 
 @pytest.mark.asyncio
 async def test_none_channel_marks_notification_skipped(db_session) -> None:
-    context = await MessagingService(db_session).register_user(name="Skip", email="skip@example.com", password="secret123")
+    context = await MessagingService(db_session).register_user(
+        name="Skip", email="skip@example.com", password="secret123"
+    )
     service = NotificationService(db_session)
-    lead = Lead(tenant_id=context.tenant.id, conversation_id=None, name="Mia", phone="+1555", service="Whitening", status="new", source="whatsapp")
+    lead = Lead(
+        tenant_id=context.tenant.id,
+        conversation_id=None,
+        name="Mia",
+        phone="+1555",
+        service="Whitening",
+        status="new",
+        source="whatsapp",
+    )
     db_session.add(lead)
     await db_session.flush()
 
@@ -64,7 +86,9 @@ async def test_none_channel_marks_notification_skipped(db_session) -> None:
 
 @pytest.mark.asyncio
 async def test_send_test_notification_creates_event(db_session) -> None:
-    context = await MessagingService(db_session).register_user(name="Test", email="test-notify@example.com", password="secret123")
+    context = await MessagingService(db_session).register_user(
+        name="Test", email="test-notify@example.com", password="secret123"
+    )
     service = NotificationService(db_session)
 
     event = await service.send_test_notification(context.tenant.id)
@@ -74,7 +98,9 @@ async def test_send_test_notification_creates_event(db_session) -> None:
 
 @pytest.mark.asyncio
 async def test_needs_human_notification_can_be_created(db_session) -> None:
-    context = await MessagingService(db_session).register_user(name="Human", email="human@example.com", password="secret123")
+    context = await MessagingService(db_session).register_user(
+        name="Human", email="human@example.com", password="secret123"
+    )
     conversation = Conversation(
         tenant_id=context.tenant.id,
         channel_account_id=1,
@@ -88,6 +114,8 @@ async def test_needs_human_notification_can_be_created(db_session) -> None:
     await db_session.flush()
 
     service = NotificationService(db_session)
-    event = await service.notify_needs_human(context.tenant.id, conversation, preview_text="Please call me back")
+    event = await service.notify_needs_human(
+        context.tenant.id, conversation, preview_text="Please call me back"
+    )
     assert event.type == "needs_human"
     assert event.status == "skipped"

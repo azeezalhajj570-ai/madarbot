@@ -3,20 +3,41 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
-from bot.agents.auth import AgentTelegramAuthResult, AgentTelegramAuthSession, AgentTelegramTwoFactorRequired
-from bot.agents.contracts import AccountGroupVisibility, AccountSessionState, AgentJobOwnership, LinkedAccountIdentity
+from bot.agents.auth import (
+    AgentTelegramAuthResult,
+    AgentTelegramAuthSession,
+    AgentTelegramTwoFactorRequired,
+)
+from bot.agents.contracts import (
+    AccountGroupVisibility,
+    AccountSessionState,
+    AgentJobOwnership,
+    LinkedAccountIdentity,
+)
 from bot.agents.linked_account_service import LinkedAccountService
 from bot.agents.account_session_service import AccountSessionService
 from bot.agents.account_group_membership_service import AccountGroupMembershipService
 from bot.agents.agent_job_service import AgentJobService
 from bot.agents.runtime import GROUP_MEMBER_BROADCAST_JOB_TYPE
 from bot.agents.service import AgentService
-from bot.db.models import Agent, AgentJob, AgentNotification, Group, GroupAdminRole, ScrapedGroup, ScrapedMember, ScrapedMessage, User
+from bot.db.models import (
+    Agent,
+    AgentJob,
+    AgentNotification,
+    Group,
+    GroupAdminRole,
+    ScrapedGroup,
+    ScrapedMember,
+    ScrapedMessage,
+    User,
+)
 
 
 class FakeTelegramAuthService:
     async def start_login(self, *, phone_number: str) -> AgentTelegramAuthSession:
-        return AgentTelegramAuthSession(phone_number=phone_number, session_string="session:pending", phone_code_hash="hash-1")
+        return AgentTelegramAuthSession(
+            phone_number=phone_number, session_string="session:pending", phone_code_hash="hash-1"
+        )
 
     async def verify_code(
         self,
@@ -38,7 +59,9 @@ class FakeTelegramAuthService:
             session_string="session:active",
         )
 
-    async def verify_password(self, *, password: str, session_string: str) -> AgentTelegramAuthResult:
+    async def verify_password(
+        self, *, password: str, session_string: str
+    ) -> AgentTelegramAuthResult:
         raise AssertionError("2FA should not be required in this test")
 
 
@@ -66,7 +89,9 @@ class FakeTelegramAuth2FAService(FakeTelegramAuthService):
     ) -> AgentTelegramAuthResult:
         raise AgentTelegramTwoFactorRequired("2FA required")
 
-    async def verify_password(self, *, password: str, session_string: str) -> AgentTelegramAuthResult:
+    async def verify_password(
+        self, *, password: str, session_string: str
+    ) -> AgentTelegramAuthResult:
         assert password == "secret-password"
         assert session_string == "session:pending"
         return AgentTelegramAuthResult(
@@ -112,8 +137,12 @@ async def test_agent_service_authenticates_agent_and_creates_job(db_session) -> 
         job_payload={"priority": "high"},
     )
 
-    stored_agent = (await db_session.execute(select(Agent).where(Agent.id == agent.id))).scalar_one()
-    stored_job = (await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
+    stored_agent = (
+        await db_session.execute(select(Agent).where(Agent.id == agent.id))
+    ).scalar_one()
+    stored_job = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))
+    ).scalar_one()
     assert stored_agent.external_account_id == "salesbot"
     assert stored_agent.phone_number == "+15550000001"
     assert stored_agent.auth_state == "active"
@@ -128,7 +157,9 @@ async def test_linked_account_service_validates_and_deduplicates_phone_numbers(d
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008120, title="Phone Link Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008120, title="Phone Link Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -164,12 +195,16 @@ async def test_linked_account_service_validates_and_deduplicates_phone_numbers(d
 
 
 @pytest.mark.asyncio
-async def test_account_session_start_reuses_pending_login_without_resending_code(db_session) -> None:
+async def test_account_session_start_reuses_pending_login_without_resending_code(
+    db_session,
+) -> None:
     user = User(tg_user_id=8121, username="owner21", full_name="Owner 21", language_code="en")
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008121, title="Login Reuse Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008121, title="Login Reuse Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -201,7 +236,9 @@ async def test_account_session_start_handles_duplicate_phone_rows(db_session) ->
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008122, title="Duplicate Phone Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008122, title="Duplicate Phone Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -256,7 +293,9 @@ async def test_agent_service_validates_group_member_broadcast_job_payload(db_ses
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008104, title="Broadcast Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008104, title="Broadcast Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -285,15 +324,23 @@ async def test_agent_service_validates_group_member_broadcast_job_payload(db_ses
         },
     )
 
-    stored_job = (await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
+    stored_job = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))
+    ).scalar_one()
     assert stored_job.job_payload["source_group_id"] == group.tg_group_id
     assert stored_job.job_payload["message"] == "Hello from the team"
     assert stored_job.job_payload["threshold"] == 25
     assert stored_job.job_payload["interval_seconds"] == 1.5
     assert stored_job.job_payload["skip_bots"] is True
     queued_notification = (
-        await db_session.execute(select(AgentNotification).where(AgentNotification.agent_id == agent.id))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(AgentNotification).where(AgentNotification.agent_id == agent.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(queued_notification) == 1
     assert queued_notification[0].kind == "job_queued"
     assert queued_notification[0].payload["job_type"] == GROUP_MEMBER_BROADCAST_JOB_TYPE
@@ -307,7 +354,9 @@ async def test_agent_service_rejects_invalid_group_member_broadcast_job_payload(
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008105, title="Broadcast Reject Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008105, title="Broadcast Reject Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -350,12 +399,16 @@ async def test_agent_service_rejects_non_admin(db_session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_scrape_agent_member_group_creates_notification(db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_scrape_agent_member_group_creates_notification(
+    db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     user = User(tg_user_id=8105, username="owner5", full_name="Owner 5", language_code="en")
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008106, title="Scrape Notify Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008106, title="Scrape Notify Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -386,9 +439,16 @@ async def test_scrape_agent_member_group_creates_notification(db_session, monkey
             "messages": {"success_count": 12, "error_count": 0, "total_scraped": 12},
         }
 
-    monkeypatch.setattr(AccountGroupMembershipService, "_ensure_agent_group_visible", fake_ensure_visible)
-    monkeypatch.setattr(AccountGroupMembershipService, "_list_agent_member_groups", fake_list_groups)
-    monkeypatch.setattr("bot.agents.account_group_membership_service.ScraperService.scrape_full_group", fake_scrape_full_group)
+    monkeypatch.setattr(
+        AccountGroupMembershipService, "_ensure_agent_group_visible", fake_ensure_visible
+    )
+    monkeypatch.setattr(
+        AccountGroupMembershipService, "_list_agent_member_groups", fake_list_groups
+    )
+    monkeypatch.setattr(
+        "bot.agents.account_group_membership_service.ScraperService.scrape_full_group",
+        fake_scrape_full_group,
+    )
 
     payload = await AccountGroupMembershipService(db_session).scrape_agent_member_group(
         actor_user_id=user.tg_user_id,
@@ -401,8 +461,14 @@ async def test_scrape_agent_member_group_creates_notification(db_session, monkey
 
     assert payload["success_count"] == 31
     notifications = (
-        await db_session.execute(select(AgentNotification).where(AgentNotification.agent_id == agent.id))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(AgentNotification).where(AgentNotification.agent_id == agent.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(notifications) == 1
     assert notifications[0].title == "Scrape finished"
     assert notifications[0].is_seen is False
@@ -415,7 +481,9 @@ async def test_agent_service_handles_2fa_login(db_session) -> None:
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008103, title="Agents 2FA Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008103, title="Agents 2FA Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -452,7 +520,9 @@ async def test_extracted_agent_services_expose_group_owned_account_contracts(db_
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008110, title="Contracts Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008110, title="Contracts Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -469,8 +539,12 @@ async def test_extracted_agent_services_expose_group_owned_account_contracts(db_
     db_session.add(agent)
     await db_session.commit()
 
-    linked_identity = await LinkedAccountService(db_session).describe_linked_account(agent_id=agent.id)
-    session_state = await AccountSessionService(db_session).get_account_session_state(agent_id=agent.id)
+    linked_identity = await LinkedAccountService(db_session).describe_linked_account(
+        agent_id=agent.id
+    )
+    session_state = await AccountSessionService(db_session).get_account_session_state(
+        agent_id=agent.id
+    )
 
     assert linked_identity == LinkedAccountIdentity(
         agent_id=agent.id,
@@ -491,12 +565,16 @@ async def test_extracted_agent_services_expose_group_owned_account_contracts(db_
 
 
 @pytest.mark.asyncio
-async def test_account_group_membership_service_exposes_group_visibility_contract(db_session, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_account_group_membership_service_exposes_group_visibility_contract(
+    db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     user = User(tg_user_id=8112, username="owner12", full_name="Owner 12", language_code="en")
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008112, title="Visibility Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008112, title="Visibility Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -540,12 +618,16 @@ async def test_account_group_membership_service_exposes_group_visibility_contrac
 
 
 @pytest.mark.asyncio
-async def test_account_group_membership_service_returns_member_message_counts_and_history(db_session) -> None:
+async def test_account_group_membership_service_returns_member_message_counts_and_history(
+    db_session,
+) -> None:
     user = User(tg_user_id=8113, username="owner13", full_name="Owner 13", language_code="en")
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008113, title="Member History Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008113, title="Member History Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -658,7 +740,9 @@ async def test_agent_job_service_queues_automation_jobs_without_agent_facade(db_
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=-1008111, title="Automation Job Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=-1008111, title="Automation Job Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -681,7 +765,12 @@ async def test_agent_job_service_queues_automation_jobs_without_agent_facade(db_
         assignment_id="assign-1",
         task_config={"destination": "@alerts"},
         conditions={"keywords": ["pricing"]},
-        event={"name": "message.received", "group_id": group.id, "user_id": 123, "payload": {"text": "pricing"}},
+        event={
+            "name": "message.received",
+            "group_id": group.id,
+            "user_id": 123,
+            "payload": {"text": "pricing"},
+        },
     )
 
     assert job == AgentJobOwnership(
@@ -692,6 +781,8 @@ async def test_agent_job_service_queues_automation_jobs_without_agent_facade(db_
         status="pending",
         ownership_scope="group",
     )
-    stored_job = (await db_session.execute(select(AgentJob).where(AgentJob.id == job.job_id))).scalar_one()
+    stored_job = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == job.job_id))
+    ).scalar_one()
     assert stored_job.job_payload["task_key"] == "notify_destination"
     assert stored_job.job_payload["assignment_id"] == "assign-1"

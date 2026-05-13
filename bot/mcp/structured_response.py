@@ -3,6 +3,7 @@
 Provides outputSchema definitions and structuredContent response patterns
 for ChatGPT Apps MCP compatibility.
 """
+
 from __future__ import annotations
 
 import json

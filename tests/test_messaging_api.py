@@ -26,11 +26,16 @@ def _webapp_init_data(*, user_id: int, bot_token: str = "123456:TESTTOKEN") -> s
     payload = {
         "auth_date": str(int(time.time())),
         "query_id": "AAEAAAE",
-        "user": json.dumps({"id": user_id, "username": f"user{user_id}", "first_name": "Test"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "username": f"user{user_id}", "first_name": "Test"},
+            separators=(",", ":"),
+        ),
     }
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    payload["hash"] = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    payload["hash"] = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     return urlencode(payload)
 
 
@@ -49,8 +54,12 @@ async def _register_and_authenticate(
     return {"Authorization": f"Bearer {access_token}"}
 
 
-async def _set_business_profile(api_client: AsyncClient, headers: dict[str, str], payload: dict) -> None:
-    response = await api_client.patch("/api/tenants/current/business-profile", headers=headers, json=payload)
+async def _set_business_profile(
+    api_client: AsyncClient, headers: dict[str, str], payload: dict
+) -> None:
+    response = await api_client.patch(
+        "/api/tenants/current/business-profile", headers=headers, json=payload
+    )
     assert response.status_code == 200, response.text
 
 
@@ -64,11 +73,15 @@ async def _update_automation_by_slug(
     response = await api_client.get("/api/automations", headers=headers)
     assert response.status_code == 200, response.text
     automation = next(item for item in response.json()["automations"] if item["slug"] == slug)
-    updated = await api_client.patch(f"/api/automations/{automation['id']}", headers=headers, json=patch)
+    updated = await api_client.patch(
+        f"/api/automations/{automation['id']}", headers=headers, json=patch
+    )
     assert updated.status_code == 200, updated.text
 
 
-async def _get_conversation_detail(api_client: AsyncClient, headers: dict[str, str], conversation_id: str) -> dict:
+async def _get_conversation_detail(
+    api_client: AsyncClient, headers: dict[str, str], conversation_id: str
+) -> dict:
     response = await api_client.get(f"/api/conversations/{conversation_id}", headers=headers)
     assert response.status_code == 200, response.text
     return response.json()
@@ -180,7 +193,10 @@ async def test_register_connect_simulate_and_read_conversations(api_client) -> N
     assert conversation["contactName"] == "Mia Prospect"
     assert conversation["contactPhone"] == "+15551234567"
     assert conversation["status"] == "ai_active"
-    assert conversation["latestMessage"] == "Hi, I want to book an appointment for teeth whitening. What is the price?"
+    assert (
+        conversation["latestMessage"]
+        == "Hi, I want to book an appointment for teeth whitening. What is the price?"
+    )
 
     detail = await api_client.get(f"/api/conversations/{conversation['id']}", headers=headers)
     assert detail.status_code == 200
@@ -188,7 +204,10 @@ async def test_register_connect_simulate_and_read_conversations(api_client) -> N
     assert detail_payload["conversation"]["id"] == conversation["id"]
     assert any(message["direction"] == "inbound" for message in detail_payload["messages"])
     assert any(message["senderType"] == "ai" for message in detail_payload["messages"])
-    assert any(message["senderType"] == "ai" and message["status"] == "draft" for message in detail_payload["messages"])
+    assert any(
+        message["senderType"] == "ai" and message["status"] == "draft"
+        for message in detail_payload["messages"]
+    )
 
     leads = await api_client.get("/api/leads", headers=headers)
     assert leads.status_code == 200
@@ -239,7 +258,9 @@ async def test_telegram_auth_returns_user_and_tenant(api_client) -> None:
 
 @pytest.mark.asyncio
 async def test_default_notification_settings_are_created_and_can_be_patched(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Notify Owner", email="notify-owner@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Notify Owner", email="notify-owner@example.com"
+    )
     settings = await _get_notification_settings(api_client, headers)
     assert settings["notificationChannel"] == "none"
     assert settings["notifyOnNewLead"] is True
@@ -263,7 +284,9 @@ async def test_default_notification_settings_are_created_and_can_be_patched(api_
 
 @pytest.mark.asyncio
 async def test_invalid_webhook_target_is_rejected(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Invalid Webhook", email="invalid-webhook@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Invalid Webhook", email="invalid-webhook@example.com"
+    )
     updated = await api_client.patch(
         "/api/notification-settings",
         headers=headers,
@@ -277,7 +300,9 @@ async def test_invalid_webhook_target_is_rejected(api_client) -> None:
 
 @pytest.mark.asyncio
 async def test_evolution_webhook_can_mark_conversation_for_handoff(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Ops Owner", email="ops@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Ops Owner", email="ops@example.com"
+    )
 
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     channel_id = connect.json()["channel"]["id"]
@@ -311,7 +336,9 @@ async def test_evolution_webhook_can_mark_conversation_for_handoff(api_client) -
 
 
 @pytest.mark.asyncio
-async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconnect(api_client, monkeypatch) -> None:
+async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconnect(
+    api_client, monkeypatch
+) -> None:
     def handler(request: Request, body: dict | None) -> Response:
         if request.method == "POST" and request.url.path == "/instance/create":
             assert body == {
@@ -321,7 +348,9 @@ async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconn
                 "number": "",
                 "displayName": "WhatsApp Primary",
             }
-            return Response(200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"})
+            return Response(
+                200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"}
+            )
         if request.method == "POST" and request.url.path == "/webhook/set/wa_t1_c1":
             assert body is not None
             assert body["url"] == "https://preview.example.com/api/webhooks/evolution/1"
@@ -335,12 +364,17 @@ async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconn
         if request.method == "POST" and request.url.path == "/message/sendText/wa_t1_c1":
             assert body == {"number": "15551234567", "text": "Manual follow-up from an agent"}
             return Response(200, json={"key": {"id": "outbound-1"}})
-        if request.method == "DELETE" and request.url.path in {"/instance/logout/wa_t1_c1", "/instance/delete/wa_t1_c1"}:
+        if request.method == "DELETE" and request.url.path in {
+            "/instance/logout/wa_t1_c1",
+            "/instance/delete/wa_t1_c1",
+        }:
             return Response(200, json={"ok": True})
         raise AssertionError(f"Unexpected Evolution request: {request.method} {request.url.path}")
 
     requests = _install_evolution_service(monkeypatch, handler)
-    headers = await _register_and_authenticate(api_client, name="Evolution Owner", email="evolution@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Evolution Owner", email="evolution@example.com"
+    )
 
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200, connect.text
@@ -374,7 +408,10 @@ async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconn
 
     detail = await api_client.get(f"/api/conversations/{conversation_id}", headers=headers)
     assert detail.status_code == 200
-    assert any(message["senderType"] == "human" and message["direction"] == "outbound" for message in detail.json()["messages"])
+    assert any(
+        message["senderType"] == "human" and message["direction"] == "outbound"
+        for message in detail.json()["messages"]
+    )
 
     status = await api_client.get("/api/channels/1/status", headers=headers)
     assert status.status_code == 200
@@ -388,16 +425,34 @@ async def test_evolution_enabled_channel_connect_status_refresh_send_and_disconn
     assert disconnected.status_code == 200
     assert disconnected.json() == {"ok": True}
 
-    assert ("POST", "/instance/create", {"instanceName": "wa_t1_c1", "integration": "WHATSAPP-BAILEYS", "qrcode": True, "number": "", "displayName": "WhatsApp Primary"}) in requests
-    assert any(method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests)
-    assert any(method == "DELETE" and path == "/instance/logout/wa_t1_c1" for method, path, _ in requests)
+    assert (
+        "POST",
+        "/instance/create",
+        {
+            "instanceName": "wa_t1_c1",
+            "integration": "WHATSAPP-BAILEYS",
+            "qrcode": True,
+            "number": "",
+            "displayName": "WhatsApp Primary",
+        },
+    ) in requests
+    assert any(
+        method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests
+    )
+    assert any(
+        method == "DELETE" and path == "/instance/logout/wa_t1_c1" for method, path, _ in requests
+    )
 
 
 @pytest.mark.asyncio
-async def test_ai_receptionist_autosend_uses_evolution_and_marks_message_sent(api_client, monkeypatch) -> None:
+async def test_ai_receptionist_autosend_uses_evolution_and_marks_message_sent(
+    api_client, monkeypatch
+) -> None:
     def handler(request: Request, body: dict | None) -> Response:
         if request.method == "POST" and request.url.path == "/instance/create":
-            return Response(200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"})
+            return Response(
+                200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"}
+            )
         if request.method == "POST" and request.url.path == "/webhook/set/wa_t1_c1":
             return Response(200, json={"success": True})
         if request.method == "GET" and request.url.path == "/instance/connectionState/wa_t1_c1":
@@ -409,7 +464,9 @@ async def test_ai_receptionist_autosend_uses_evolution_and_marks_message_sent(ap
         raise AssertionError(f"Unexpected Evolution request: {request.method} {request.url.path}")
 
     requests = _install_evolution_service(monkeypatch, handler)
-    headers = await _register_and_authenticate(api_client, name="AI Owner", email="ai-owner@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="AI Owner", email="ai-owner@example.com"
+    )
     await _set_business_profile(
         api_client,
         headers,
@@ -428,28 +485,42 @@ async def test_ai_receptionist_autosend_uses_evolution_and_marks_message_sent(ap
 
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200, connect.text
-    await _update_automation_by_slug(api_client, headers, slug="ai-receptionist", patch={"config": {"autoSend": True}})
+    await _update_automation_by_slug(
+        api_client, headers, slug="ai-receptionist", patch={"config": {"autoSend": True}}
+    )
 
     simulated = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "I want to book a haircut", "contactName": "Ava Contact", "phone": "+15551234567"},
+        json={
+            "text": "I want to book a haircut",
+            "contactName": "Ava Contact",
+            "phone": "+15551234567",
+        },
     )
     assert simulated.status_code == 200, simulated.text
 
-    detail = await api_client.get(f"/api/conversations/{simulated.json()['conversationId']}", headers=headers)
+    detail = await api_client.get(
+        f"/api/conversations/{simulated.json()['conversationId']}", headers=headers
+    )
     assert detail.status_code == 200
-    ai_messages = [message for message in detail.json()["messages"] if message["senderType"] == "ai"]
+    ai_messages = [
+        message for message in detail.json()["messages"] if message["senderType"] == "ai"
+    ]
     assert len(ai_messages) == 1
     assert ai_messages[0]["status"] == "sent"
-    assert any(method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests)
+    assert any(
+        method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests
+    )
 
 
 @pytest.mark.asyncio
 async def test_ai_receptionist_disabled_creates_no_draft(api_client, monkeypatch) -> None:
     monkeypatch.setenv("AI_RECEPTIONIST_ENABLED", "false")
     get_settings.cache_clear()
-    headers = await _register_and_authenticate(api_client, name="No AI Owner", email="no-ai@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="No AI Owner", email="no-ai@example.com"
+    )
 
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
@@ -461,25 +532,37 @@ async def test_ai_receptionist_disabled_creates_no_draft(api_client, monkeypatch
     )
     assert simulated.status_code == 200
 
-    detail = await api_client.get(f"/api/conversations/{simulated.json()['conversationId']}", headers=headers)
+    detail = await api_client.get(
+        f"/api/conversations/{simulated.json()['conversationId']}", headers=headers
+    )
     assert detail.status_code == 200
     assert not any(message["senderType"] == "ai" for message in detail.json()["messages"])
 
 
 @pytest.mark.asyncio
 async def test_can_edit_draft_message(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Draft Owner", email="draft-owner@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Draft Owner", email="draft-owner@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
     simulated = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "How much is consultation?", "contactName": "Ava Contact", "phone": "+15551234567"},
+        json={
+            "text": "How much is consultation?",
+            "contactName": "Ava Contact",
+            "phone": "+15551234567",
+        },
     )
     assert simulated.status_code == 200
     detail = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
 
     updated = await api_client.patch(
         f"/api/messages/{draft['id']}",
@@ -495,7 +578,9 @@ async def test_can_edit_draft_message(api_client) -> None:
 async def test_cannot_edit_sent_message(api_client, monkeypatch) -> None:
     def handler(request: Request, body: dict | None) -> Response:
         if request.method == "POST" and request.url.path == "/instance/create":
-            return Response(200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"})
+            return Response(
+                200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"}
+            )
         if request.method == "POST" and request.url.path == "/webhook/set/wa_t1_c1":
             return Response(200, json={"success": True})
         if request.method == "GET" and request.url.path == "/instance/connectionState/wa_t1_c1":
@@ -507,10 +592,14 @@ async def test_cannot_edit_sent_message(api_client, monkeypatch) -> None:
         raise AssertionError(f"Unexpected Evolution request: {request.method} {request.url.path}")
 
     _install_evolution_service(monkeypatch, handler)
-    headers = await _register_and_authenticate(api_client, name="Sent Draft Owner", email="sent-draft@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Sent Draft Owner", email="sent-draft@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
-    await _update_automation_by_slug(api_client, headers, slug="ai-receptionist", patch={"config": {"autoSend": True}})
+    await _update_automation_by_slug(
+        api_client, headers, slug="ai-receptionist", patch={"config": {"autoSend": True}}
+    )
 
     simulated = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
@@ -531,18 +620,28 @@ async def test_cannot_edit_sent_message(api_client, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_can_send_draft_in_mock_mode(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Mock Draft Owner", email="mock-draft@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Mock Draft Owner", email="mock-draft@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
     simulated = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "Tell me about your service", "contactName": "Ava Contact", "phone": "+15551234567"},
+        json={
+            "text": "Tell me about your service",
+            "contactName": "Ava Contact",
+            "phone": "+15551234567",
+        },
     )
     assert simulated.status_code == 200
     detail = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
 
     sent = await api_client.post(f"/api/messages/{draft['id']}/send-draft", headers=headers)
     assert sent.status_code == 200, sent.text
@@ -554,7 +653,9 @@ async def test_can_send_draft_in_mock_mode(api_client) -> None:
 async def test_sending_draft_calls_evolution_when_enabled(api_client, monkeypatch) -> None:
     def handler(request: Request, body: dict | None) -> Response:
         if request.method == "POST" and request.url.path == "/instance/create":
-            return Response(200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"})
+            return Response(
+                200, json={"instance": {"instanceName": "wa_t1_c1"}, "state": "connecting"}
+            )
         if request.method == "POST" and request.url.path == "/webhook/set/wa_t1_c1":
             return Response(200, json={"success": True})
         if request.method == "GET" and request.url.path == "/instance/connectionState/wa_t1_c1":
@@ -566,7 +667,9 @@ async def test_sending_draft_calls_evolution_when_enabled(api_client, monkeypatc
         raise AssertionError(f"Unexpected Evolution request: {request.method} {request.url.path}")
 
     requests = _install_evolution_service(monkeypatch, handler)
-    headers = await _register_and_authenticate(api_client, name="Draft Send Owner", email="draft-send@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Draft Send Owner", email="draft-send@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -577,18 +680,28 @@ async def test_sending_draft_calls_evolution_when_enabled(api_client, monkeypatc
     )
     assert simulated.status_code == 200
     detail = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
 
     sent = await api_client.post(f"/api/messages/{draft['id']}/send-draft", headers=headers)
     assert sent.status_code == 200, sent.text
     assert sent.json()["status"] == "sent"
-    assert any(method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests)
+    assert any(
+        method == "POST" and path == "/message/sendText/wa_t1_c1" for method, path, _ in requests
+    )
 
 
 @pytest.mark.asyncio
 async def test_cannot_send_another_tenants_draft(api_client) -> None:
-    owner_headers = await _register_and_authenticate(api_client, name="Tenant One", email="tenant-one@example.com")
-    other_headers = await _register_and_authenticate(api_client, name="Tenant Two", email="tenant-two@example.com")
+    owner_headers = await _register_and_authenticate(
+        api_client, name="Tenant One", email="tenant-one@example.com"
+    )
+    other_headers = await _register_and_authenticate(
+        api_client, name="Tenant Two", email="tenant-two@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=owner_headers)
     assert connect.status_code == 200
 
@@ -598,8 +711,14 @@ async def test_cannot_send_another_tenants_draft(api_client) -> None:
         json={"text": "Hello there", "contactName": "Ava Contact", "phone": "+15551234567"},
     )
     assert simulated.status_code == 200
-    detail = await _get_conversation_detail(api_client, owner_headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    detail = await _get_conversation_detail(
+        api_client, owner_headers, simulated.json()["conversationId"]
+    )
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
 
     sent = await api_client.post(f"/api/messages/{draft['id']}/send-draft", headers=other_headers)
     assert sent.status_code == 404
@@ -607,7 +726,9 @@ async def test_cannot_send_another_tenants_draft(api_client) -> None:
 
 @pytest.mark.asyncio
 async def test_can_discard_draft(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Discard Owner", email="discard@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Discard Owner", email="discard@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -618,20 +739,30 @@ async def test_can_discard_draft(api_client) -> None:
     )
     assert simulated.status_code == 200
     detail = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
 
     discarded = await api_client.delete(f"/api/messages/{draft['id']}", headers=headers)
     assert discarded.status_code == 200, discarded.text
     assert discarded.json() == {"ok": True}
 
-    detail_after = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    discarded_message = next(message for message in detail_after["messages"] if message["id"] == draft["id"])
+    detail_after = await _get_conversation_detail(
+        api_client, headers, simulated.json()["conversationId"]
+    )
+    discarded_message = next(
+        message for message in detail_after["messages"] if message["id"] == draft["id"]
+    )
     assert discarded_message["status"] == "discarded"
 
 
 @pytest.mark.asyncio
 async def test_cannot_discard_sent_message(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Discard Sent Owner", email="discard-sent@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Discard Sent Owner", email="discard-sent@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -642,7 +773,11 @@ async def test_cannot_discard_sent_message(api_client) -> None:
     )
     assert simulated.status_code == 200
     detail = await _get_conversation_detail(api_client, headers, simulated.json()["conversationId"])
-    draft = next(message for message in detail["messages"] if message["senderType"] == "ai" and message["status"] == "draft")
+    draft = next(
+        message
+        for message in detail["messages"]
+        if message["senderType"] == "ai" and message["status"] == "draft"
+    )
     sent = await api_client.post(f"/api/messages/{draft['id']}/send-draft", headers=headers)
     assert sent.status_code == 200
 
@@ -652,7 +787,9 @@ async def test_cannot_discard_sent_message(api_client) -> None:
 
 @pytest.mark.asyncio
 async def test_manual_human_send_still_works(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Manual Owner", email="manual-owner@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Manual Owner", email="manual-owner@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -675,7 +812,9 @@ async def test_manual_human_send_still_works(api_client) -> None:
 
 @pytest.mark.asyncio
 async def test_handoff_still_marks_conversation_needs_human(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Handoff Owner", email="handoff-owner@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Handoff Owner", email="handoff-owner@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -686,14 +825,18 @@ async def test_handoff_still_marks_conversation_needs_human(api_client) -> None:
     )
     assert simulated.status_code == 200
 
-    handoff = await api_client.post(f"/api/conversations/{simulated.json()['conversationId']}/handoff", headers=headers)
+    handoff = await api_client.post(
+        f"/api/conversations/{simulated.json()['conversationId']}/handoff", headers=headers
+    )
     assert handoff.status_code == 200, handoff.text
     assert handoff.json()["status"] == "needs_human"
 
 
 @pytest.mark.asyncio
 async def test_handoff_is_sticky_after_followup_inbound_message(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Sticky Handoff", email="sticky-handoff@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Sticky Handoff", email="sticky-handoff@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -708,7 +851,11 @@ async def test_handoff_is_sticky_after_followup_inbound_message(api_client) -> N
     second = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "Also, what are your opening hours?", "contactName": "Mia", "phone": "+15551234567"},
+        json={
+            "text": "Also, what are your opening hours?",
+            "contactName": "Mia",
+            "phone": "+15551234567",
+        },
     )
     assert second.status_code == 200
     assert second.json().get("ignored") is not True
@@ -726,38 +873,54 @@ async def test_handoff_is_sticky_after_followup_inbound_message(api_client) -> N
 
     notifications = await api_client.get("/api/notifications", headers=headers)
     assert notifications.status_code == 200
-    handoff_events = [event for event in notifications.json()["notifications"] if event["type"] == "needs_human"]
+    handoff_events = [
+        event for event in notifications.json()["notifications"] if event["type"] == "needs_human"
+    ]
     assert len(handoff_events) == 1
 
 
 @pytest.mark.asyncio
 async def test_existing_lead_update_does_not_duplicate_new_lead_notification(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Lead Notify", email="lead-notify@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Lead Notify", email="lead-notify@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
     first = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "I want to book teeth whitening and know the price", "contactName": "Mia", "phone": "+15551234567"},
+        json={
+            "text": "I want to book teeth whitening and know the price",
+            "contactName": "Mia",
+            "phone": "+15551234567",
+        },
     )
     assert first.status_code == 200
     second = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "I still want the price for teeth whitening", "contactName": "Mia", "phone": "+15551234567"},
+        json={
+            "text": "I still want the price for teeth whitening",
+            "contactName": "Mia",
+            "phone": "+15551234567",
+        },
     )
     assert second.status_code == 200
 
     notifications = await api_client.get("/api/notifications", headers=headers)
     assert notifications.status_code == 200
-    new_lead_events = [event for event in notifications.json()["notifications"] if event["type"] == "new_lead"]
+    new_lead_events = [
+        event for event in notifications.json()["notifications"] if event["type"] == "new_lead"
+    ]
     assert len(new_lead_events) == 1
 
 
 @pytest.mark.asyncio
 async def test_already_needs_human_does_not_duplicate_notification(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Human Notify", email="human-notify@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Human Notify", email="human-notify@example.com"
+    )
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     assert connect.status_code == 200
 
@@ -776,20 +939,26 @@ async def test_already_needs_human_does_not_duplicate_notification(api_client) -
 
     notifications = await api_client.get("/api/notifications", headers=headers)
     assert notifications.status_code == 200
-    handoff_events = [event for event in notifications.json()["notifications"] if event["type"] == "needs_human"]
+    handoff_events = [
+        event for event in notifications.json()["notifications"] if event["type"] == "needs_human"
+    ]
     assert len(handoff_events) == 1
 
 
 @pytest.mark.asyncio
 async def test_test_notification_endpoint_creates_event(api_client) -> None:
-    headers = await _register_and_authenticate(api_client, name="Test Notify", email="test-notify-api@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Test Notify", email="test-notify-api@example.com"
+    )
     response = await api_client.post("/api/notifications/test", headers=headers)
     assert response.status_code == 200, response.text
     assert response.json()["notification"]["type"] == "test"
 
 
 @pytest.mark.asyncio
-async def test_webhook_notification_delivery_posts_expected_payload(api_client, monkeypatch) -> None:
+async def test_webhook_notification_delivery_posts_expected_payload(
+    api_client, monkeypatch
+) -> None:
     requests: list[tuple[str, str, dict | None]] = []
 
     def handler(request: Request) -> Response:
@@ -797,18 +966,29 @@ async def test_webhook_notification_delivery_posts_expected_payload(api_client, 
         requests.append((request.method, str(request.url), body))
         return Response(200, json={"ok": True})
 
-    original_init = __import__("bot.services.notification_service", fromlist=["NotificationService"]).NotificationService.__init__
+    original_init = __import__(
+        "bot.services.notification_service", fromlist=["NotificationService"]
+    ).NotificationService.__init__
 
     def patched_init(self, session, *, transport=None, timeout_seconds=5.0):
-        return original_init(self, session, transport=MockTransport(handler), timeout_seconds=timeout_seconds)
+        return original_init(
+            self, session, transport=MockTransport(handler), timeout_seconds=timeout_seconds
+        )
 
-    monkeypatch.setattr("bot.services.notification_service.NotificationService.__init__", patched_init)
+    monkeypatch.setattr(
+        "bot.services.notification_service.NotificationService.__init__", patched_init
+    )
 
-    headers = await _register_and_authenticate(api_client, name="Webhook Notify", email="webhook-notify@example.com")
+    headers = await _register_and_authenticate(
+        api_client, name="Webhook Notify", email="webhook-notify@example.com"
+    )
     update = await api_client.patch(
         "/api/notification-settings",
         headers=headers,
-        json={"notificationChannel": "webhook", "notificationTarget": "https://hooks.example.com/operator"},
+        json={
+            "notificationChannel": "webhook",
+            "notificationTarget": "https://hooks.example.com/operator",
+        },
     )
     assert update.status_code == 200
 
@@ -817,7 +997,11 @@ async def test_webhook_notification_delivery_posts_expected_payload(api_client, 
     simulated = await api_client.post(
         "/api/dev/simulate-whatsapp-message",
         headers=headers,
-        json={"text": "I want to book teeth whitening and know the price", "contactName": "Mia", "phone": "+15551234567"},
+        json={
+            "text": "I want to book teeth whitening and know the price",
+            "contactName": "Mia",
+            "phone": "+15551234567",
+        },
     )
     assert simulated.status_code == 200
 
@@ -825,9 +1009,17 @@ async def test_webhook_notification_delivery_posts_expected_payload(api_client, 
 
 
 @pytest.mark.asyncio
-async def test_evolution_webhook_normalizes_extended_text_and_ignores_non_text_and_from_me(api_client, monkeypatch) -> None:
-    _install_evolution_service(monkeypatch, lambda _request, _body: Response(200, json={"ok": True}), webhook_secret="whsec-test")
-    headers = await _register_and_authenticate(api_client, name="Webhook Owner", email="webhook@example.com")
+async def test_evolution_webhook_normalizes_extended_text_and_ignores_non_text_and_from_me(
+    api_client, monkeypatch
+) -> None:
+    _install_evolution_service(
+        monkeypatch,
+        lambda _request, _body: Response(200, json={"ok": True}),
+        webhook_secret="whsec-test",
+    )
+    headers = await _register_and_authenticate(
+        api_client, name="Webhook Owner", email="webhook@example.com"
+    )
 
     connect = await api_client.post("/api/channels/whatsapp/connect", headers=headers)
     channel_id = connect.json()["channel"]["id"]
@@ -845,7 +1037,11 @@ async def test_evolution_webhook_normalizes_extended_text_and_ignores_non_text_a
                 "pushName": "Jamie Buyer",
                 "message": {
                     "key": {"remoteJid": "15557778888@s.whatsapp.net", "id": "msg-ext-1"},
-                    "message": {"extendedTextMessage": {"text": "I am interested in the price and want to schedule"}},
+                    "message": {
+                        "extendedTextMessage": {
+                            "text": "I am interested in the price and want to schedule"
+                        }
+                    },
                 },
             }
         },

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import secrets
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -16,9 +14,11 @@ from bot.db.session import engine
 
 def _ensure_table(eng: AsyncEngine) -> None:
     import asyncio
+
     async def create():
         async with eng.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[MCPToken.__table__])
+
     try:
         asyncio.get_running_loop().create_task(create())
     except RuntimeError:
@@ -91,7 +91,7 @@ class MCPTokenService:
         token_hash = _hash_token(token)
         stmt = select(MCPToken).where(
             MCPToken.token_hash == token_hash,
-            MCPToken.is_active == True,
+            MCPToken.is_active,
         )
         record = (await self.session.execute(stmt)).scalar_one_or_none()
         if record is None:

@@ -80,16 +80,16 @@ def parse_runtime_audit_compatibility(log: ModerationLog) -> RuntimeAuditCompati
     execution_result = dict(details.get("execution_result") or {})
     if not execution_result:
         execution_result = {
-            key: value
-            for key, value in details.items()
-            if key not in RUNTIME_AUDIT_META_KEYS
+            key: value for key, value in details.items() if key not in RUNTIME_AUDIT_META_KEYS
         }
     selected_actions = list(details.get("selected_actions") or [])
     if not selected_actions and details.get("runtime_action"):
         selected_actions = [str(details["runtime_action"])]
     compat_schema_version = details.get("compat_schema_version")
     try:
-        compat_schema_version = int(compat_schema_version) if compat_schema_version is not None else None
+        compat_schema_version = (
+            int(compat_schema_version) if compat_schema_version is not None else None
+        )
     except (TypeError, ValueError):
         compat_schema_version = None
     return RuntimeAuditCompatibility(
@@ -119,8 +119,7 @@ def serialize_guard_result(result: Any) -> dict[str, Any]:
 
 
 class AuditSink(Protocol):
-    async def write(self, entry: AuditEntry) -> None:
-        ...
+    async def write(self, entry: AuditEntry) -> None: ...
 
 
 @dataclass

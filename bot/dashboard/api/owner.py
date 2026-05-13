@@ -11,14 +11,12 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
 from bot.dashboard.api.auth import extract_dashboard_identity
-from bot.db.models import OwnerAuditLog, PromotionCode, PromotionCodeRedemption, SubscriptionRequest, SubscriptionStatus
+from bot.db.models import OwnerAuditLog, PromotionCode, SubscriptionRequest, SubscriptionStatus
 from bot.db.session import get_session
 from bot.services.menu_button_service import configure_private_chat_menu_button
+
 ...
-from .routers._shared import (
-    AccessGateUpdateRequest,
-    RedeemCodeRequest,
-)
+
 
 class PromoCodeCreateRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
@@ -34,10 +32,14 @@ class PromoCodeUpdateRequest(BaseModel):
     max_uses: int | None = Field(default=None, ge=1)
     expiry_date: datetime | None = Field(default=None)
 
+
 from bot.services.owner_audit_service import log_owner_action
 from bot.services.owner_service import OwnerService
 from bot.services.private_access_requirement_service import PrivateAccessRequirementService
-from bot.services.subscription_service import SubscriptionService, build_requester_status_notification
+from bot.services.subscription_service import (
+    SubscriptionService,
+    build_requester_status_notification,
+)
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 from bot.services.user_service import UserService
 
@@ -154,10 +156,14 @@ async def require_owner(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not a bot owner")
 
     user_service = UserService(session)
-    full_name = " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    full_name = (
+        " ".join(part for part in [identity.first_name, identity.last_name] if part).strip() or None
+    )
     await user_service.set_language(
         tg_user_id=identity.user_id,
-        language_code=await user_service.resolve_language(identity.user_id, fallback=settings.default_language),
+        language_code=await user_service.resolve_language(
+            identity.user_id, fallback=settings.default_language
+        ),
         username=identity.username,
         full_name=full_name,
     )
@@ -256,7 +262,9 @@ async def owner_leave_group(
         await bot.leave_chat(group["tg_group_id"])
     except Exception as exc:
         logger.warning("owner_leave_group_failed", extra={"group_id": group_id, "error": str(exc)})
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to leave group") from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to leave group"
+        ) from exc
     finally:
         await bot.session.close()
 
@@ -326,7 +334,9 @@ async def owner_update_subscription(
     try:
         status_enum = SubscriptionStatus(payload.normalized_status)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     request = await SubscriptionService(session).update_request_status(
         request_id=request_id,
         status=status_enum,
@@ -334,7 +344,9 @@ async def owner_update_subscription(
         responder_id=identity.user_id,
     )
     if request is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription request not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Subscription request not found"
+        )
 
     if status_enum is SubscriptionStatus.APPROVED and payload.plan:
         request.plan = payload.plan
@@ -384,13 +396,17 @@ async def owner_audit_log(
     session: AsyncSession = Depends(get_session),
 ) -> list[OwnerAuditEntry]:
     rows = (
-        await session.execute(
-            select(OwnerAuditLog)
-            .order_by(desc(OwnerAuditLog.created_at), desc(OwnerAuditLog.id))
-            .limit(limit)
-            .offset(offset)
+        (
+            await session.execute(
+                select(OwnerAuditLog)
+                .order_by(desc(OwnerAuditLog.created_at), desc(OwnerAuditLog.id))
+                .limit(limit)
+                .offset(offset)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_serialize_audit_entry(row) for row in rows]
 
 
@@ -401,10 +417,14 @@ async def owner_list_promo_codes(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     rows = (
-        await session.execute(
-            select(PromotionCode).order_by(desc(PromotionCode.created_at)).limit(limit)
+        (
+            await session.execute(
+                select(PromotionCode).order_by(desc(PromotionCode.created_at)).limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [_serialize_promo_code(row) for row in rows]
 
 
@@ -418,7 +438,9 @@ async def owner_create_promo_code(
     stmt = select(PromotionCode).where(PromotionCode.code == payload.code.strip().upper())
     existing = (await session.execute(stmt)).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Promotion code already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Promotion code already exists"
+        )
 
     promo = PromotionCode(
         code=payload.code.strip().upper(),
@@ -431,7 +453,7 @@ async def owner_create_promo_code(
     session.add(promo)
     await session.commit()
     await session.refresh(promo)
-    
+
     await log_owner_action(
         session,
         actor_id=identity.user_id,
@@ -454,20 +476,24 @@ async def owner_update_promo_code(
     identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    promo = (await session.execute(select(PromotionCode).where(PromotionCode.id == promo_code_id))).scalar_one_or_none()
+    promo = (
+        await session.execute(select(PromotionCode).where(PromotionCode.id == promo_code_id))
+    ).scalar_one_or_none()
     if not promo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion code not found")
-        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Promotion code not found"
+        )
+
     if payload.is_active is not None:
         promo.is_active = payload.is_active
     if payload.max_uses is not None:
         promo.max_uses = payload.max_uses
     if payload.expiry_date is not None:
         promo.expiry_date = payload.expiry_date
-        
+
     await session.commit()
     await session.refresh(promo)
-    
+
     await log_owner_action(
         session,
         actor_id=identity.user_id,
@@ -485,13 +511,17 @@ async def owner_delete_promo_code(
     identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    promo = (await session.execute(select(PromotionCode).where(PromotionCode.id == promo_code_id))).scalar_one_or_none()
+    promo = (
+        await session.execute(select(PromotionCode).where(PromotionCode.id == promo_code_id))
+    ).scalar_one_or_none()
     if not promo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion code not found")
-        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Promotion code not found"
+        )
+
     await session.delete(promo)
     await session.commit()
-    
+
     await log_owner_action(
         session,
         actor_id=identity.user_id,

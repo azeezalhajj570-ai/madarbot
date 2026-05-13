@@ -40,7 +40,9 @@ async def test_evolution_service_create_instance_configures_webhook_and_maps_sta
         transport=MockTransport(handler),
     )
 
-    state = await service.create_instance(tenant_id=7, channel_account_id=12, display_name="Clinic Line")
+    state = await service.create_instance(
+        tenant_id=7, channel_account_id=12, display_name="Clinic Line"
+    )
     assert state.external_account_id == "wa_t7_c12"
     assert state.status == "connected"
     assert state.qr_code == "data:image/png;base64,cXItY29kZQ=="

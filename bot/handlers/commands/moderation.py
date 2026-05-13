@@ -14,8 +14,26 @@ from bot.utils.i18n import t
 from bot.workers.tasks import schedule_bot_message_delete
 
 router = Router(name="moderation_commands")
-_BAN_REPLY_ALIASES = {"ban", "/ban", "ban user", "/ban user", "حظر", "/حظر", "حظر المستخدم", "/حظر المستخدم"}
-_MUTE_REPLY_ALIASES = {"mute", "/mute", "mute user", "/mute user", "كتم", "/كتم", "كتم المستخدم", "/كتم المستخدم"}
+_BAN_REPLY_ALIASES = {
+    "ban",
+    "/ban",
+    "ban user",
+    "/ban user",
+    "حظر",
+    "/حظر",
+    "حظر المستخدم",
+    "/حظر المستخدم",
+}
+_MUTE_REPLY_ALIASES = {
+    "mute",
+    "/mute",
+    "mute user",
+    "/mute user",
+    "كتم",
+    "/كتم",
+    "كتم المستخدم",
+    "/كتم المستخدم",
+}
 
 
 async def _resolve_lang(message: Message) -> str:
@@ -28,7 +46,9 @@ async def _group_and_lang(message: Message) -> tuple[Group | None, str]:
         return None, lang
     async with SessionLocal() as session:
         group = (
-            await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(message.chat.id))))
+            await session.execute(
+                select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(message.chat.id)))
+            )
         ).scalar_one_or_none()
     return group, lang
 
@@ -71,7 +91,9 @@ def _schedule_command_cleanup(message: Message, *, delay_seconds: int = 60) -> N
     )
 
 
-async def _handle_unauthorized_moderation_attempt(message: Message, *, group: Group | None, command_name: str) -> None:
+async def _handle_unauthorized_moderation_attempt(
+    message: Message, *, group: Group | None, command_name: str
+) -> None:
     if group is None or message.from_user is None:
         return
 
@@ -103,7 +125,11 @@ async def _handle_unauthorized_moderation_attempt(message: Message, *, group: Gr
 
         if action == "mute":
             applied = True
-            details: dict[str, object] = {"source": "command", "count": incident_count, "trigger": "unauthorized_moderation_command"}
+            details: dict[str, object] = {
+                "source": "command",
+                "count": incident_count,
+                "trigger": "unauthorized_moderation_command",
+            }
             try:
                 await message.bot.restrict_chat_member(
                     message.chat.id,
@@ -126,7 +152,11 @@ async def _handle_unauthorized_moderation_attempt(message: Message, *, group: Gr
             )
         elif action == "ban":
             applied = True
-            details = {"source": "command", "count": incident_count, "trigger": "unauthorized_moderation_command"}
+            details = {
+                "source": "command",
+                "count": incident_count,
+                "trigger": "unauthorized_moderation_command",
+            }
             try:
                 await message.bot.ban_chat_member(message.chat.id, message.from_user.id)
             except Exception as exc:
@@ -182,7 +212,13 @@ async def ban_handler(message: Message) -> None:
         await message.answer(t("moderation_reply_required", lang))
         return
     await message.bot.ban_chat_member(message.chat.id, target_user_id)
-    await _log_action(group, "ban_user", message.from_user.id if message.from_user else None, target_user_id, {"source": "command"})
+    await _log_action(
+        group,
+        "ban_user",
+        message.from_user.id if message.from_user else None,
+        target_user_id,
+        {"source": "command"},
+    )
     await message.answer(t("ban_done", lang))
     _schedule_command_cleanup(message)
 
@@ -199,7 +235,13 @@ async def unban_handler(message: Message) -> None:
         await message.answer(t("moderation_reply_required", lang))
         return
     await message.bot.unban_chat_member(message.chat.id, target_user_id)
-    await _log_action(group, "unban_user", message.from_user.id if message.from_user else None, target_user_id, {"source": "command"})
+    await _log_action(
+        group,
+        "unban_user",
+        message.from_user.id if message.from_user else None,
+        target_user_id,
+        {"source": "command"},
+    )
     await message.answer(t("unban_done", lang))
 
 
@@ -219,7 +261,13 @@ async def mute_handler(message: Message) -> None:
         target_user_id,
         permissions=ChatPermissions(can_send_messages=False),
     )
-    await _log_action(group, "mute_user", message.from_user.id if message.from_user else None, target_user_id, {"source": "command"})
+    await _log_action(
+        group,
+        "mute_user",
+        message.from_user.id if message.from_user else None,
+        target_user_id,
+        {"source": "command"},
+    )
     await message.answer(t("mute_done", lang))
     _schedule_command_cleanup(message)
 
@@ -254,7 +302,13 @@ async def unmute_handler(message: Message) -> None:
             can_pin_messages=False,
         ),
     )
-    await _log_action(group, "unmute_user", message.from_user.id if message.from_user else None, target_user_id, {"source": "command"})
+    await _log_action(
+        group,
+        "unmute_user",
+        message.from_user.id if message.from_user else None,
+        target_user_id,
+        {"source": "command"},
+    )
     await message.answer(t("unmute_done", lang))
 
 

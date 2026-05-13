@@ -6,7 +6,10 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import AgentJobOwnership
-from bot.agents.jobs import GROUP_MEMBER_BROADCAST_JOB_TYPE, normalize_group_member_broadcast_payload
+from bot.agents.jobs import (
+    GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    normalize_group_member_broadcast_payload,
+)
 from bot.core.event_bus import EventBus
 from bot.db.models import Agent, AgentJob
 
@@ -14,11 +17,15 @@ from .agent_notification_service import AgentNotificationService
 from .service_support import AgentServiceSupport
 
 
-def _job_queued_notification(job_type: str, payload: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+def _job_queued_notification(
+    job_type: str, payload: dict[str, Any]
+) -> tuple[str, str, dict[str, Any]]:
     if job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
         group_title = str(payload.get("source_group_title") or "").strip()
         selected_count = len(list(payload.get("selected_user_ids") or []))
-        summary = f"Queued for {group_title}." if group_title else "Queued for the selected source group."
+        summary = (
+            f"Queued for {group_title}." if group_title else "Queued for the selected source group."
+        )
         notification_payload = {
             "job_type": job_type,
             "source_group_title": group_title,
@@ -60,7 +67,12 @@ class AgentJobService(AgentServiceSupport):
             normalized_payload = normalize_group_member_broadcast_payload(normalized_payload)
             await self._validate_broadcast_preflight(agent, normalized_payload)
 
-        job = AgentJob(agent_id=agent.id, job_type=normalized_job_type, job_payload=normalized_payload, status="pending")
+        job = AgentJob(
+            agent_id=agent.id,
+            job_type=normalized_job_type,
+            job_payload=normalized_payload,
+            status="pending",
+        )
         self.session.add(job)
         await self.session.commit()
         notification_title, notification_body, notification_payload = _job_queued_notification(
@@ -83,7 +95,9 @@ class AgentJobService(AgentServiceSupport):
         )
         return job
 
-    async def list_jobs(self, *, actor_user_id: int, group_id: int, limit: int = 20) -> list[AgentJob]:
+    async def list_jobs(
+        self, *, actor_user_id: int, group_id: int, limit: int = 20
+    ) -> list[AgentJob]:
         await self.ensure_group_admin(group_id, actor_user_id)
         stmt = (
             select(AgentJob)
@@ -94,7 +108,9 @@ class AgentJobService(AgentServiceSupport):
         )
         return list((await self.session.execute(stmt)).scalars())
 
-    async def list_agent_jobs(self, *, actor_user_id: int, agent_id: int, limit: int = 20) -> list[AgentJob]:
+    async def list_agent_jobs(
+        self, *, actor_user_id: int, agent_id: int, limit: int = 20
+    ) -> list[AgentJob]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
             return []
@@ -153,7 +169,9 @@ class AgentJobService(AgentServiceSupport):
         )
 
     async def update_job_status(self, *, actor_user_id: int, job_id: int, status: str) -> AgentJob:
-        job = (await self.session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+        job = (
+            await self.session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
         if job is None:
             raise ValueError("Job not found")
         agent = await self.get_agent(agent_id=job.agent_id)
@@ -165,7 +183,9 @@ class AgentJobService(AgentServiceSupport):
         return job
 
     async def delete_job(self, *, actor_user_id: int, job_id: int) -> bool:
-        job = (await self.session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+        job = (
+            await self.session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
         if job is None:
             return False
         agent = await self.get_agent(agent_id=job.agent_id)
@@ -200,13 +220,17 @@ class AgentJobService(AgentServiceSupport):
             if max_per_hour is not None and max_per_hour > 0:
                 allowed, count = await limiter.check_and_increment(agent.id, max_per_hour)
                 if not allowed:
-                    raise ValueError(f"Hourly rate limit reached ({count}/{max_per_hour}). Try again later.")
+                    raise ValueError(
+                        f"Hourly rate limit reached ({count}/{max_per_hour}). Try again later."
+                    )
 
             max_per_day = getattr(agent, "max_messages_per_day", None) or 500
             if max_per_day > 0:
                 allowed, count = await limiter.check_daily_limit(agent.id, max_per_day)
                 if not allowed:
-                    raise ValueError(f"Daily message limit reached ({count}/{max_per_day}). Try again tomorrow.")
+                    raise ValueError(
+                        f"Daily message limit reached ({count}/{max_per_day}). Try again tomorrow."
+                    )
 
             threshold = int(payload.get("threshold") or 0)
             if threshold > max_per_day:
@@ -216,7 +240,9 @@ class AgentJobService(AgentServiceSupport):
 
             selected = list(payload.get("selected_user_ids") or [])
             if len(selected) > threshold:
-                raise ValueError(f"Selected members ({len(selected)}) exceeds threshold ({threshold})")
+                raise ValueError(
+                    f"Selected members ({len(selected)}) exceeds threshold ({threshold})"
+                )
 
         finally:
             await redis_client.aclose()

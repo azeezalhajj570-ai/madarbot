@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.types import ChatJoinRequest
 from sqlalchemy import select, and_
 import structlog
@@ -31,13 +31,8 @@ async def _setting_enabled(session, group_id: int, key: str, default: bool = Tru
 async def _get_admin_ids(session, group_id: int) -> list[int]:
     """Get all admin user TG IDs for a managed group."""
     # Get group admins
-    admin_stmt = (
-        select(GroupAdminRole.user_id)
-        .where(GroupAdminRole.group_id == group_id)
-    )
-    admin_ids = list(
-        (await session.execute(admin_stmt)).scalars().all()
-    )
+    admin_stmt = select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group_id)
+    admin_ids = list((await session.execute(admin_stmt)).scalars().all())
     # Get group owner
     owner_stmt = (
         select(User.tg_user_id)
@@ -106,21 +101,21 @@ async def on_chat_join_request(event: ChatJoinRequest) -> None:
         # 1. Paid Group Access check
         from bot.services.group_subscription_service import GroupSubscriptionService
         from bot.db.models import GroupSubscriberStatus
-        
+
         gs_service = GroupSubscriptionService(session)
         paid_settings = await gs_service.get_settings(group.id)
-        
+
         if paid_settings.enabled:
             # Check if user has active subscription
             subscriber_stmt = select(GroupSubscriber).where(
                 and_(
                     GroupSubscriber.group_id == group.id,
                     GroupSubscriber.user_id == user.id,
-                    GroupSubscriber.status == GroupSubscriberStatus.ACTIVE
+                    GroupSubscriber.status == GroupSubscriberStatus.ACTIVE,
                 )
             )
             subscriber = (await session.execute(subscriber_stmt)).scalar_one_or_none()
-            
+
             if not subscriber:
                 # User not subscribed, decline and notify
                 # Actually declining might be too harsh, maybe just ignore or notify?
@@ -129,28 +124,32 @@ async def on_chat_join_request(event: ChatJoinRequest) -> None:
                 try:
                     await bot.send_message(
                         chat_id=user.id,
-                        text=f"This group '{group.title}' requires a paid subscription to join. Please use /subscribe to see available plans."
+                        text=f"This group '{group.title}' requires a paid subscription to join. Please use /subscribe to see available plans.",
                     )
                 except Exception:
                     pass
-                
+
                 logger.info(
                     "joinreq_declined_unpaid",
                     group_id=group.id,
                     user_tg_id=user.id,
                 )
-                # We don't necessarily 'decline' via API yet to avoid blocking future attempts 
+                # We don't necessarily 'decline' via API yet to avoid blocking future attempts
                 # unless that's intended. Telegram auto-declines after 24h if no action.
                 return
 
         # 2. Existing join request verification
         # Check if join request verification is enabled
-        join_req_enabled = await _setting_enabled(session, group.id, "join_request_verify", default=False)
+        join_req_enabled = await _setting_enabled(
+            session, group.id, "join_request_verify", default=False
+        )
         if not join_req_enabled:
             return
 
         # Get required groups for this protected group
-        required_group_tg_ids = await AccessGateService(session).list_required_group_tg_ids(group.id)
+        required_group_tg_ids = await AccessGateService(session).list_required_group_tg_ids(
+            group.id
+        )
         if not required_group_tg_ids:
             # No required groups configured, let Telegram handle normally
             return

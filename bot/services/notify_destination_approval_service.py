@@ -18,13 +18,21 @@ def _approval_setting_key(token: str) -> str:
     return f"{PENDING_NOTIFY_APPROVAL_PREFIX}{token}"
 
 
-def build_notify_destination_approval_keyboard(*, group_id: int, token: str) -> InlineKeyboardMarkup:
+def build_notify_destination_approval_keyboard(
+    *, group_id: int, token: str
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Yes", callback_data=f"notify-destination:yes:{group_id}:{token}"),
-                InlineKeyboardButton(text="Edit Reply", callback_data=f"notify-destination:edit:{group_id}:{token}"),
-                InlineKeyboardButton(text="No", callback_data=f"notify-destination:no:{group_id}:{token}"),
+                InlineKeyboardButton(
+                    text="Yes", callback_data=f"notify-destination:yes:{group_id}:{token}"
+                ),
+                InlineKeyboardButton(
+                    text="Edit Reply", callback_data=f"notify-destination:edit:{group_id}:{token}"
+                ),
+                InlineKeyboardButton(
+                    text="No", callback_data=f"notify-destination:no:{group_id}:{token}"
+                ),
             ]
         ]
     )
@@ -38,7 +46,9 @@ class NotifyDestinationApprovalService:
     async def _resolve_agent_label(self, agent_id: int | None) -> str:
         if agent_id is None:
             return "Unknown agent"
-        agent = (await self.session.execute(select(Agent).where(Agent.id == int(agent_id)))).scalar_one_or_none()
+        agent = (
+            await self.session.execute(select(Agent).where(Agent.id == int(agent_id)))
+        ).scalar_one_or_none()
         if agent is None:
             return f"Agent #{int(agent_id)}"
         username = str((agent.details or {}).get("username") or "").strip().lstrip("@")
@@ -131,10 +141,14 @@ class NotifyDestinationApprovalService:
     async def set_prompt(self, *, group_id: int, token: str, payload: dict) -> None:
         await self.settings.set_value(group_id, _approval_setting_key(token), payload)
 
-    async def find_prompt_by_control_message(self, *, destination: int | str, prompt_message_id: int) -> tuple[int, dict] | None:
+    async def find_prompt_by_control_message(
+        self, *, destination: int | str, prompt_message_id: int
+    ) -> tuple[int, dict] | None:
         rows = (
             await self.session.execute(
-                select(GroupSetting.group_id, GroupSetting.value).where(GroupSetting.key.startswith(PENDING_NOTIFY_APPROVAL_PREFIX))
+                select(GroupSetting.group_id, GroupSetting.value).where(
+                    GroupSetting.key.startswith(PENDING_NOTIFY_APPROVAL_PREFIX)
+                )
             )
         ).all()
         for row in rows:

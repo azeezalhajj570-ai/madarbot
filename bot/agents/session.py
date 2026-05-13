@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from sqlalchemy import select
 
-from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError, AgentSessionError, AgentSessionRevokedError
+from bot.agents.exceptions import (
+    AgentBannedError,
+    AgentFloodWaitError,
+    AgentSessionError,
+    AgentSessionRevokedError,
+)
 from bot.config import get_settings
 from bot.db.models import Agent
 from bot.db.session import SessionLocal
@@ -29,14 +34,14 @@ _client_loops: dict[int, asyncio.AbstractEventLoop] = {}
 def _get_client_lock(agent_id: int) -> asyncio.Lock:
     lock = _client_locks.get(agent_id)
     current_loop = asyncio.get_running_loop()
-    
+
     # Check if lock was created on a different event loop
     if lock is not None:
         lock_loop = _client_lock_loops.get(agent_id)
         if lock_loop is not current_loop:
             # Lock was created on a different loop, recreate it
             lock = None
-    
+
     if lock is None:
         lock = asyncio.Lock()
         _client_locks[agent_id] = lock
@@ -83,7 +88,9 @@ class SessionManager:
         self._redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
         return self._redis
 
-    async def _set_state(self, agent_id: int, state: str, *, retry_after: int | None = None) -> None:
+    async def _set_state(
+        self, agent_id: int, state: str, *, retry_after: int | None = None
+    ) -> None:
         client = await self._get_redis()
         bound_logger = logger.bind(agent_id=agent_id)
         if state == "flood_wait" and retry_after is not None:
@@ -110,8 +117,15 @@ class SessionManager:
 
     async def _load_agent(self, agent_id: int) -> Agent:
         async with self._session_factory() as session:
-            agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
-        if agent is None or not agent.session_string or agent.auth_state != "active" or agent.status in {"banned", "failed"}:
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
+        if (
+            agent is None
+            or not agent.session_string
+            or agent.auth_state != "active"
+            or agent.status in {"banned", "failed"}
+        ):
             raise AgentSessionError("Agent session is unavailable")
         return agent
 
@@ -189,7 +203,7 @@ class SessionManager:
     async def _get_or_create_client(self, agent_id: int, agent: Agent) -> "TelegramClient":
         client = _client_pool.get(agent_id)
         current_loop = asyncio.get_running_loop()
-        
+
         # Check if client was created on a different event loop
         if client is not None:
             client_loop = _client_loops.get(agent_id)
@@ -203,7 +217,7 @@ class SessionManager:
                 _client_pool.pop(agent_id, None)
                 _client_loops.pop(agent_id, None)
                 client = None
-        
+
         if client is None:
             client = await self._build_client(agent)
             _client_pool[agent_id] = client
@@ -217,7 +231,9 @@ class SessionManager:
             bound_logger.warning("agent_session_unavailable", state=state)
             raise AgentBannedError()
         if state == "flood_wait":
-            bound_logger.warning("agent_session_unavailable", state=state, retry_after=retry_after or 0)
+            bound_logger.warning(
+                "agent_session_unavailable", state=state, retry_after=retry_after or 0
+            )
             raise AgentFloodWaitError(retry_after or 0)
 
         agent = await self._load_agent(agent_id)
@@ -252,7 +268,9 @@ class SessionManager:
 
     async def mark_failed(self, agent_id: int) -> None:
         async with self._session_factory() as session:
-            agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
             if agent is None:
                 return
             agent.status = "failed"
@@ -263,12 +281,18 @@ class SessionManager:
     async def is_available(self, agent_id: int) -> bool:
         state, _retry_after = await self._get_state(agent_id)
         if state in {"banned", "flood_wait"}:
-            logger.bind(agent_id=agent_id).info("agent_session_availability_checked", available=False, state=state)
+            logger.bind(agent_id=agent_id).info(
+                "agent_session_availability_checked", available=False, state=state
+            )
             return False
         try:
             await self._load_agent(agent_id)
         except AgentSessionError:
-            logger.bind(agent_id=agent_id).info("agent_session_availability_checked", available=False, state="unknown")
+            logger.bind(agent_id=agent_id).info(
+                "agent_session_availability_checked", available=False, state="unknown"
+            )
             return False
-        logger.bind(agent_id=agent_id).info("agent_session_availability_checked", available=True, state=state)
+        logger.bind(agent_id=agent_id).info(
+            "agent_session_availability_checked", available=True, state=state
+        )
         return True

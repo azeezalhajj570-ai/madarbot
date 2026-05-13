@@ -27,10 +27,16 @@ class PluginService:
         if existing:
             existing.enabled = enabled
         else:
-            self.session.add(PluginEnabled(group_id=group_id, plugin_name=plugin_name, enabled=enabled, config={}))
+            self.session.add(
+                PluginEnabled(
+                    group_id=group_id, plugin_name=plugin_name, enabled=enabled, config={}
+                )
+            )
         await self.session.commit()
 
     async def list_group_plugins(self, group_id: int) -> dict[str, bool]:
-        stmt = select(PluginEnabled.plugin_name, PluginEnabled.enabled).where(PluginEnabled.group_id == group_id)
+        stmt = select(PluginEnabled.plugin_name, PluginEnabled.enabled).where(
+            PluginEnabled.group_id == group_id
+        )
         rows = (await self.session.execute(stmt)).all()
         return {row.plugin_name: bool(row.enabled) for row in rows}

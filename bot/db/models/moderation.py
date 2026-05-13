@@ -5,7 +5,18 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -40,7 +51,9 @@ class ModerationSetting(Base):
     __tablename__ = "moderation_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True, unique=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"), index=True, unique=True
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     safe_mode: Mapped[bool] = mapped_column(Boolean, default=True)
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)

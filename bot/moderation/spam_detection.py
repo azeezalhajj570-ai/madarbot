@@ -7,8 +7,7 @@ from bot.moderation.schemas import ModerationAction, ModerationCategory, Moderat
 
 
 class SpamScamClassifier(Protocol):
-    async def classify(self, text: str) -> ModerationDecision:
-        ...
+    async def classify(self, text: str) -> ModerationDecision: ...
 
 
 class HeuristicSpamScamClassifier:
@@ -44,7 +43,7 @@ class HeuristicSpamScamClassifier:
 
     SUSPICIOUS_LINKS_RE = re.compile(
         r"(bit\.ly|t\.co|tinyurl|cutt\.ly|rebrand\.ly|t\.me/(\+[a-zA-Z0-9_-]+|joinchat/))",
-        re.IGNORECASE
+        re.IGNORECASE,
     )
 
     async def classify(self, text: str) -> ModerationDecision:
@@ -74,7 +73,11 @@ class HeuristicSpamScamClassifier:
         link_matches = self.SUSPICIOUS_LINKS_RE.findall(text)
         if link_matches:
             matched_signals.append("suspicious_link")
-            category = ModerationCategory.PHISHING_LINK if category == ModerationCategory.SAFE else category
+            category = (
+                ModerationCategory.PHISHING_LINK
+                if category == ModerationCategory.SAFE
+                else category
+            )
             max_confidence = max(max_confidence, 0.8)
 
         if not matched_signals:

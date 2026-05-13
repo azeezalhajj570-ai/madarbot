@@ -42,7 +42,6 @@ class AdminAutomationRuntimeService:
     ) -> None:
         """Records a notification and optionally sends it to the admin via Telegram."""
         from bot.agents.agent_notification_service import AgentNotificationService
-        from bot.utils.i18n import t
         from bot.services.user_service import UserService
 
         # 1. Record database notification
@@ -69,11 +68,13 @@ class AdminAutomationRuntimeService:
         # 2. Send Telegram notification to the actor (admin)
         if not skip_telegram and self.bot is not None:
             user_service = UserService(self.session)
-            lang = await user_service.resolve_language(actor_user_id)
-            
-            group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+            await user_service.resolve_language(actor_user_id)
+
+            group = (
+                await self.session.execute(select(Group).where(Group.id == group_id))
+            ).scalar_one_or_none()
             group_title = group.title if group else f"Group {group_id}"
-            
+
             message = f"🔔 *{title}*\n\n{body}\n\n📍 Group: {group_title}"
             try:
                 await self.bot.send_message(
@@ -97,7 +98,9 @@ class AdminAutomationRuntimeService:
         return await self._task_service().list_catalog()
 
     async def list_assignments(self, *, actor_user_id: int, group_id: int) -> list[dict[str, Any]]:
-        return await self._task_service().list_assignments(actor_user_id=actor_user_id, group_id=group_id)
+        return await self._task_service().list_assignments(
+            actor_user_id=actor_user_id, group_id=group_id
+        )
 
     async def save_assignment(
         self,
@@ -142,7 +145,9 @@ class AdminAutomationRuntimeService:
         )
         return result
 
-    async def delete_assignment(self, *, actor_user_id: int, group_id: int, assignment_id: str) -> bool:
+    async def delete_assignment(
+        self, *, actor_user_id: int, group_id: int, assignment_id: str
+    ) -> bool:
         assignments_before = await self._task_service().store.list_assignments(group_id)
         was_agent_task = any(
             a.assignment_id == assignment_id and a.executor_type == "agent"
@@ -190,7 +195,7 @@ class AdminAutomationRuntimeService:
                 entry_id=entry["id"],
                 expected_send_at=entry["send_at"],
             )
-        
+
         await self.broadcast_admin_action(
             group_id=group_id,
             actor_user_id=actor_user_id,
@@ -225,7 +230,7 @@ class AdminAutomationRuntimeService:
                 entry_id=entry["id"],
                 expected_send_at=entry["send_at"],
             )
-        
+
         await self.broadcast_admin_action(
             group_id=group_id,
             actor_user_id=actor_user_id,
@@ -236,8 +241,12 @@ class AdminAutomationRuntimeService:
         )
         return entry
 
-    async def delete_scheduled_message(self, *, actor_user_id: int, group_id: int, entry_id: str) -> bool:
-        deleted = await ScheduledMessageService(self.session).delete_entry(group_id=group_id, entry_id=entry_id)
+    async def delete_scheduled_message(
+        self, *, actor_user_id: int, group_id: int, entry_id: str
+    ) -> bool:
+        deleted = await ScheduledMessageService(self.session).delete_entry(
+            group_id=group_id, entry_id=entry_id
+        )
         if deleted:
             await self.broadcast_admin_action(
                 group_id=group_id,
@@ -255,11 +264,15 @@ class AdminAutomationRuntimeService:
         group_id: int,
         entry_id: str,
     ) -> ScheduledAnnouncementRequest | None:
-        entry = await ScheduledMessageService(self.session).get_entry(group_id=group_id, entry_id=entry_id)
+        entry = await ScheduledMessageService(self.session).get_entry(
+            group_id=group_id, entry_id=entry_id
+        )
         if entry is None or entry.get("status") == "sent":
             return None
 
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             return None
 
@@ -280,7 +293,10 @@ class AdminAutomationRuntimeService:
         bot: Any,
     ) -> dict[str, Any]:
         from bot.core.runtime.automation import AutomationRuntimeService
-        request = await self.get_scheduled_message_dispatch_request(group_id=group_id, entry_id=entry_id)
+
+        request = await self.get_scheduled_message_dispatch_request(
+            group_id=group_id, entry_id=entry_id
+        )
         if request is None:
             return {"status": "skipped", "reason": "entry_not_found_or_already_sent"}
 

@@ -45,7 +45,9 @@ async def resolve_group_entity(client: Any, tg_group_id: int, session: AsyncSess
                 if str(tg_group_id).startswith("-100"):
                     pure_id = int(str(tg_group_id)[4:])
                     try:
-                        return await client.get_entity(InputPeerChannel(channel_id=pure_id, access_hash=int(access_hash)))
+                        return await client.get_entity(
+                            InputPeerChannel(channel_id=pure_id, access_hash=int(access_hash))
+                        )
                     except Exception:
                         pass
                 else:
@@ -71,8 +73,16 @@ async def get_or_create_group_from_client(
     entity = await resolve_group_entity(client, int(tg_group_id), session)
     title = getattr(entity, "title", None)
     username = getattr(entity, "username", None)
-    group_type = "channel" if getattr(entity, "broadcast", False) else "supergroup" if getattr(entity, "megagroup", False) else "group"
-    member_count = getattr(entity, "participants_count", None) or getattr(entity, "user_count", None)
+    group_type = (
+        "channel"
+        if getattr(entity, "broadcast", False)
+        else "supergroup"
+        if getattr(entity, "megagroup", False)
+        else "group"
+    )
+    member_count = getattr(entity, "participants_count", None) or getattr(
+        entity, "user_count", None
+    )
     description = getattr(entity, "about", None) if hasattr(entity, "about") else None
 
     raw_data = {
@@ -110,10 +120,14 @@ async def get_or_create_scraped_group(
 
     canonical_id = canonical_tg_group_id(int(tg_group_id))
     group = (
-        await session.execute(
-            select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical_id).limit(1)
+        (
+            await session.execute(
+                select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical_id).limit(1)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
     now = datetime.utcnow()
     if group is None:

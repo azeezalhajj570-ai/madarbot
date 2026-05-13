@@ -13,7 +13,15 @@ from bot.db.models import Conversation, Message, Tenant
 
 SAFETY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "medical": ("diagnosis", "diagnose", "symptom", "symptoms", "prescription", "medical advice"),
-    "emergency": ("emergency", "urgent", "ambulance", "bleeding", "can't breathe", "cannot breathe", "chest pain"),
+    "emergency": (
+        "emergency",
+        "urgent",
+        "ambulance",
+        "bleeding",
+        "can't breathe",
+        "cannot breathe",
+        "chest pain",
+    ),
     "legal": ("legal advice", "lawyer", "sue", "lawsuit", "attorney"),
     "financial": ("financial advice", "investment advice", "tax advice", "loan advice"),
     "refund": ("refund", "chargeback", "dispute"),
@@ -88,8 +96,12 @@ class MockAIReceptionistProvider(BaseAIReceptionistProvider):
             )
 
         matched_service = _match_service(lowered, business_profile.get("services") or [])
-        asks_price = any(word in lowered for word in ("price", "cost", "pricing", "quote", "how much"))
-        asks_booking = any(word in lowered for word in ("book", "booking", "appointment", "schedule"))
+        asks_price = any(
+            word in lowered for word in ("price", "cost", "pricing", "quote", "how much")
+        )
+        asks_booking = any(
+            word in lowered for word in ("book", "booking", "appointment", "schedule")
+        )
 
         if asks_price:
             if matched_service and matched_service.get("priceFrom"):
@@ -183,7 +195,9 @@ class OpenAIReceptionistProvider(BaseAIReceptionistProvider):
             "text": {"format": {"type": "json_object"}},
         }
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
+            response = await client.post(
+                "https://api.openai.com/v1/responses", headers=headers, json=payload
+            )
         if response.status_code >= 400:
             raise AIProviderError(f"openai_http_{response.status_code}")
         data = response.json()
@@ -212,7 +226,11 @@ class GeminiReceptionistProvider(BaseAIReceptionistProvider):
         recent_messages: list[Message],
         inbound_message: Message,
     ) -> AIReceptionistDecision:
-        prompt = _system_instructions() + "\n\n" + _build_model_prompt(business_profile, recent_messages, inbound_message)
+        prompt = (
+            _system_instructions()
+            + "\n\n"
+            + _build_model_prompt(business_profile, recent_messages, inbound_message)
+        )
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -299,7 +317,12 @@ def _match_service(lowered_text: str, services: list[dict[str, Any]]) -> dict[st
         name = str(service.get("name") or "").strip()
         if name and name.lower() in lowered_text:
             return service
-    return services[0] if len(services) == 1 and any(word in lowered_text for word in ("price", "cost", "book", "service")) else None
+    return (
+        services[0]
+        if len(services) == 1
+        and any(word in lowered_text for word in ("price", "cost", "book", "service"))
+        else None
+    )
 
 
 def _match_faq_answer(lowered_text: str, faqs: list[dict[str, Any]]) -> str | None:
@@ -315,12 +338,16 @@ def _match_faq_answer(lowered_text: str, faqs: list[dict[str, Any]]) -> str | No
 
 
 def _human_handoff_text(escalation_contact: str) -> str:
-    suffix = f" You can also contact our team at {escalation_contact}." if escalation_contact else ""
+    suffix = (
+        f" You can also contact our team at {escalation_contact}." if escalation_contact else ""
+    )
     return f"Thanks for your message. I've marked this conversation for a team member to follow up with you shortly.{suffix}"
 
 
 def _medical_handoff_text(escalation_contact: str) -> str:
-    suffix = f" You can also contact our team at {escalation_contact}." if escalation_contact else ""
+    suffix = (
+        f" You can also contact our team at {escalation_contact}." if escalation_contact else ""
+    )
     return (
         "Thanks for your message. I can't provide diagnosis, emergency help, or medical advice over chat. "
         "If this is urgent, please contact local emergency services or a qualified professional right away."

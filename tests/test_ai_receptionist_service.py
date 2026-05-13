@@ -80,7 +80,9 @@ async def test_mock_ai_does_not_invent_missing_price() -> None:
         "faqs": [],
         "forbiddenClaims": [],
     }
-    decision = await service.generate_reply(_tenant(profile), profile, _conversation(), [], _message("What is the price for cleaning?"))
+    decision = await service.generate_reply(
+        _tenant(profile), profile, _conversation(), [], _message("What is the price for cleaning?")
+    )
     assert "confirm pricing" in decision.reply_text.lower()
     assert "$" not in decision.reply_text
 
@@ -96,7 +98,9 @@ async def test_mock_ai_booking_uses_booking_link() -> None:
         "faqs": [],
         "forbiddenClaims": [],
     }
-    decision = await service.generate_reply(_tenant(profile), profile, _conversation(), [], _message("I want to book"))
+    decision = await service.generate_reply(
+        _tenant(profile), profile, _conversation(), [], _message("I want to book")
+    )
     assert "https://booking.example.com" in decision.reply_text
     assert decision.should_handoff is False
 
@@ -135,6 +139,8 @@ async def test_mock_ai_handoffs_human_request() -> None:
         "faqs": [],
         "forbiddenClaims": [],
     }
-    decision = await service.generate_reply(_tenant(profile), profile, _conversation(), [], _message("I need a human agent"))
+    decision = await service.generate_reply(
+        _tenant(profile), profile, _conversation(), [], _message("I need a human agent")
+    )
     assert decision.should_handoff is True
     assert "+15550001111" in decision.reply_text

@@ -15,16 +15,18 @@ class ScrapedGroup(Base):
     """Metadata about scraped Telegram groups/channels."""
 
     __tablename__ = "scraped_groups"
-    __table_args__ = (
-        Index("ix_scraped_groups_type", "group_type"),
-    )
+    __table_args__ = (Index("ix_scraped_groups_type", "group_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tg_group_id: Mapped[int] = mapped_column(BigInteger, index=True, unique=True)
-    last_agent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
+    last_agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    group_type: Mapped[str] = mapped_column(String(32), default="group", index=True)  # group, channel, supergroup
+    group_type: Mapped[str] = mapped_column(
+        String(32), default="group", index=True
+    )  # group, channel, supergroup
     member_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -49,7 +51,9 @@ class ScrapedMessage(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
     tg_group_id: Mapped[int] = mapped_column(BigInteger)
     message_id: Mapped[int] = mapped_column(BigInteger)
     sender_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
@@ -57,8 +61,12 @@ class ScrapedMessage(Base):
     sender_first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     sender_last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     message_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    message_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    message_type: Mapped[str] = mapped_column(String(32), default="text", index=True)  # text, photo, video, document, etc.
+    message_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    message_type: Mapped[str] = mapped_column(
+        String(32), default="text", index=True
+    )  # text, photo, video, document, etc.
     media_file_id: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     media_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     reply_to_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
@@ -80,7 +88,9 @@ class ScrapedMember(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
     tg_group_id: Mapped[int] = mapped_column(BigInteger)
     tg_user_id: Mapped[int] = mapped_column(BigInteger)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -90,7 +100,9 @@ class ScrapedMember(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
-    role: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)  # creator, admin, member, restricted
+    role: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )  # creator, admin, member, restricted
     joined_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -106,7 +118,9 @@ class ScrapedConversation(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
     tg_group_id: Mapped[int] = mapped_column(BigInteger)
     root_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     root_message_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -115,8 +129,12 @@ class ScrapedConversation(Base):
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     participant_count: Mapped[int] = mapped_column(Integer, default=0)
     message_count: Mapped[int] = mapped_column(Integer, default=0)
-    first_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    first_message_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_message_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     is_topic: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -135,7 +153,9 @@ class ScrapedDailySummary(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     message_count: Mapped[int] = mapped_column(Integer, default=0)
     active_users: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -154,8 +174,12 @@ class GroupKnowledge(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
-    knowledge_type: Mapped[str] = mapped_column(String(32), index=True)  # faq, topic, entity, decision, trend, consensus
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
+    knowledge_type: Mapped[str] = mapped_column(
+        String(32), index=True
+    )  # faq, topic, entity, decision, trend, consensus
     title: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_message_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -176,14 +200,20 @@ class ScrapedLead(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scraped_group_id: Mapped[int] = mapped_column(ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True)
+    scraped_group_id: Mapped[int] = mapped_column(
+        ForeignKey("scraped_groups.id", ondelete="CASCADE"), index=True
+    )
     source_message_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     sender_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     sender_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    signal: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # buying_intent, contact_request, support_need, hiring, partnership
+    signal: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )  # buying_intent, contact_request, support_need, hiring, partnership
     excerpt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     contact_info: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default="new")  # new, contacted, converted, dismissed
+    status: Mapped[str] = mapped_column(
+        String(32), default="new"
+    )  # new, contacted, converted, dismissed
     confidence: Mapped[float] = mapped_column(default=0.5)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

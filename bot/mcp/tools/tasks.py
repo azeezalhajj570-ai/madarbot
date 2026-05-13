@@ -6,7 +6,6 @@ from mcp.types import ToolAnnotations
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -20,7 +19,6 @@ def register_task_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_task_catalog() -> str:
         """List available task types with their config schemas. Use this first to know what fields each task supports."""
@@ -35,9 +33,10 @@ def register_task_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
-    async def madarbot_list_tasks(group_id: int | None = None, tg_group_id: int | None = None) -> str:
+    async def madarbot_list_tasks(
+        group_id: int | None = None, tg_group_id: int | None = None
+    ) -> str:
         """List active task assignments for a group. Provide group_id (internal) OR tg_group_id (Telegram ID)."""
         ctx = resolve_mcp_context()
         if tg_group_id and not group_id:
@@ -59,7 +58,9 @@ def register_task_tools(server: FastMCP) -> None:
         async with SessionLocal() as session:
             service = TaskService(session, dispatch_agent_job=lambda **kw: None)
             try:
-                tasks = await service.list_assignments(actor_user_id=ctx.actor_user_id, group_id=group_id)
+                tasks = await service.list_assignments(
+                    actor_user_id=ctx.actor_user_id, group_id=group_id
+                )
                 result = success_response(
                     content=f"Found {len(tasks)} active task{'s' if len(tasks) != 1 else ''}",
                     data={"tasks": tasks, "total": len(tasks)},
@@ -75,7 +76,6 @@ def register_task_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_create_task(
         group_id: int | None = None,
@@ -224,7 +224,6 @@ def register_task_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_update_task(
         group_id: int | None = None,
@@ -252,9 +251,13 @@ def register_task_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
-
     )
-    async def madarbot_delete_task(group_id: int | None = None, tg_group_id: int | None = None, assignment_id: str = "", confirm: bool = False) -> str:
+    async def madarbot_delete_task(
+        group_id: int | None = None,
+        tg_group_id: int | None = None,
+        assignment_id: str = "",
+        confirm: bool = False,
+    ) -> str:
         """Delete a task assignment. Provide group_id OR tg_group_id. Requires confirmation and MCP_READONLY=false."""
         ctx = resolve_mcp_context()
         if ctx.readonly:
@@ -319,6 +322,7 @@ def register_task_tools(server: FastMCP) -> None:
 def _get_valid_task_keys() -> set[str]:
     try:
         from bot.automation.registry import build_default_registry
+
         registry = build_default_registry()
         return {d.key for d in registry.list()}
     except Exception:
@@ -329,6 +333,7 @@ async def _resolve_group_id(tg_group_id: int) -> int | None:
     from bot.agents.service import AgentService
     from bot.mcp.context import resolve_mcp_context
     from bot.services.group_service import canonical_tg_group_id
+
     ctx = resolve_mcp_context()
     async with SessionLocal() as session:
         service = AgentService(session)

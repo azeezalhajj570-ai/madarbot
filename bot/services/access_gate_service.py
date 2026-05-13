@@ -53,7 +53,9 @@ class AccessGateService:
         )
         await self.session.commit()
 
-    async def remove_required_group(self, protected_group_id: int, required_group_tg_id: int) -> None:
+    async def remove_required_group(
+        self, protected_group_id: int, required_group_tg_id: int
+    ) -> None:
         await self.session.execute(
             delete(GroupAccessRequirement).where(
                 GroupAccessRequirement.protected_group_id == protected_group_id,
@@ -74,7 +76,9 @@ class AccessGateService:
 def build_access_gate_notice(lang: str, required_group_titles: list[str]) -> str:
     lines = [t("access_gate_blocked", lang)]
     if required_group_titles:
-        lines.append(t("access_gate_required_groups", lang, groups=", ".join(required_group_titles)))
+        lines.append(
+            t("access_gate_required_groups", lang, groups=", ".join(required_group_titles))
+        )
     return "\n".join(lines)
 
 
@@ -86,11 +90,15 @@ def build_private_access_gate_notice(
 ) -> str:
     lines = [t("private_access_gate_blocked", lang, member=member_name or "Member")]
     if required_group_titles:
-        lines.append(t("access_gate_required_groups", lang, groups=", ".join(required_group_titles)))
+        lines.append(
+            t("access_gate_required_groups", lang, groups=", ".join(required_group_titles))
+        )
     return "\n".join(lines)
 
 
-def build_access_gate_buttons(required_groups: list[tuple[str, str]]) -> InlineKeyboardMarkup | None:
+def build_access_gate_buttons(
+    required_groups: list[tuple[str, str]],
+) -> InlineKeyboardMarkup | None:
     if not required_groups:
         return None
 

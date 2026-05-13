@@ -14,7 +14,13 @@ from bot.automation.agent_task_store import AgentTaskStore
 from bot.automation.conditions import ConditionEvaluator
 from bot.automation.engine import TaskEngine
 from bot.automation.executors import BotTaskExecutor
-from bot.automation.models import ActionTemplate, TaskAssignment, TaskCondition, TaskEvent, TaskTrigger
+from bot.automation.models import (
+    ActionTemplate,
+    TaskAssignment,
+    TaskCondition,
+    TaskEvent,
+    TaskTrigger,
+)
 from bot.automation.planners import RulesPlanner
 from bot.automation.registry import build_default_registry
 from bot.db.models import Agent, AgentJob, AgentLead, Group, GroupAdminRole, ModerationLog, User
@@ -109,7 +115,10 @@ async def test_task_engine_reply_message_supports_inline_url_buttons(fake_bot) -
 
     markup = results[0].output.get("reply_markup")
     assert isinstance(markup, InlineKeyboardMarkup)
-    assert [button.text for row in markup.inline_keyboard for button in row] == ["Dashboard", "Docs"]
+    assert [button.text for row in markup.inline_keyboard for button in row] == [
+        "Dashboard",
+        "Docs",
+    ]
     assert [button.url for row in markup.inline_keyboard for button in row] == [
         "https://example.com/dashboard",
         "https://example.com/docs",
@@ -126,7 +135,11 @@ async def test_task_engine_executes_lead_capture_module(fake_bot) -> None:
         task_key="lead_capture",
         executor_type="bot",
         conditions={"text_contains": "quote"},
-        config={"ack_template": "Thanks, we received your request.", "lead_label": "sales", "ask_contact": True},
+        config={
+            "ack_template": "Thanks, we received your request.",
+            "lead_label": "sales",
+            "ask_contact": True,
+        },
     )
 
     results = await engine.process(
@@ -147,7 +160,13 @@ async def test_task_engine_executes_lead_capture_module(fake_bot) -> None:
 def test_registry_contains_builtin_task_modules() -> None:
     registry = build_default_registry()
     keys = {definition.key for definition in registry.list()}
-    assert {"reply_message", "welcome_flow", "lead_capture", "escalation_alert", "notify_destination"} <= keys
+    assert {
+        "reply_message",
+        "welcome_flow",
+        "lead_capture",
+        "escalation_alert",
+        "notify_destination",
+    } <= keys
     notify_definition = registry.get("notify_destination")
     assert notify_definition.trigger_rule == TaskTrigger(event_name="message.received")
     assert notify_definition.action_template == ActionTemplate(
@@ -158,7 +177,12 @@ def test_registry_contains_builtin_task_modules() -> None:
 
 def test_condition_evaluator_matches_any_bulk_keyword() -> None:
     evaluator = ConditionEvaluator()
-    event = TaskEvent(name="message.received", group_id=-1001, user_id=50, payload={"text": "need urgent sev1 support"})
+    event = TaskEvent(
+        name="message.received",
+        group_id=-1001,
+        user_id=50,
+        payload={"text": "need urgent sev1 support"},
+    )
 
     assert evaluator.matches(event, {"text_contains_any": ["vip", "sev1"]}) is True
     assert evaluator.matches(event, {"text_contains": ["vip", "urgent"]}) is True
@@ -174,14 +198,22 @@ def test_rules_planner_builds_condition_and_action_templates() -> None:
         conditions={"text_contains": "help"},
         config={"message_template": "Support: {text}"},
     )
-    event = TaskEvent(name="message.received", group_id=-1001, user_id=50, payload={"text": "need help now"})
+    event = TaskEvent(
+        name="message.received", group_id=-1001, user_id=50, payload={"text": "need help now"}
+    )
 
-    plan = RulesPlanner().plan(task=registry.get("reply_message"), assignment=assignment, event=event)
+    plan = RulesPlanner().plan(
+        task=registry.get("reply_message"), assignment=assignment, event=event
+    )
 
     assert plan is not None
     assert plan.context.trigger == TaskTrigger(event_name="message.received")
-    assert plan.context.conditions == [TaskCondition(key="text_contains", value="help", operator="contains")]
-    assert plan.action_template == ActionTemplate(kind="send_runtime_message", metadata={"flow": "reply_message"})
+    assert plan.context.conditions == [
+        TaskCondition(key="text_contains", value="help", operator="contains")
+    ]
+    assert plan.action_template == ActionTemplate(
+        kind="send_runtime_message", metadata={"flow": "reply_message"}
+    )
 
 
 @pytest.mark.asyncio
@@ -193,7 +225,11 @@ async def test_task_engine_executes_notify_destination_module(fake_bot) -> None:
         task_key="notify_destination",
         executor_type="bot",
         conditions={"text_contains": "urgent"},
-        config={"message_template": "Alert: {text}", "destination": "123456", "delete_after_seconds": 30},
+        config={
+            "message_template": "Alert: {text}",
+            "destination": "123456",
+            "delete_after_seconds": 30,
+        },
     )
     delete_calls: list[tuple[int, int, int]] = []
 
@@ -203,12 +239,18 @@ async def test_task_engine_executes_notify_destination_module(fake_bot) -> None:
             name="message.received",
             group_id=-1008,
             user_id=42,
-            payload={"chat_id": -1008, "group_title": "QA Group", "text": "urgent ticket", "message_id": 81, "bot": fake_bot},
+            payload={
+                "chat_id": -1008,
+                "group_title": "QA Group",
+                "text": "urgent ticket",
+                "message_id": 81,
+                "bot": fake_bot,
+            },
         ),
         {
             "bot": BotTaskExecutor(
-                dispatch_delete_message=lambda *, delay_seconds, chat_id, message_id: delete_calls.append(
-                    (delay_seconds, chat_id, message_id)
+                dispatch_delete_message=lambda *, delay_seconds, chat_id, message_id: (
+                    delete_calls.append((delay_seconds, chat_id, message_id))
                 )
             )
         },
@@ -246,12 +288,18 @@ async def test_task_engine_can_forward_original_message_in_notify_destination(fa
             name="message.received",
             group_id=-1008,
             user_id=42,
-            payload={"chat_id": -1008, "group_title": "QA Group", "text": "urgent ticket", "message_id": 81, "bot": fake_bot},
+            payload={
+                "chat_id": -1008,
+                "group_title": "QA Group",
+                "text": "urgent ticket",
+                "message_id": 81,
+                "bot": fake_bot,
+            },
         ),
         {
             "bot": BotTaskExecutor(
-                dispatch_delete_message=lambda *, delay_seconds, chat_id, message_id: delete_calls.append(
-                    (delay_seconds, chat_id, message_id)
+                dispatch_delete_message=lambda *, delay_seconds, chat_id, message_id: (
+                    delete_calls.append((delay_seconds, chat_id, message_id))
                 )
             )
         },
@@ -282,7 +330,13 @@ async def test_task_engine_notify_destination_template_can_reference_group_title
             name="message.received",
             group_id=-1008,
             user_id=42,
-            payload={"chat_id": -1008, "group_title": "QA Group", "text": "urgent ticket", "message_id": 81, "bot": fake_bot},
+            payload={
+                "chat_id": -1008,
+                "group_title": "QA Group",
+                "text": "urgent ticket",
+                "message_id": 81,
+                "bot": fake_bot,
+            },
         ),
         {"bot": BotTaskExecutor()},
     )
@@ -332,7 +386,12 @@ def test_agent_task_store_loads_automation_task_from_job_payload() -> None:
             "task_key": "reply_message",
             "assignment_id": "assignment-4",
             "task_config": {"message_template": "Hello {user_id}"},
-            "event": {"name": "message.received", "group_id": -1005, "user_id": 42, "payload": {"message_id": 11}},
+            "event": {
+                "name": "message.received",
+                "group_id": -1005,
+                "user_id": 42,
+                "payload": {"message_id": 11},
+            },
         },
         status="pending",
     )
@@ -410,12 +469,19 @@ async def test_task_service_saves_bot_assignment_and_executes_on_group_message(
     await service.handle_message_event(
         group_id=group.id,
         user_id=user.tg_user_id,
-        payload={"text": "what is the price?", "message_id": 33, "bot": fake_bot, "contains_link": False},
+        payload={
+            "text": "what is the price?",
+            "message_id": 33,
+            "bot": fake_bot,
+            "contains_link": False,
+        },
     )
-    assert fake_bot.sent_messages == [(
-        group.id,
-        "Pricing team will reply soon.",
-    )]
+    assert fake_bot.sent_messages == [
+        (
+            group.id,
+            "Pricing team will reply soon.",
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -423,7 +489,9 @@ async def test_task_service_creates_agent_job_for_agent_assignment(db_session) -
     owner = User(tg_user_id=902, username="owner2", full_name="Owner 2", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100902, title="Agent Task Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100902, title="Agent Task Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -453,10 +521,19 @@ async def test_task_service_creates_agent_job_for_agent_assignment(db_session) -
     results = await service.handle_message_event(
         group_id=group.id,
         user_id=owner.tg_user_id,
-        payload={"text": "hello", "message_id": 55, "bot": SimpleNamespace(), "contains_link": False},
+        payload={
+            "text": "hello",
+            "message_id": 55,
+            "bot": SimpleNamespace(),
+            "contains_link": False,
+        },
     )
 
-    jobs = (await db_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))).scalars().all()
+    jobs = (
+        (await db_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id)))
+        .scalars()
+        .all()
+    )
     assert len(jobs) == 1
     assert jobs[0].job_type == "automation_task"
     dispatch_mock.assert_called_once_with(jobs[0].id)
@@ -468,8 +545,12 @@ async def test_task_service_rejects_agent_assignment_from_another_group(db_sessi
     owner = User(tg_user_id=908, username="owner8", full_name="Owner 8", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    source_group = Group(tg_group_id=-100908, title="Source Group", owner_user_id=owner.id, is_active=True)
-    target_group = Group(tg_group_id=-100909, title="Target Group", owner_user_id=owner.id, is_active=True)
+    source_group = Group(
+        tg_group_id=-100908, title="Source Group", owner_user_id=owner.id, is_active=True
+    )
+    target_group = Group(
+        tg_group_id=-100909, title="Target Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add_all([source_group, target_group])
     await db_session.flush()
     db_session.add_all(
@@ -527,13 +608,22 @@ async def test_task_service_persists_lead_capture_metadata(db_session, fake_bot)
     await service.handle_message_event(
         group_id=group.id,
         user_id=owner.tg_user_id,
-        payload={"chat_id": group.tg_group_id, "text": "need a quote", "message_id": 101, "bot": fake_bot},
+        payload={
+            "chat_id": group.tg_group_id,
+            "text": "need a quote",
+            "message_id": 101,
+            "bot": fake_bot,
+        },
     )
 
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == group.id))
-    ).scalars().all()
-    assert any(log.action == "lead_captured" and log.details.get("lead_label") == "sales" for log in logs)
+        (await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == group.id)))
+        .scalars()
+        .all()
+    )
+    assert any(
+        log.action == "lead_captured" and log.details.get("lead_label") == "sales" for log in logs
+    )
 
 
 @pytest.mark.asyncio
@@ -541,7 +631,9 @@ async def test_bot_executor_lead_capture_persists_agent_lead(db_session, fake_bo
     owner = User(tg_user_id=905, username="owner5", full_name="Owner 5", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100905, title="Bot Lead Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100905, title="Bot Lead Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -572,7 +664,11 @@ async def test_bot_executor_lead_capture_persists_agent_lead(db_session, fake_bo
         },
     )
 
-    leads = (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id))).scalars().all()
+    leads = (
+        (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id)))
+        .scalars()
+        .all()
+    )
     assert len(leads) == 1
     lead = leads[0]
     assert lead.lead_label == "support"
@@ -585,11 +681,15 @@ async def test_bot_executor_lead_capture_persists_agent_lead(db_session, fake_bo
 
 
 @pytest.mark.asyncio
-async def test_bot_executor_lead_capture_deduplicates_by_group_user_source(db_session, fake_bot) -> None:
+async def test_bot_executor_lead_capture_deduplicates_by_group_user_source(
+    db_session, fake_bot
+) -> None:
     owner = User(tg_user_id=906, username="owner6", full_name="Owner 6", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100906, title="Dedup Lead Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100906, title="Dedup Lead Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -614,9 +714,17 @@ async def test_bot_executor_lead_capture_deduplicates_by_group_user_source(db_se
         "bot": fake_bot,
     }
     await service.handle_message_event(group_id=group.id, user_id=401, payload=payload)
-    await service.handle_message_event(group_id=group.id, user_id=401, payload={**payload, "text": "second message", "message_id": 302})
+    await service.handle_message_event(
+        group_id=group.id,
+        user_id=401,
+        payload={**payload, "text": "second message", "message_id": 302},
+    )
 
-    leads = (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id))).scalars().all()
+    leads = (
+        (await db_session.execute(select(AgentLead).where(AgentLead.group_id == group.id)))
+        .scalars()
+        .all()
+    )
     assert len(leads) == 1
     assert leads[0].message_text == "second message"
     assert leads[0].source_message_id == 302
@@ -627,7 +735,9 @@ async def test_agent_lead_service_capture_lead_without_agent(db_session) -> None
     owner = User(tg_user_id=907, username="owner7", full_name="Owner 7", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100907, title="NoAgent Lead Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100907, title="NoAgent Lead Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.commit()
 
@@ -678,7 +788,9 @@ async def test_agent_task_runtime_dispatches_message_event_to_user_agent_executo
     owner = User(tg_user_id=903, username="owner3", full_name="Owner 3", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100903, title="Runtime Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100903, title="Runtime Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -698,7 +810,12 @@ async def test_agent_task_runtime_dispatches_message_event_to_user_agent_executo
         job_payload={
             "task_key": "reply_message",
             "task_config": {"message_template": "Runtime reply"},
-            "event": {"name": "message.received", "group_id": group.tg_group_id, "user_id": owner.tg_user_id, "payload": {"message_id": 99}},
+            "event": {
+                "name": "message.received",
+                "group_id": group.tg_group_id,
+                "user_id": owner.tg_user_id,
+                "payload": {"message_id": 99},
+            },
         },
         status="pending",
     )
@@ -712,7 +829,9 @@ async def test_agent_task_runtime_dispatches_message_event_to_user_agent_executo
     dispatched = await runtime.dispatch_job(job.id)
 
     async with session_factory() as verification_session:
-        stored = (await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
+        stored = (
+            await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))
+        ).scalar_one()
     assert dispatched is True
     assert stored.status == "completed"
     executor.execute.assert_awaited_once()
@@ -727,7 +846,9 @@ async def test_agent_task_runtime_passes_telegram_chat_id_to_user_agent_executor
     owner = User(tg_user_id=906, username="owner6", full_name="Owner 6", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100906, title="Runtime Chat Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100906, title="Runtime Chat Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -779,7 +900,9 @@ async def test_execute_agent_job_marks_failed_when_agent_session_is_unavailable(
     owner = User(tg_user_id=907, username="owner7", full_name="Owner 7", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100907, title="Worker Failure Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100907, title="Worker Failure Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -817,7 +940,9 @@ async def test_execute_agent_job_marks_failed_when_agent_session_is_unavailable(
     await execute_agent_job.fn(agent.id, job.id)
 
     async with session_factory() as verification_session:
-        stored = (await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
+        stored = (
+            await verification_session.execute(select(AgentJob).where(AgentJob.id == job.id))
+        ).scalar_one()
     assert stored.status == "failed"
     assert stored.job_payload["last_error"] == "Telegram client auth is not configured"
 
@@ -918,7 +1043,9 @@ async def test_execute_agent_job_marks_successful_automation_task_completed(
     fake_session = FakeSession()
     notifications: list[tuple[int, str]] = []
 
-    async def fake_create_job_notification(session, job, *, status: str, result=None, error=None) -> None:
+    async def fake_create_job_notification(
+        session, job, *, status: str, result=None, error=None
+    ) -> None:
         notifications.append((job.id, status))
 
     monkeypatch.setattr("bot.agents.worker.SessionLocal", FakeSessionFactory(fake_session))
@@ -1005,7 +1132,9 @@ async def test_scraper_runtime_passes_max_age_days_to_full_group_scrape(
     owner = User(tg_user_id=908, username="owner8", full_name="Owner 8", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-100908, title="Scraper Runtime Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-100908, title="Scraper Runtime Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -1032,7 +1161,9 @@ async def test_scraper_runtime_passes_max_age_days_to_full_group_scrape(
         }
 
     monkeypatch.setattr("bot.agents.runtime.SessionLocal", session_factory)
-    monkeypatch.setattr("bot.agents.runtime.ScraperService.scrape_full_group", fake_scrape_full_group)
+    monkeypatch.setattr(
+        "bot.agents.runtime.ScraperService.scrape_full_group", fake_scrape_full_group
+    )
 
     runtime = ScraperRuntime()
     result = await runtime.execute(
@@ -1183,7 +1314,9 @@ async def test_capture_lead_handles_existing_duplicates_gracefully(db_session) -
     owner = User(tg_user_id=9901, username="owner-dup", full_name="Owner Dup", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-1009901, title="Dup Test Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-1009901, title="Dup Test Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.commit()
 
@@ -1240,11 +1373,13 @@ async def test_capture_lead_handles_existing_duplicates_gracefully(db_session) -
     assert result.username == "updated_user"
 
     # Verify total count is still 2 (no new row inserted)
-    count = (await db_session.execute(
-        select(func.count(AgentLead.id)).where(
-            AgentLead.group_id == group.id,
-            AgentLead.tg_user_id == 6201,
-            AgentLead.source_group_tg_id == group.tg_group_id,
+    count = (
+        await db_session.execute(
+            select(func.count(AgentLead.id)).where(
+                AgentLead.group_id == group.id,
+                AgentLead.tg_user_id == 6201,
+                AgentLead.source_group_tg_id == group.tg_group_id,
+            )
         )
-    )).scalar_one()
+    ).scalar_one()
     assert count == 2

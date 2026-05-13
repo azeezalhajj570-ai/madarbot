@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -45,17 +45,31 @@ class ModerationSettingsUpdateRequest(BaseModel):
     enabled: bool | None = None
     safe_mode: bool | None = None
     dry_run: bool | None = None
-    default_action: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
+    default_action: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
     review_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     auto_delete_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     mute_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     ban_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
-    action_for_arabic_ads: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
-    action_for_investment_scam: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
-    action_for_crypto_scam: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
-    action_for_phishing_link: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
-    action_for_link_spam: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
-    action_for_repeated_promo: str | None = Field(default=None, pattern="^(allow|review|delete|warn|mute|ban)$")
+    action_for_arabic_ads: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
+    action_for_investment_scam: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
+    action_for_crypto_scam: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
+    action_for_phishing_link: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
+    action_for_link_spam: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
+    action_for_repeated_promo: str | None = Field(
+        default=None, pattern="^(allow|review|delete|warn|mute|ban)$"
+    )
     allowlisted_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
     allowlisted_user_ids: list[int] | None = None
@@ -94,7 +108,9 @@ class AgentSafetyUpdateRequest(BaseModel):
 
 
 class LeadUpdateRequest(BaseModel):
-    status: str | None = Field(default=None, pattern="^(new|contacted|interested|converted|junk|dismissed)$")
+    status: str | None = Field(
+        default=None, pattern="^(new|contacted|interested|converted|junk|dismissed)$"
+    )
     assigned_to: int | None = None
     contact_info: str | None = Field(default=None, max_length=512)
     notes: str | None = Field(default=None, max_length=5000)
@@ -218,7 +234,9 @@ def serialize_agent(agent: Agent) -> dict[str, Any]:
         "min_delay_seconds": agent.min_delay_seconds,
         "cooldown_minutes": agent.cooldown_minutes,
         "safety_mode_enabled": agent.safety_mode_enabled,
-        "safety_mode_until": agent.safety_mode_until.isoformat() if agent.safety_mode_until else None,
+        "safety_mode_until": agent.safety_mode_until.isoformat()
+        if agent.safety_mode_until
+        else None,
     }
 
 

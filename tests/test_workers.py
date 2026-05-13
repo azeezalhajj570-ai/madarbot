@@ -127,13 +127,17 @@ async def test_run_spam_analysis_warns_user_and_persists_warning(
     )
 
     warnings = (
-        await db_session.execute(
-            select(Warning).where(
-                Warning.group_id == seeded_group["group_id"],
-                Warning.user_id == target_user_id,
+        (
+            await db_session.execute(
+                select(Warning).where(
+                    Warning.group_id == seeded_group["group_id"],
+                    Warning.user_id == target_user_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(warnings) == 1
     assert warnings[0].count == 1
     assert fake_bot.sent_messages == [
@@ -179,10 +183,14 @@ async def test_run_spam_analysis_can_mute_spam_sender(
 
     assert fake_bot.muted_members == [(seeded_group["tg_group_id"], target_user_id)]
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "mute_spam_user" for log in logs)
 
 
@@ -323,10 +331,14 @@ async def test_run_spam_analysis_deletes_message_and_notifies_user(
         (seeded_group["tg_group_id"], build_rule_notice("en", "anti_spam_delete"))
     ]
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_spam" and log.details.get("message_id") == 601 for log in logs)
 
 
@@ -386,7 +398,15 @@ async def test_run_spam_analysis_removes_user_on_warning_limit(
     await SettingsService(db_session).set_value(seeded_group["group_id"], "warn_auto_remove", True)
     await SettingsService(db_session).set_value(seeded_group["group_id"], "warn_remove_limit", 2)
     target_user_id = 2005
-    db_session.add(Warning(group_id=seeded_group["group_id"], user_id=target_user_id, issued_by=None, reason="spam", count=1))
+    db_session.add(
+        Warning(
+            group_id=seeded_group["group_id"],
+            user_id=target_user_id,
+            issued_by=None,
+            reason="spam",
+            count=1,
+        )
+    )
     await db_session.commit()
 
     monkeypatch.setattr(tasks, "SessionLocal", session_factory)
@@ -415,13 +435,20 @@ async def test_run_spam_analysis_removes_user_on_warning_limit(
 
     assert fake_bot.banned_members == [(seeded_group["tg_group_id"], target_user_id)]
     assert fake_bot.sent_messages == [
-        (seeded_group["tg_group_id"], build_rule_notice("en", "warn_limit_remove", count=2, limit=2))
+        (
+            seeded_group["tg_group_id"],
+            build_rule_notice("en", "warn_limit_remove", count=2, limit=2),
+        )
     ]
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "remove_warn_limit" for log in logs)
 
 
@@ -434,7 +461,9 @@ async def test_run_spam_analysis_skips_group_admins(
     fake_bot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    db_session.add(GroupAdminRole(group_id=seeded_group["group_id"], user_id=2006, role="moderator"))
+    db_session.add(
+        GroupAdminRole(group_id=seeded_group["group_id"], user_id=2006, role="moderator")
+    )
     await db_session.commit()
 
     monkeypatch.setattr(tasks, "SessionLocal", session_factory)
@@ -462,21 +491,29 @@ async def test_run_spam_analysis_skips_group_admins(
     )
 
     warnings = (
-        await db_session.execute(
-            select(Warning).where(
-                Warning.group_id == seeded_group["group_id"],
-                Warning.user_id == 2006,
+        (
+            await db_session.execute(
+                select(Warning).where(
+                    Warning.group_id == seeded_group["group_id"],
+                    Warning.user_id == 2006,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(
-                ModerationLog.group_id == seeded_group["group_id"],
-                ModerationLog.target_user_id == 2006,
+        (
+            await db_session.execute(
+                select(ModerationLog).where(
+                    ModerationLog.group_id == seeded_group["group_id"],
+                    ModerationLog.target_user_id == 2006,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert warnings == []
     assert logs == []
@@ -517,32 +554,41 @@ async def test_on_group_message_logs_moderation_entry(
 
     await on_group_message(message, EventBus())
 
-    assert ("moderation_group_message_received", {
-        "chat_id": seeded_group["tg_group_id"],
-        "chat_type": "group",
-        "user_id": seeded_group["user_id"],
-        "message_id": 504,
-        "has_text": True,
-    }) in log_events
-    assert ("moderation_message_trace", {
-        "chat_id": seeded_group["tg_group_id"],
-        "chat_type": "group",
-        "user_id": seeded_group["user_id"],
-        "message_id": 504,
-        "text": "normal message",
-        "has_text": True,
-        "contains_link": False,
-        "entity_types": [],
-        "caption_entity_types": [],
-    }) in log_events
-    assert ("moderation_message_publish", {
-        "chat_id": seeded_group["tg_group_id"],
-        "chat_type": "group",
-        "user_id": seeded_group["user_id"],
-        "message_id": 504,
-        "contains_link": False,
-        "text": "normal message",
-    }) in log_events
+    assert (
+        "moderation_group_message_received",
+        {
+            "chat_id": seeded_group["tg_group_id"],
+            "chat_type": "group",
+            "user_id": seeded_group["user_id"],
+            "message_id": 504,
+            "has_text": True,
+        },
+    ) in log_events
+    assert (
+        "moderation_message_trace",
+        {
+            "chat_id": seeded_group["tg_group_id"],
+            "chat_type": "group",
+            "user_id": seeded_group["user_id"],
+            "message_id": 504,
+            "text": "normal message",
+            "has_text": True,
+            "contains_link": False,
+            "entity_types": [],
+            "caption_entity_types": [],
+        },
+    ) in log_events
+    assert (
+        "moderation_message_publish",
+        {
+            "chat_id": seeded_group["tg_group_id"],
+            "chat_type": "group",
+            "user_id": seeded_group["user_id"],
+            "message_id": 504,
+            "contains_link": False,
+            "text": "normal message",
+        },
+    ) in log_events
 
 
 @pytest.mark.asyncio
@@ -645,8 +691,14 @@ async def test_run_task_follow_up_sends_message_and_logs(
     )
 
     logs = (
-        await db_session.execute(select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"]))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert fake_bot.sent_messages == [(seeded_group["tg_group_id"], "Follow up")]
     assert any(log.action == "task_follow_up_sent" for log in logs)
 
@@ -665,7 +717,9 @@ async def test_run_task_follow_up_can_schedule_message_deletion(
     monkeypatch.setattr(
         tasks,
         "schedule_bot_message_delete",
-        lambda *, delay_seconds, chat_id, message_id: delete_calls.append((delay_seconds, chat_id, message_id)),
+        lambda *, delay_seconds, chat_id, message_id: delete_calls.append(
+            (delay_seconds, chat_id, message_id)
+        ),
     )
 
     await tasks._run_task_follow_up(
@@ -699,7 +753,9 @@ async def test_run_task_follow_up_delegates_bot_delivery_to_runtime_service(
 
     monkeypatch.setattr(tasks, "SessionLocal", session_factory)
     monkeypatch.setattr(tasks, "Bot", lambda token: fake_bot)
-    monkeypatch.setattr("bot.workers.tasks.AutomationRuntimeService.execute_task_follow_up", fake_execute)
+    monkeypatch.setattr(
+        "bot.workers.tasks.AutomationRuntimeService.execute_task_follow_up", fake_execute
+    )
 
     await tasks._run_task_follow_up(
         seeded_group["group_id"],
@@ -756,12 +812,16 @@ async def test_run_scheduled_announcement_sends_message_and_reschedules_cron(
     monkeypatch.setattr(
         tasks,
         "schedule_scheduled_announcement",
-        lambda *, delay_seconds, group_id, entry_id: reschedules.append((delay_seconds, group_id, entry_id)),
+        lambda *, delay_seconds, group_id, entry_id: reschedules.append(
+            (delay_seconds, group_id, entry_id)
+        ),
     )
     monkeypatch.setattr(
         tasks,
         "schedule_bot_message_delete",
-        lambda *, delay_seconds, chat_id, message_id: delete_calls.append((delay_seconds, chat_id, message_id)),
+        lambda *, delay_seconds, chat_id, message_id: delete_calls.append(
+            (delay_seconds, chat_id, message_id)
+        ),
     )
 
     await tasks._run_scheduled_announcement(seeded_group["group_id"], "announcement-1")
@@ -771,7 +831,9 @@ async def test_run_scheduled_announcement_sends_message_and_reschedules_cron(
     assert delete_calls == [(30, seeded_group["tg_group_id"], 1001)]
 
     async with session_factory() as session:
-        saved = await SettingsService(session).get_one(seeded_group["group_id"], "announcement_schedules")
+        saved = await SettingsService(session).get_one(
+            seeded_group["group_id"], "announcement_schedules"
+        )
     assert saved[0]["status"] == "pending"
     assert saved[0]["send_at"] == "2026-03-13T12:00"
 
@@ -812,7 +874,9 @@ async def test_run_scheduled_announcement_delegates_to_runtime_service(
     monkeypatch.setattr(tasks, "SessionLocal", session_factory)
     monkeypatch.setattr(tasks, "Bot", lambda token: fake_bot)
     monkeypatch.setattr(tasks, "datetime", FrozenDateTime)
-    monkeypatch.setattr("bot.workers.tasks.AutomationRuntimeService.execute_scheduled_announcement", fake_execute)
+    monkeypatch.setattr(
+        "bot.workers.tasks.AutomationRuntimeService.execute_scheduled_announcement", fake_execute
+    )
 
     await tasks._run_scheduled_announcement(seeded_group["group_id"], "announcement-runtime-1")
 
@@ -854,25 +918,31 @@ async def test_on_group_message_logs_text_link_entity_as_link(
 
     await on_group_message(message, EventBus())
 
-    assert ("moderation_message_trace", {
-        "chat_id": seeded_group["tg_group_id"],
-        "chat_type": "supergroup",
-        "user_id": seeded_group["user_id"],
-        "message_id": 505,
-        "text": "tap here",
-        "has_text": True,
-        "contains_link": True,
-        "entity_types": ["text_link"],
-        "caption_entity_types": [],
-    }) in log_events
-    assert ("moderation_message_publish", {
-        "chat_id": seeded_group["tg_group_id"],
-        "chat_type": "supergroup",
-        "user_id": seeded_group["user_id"],
-        "message_id": 505,
-        "contains_link": True,
-        "text": "tap here",
-    }) in log_events
+    assert (
+        "moderation_message_trace",
+        {
+            "chat_id": seeded_group["tg_group_id"],
+            "chat_type": "supergroup",
+            "user_id": seeded_group["user_id"],
+            "message_id": 505,
+            "text": "tap here",
+            "has_text": True,
+            "contains_link": True,
+            "entity_types": ["text_link"],
+            "caption_entity_types": [],
+        },
+    ) in log_events
+    assert (
+        "moderation_message_publish",
+        {
+            "chat_id": seeded_group["tg_group_id"],
+            "chat_type": "supergroup",
+            "user_id": seeded_group["user_id"],
+            "message_id": 505,
+            "contains_link": True,
+            "text": "tap here",
+        },
+    ) in log_events
 
 
 @pytest.mark.asyncio
@@ -916,10 +986,14 @@ async def test_integration_message_plugin_worker_db(
     )
 
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_link" for log in logs)
 
 
@@ -963,7 +1037,9 @@ async def test_anti_ads_sends_notice_after_deletion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     send_mock = Mock()
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", send_mock)
 
@@ -979,12 +1055,19 @@ async def test_anti_ads_sends_notice_after_deletion(
     await on_group_message(message, EventBus())
 
     assert message.log.deletes == [{"chat_id": seeded_group["tg_group_id"], "message_id": 506}]
-    assert fake_bot.sent_messages[-1] == (seeded_group["tg_group_id"], build_rule_notice("ar", "anti_ads"))
+    assert fake_bot.sent_messages[-1] == (
+        seeded_group["tg_group_id"],
+        build_rule_notice("ar", "anti_ads"),
+    )
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "delete_ad" for log in logs)
 
 
@@ -1004,7 +1087,9 @@ async def test_anti_ads_delete_delegates_to_runtime_facade(
         return {"status": "ok", "action": "delete_ad"}
 
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", Mock())
     monkeypatch.setattr(
         "bot.handlers.moderation.events.ModerationRuntimeService.enforce_flagged_message",
@@ -1039,7 +1124,9 @@ async def test_anti_ads_can_mute_sender_after_deletion(
 ) -> None:
     await SettingsService(db_session).set_value(seeded_group["group_id"], "anti_ads_mute", True)
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", Mock())
 
     message = fake_message_factory(
@@ -1055,10 +1142,14 @@ async def test_anti_ads_can_mute_sender_after_deletion(
 
     assert fake_bot.muted_members == [(seeded_group["tg_group_id"], seeded_group["user_id"])]
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert any(log.action == "mute_ad_user" for log in logs)
 
 
@@ -1073,9 +1164,13 @@ async def test_anti_ads_skips_group_admin_messages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", Mock())
-    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(status="administrator")
+    fake_bot.chat_members[(seeded_group["tg_group_id"], seeded_group["user_id"])] = SimpleNamespace(
+        status="administrator"
+    )
 
     message = fake_message_factory(
         chat_id=seeded_group["tg_group_id"],
@@ -1092,11 +1187,17 @@ async def test_anti_ads_skips_group_admin_messages(
     assert message.log.answers == []
     assert fake_bot.muted_members == []
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
-    assert not any(log.action == "delete_ad" and log.details.get("message_id") == 5071 for log in logs)
+        .scalars()
+        .all()
+    )
+    assert not any(
+        log.action == "delete_ad" and log.details.get("message_id") == 5071 for log in logs
+    )
 
 
 @pytest.mark.asyncio
@@ -1112,7 +1213,9 @@ async def test_anti_ads_respects_mute_threshold(
     await SettingsService(db_session).set_value(seeded_group["group_id"], "anti_ads_mute", True)
     await SettingsService(db_session).set_value(seeded_group["group_id"], "anti_ads_mute_limit", 2)
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", Mock())
 
     first = fake_message_factory(
@@ -1151,7 +1254,9 @@ async def test_anti_ads_toggle_disables_classifier_deletion(
     await SettingsService(db_session).set_value(seeded_group["group_id"], "anti_ads", False)
 
     classify = AsyncMock(return_value=SimpleNamespace(label="ad", ad_score=0.99))
-    monkeypatch.setattr("bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify))
+    monkeypatch.setattr(
+        "bot.handlers.moderation.events.ads_service", SimpleNamespace(classify=classify)
+    )
     send_mock = Mock()
     monkeypatch.setattr("bot.handlers.moderation.events.run_spam_analysis.send", send_mock)
 
@@ -1169,10 +1274,14 @@ async def test_anti_ads_toggle_disables_classifier_deletion(
     classify.assert_not_awaited()
     assert message.log.deletes == []
     logs = (
-        await db_session.execute(
-            select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+        (
+            await db_session.execute(
+                select(ModerationLog).where(ModerationLog.group_id == seeded_group["group_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert not any(log.action == "delete_ad" for log in logs)
 
 

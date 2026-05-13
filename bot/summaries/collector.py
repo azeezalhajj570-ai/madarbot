@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime
 from typing import Iterable
 from urllib.parse import urlparse
 import re
 
 from aiogram.types import Message
-from sqlalchemy import Select, and_, distinct, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,14 +21,86 @@ _LATIN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _ARABIC_RE = re.compile(r"[\u0600-\u06ff]+")
 _SPACE_RE = re.compile(r"\s+")
 _STOP_WORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "i", "in", "is", "it", "of",
-    "on", "or", "that", "the", "this", "to", "what", "when", "where", "why", "with", "you", "your",
-    "الى", "الى", "التي", "الذي", "الذين", "اليوم", "الى", "اذا", "الى", "في", "من", "على", "عن", "ما", "متى",
-    "كيف", "هل", "كم", "لم", "لن", "له", "لها", "هناك", "هذا", "هذه", "ذلك", "ثم", "او", "أو", "انا", "نحن",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "what",
+    "when",
+    "where",
+    "why",
+    "with",
+    "you",
+    "your",
+    "الى",
+    "الى",
+    "التي",
+    "الذي",
+    "الذين",
+    "اليوم",
+    "الى",
+    "اذا",
+    "الى",
+    "في",
+    "من",
+    "على",
+    "عن",
+    "ما",
+    "متى",
+    "كيف",
+    "هل",
+    "كم",
+    "لم",
+    "لن",
+    "له",
+    "لها",
+    "هناك",
+    "هذا",
+    "هذه",
+    "ذلك",
+    "ثم",
+    "او",
+    "أو",
+    "انا",
+    "نحن",
 }
 _QUESTION_WORDS = (
-    "how", "when", "where", "why", "what", "can", "does", "could", "is", "are",
-    "كيف", "متى", "أين", "اين", "لماذا", "هل", "كم", "ما",
+    "how",
+    "when",
+    "where",
+    "why",
+    "what",
+    "can",
+    "does",
+    "could",
+    "is",
+    "are",
+    "كيف",
+    "متى",
+    "أين",
+    "اين",
+    "لماذا",
+    "هل",
+    "كم",
+    "ما",
 )
 _SUSPICIOUS_ACTION_TERMS = ("spam", "scam", "ad")
 
@@ -103,7 +175,9 @@ def _topic_candidates(messages: Iterable[ActivityMessageSample]) -> list[str]:
     return topics
 
 
-def _question_lists(messages: list[ActivityMessageSample], admin_user_ids: set[int]) -> tuple[list[str], list[str], list[str]]:
+def _question_lists(
+    messages: list[ActivityMessageSample], admin_user_ids: set[int]
+) -> tuple[list[str], list[str], list[str]]:
     question_counts: Counter[str] = Counter()
     first_seen_text: dict[str, str] = {}
     unanswered: list[str] = []
@@ -133,7 +207,9 @@ def _question_lists(messages: list[ActivityMessageSample], admin_user_ids: set[i
             unanswered.append(key)
 
     important_questions = [first_seen_text[key] for key, _count in question_counts.most_common(5)]
-    repeated_questions = [first_seen_text[key] for key, count in question_counts.most_common(5) if count > 1]
+    repeated_questions = [
+        first_seen_text[key] for key, count in question_counts.most_common(5) if count > 1
+    ]
     unanswered_questions = [first_seen_text[key] for key in unanswered[:5]]
     return important_questions, unanswered_questions, repeated_questions
 
@@ -143,9 +219,13 @@ def _build_recommendations(report: DailyActivityReport) -> list[str]:
     if report.unanswered_questions:
         recommendations.append("Review unanswered questions and add a pinned FAQ or direct reply.")
     if report.suspicious_messages_count:
-        recommendations.append(f"Review {report.suspicious_messages_count} suspicious or spam-related incidents.")
+        recommendations.append(
+            f"Review {report.suspicious_messages_count} suspicious or spam-related incidents."
+        )
     if report.repeated_questions:
-        recommendations.append("Document repeated questions in a reusable admin answer or pinned post.")
+        recommendations.append(
+            "Document repeated questions in a reusable admin answer or pinned post."
+        )
     if report.links_count >= 10:
         recommendations.append("Check frequently shared links and pin the trusted resources.")
     return recommendations[:4]
@@ -169,16 +249,24 @@ async def record_group_message_activity(
         "has_link": bool(domains),
         "link_domains": domains,
         "is_question": is_question_text(text),
-        "is_forwarded": bool(getattr(message, "forward_date", None) or getattr(message, "forward_origin", None)),
-        "reply_to_message_id": getattr(getattr(message, "reply_to_message", None), "message_id", None),
+        "is_forwarded": bool(
+            getattr(message, "forward_date", None) or getattr(message, "forward_origin", None)
+        ),
+        "reply_to_message_id": getattr(
+            getattr(message, "reply_to_message", None), "message_id", None
+        ),
         "created_at": datetime.utcnow(),
     }
-    bind = getattr(session, "bind", None) or getattr(getattr(session, "_session", None), "bind", None)
+    bind = getattr(session, "bind", None) or getattr(
+        getattr(session, "_session", None), "bind", None
+    )
     dialect_name = bind.dialect.name if bind is not None else "sqlite"
     insert_builder = pg_insert if dialect_name == "postgresql" else sqlite_insert
     stmt = insert_builder(GroupMessageActivity.__table__).values(payload)
     await session.execute(
-        stmt.on_conflict_do_nothing(index_elements=[GroupMessageActivity.group_id, GroupMessageActivity.message_id])
+        stmt.on_conflict_do_nothing(
+            index_elements=[GroupMessageActivity.group_id, GroupMessageActivity.message_id]
+        )
     )
 
 
@@ -190,11 +278,38 @@ async def collect_group_activity(
     end_at: datetime,
     max_message_samples: int,
 ) -> DailyActivityReport:
-    time_filter = and_(GroupMessageActivity.group_id == group_id, GroupMessageActivity.created_at >= start_at, GroupMessageActivity.created_at < end_at)
+    time_filter = and_(
+        GroupMessageActivity.group_id == group_id,
+        GroupMessageActivity.created_at >= start_at,
+        GroupMessageActivity.created_at < end_at,
+    )
 
-    total_messages = int((await session.execute(select(func.count(GroupMessageActivity.id)).where(time_filter))).scalar_one() or 0)
-    active_users_count = int((await session.execute(select(func.count(distinct(GroupMessageActivity.user_id))).where(time_filter, GroupMessageActivity.user_id.is_not(None)))).scalar_one() or 0)
-    links_count = int((await session.execute(select(func.count(GroupMessageActivity.id)).where(time_filter, GroupMessageActivity.has_link.is_(True)))).scalar_one() or 0)
+    total_messages = int(
+        (
+            await session.execute(select(func.count(GroupMessageActivity.id)).where(time_filter))
+        ).scalar_one()
+        or 0
+    )
+    active_users_count = int(
+        (
+            await session.execute(
+                select(func.count(distinct(GroupMessageActivity.user_id))).where(
+                    time_filter, GroupMessageActivity.user_id.is_not(None)
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    links_count = int(
+        (
+            await session.execute(
+                select(func.count(GroupMessageActivity.id)).where(
+                    time_filter, GroupMessageActivity.has_link.is_(True)
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
 
     top_user_rows = (
         await session.execute(
@@ -205,24 +320,34 @@ async def collect_group_activity(
             )
             .where(time_filter, GroupMessageActivity.user_id.is_not(None))
             .group_by(GroupMessageActivity.user_id)
-            .order_by(func.count(GroupMessageActivity.id).desc(), GroupMessageActivity.user_id.asc())
+            .order_by(
+                func.count(GroupMessageActivity.id).desc(), GroupMessageActivity.user_id.asc()
+            )
             .limit(5)
         )
     ).all()
     top_users = [
-        {"user_id": int(row.user_id), "username": row.username, "message_count": int(row.message_count)}
+        {
+            "user_id": int(row.user_id),
+            "username": row.username,
+            "message_count": int(row.message_count),
+        }
         for row in top_user_rows
         if row.user_id is not None
     ]
 
     sample_rows = (
-        await session.execute(
-            select(GroupMessageActivity)
-            .where(time_filter)
-            .order_by(GroupMessageActivity.created_at.asc(), GroupMessageActivity.id.asc())
-            .limit(max_message_samples)
+        (
+            await session.execute(
+                select(GroupMessageActivity)
+                .where(time_filter)
+                .order_by(GroupMessageActivity.created_at.asc(), GroupMessageActivity.id.asc())
+                .limit(max_message_samples)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     messages = [
         ActivityMessageSample(
             message_id=int(row.message_id),
@@ -234,13 +359,23 @@ async def collect_group_activity(
             link_domains=[str(item) for item in row.link_domains or []],
             is_question=bool(row.is_question),
             is_forwarded=bool(row.is_forwarded),
-            reply_to_message_id=int(row.reply_to_message_id) if row.reply_to_message_id is not None else None,
+            reply_to_message_id=int(row.reply_to_message_id)
+            if row.reply_to_message_id is not None
+            else None,
             created_at=row.created_at,
         )
         for row in sample_rows
     ]
 
-    admin_ids = set((await session.execute(select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group_id))).scalars().all())
+    admin_ids = set(
+        (
+            await session.execute(
+                select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     owner_tg_id = (
         await session.execute(
             select(User.tg_user_id)
@@ -251,12 +386,22 @@ async def collect_group_activity(
     if owner_tg_id is not None:
         admin_ids.add(int(owner_tg_id))
 
-    important_questions, unanswered_questions, repeated_questions = _question_lists(messages, admin_ids)
+    important_questions, unanswered_questions, repeated_questions = _question_lists(
+        messages, admin_ids
+    )
 
     moderation_rows = (
         await session.execute(
-            select(ModerationLog.action, ModerationLog.reason, func.count(ModerationLog.id).label("count"))
-            .where(ModerationLog.group_id == group_id, ModerationLog.created_at >= start_at, ModerationLog.created_at < end_at)
+            select(
+                ModerationLog.action,
+                ModerationLog.reason,
+                func.count(ModerationLog.id).label("count"),
+            )
+            .where(
+                ModerationLog.group_id == group_id,
+                ModerationLog.created_at >= start_at,
+                ModerationLog.created_at < end_at,
+            )
             .group_by(ModerationLog.action, ModerationLog.reason)
             .order_by(func.count(ModerationLog.id).desc(), ModerationLog.action.asc())
         )
@@ -266,7 +411,9 @@ async def collect_group_activity(
         for row in moderation_rows
         if any(term in str(row.action).lower() for term in _SUSPICIOUS_ACTION_TERMS)
     )
-    deleted_messages_count = sum(int(row.count) for row in moderation_rows if str(row.action).lower().startswith("delete_"))
+    deleted_messages_count = sum(
+        int(row.count) for row in moderation_rows if str(row.action).lower().startswith("delete_")
+    )
     moderation_highlights = [
         f"{row.action.replace('_', ' ')}: {int(row.count)}"
         if not row.reason

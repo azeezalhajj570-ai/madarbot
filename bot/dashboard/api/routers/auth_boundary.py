@@ -31,7 +31,9 @@ def _normalize_app_boundary(value: str | None) -> AppKind | None:
         return None
     if normalized in {"admin", "agents"}:
         return normalized
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-App-Boundary header")
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-App-Boundary header"
+    )
 
 
 async def get_app_boundary(
@@ -103,7 +105,9 @@ async def email_password_login(
     payload: EmailPasswordLoginRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    return await email_login_payload(email=payload.email, password=payload.password, session=session)
+    return await email_login_payload(
+        email=payload.email, password=payload.password, session=session
+    )
 
 
 @router.post("/auth/miniapp/token")
@@ -113,7 +117,9 @@ async def miniapp_token(
     app_boundary: AppKind | None = Depends(get_app_boundary),
 ) -> dict[str, Any]:
     init_data = str(payload.get("init_data") or "")
-    return await miniapp_token_payload(session=session, init_data=init_data, app_boundary=app_boundary)
+    return await miniapp_token_payload(
+        session=session, init_data=init_data, app_boundary=app_boundary
+    )
 
 
 @router.post("/auth/miniapp-login")
@@ -123,7 +129,9 @@ async def miniapp_login_compat(
     app_boundary: AppKind | None = Depends(get_app_boundary),
 ) -> dict[str, Any]:
     init_data = str(payload.get("init_data") or "")
-    return await miniapp_token_payload(session=session, init_data=init_data, app_boundary=app_boundary)
+    return await miniapp_token_payload(
+        session=session, init_data=init_data, app_boundary=app_boundary
+    )
 
 
 @router.get("/auth/me")

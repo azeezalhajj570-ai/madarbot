@@ -80,7 +80,9 @@ class SemanticSearchService:
                             return result
         return None
 
-    def _result_from_mapping(self, payload: dict[str, Any], *, raw: dict[str, Any]) -> SemanticSearchResult | None:
+    def _result_from_mapping(
+        self, payload: dict[str, Any], *, raw: dict[str, Any]
+    ) -> SemanticSearchResult | None:
         text = self._first_string(
             payload,
             "answer",

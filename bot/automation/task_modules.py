@@ -34,7 +34,14 @@ def _normalize_destination(value: Any) -> int | str:
 
 def _normalize_notify_delivery_mode(value: Any) -> str:
     mode = str(value or "text").strip().lower()
-    valid_modes = {"text", "forward", "copy", "text_and_forward", "text_and_copy", "approval_request"}
+    valid_modes = {
+        "text",
+        "forward",
+        "copy",
+        "text_and_forward",
+        "text_and_copy",
+        "approval_request",
+    }
     if mode not in valid_modes:
         raise ValueError("delivery_mode is invalid")
     return mode
@@ -149,7 +156,11 @@ async def escalation_alert_handler(config: dict[str, Any], event: TaskEvent) -> 
         "text": text,
         "reply_to_message_id": event.payload.get("message_id"),
         "metadata": {"capture_type": "escalation_alert"},
-        **({"delete_after_seconds": int(config.get("delete_after_seconds") or 0)} if int(config.get("delete_after_seconds") or 0) > 0 else {}),
+        **(
+            {"delete_after_seconds": int(config.get("delete_after_seconds") or 0)}
+            if int(config.get("delete_after_seconds") or 0) > 0
+            else {}
+        ),
     }
 
 
@@ -161,16 +172,22 @@ async def notify_destination_handler(config: dict[str, Any], event: TaskEvent) -
     approval_requested = delivery_mode == "approval_request" or bool(suggested_reply_template)
     if approval_requested:
         if not suggested_reply_template:
-            raise ValueError("suggested_reply_template is required for approval_request delivery mode")
+            raise ValueError(
+                "suggested_reply_template is required for approval_request delivery mode"
+            )
         if event.user_id is None:
-            raise ValueError("A sender user_id is required for approval-based destination notifications")
+            raise ValueError(
+                "A sender user_id is required for approval-based destination notifications"
+            )
         sender_name = (
             str(event.payload.get("full_name") or "").strip()
             or str(event.payload.get("first_name") or "").strip()
             or str(event.payload.get("username") or "").strip()
             or str(event.user_id)
         )
-        source_group_title = str(event.payload.get("group_title") or "").strip() or f"Group {event.group_id}"
+        source_group_title = (
+            str(event.payload.get("group_title") or "").strip() or f"Group {event.group_id}"
+        )
         original_message = str(event.payload.get("text") or "").strip() or "[No message text]"
         private_reply_text = _render_template(suggested_reply_template, event)
         prompt_sections: list[str] = []
@@ -200,7 +217,8 @@ async def notify_destination_handler(config: dict[str, Any], event: TaskEvent) -
         return {
             "approval_request": {
                 "chat_id": destination,
-                "prompt_text": "\n\n".join(prompt_sections) + "\n\nApprove sending this private reply?",
+                "prompt_text": "\n\n".join(prompt_sections)
+                + "\n\nApprove sending this private reply?",
                 "private_reply_text": private_reply_text,
                 "target_user_id": event.user_id,
                 "source_group_title": source_group_title,
@@ -243,7 +261,11 @@ async def notify_destination_handler(config: dict[str, Any], event: TaskEvent) -
     if requires_text:
         rendered_text = _render_template(template, event)
         should_prefix_group_title = source_group_title and "{group_title}" not in template
-        result["text"] = f"[{source_group_title}] {rendered_text}" if should_prefix_group_title else rendered_text
+        result["text"] = (
+            f"[{source_group_title}] {rendered_text}"
+            if should_prefix_group_title
+            else rendered_text
+        )
     if delivery_mode in {"forward", "text_and_forward"}:
         result["forward_from_chat_id"] = source_chat_id
         result["forward_message_id"] = source_message_id
@@ -302,7 +324,9 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
             },
             handler=reply_message_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),
-            action_template=ActionTemplate(kind="send_runtime_message", metadata={"flow": "reply_message"}),
+            action_template=ActionTemplate(
+                kind="send_runtime_message", metadata={"flow": "reply_message"}
+            ),
         ),
         TaskDefinition(
             key="welcome_flow",
@@ -328,7 +352,9 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
             },
             handler=welcome_flow_handler,
             trigger_rule=TaskTrigger(event_name="member.joined"),
-            action_template=ActionTemplate(kind="send_runtime_message", metadata={"flow": "welcome_flow"}),
+            action_template=ActionTemplate(
+                kind="send_runtime_message", metadata={"flow": "welcome_flow"}
+            ),
         ),
         TaskDefinition(
             key="lead_capture",
@@ -354,7 +380,9 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
             },
             handler=lead_capture_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),
-            action_template=ActionTemplate(kind="send_runtime_message", metadata={"flow": "lead_capture"}),
+            action_template=ActionTemplate(
+                kind="send_runtime_message", metadata={"flow": "lead_capture"}
+            ),
         ),
         TaskDefinition(
             key="escalation_alert",
@@ -375,7 +403,9 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
             },
             handler=escalation_alert_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),
-            action_template=ActionTemplate(kind="send_runtime_message", metadata={"flow": "escalation_alert"}),
+            action_template=ActionTemplate(
+                kind="send_runtime_message", metadata={"flow": "escalation_alert"}
+            ),
         ),
         TaskDefinition(
             key="notify_destination",
@@ -406,6 +436,8 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
             },
             handler=notify_destination_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),
-            action_template=ActionTemplate(kind="send_runtime_message", metadata={"flow": "notify_destination"}),
+            action_template=ActionTemplate(
+                kind="send_runtime_message", metadata={"flow": "notify_destination"}
+            ),
         ),
     ]

@@ -168,7 +168,9 @@ class MessagingService:
         tenant = await self._ensure_tenant_for_user(user)
         return MessagingAuthContext(user=user, tenant=tenant, access_token=token)
 
-    async def authenticate_telegram(self, init_data: str | None, app_boundary: str | None = None) -> MessagingAuthContext:
+    async def authenticate_telegram(
+        self, init_data: str | None, app_boundary: str | None = None
+    ) -> MessagingAuthContext:
         identity = self._resolve_telegram_identity(init_data, app_boundary=app_boundary)
         user = await self._get_user_by_telegram_id(identity.user_id)
         if user is None:
@@ -211,9 +213,15 @@ class MessagingService:
         normalized = identifier.strip().lower()
         user = await self._get_user_by_email(normalized)
         if user is None:
-            result = await self.session.execute(select(User).where(func.lower(func.coalesce(User.username, "")) == normalized))
+            result = await self.session.execute(
+                select(User).where(func.lower(func.coalesce(User.username, "")) == normalized)
+            )
             user = result.scalar_one_or_none()
-        if user is None or not user.password_hash or not hmac.compare_digest(user.password_hash, self._hash_password(password)):
+        if (
+            user is None
+            or not user.password_hash
+            or not hmac.compare_digest(user.password_hash, self._hash_password(password))
+        ):
             raise MessagingAuthError("Invalid credentials")
         tenant = await self._ensure_tenant_for_user(user)
         token = self._create_token_for_user(user)
@@ -252,7 +260,9 @@ class MessagingService:
         return list(
             (
                 await self.session.execute(
-                    select(ChannelAccount).where(ChannelAccount.tenant_id == tenant_id).order_by(ChannelAccount.id)
+                    select(ChannelAccount)
+                    .where(ChannelAccount.tenant_id == tenant_id)
+                    .order_by(ChannelAccount.id)
                 )
             ).scalars()
         )
@@ -325,7 +335,9 @@ class MessagingService:
         await self.session.commit()
 
     async def get_channel(self, tenant_id: int, channel_id: int) -> ChannelAccount:
-        result = await self.session.execute(select(ChannelAccount).where(ChannelAccount.id == channel_id))
+        result = await self.session.execute(
+            select(ChannelAccount).where(ChannelAccount.id == channel_id)
+        )
         channel = result.scalar_one_or_none()
         if channel is None or channel.tenant_id != tenant_id:
             raise MessagingAuthError("Channel not found")
@@ -354,7 +366,9 @@ class MessagingService:
 
     async def get_channel_status(self, tenant_id: int, channel_id: int) -> ChannelAccount:
         channel = await self.get_channel(tenant_id, channel_id)
-        if not (self.evolution.enabled and channel.type == "whatsapp" and channel.external_account_id):
+        if not (
+            self.evolution.enabled and channel.type == "whatsapp" and channel.external_account_id
+        ):
             return channel
         try:
             state = await self.evolution.get_instance_status(channel)
@@ -382,8 +396,12 @@ class MessagingService:
             ).scalars()
         )
 
-    async def get_conversation(self, tenant_id: int, conversation_id: int) -> tuple[Conversation, list[Message]]:
-        result = await self.session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    async def get_conversation(
+        self, tenant_id: int, conversation_id: int
+    ) -> tuple[Conversation, list[Message]]:
+        result = await self.session.execute(
+            select(Conversation).where(Conversation.id == conversation_id)
+        )
         conversation = result.scalar_one_or_none()
         if conversation is None or conversation.tenant_id != tenant_id:
             raise MessagingAuthError("Conversation not found")
@@ -391,7 +409,9 @@ class MessagingService:
             (
                 await self.session.execute(
                     select(Message)
-                    .where(Message.conversation_id == conversation_id, Message.tenant_id == tenant_id)
+                    .where(
+                        Message.conversation_id == conversation_id, Message.tenant_id == tenant_id
+                    )
                     .order_by(Message.created_at.asc(), Message.id.asc())
                 )
             ).scalars()
@@ -476,7 +496,9 @@ class MessagingService:
         self.session.add(message)
         self._touch_conversation(conversation, text=text, inbound=False)
         channel = await self.get_channel(tenant_id, conversation.channel_account_id)
-        delivery = await self._deliver_outbound_message(channel=channel, contact=contact, text=text, source="miniapp")
+        delivery = await self._deliver_outbound_message(
+            channel=channel, contact=contact, text=text, source="miniapp"
+        )
         message.status = delivery["status"]
         message.external_message_id = delivery.get("messageId")
         message.raw_payload = {"source": "miniapp", "delivery": delivery}
@@ -488,7 +510,9 @@ class MessagingService:
 
     async def handoff_conversation(self, tenant_id: int, conversation_id: int) -> Conversation:
         conversation = await self._require_conversation(tenant_id, conversation_id)
-        await self._mark_conversation_needs_human(conversation, preview_text=conversation.latest_message_text)
+        await self._mark_conversation_needs_human(
+            conversation, preview_text=conversation.latest_message_text
+        )
         await self.session.commit()
         await self.session.refresh(conversation)
         return conversation
@@ -497,7 +521,9 @@ class MessagingService:
         return list(
             (
                 await self.session.execute(
-                    select(Lead).where(Lead.tenant_id == tenant_id).order_by(Lead.updated_at.desc(), Lead.id.desc())
+                    select(Lead)
+                    .where(Lead.tenant_id == tenant_id)
+                    .order_by(Lead.updated_at.desc(), Lead.id.desc())
                 )
             ).scalars()
         )
@@ -527,13 +553,19 @@ class MessagingService:
         return list(
             (
                 await self.session.execute(
-                    select(Automation).where(Automation.tenant_id == tenant_id).order_by(Automation.id)
+                    select(Automation)
+                    .where(Automation.tenant_id == tenant_id)
+                    .order_by(Automation.id)
                 )
             ).scalars()
         )
 
-    async def update_automation(self, tenant_id: int, automation_id: int, patch: dict[str, Any]) -> Automation:
-        result = await self.session.execute(select(Automation).where(Automation.id == automation_id))
+    async def update_automation(
+        self, tenant_id: int, automation_id: int, patch: dict[str, Any]
+    ) -> Automation:
+        result = await self.session.execute(
+            select(Automation).where(Automation.id == automation_id)
+        )
         automation = result.scalar_one_or_none()
         if automation is None or automation.tenant_id != tenant_id:
             raise MessagingAuthError("Automation not found")
@@ -551,7 +583,9 @@ class MessagingService:
         await self.session.commit()
         return list((await self.session.execute(select(Skill).order_by(Skill.id))).scalars())
 
-    async def run_skill(self, tenant_id: int, skill_identifier: str, conversation_id: int | None = None) -> SkillRun:
+    async def run_skill(
+        self, tenant_id: int, skill_identifier: str, conversation_id: int | None = None
+    ) -> SkillRun:
         skill = await self._resolve_skill(skill_identifier)
         skill_run = SkillRun(
             tenant_id=tenant_id,
@@ -577,14 +611,22 @@ class MessagingService:
         notification_counts = await self.notifications.count_events_by_status(tenant_id)
         messages = list(
             (
-                await self.session.execute(
-                    select(Message).where(Message.tenant_id == tenant_id)
-                )
+                await self.session.execute(select(Message).where(Message.tenant_id == tenant_id))
             ).scalars()
         )
-        connected_channels = sum(1 for channel in channels if channel.type == "whatsapp" and channel.status == "connected")
-        pending_or_connected = any(channel.type == "whatsapp" and channel.status in {"connected", "pending"} for channel in channels)
-        ai_receptionist_enabled = any(automation.slug == "ai-receptionist" and automation.enabled for automation in automations)
+        connected_channels = sum(
+            1
+            for channel in channels
+            if channel.type == "whatsapp" and channel.status == "connected"
+        )
+        pending_or_connected = any(
+            channel.type == "whatsapp" and channel.status in {"connected", "pending"}
+            for channel in channels
+        )
+        ai_receptionist_enabled = any(
+            automation.slug == "ai-receptionist" and automation.enabled
+            for automation in automations
+        )
         has_business_profile = bool((tenant.business_profile or {}).get("businessName"))
         missing: list[str] = []
         if not has_business_profile:
@@ -598,23 +640,34 @@ class MessagingService:
         return {
             "connectedWhatsAppNumbers": connected_channels,
             "conversationsToday": sum(
-                1 for conversation in conversations if conversation.last_message_at and conversation.last_message_at.date() == today
+                1
+                for conversation in conversations
+                if conversation.last_message_at and conversation.last_message_at.date() == today
             ),
             "newLeadsToday": sum(1 for lead in leads if lead.created_at.date() == today),
-            "handoffsNeeded": sum(1 for conversation in conversations if conversation.status == "needs_human"),
+            "handoffsNeeded": sum(
+                1 for conversation in conversations if conversation.status == "needs_human"
+            ),
             "activeAutomations": sum(1 for automation in automations if automation.enabled),
             "pendingNotifications": notification_counts.get("pending", 0),
             "failedNotifications": notification_counts.get("failed", 0),
-            "needsHumanConversations": sum(1 for conversation in conversations if conversation.status == "needs_human"),
+            "needsHumanConversations": sum(
+                1 for conversation in conversations if conversation.status == "needs_human"
+            ),
             "draftMessages": sum(1 for message in messages if message.status == "draft"),
             "connectedChannels": connected_channels,
-            "disconnectedChannels": sum(1 for channel in channels if channel.status == "disconnected"),
+            "disconnectedChannels": sum(
+                1 for channel in channels if channel.status == "disconnected"
+            ),
             "readiness": {
                 "hasBusinessProfile": has_business_profile,
                 "hasConnectedWhatsApp": pending_or_connected,
                 "hasNotificationSettings": notification_settings is not None,
                 "hasAiReceptionistEnabled": ai_receptionist_enabled,
-                "readyForLiveTest": has_business_profile and pending_or_connected and notification_settings is not None and ai_receptionist_enabled,
+                "readyForLiveTest": has_business_profile
+                and pending_or_connected
+                and notification_settings is not None
+                and ai_receptionist_enabled,
                 "missing": missing,
             },
         }
@@ -643,7 +696,9 @@ class MessagingService:
         await self.session.commit()
         return result
 
-    async def ingest_evolution_webhook(self, tenant_id: int, channel_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    async def ingest_evolution_webhook(
+        self, tenant_id: int, channel_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         channel = await self.get_channel(tenant_id, channel_id)
         channel.status = "connected"
         channel.last_synced_at = datetime.utcnow()
@@ -675,7 +730,9 @@ class MessagingService:
             self.evolution.validate_webhook_secret(webhook_secret)
         except EvolutionWebhookAuthError as exc:
             raise MessagingWebhookAuthError(str(exc)) from exc
-        result = await self.session.execute(select(ChannelAccount).where(ChannelAccount.id == channel_id))
+        result = await self.session.execute(
+            select(ChannelAccount).where(ChannelAccount.id == channel_id)
+        )
         channel = result.scalar_one_or_none()
         if channel is None:
             raise MessagingAuthError("Channel not found")
@@ -703,7 +760,12 @@ class MessagingService:
             )
             existing_message = existing_result.scalar_one_or_none()
             if existing_message is not None:
-                return {"ok": True, "ignored": True, "duplicate": True, "conversationId": str(existing_message.conversation_id)}
+                return {
+                    "ok": True,
+                    "ignored": True,
+                    "duplicate": True,
+                    "conversationId": str(existing_message.conversation_id),
+                }
         contact = await self._get_or_create_contact(
             tenant_id=tenant_id,
             channel_account=channel_account,
@@ -742,7 +804,9 @@ class MessagingService:
         lead = None
         lead_created = False
         if any(keyword in lower_text for keyword in BOOKING_INTENT_WORDS):
-            lead, lead_created = await self._get_or_create_lead(tenant_id=tenant_id, conversation=conversation, contact=contact, text=text)
+            lead, lead_created = await self._get_or_create_lead(
+                tenant_id=tenant_id, conversation=conversation, contact=contact, text=text
+            )
             if lead_created:
                 await self.notifications.notify_new_lead(tenant_id, lead)
 
@@ -769,7 +833,9 @@ class MessagingService:
         return bool(automation.enabled) if automation else False
 
     async def _get_automation(self, tenant_id: int, slug: str) -> Automation | None:
-        result = await self.session.execute(select(Automation).where(Automation.tenant_id == tenant_id, Automation.slug == slug))
+        result = await self.session.execute(
+            select(Automation).where(Automation.tenant_id == tenant_id, Automation.slug == slug)
+        )
         return result.scalar_one_or_none()
 
     async def _get_or_create_contact(
@@ -857,7 +923,9 @@ class MessagingService:
                 conversation = result.scalar_one()
         return conversation
 
-    async def _get_or_create_lead(self, *, tenant_id: int, conversation: Conversation, contact: Contact, text: str) -> tuple[Lead, bool]:
+    async def _get_or_create_lead(
+        self, *, tenant_id: int, conversation: Conversation, contact: Contact, text: str
+    ) -> tuple[Lead, bool]:
         result = await self.session.execute(
             select(Lead).where(
                 Lead.tenant_id == tenant_id,
@@ -915,16 +983,24 @@ class MessagingService:
             return skill
         automation = None
         if identifier.isdigit():
-            result = await self.session.execute(select(Automation).where(Automation.id == int(identifier)))
+            result = await self.session.execute(
+                select(Automation).where(Automation.id == int(identifier))
+            )
             automation = result.scalar_one_or_none()
         if automation is not None:
-            result = await self.session.execute(select(Skill).where(or_(Skill.slug == automation.slug, Skill.name == automation.name)))
+            result = await self.session.execute(
+                select(Skill).where(
+                    or_(Skill.slug == automation.slug, Skill.name == automation.name)
+                )
+            )
             skill = result.scalar_one_or_none()
             if skill is not None:
                 return skill
         raise MessagingAuthError("Skill not found")
 
-    async def _create_skill_run(self, tenant_id: int, skill_identifier: str, conversation_id: int | None = None) -> SkillRun:
+    async def _create_skill_run(
+        self, tenant_id: int, skill_identifier: str, conversation_id: int | None = None
+    ) -> SkillRun:
         skill = await self._resolve_skill(skill_identifier)
         skill_run = SkillRun(
             tenant_id=tenant_id,
@@ -939,7 +1015,9 @@ class MessagingService:
         return skill_run
 
     async def _require_conversation(self, tenant_id: int, conversation_id: int) -> Conversation:
-        result = await self.session.execute(select(Conversation).where(Conversation.id == conversation_id))
+        result = await self.session.execute(
+            select(Conversation).where(Conversation.id == conversation_id)
+        )
         conversation = result.scalar_one_or_none()
         if conversation is None or conversation.tenant_id != tenant_id:
             raise MessagingAuthError("Conversation not found")
@@ -960,12 +1038,15 @@ class MessagingService:
         return tenant
 
     async def _ensure_tenant_for_user(self, user: User) -> Tenant:
-        result = await self.session.execute(select(Tenant).where(Tenant.owner_user_id == user.id).order_by(Tenant.id))
+        result = await self.session.execute(
+            select(Tenant).where(Tenant.owner_user_id == user.id).order_by(Tenant.id)
+        )
         tenant = result.scalar_one_or_none()
         if tenant is None:
             tenant = Tenant(
                 owner_user_id=user.id,
-                name=(user.full_name or user.username or user.email or "My Business").strip() or "My Business",
+                name=(user.full_name or user.username or user.email or "My Business").strip()
+                or "My Business",
                 business_profile=DEFAULT_BUSINESS_PROFILE.copy(),
             )
             self.session.add(tenant)
@@ -978,7 +1059,9 @@ class MessagingService:
         existing = {
             automation.slug: automation
             for automation in (
-                await self.session.execute(select(Automation).where(Automation.tenant_id == tenant.id))
+                await self.session.execute(
+                    select(Automation).where(Automation.tenant_id == tenant.id)
+                )
             ).scalars()
         }
         created = False
@@ -991,7 +1074,13 @@ class MessagingService:
                     if merged_config != current_config:
                         existing[item["slug"]].config = merged_config
                 continue
-            self.session.add(Automation(tenant_id=tenant.id, **item, config=self._default_automation_config(item["slug"])))
+            self.session.add(
+                Automation(
+                    tenant_id=tenant.id,
+                    **item,
+                    config=self._default_automation_config(item["slug"]),
+                )
+            )
             created = True
         if created:
             await self.session.flush()
@@ -1033,7 +1122,9 @@ class MessagingService:
         }
 
         if decision.should_handoff:
-            await self._mark_conversation_needs_human(conversation, preview_text=inbound_message.text)
+            await self._mark_conversation_needs_human(
+                conversation, preview_text=inbound_message.text
+            )
         elif await self._should_auto_send_ai_reply(automation, channel_account):
             raw_payload["autoSendRequested"] = True
             delivery = await self._deliver_outbound_message(
@@ -1045,7 +1136,9 @@ class MessagingService:
             status = delivery["status"]
             raw_payload["delivery"] = delivery
             if status == "failed":
-                await self._mark_conversation_needs_human(conversation, preview_text=decision.reply_text)
+                await self._mark_conversation_needs_human(
+                    conversation, preview_text=decision.reply_text
+                )
 
         ai_message = Message(
             tenant_id=tenant_id,
@@ -1060,12 +1153,16 @@ class MessagingService:
         )
         self.session.add(ai_message)
 
-    async def _list_recent_messages(self, conversation_id: int, tenant_id: int, limit: int = 8) -> list[Message]:
+    async def _list_recent_messages(
+        self, conversation_id: int, tenant_id: int, limit: int = 8
+    ) -> list[Message]:
         messages = list(
             (
                 await self.session.execute(
                     select(Message)
-                    .where(Message.conversation_id == conversation_id, Message.tenant_id == tenant_id)
+                    .where(
+                        Message.conversation_id == conversation_id, Message.tenant_id == tenant_id
+                    )
                     .order_by(Message.created_at.desc(), Message.id.desc())
                     .limit(limit)
                 )
@@ -1079,7 +1176,9 @@ class MessagingService:
                 setattr(lead, key, patch[key])
         lead.updated_at = datetime.utcnow()
 
-    async def _should_auto_send_ai_reply(self, automation: Automation, channel_account: ChannelAccount) -> bool:
+    async def _should_auto_send_ai_reply(
+        self, automation: Automation, channel_account: ChannelAccount
+    ) -> bool:
         automation_config = automation.config or {}
         channel_config = channel_account.credentials_encrypted or {}
         if "aiAutoSend" in channel_config:
@@ -1096,12 +1195,16 @@ class MessagingService:
             "handoffKeywords": list(HUMAN_HANDOFF_WORDS),
         }
 
-    async def _mark_conversation_needs_human(self, conversation: Conversation, *, preview_text: str | None = None) -> None:
+    async def _mark_conversation_needs_human(
+        self, conversation: Conversation, *, preview_text: str | None = None
+    ) -> None:
         already_needs_human = conversation.status == "needs_human"
         conversation.status = "needs_human"
         conversation.updated_at = datetime.utcnow()
         if not already_needs_human:
-            await self.notifications.notify_needs_human(conversation.tenant_id, conversation, preview_text=preview_text)
+            await self.notifications.notify_needs_human(
+                conversation.tenant_id, conversation, preview_text=preview_text
+            )
 
     async def _deliver_outbound_message(
         self,
@@ -1119,7 +1222,12 @@ class MessagingService:
                     text=text,
                 )
             except EvolutionApiError as exc:
-                return {"provider": "evolution", "status": "failed", "error": str(exc), "source": source}
+                return {
+                    "provider": "evolution",
+                    "status": "failed",
+                    "error": str(exc),
+                    "source": source,
+                }
             return {
                 "provider": delivery.get("provider", "evolution"),
                 "instance": delivery.get("instance"),
@@ -1163,10 +1271,14 @@ class MessagingService:
         return result.scalar_one_or_none()
 
     async def _get_user_by_email(self, email: str) -> User | None:
-        result = await self.session.execute(select(User).where(func.lower(func.coalesce(User.email, "")) == email.strip().lower()))
+        result = await self.session.execute(
+            select(User).where(func.lower(func.coalesce(User.email, "")) == email.strip().lower())
+        )
         return result.scalar_one_or_none()
 
-    def _resolve_telegram_identity(self, init_data: str | None, app_boundary: str | None = None) -> TelegramWebAppIdentity:
+    def _resolve_telegram_identity(
+        self, init_data: str | None, app_boundary: str | None = None
+    ) -> TelegramWebAppIdentity:
         if init_data:
             return verify_telegram_init_data_identity(init_data)
 
@@ -1206,12 +1318,16 @@ class MessagingService:
             auth_date=int(datetime.utcnow().timestamp()),
             raw={"auth_type": "session"},
         )
-        return create_dashboard_jwt(identity, expires_in_seconds=self.settings.dashboard_jwt_exp_seconds)
+        return create_dashboard_jwt(
+            identity, expires_in_seconds=self.settings.dashboard_jwt_exp_seconds
+        )
 
     def _hash_password(self, password: str) -> str:
         secret = self.settings.dashboard_jwt_secret or self.settings.bot_token
         if not secret:
-            raise RuntimeError("Cannot hash password: no dashboard_jwt_secret or bot_token configured")
+            raise RuntimeError(
+                "Cannot hash password: no dashboard_jwt_secret or bot_token configured"
+            )
         return hashlib.sha256(secret.encode("utf-8") + password.encode("utf-8")).hexdigest()
 
     def _full_name(self, first_name: str | None, last_name: str | None) -> str | None:
@@ -1241,10 +1357,22 @@ class MessagingService:
 
     def _normalize_evolution_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-        event = str(payload.get("event") or data.get("event") or "").lower() if isinstance(data, dict) else ""
+        event = (
+            str(payload.get("event") or data.get("event") or "").lower()
+            if isinstance(data, dict)
+            else ""
+        )
         message = data.get("message") if isinstance(data.get("message"), dict) else data
-        nested_message = message.get("message") if isinstance(message, dict) and isinstance(message.get("message"), dict) else None
-        key = message.get("key") if isinstance(message, dict) and isinstance(message.get("key"), dict) else {}
+        nested_message = (
+            message.get("message")
+            if isinstance(message, dict) and isinstance(message.get("message"), dict)
+            else None
+        )
+        key = (
+            message.get("key")
+            if isinstance(message, dict) and isinstance(message.get("key"), dict)
+            else {}
+        )
         from_me = bool(
             key.get("fromMe")
             or (data.get("fromMe") if isinstance(data, dict) else False)
@@ -1262,7 +1390,11 @@ class MessagingService:
             or (data.get("sender") if isinstance(data, dict) else None)
             or "unknown-contact"
         )
-        phone = external_contact_id.replace("@s.whatsapp.net", "") if isinstance(external_contact_id, str) else None
+        phone = (
+            external_contact_id.replace("@s.whatsapp.net", "")
+            if isinstance(external_contact_id, str)
+            else None
+        )
         contact_name = (
             (data.get("pushName") if isinstance(data, dict) else None)
             or (data.get("senderName") if isinstance(data, dict) else None)
@@ -1281,7 +1413,9 @@ class MessagingService:
             "external_message_id": str(external_message_id) if external_message_id else None,
         }
 
-    def _extract_evolution_text(self, message: dict[str, Any] | Any, nested_message: dict[str, Any] | None) -> str | None:
+    def _extract_evolution_text(
+        self, message: dict[str, Any] | Any, nested_message: dict[str, Any] | None
+    ) -> str | None:
         candidates: list[Any] = []
         if isinstance(message, dict):
             candidates.extend(

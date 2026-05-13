@@ -24,7 +24,10 @@ class PrivateAccessRequirementService:
         requested = list(dict.fromkeys(int(value) for value in required_group_tg_ids))
         await self.session.execute(delete(PrivateAccessRequirement))
         self.session.add_all(
-            [PrivateAccessRequirement(required_group_tg_id=tg_group_id) for tg_group_id in requested]
+            [
+                PrivateAccessRequirement(required_group_tg_id=tg_group_id)
+                for tg_group_id in requested
+            ]
         )
         await self.session.commit()
         return requested

@@ -103,7 +103,9 @@ async def add_user_to_group(
     except UserAlreadyParticipantError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USER_ALREADY_IN_GROUP)
     except UserPrivacyRestrictedError:
-        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USER_PRIVACY_RESTRICTED)
+        return _failure(
+            group_id=group_id, user_id=user_id, error_code=ERROR_USER_PRIVACY_RESTRICTED
+        )
     except FloodWaitError as exc:
         return _failure(
             group_id=group_id,

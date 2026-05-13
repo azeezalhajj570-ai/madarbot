@@ -10,6 +10,7 @@ from bot.db.models.moderation import ModerationSetting
 
 logger = logging.getLogger(__name__)
 
+
 async def execute_moderation_action(
     session: Any,
     bot: Bot,
@@ -35,7 +36,7 @@ async def execute_moderation_action(
         return "dry_run"
 
     runtime = ModerationRuntimeService(session)
-    
+
     try:
         if action == ModerationAction.DELETE:
             await runtime.enforce_flagged_message(
@@ -51,15 +52,16 @@ async def execute_moderation_action(
                     metadata={
                         "category": decision.category,
                         "matched_signals": decision.matched_signals,
-                    }
+                    },
                 ),
-                bot=bot
+                bot=bot,
             )
             return "deleted"
-        
+
         elif action == ModerationAction.WARN:
             # Reusing enforce_flagged_warning logic
             from bot.core.runtime.moderation import FlaggedWarningModerationRequest
+
             if user_id:
                 await runtime.enforce_flagged_warning(
                     FlaggedWarningModerationRequest(
@@ -75,24 +77,24 @@ async def execute_moderation_action(
                             "category": decision.category,
                             "matched_signals": decision.matched_signals,
                             "message_id": message_id,
-                        }
+                        },
                     ),
-                    bot=bot
+                    bot=bot,
                 )
             return "warned"
-        
+
         elif action == ModerationAction.MUTE:
             # We can use apply_action for direct mute
             if user_id:
                 await runtime.apply_action(
                     group_id=group_id,
-                    actor_user_id=None, # System action
+                    actor_user_id=None,  # System action
                     user_id=user_id,
                     action="mute",
                     reason=f"{decision.category}: {decision.reason}",
                 )
             return "muted"
-        
+
         elif action == ModerationAction.BAN:
             if user_id:
                 await runtime.apply_action(
@@ -103,7 +105,7 @@ async def execute_moderation_action(
                     reason=f"{decision.category}: {decision.reason}",
                 )
             return "banned"
-        
+
         elif action == ModerationAction.REVIEW:
             # Already logged as "review" status in events table
             return "review"

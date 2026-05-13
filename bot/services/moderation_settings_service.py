@@ -17,7 +17,7 @@ class ModerationSettingsService:
             settings = ModerationSetting(group_id=group_id)
             self.session.add(settings)
             await self.session.flush()
-        
+
         return {
             "enabled": settings.enabled,
             "safe_mode": settings.safe_mode,
@@ -49,7 +49,7 @@ class ModerationSettingsService:
         for key, value in data.items():
             if value is not None and hasattr(settings, key):
                 setattr(settings, key, value)
-        
+
         await self.session.commit()
         return await self.get_settings(group_id)
 

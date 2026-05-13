@@ -23,7 +23,9 @@ class TelegramWebAppIdentity:
 
 
 def _build_data_check_string(values: dict[str, str]) -> str:
-    return "\n".join(f"{key}={value}" for key, value in sorted(values.items(), key=lambda item: item[0]))
+    return "\n".join(
+        f"{key}={value}" for key, value in sorted(values.items(), key=lambda item: item[0])
+    )
 
 
 def validate_init_data(
@@ -43,7 +45,9 @@ def validate_init_data(
 
     data_check_string = _build_data_check_string(parsed)
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-    expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+    expected_hash = hmac.new(
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
     if not hmac.compare_digest(expected_hash, incoming_hash):
         raise TelegramWebAppAuthError("Invalid Telegram init data signature")
 
@@ -77,4 +81,3 @@ def validate_init_data(
         auth_date=auth_date,
         raw=parsed,
     )
-

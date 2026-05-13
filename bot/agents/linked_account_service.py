@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import LinkedAccountIdentity
 from bot.core.event_bus import EventBus
-from bot.db.models import Agent, Group, GroupAdminRole
-from bot.services.group_service import GroupService, upsert_group
+from bot.db.models import Agent, GroupAdminRole
+from bot.services.group_service import upsert_group
 
 from .phone import normalize_optional_agent_phone_number
 from .service_support import AgentServiceSupport
@@ -37,13 +37,17 @@ class LinkedAccountService(AgentServiceSupport):
             group_id = await self.ensure_agents_workspace_group(actor_user_id=actor_user_id)
 
         existing = (
-            await self.session.execute(
-                select(Agent).where(
-                    Agent.linked_by_user_id == actor_user_id,
-                    Agent.external_account_id == normalized_account_id,
+            (
+                await self.session.execute(
+                    select(Agent).where(
+                        Agent.linked_by_user_id == actor_user_id,
+                        Agent.external_account_id == normalized_account_id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
             if existing.auth_state in {"pending_auth", "pending_code", "pending_2fa", "failed"}:
                 existing.phone_number = normalized_phone_number or existing.phone_number
@@ -54,13 +58,17 @@ class LinkedAccountService(AgentServiceSupport):
             raise ValueError("Agent account is already linked")
         if normalized_phone_number:
             existing_phone = (
-                await self.session.execute(
-                    select(Agent).where(
-                        Agent.phone_number == normalized_phone_number,
-                        Agent.linked_by_user_id == actor_user_id,
+                (
+                    await self.session.execute(
+                        select(Agent).where(
+                            Agent.phone_number == normalized_phone_number,
+                            Agent.linked_by_user_id == actor_user_id,
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if existing_phone:
                 raise ValueError("Phone number is already linked for this subscription")
 
@@ -105,26 +113,37 @@ class LinkedAccountService(AgentServiceSupport):
         normalized_phone_number = normalize_optional_agent_phone_number(phone_number)
 
         existing = (
-            await self.session.execute(
-                select(Agent).where(
-                    Agent.group_id == agent.group_id,
-                    Agent.external_account_id == normalized_account_id,
-                    Agent.id != agent.id,
+            (
+                await self.session.execute(
+                    select(Agent).where(
+                        Agent.group_id == agent.group_id,
+                        Agent.external_account_id == normalized_account_id,
+                        Agent.id != agent.id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing:
             raise ValueError("Agent account is already linked for this group")
         if normalized_phone_number:
             existing_phone = (
-                await self.session.execute(
-                    select(Agent).where(
-                        Agent.phone_number == normalized_phone_number,
-                        Agent.id != agent.id,
-                        or_(Agent.group_id == agent.group_id, Agent.linked_by_user_id == actor_user_id),
+                (
+                    await self.session.execute(
+                        select(Agent).where(
+                            Agent.phone_number == normalized_phone_number,
+                            Agent.id != agent.id,
+                            or_(
+                                Agent.group_id == agent.group_id,
+                                Agent.linked_by_user_id == actor_user_id,
+                            ),
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if existing_phone:
                 raise ValueError("Phone number is already linked for this subscription")
 
@@ -167,6 +186,7 @@ class LinkedAccountService(AgentServiceSupport):
         )
         if group_id is not None:
             from sqlalchemy import or_
+
             stmt = stmt.where(or_(Agent.group_id == group_id, Agent.group_id.is_(None)))
         return list((await self.session.execute(stmt)).scalars())
 
@@ -200,7 +220,9 @@ class LinkedAccountService(AgentServiceSupport):
             return None
         return self._to_identity(agent)
 
-    async def list_linked_account_identities(self, *, actor_user_id: int, group_id: int) -> list[LinkedAccountIdentity]:
+    async def list_linked_account_identities(
+        self, *, actor_user_id: int, group_id: int
+    ) -> list[LinkedAccountIdentity]:
         agents = await self.list_agents(actor_user_id=actor_user_id, group_id=group_id)
         return [self._to_identity(agent) for agent in agents]
 

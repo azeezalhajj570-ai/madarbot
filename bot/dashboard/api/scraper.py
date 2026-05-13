@@ -8,17 +8,32 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.agents.jobs import SCRAPER_FULL_GROUP_JOB_TYPE, SCRAPER_GROUP_INFO_JOB_TYPE, SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_MESSAGES_JOB_TYPE
+from bot.agents.jobs import (
+    SCRAPER_FULL_GROUP_JOB_TYPE,
+    SCRAPER_GROUP_INFO_JOB_TYPE,
+    SCRAPER_MEMBERS_JOB_TYPE,
+    SCRAPER_MESSAGES_JOB_TYPE,
+)
 from bot.agents.dispatch import dispatch_agent_job
-from bot.config import get_settings
-from bot.db.models import Agent, AgentJob, Group, GroupKnowledge, ScrapedConversation, ScrapedDailySummary, ScrapedGroup, ScrapedLead, ScrapedMember, ScrapedMessage
+from bot.db.models import (
+    Agent,
+    AgentJob,
+    Group,
+    GroupKnowledge,
+    ScrapedConversation,
+    ScrapedDailySummary,
+    ScrapedGroup,
+    ScrapedLead,
+    ScrapedMember,
+    ScrapedMessage,
+)
 from bot.db.session import get_session
 from bot.agents.service import AgentService
 from bot.services.group_service import canonical_tg_group_id, tg_group_id_candidates
 from bot.services.permission_service import PermissionService
 from bot.services.scraper_service import ScraperService
 from bot.dashboard.api.auth import extract_dashboard_identity
-from bot.services.telegram_webapp_auth import TelegramWebAppAuthError, TelegramWebAppIdentity
+from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 from datetime import datetime
 
 router = APIRouter(prefix="/webapp/scraper", tags=["scraper"])
@@ -76,7 +91,9 @@ async def _ensure_agent_access(
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    can_manage = await PermissionService(session).can(agent.group_id, identity.user_id, "group.settings.update")
+    can_manage = await PermissionService(session).can(
+        agent.group_id, identity.user_id, "group.settings.update"
+    )
     if not can_manage:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     return agent
@@ -90,15 +107,23 @@ async def _ensure_scraped_group_access(
 ) -> None:
     candidate_group_ids = tg_group_id_candidates(int(scraped_group.tg_group_id))
     groups = (
-        await session.execute(select(Group).where(Group.tg_group_id.in_(candidate_group_ids)))
-    ).scalars().all()
+        (await session.execute(select(Group).where(Group.tg_group_id.in_(candidate_group_ids))))
+        .scalars()
+        .all()
+    )
     if not groups:
         if scraped_group.last_agent_id is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapped managed group not found")
-        active_agents = await AgentService(session).list_all_active_agents(actor_user_id=identity.user_id)
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Mapped managed group not found"
+            )
+        active_agents = await AgentService(session).list_all_active_agents(
+            actor_user_id=identity.user_id
+        )
         if any(int(agent.id) == int(scraped_group.last_agent_id) for agent in active_agents):
             return
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapped managed group not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mapped managed group not found"
+        )
 
     permission_service = PermissionService(session)
     canonical_id = canonical_tg_group_id(int(scraped_group.tg_group_id))
@@ -111,7 +136,9 @@ async def _ensure_scraped_group_access(
         ),
     )
     for group in ordered_groups:
-        can_manage = await permission_service.can(group.id, identity.user_id, "group.settings.update")
+        can_manage = await permission_service.can(
+            group.id, identity.user_id, "group.settings.update"
+        )
         if can_manage:
             return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
@@ -297,7 +324,9 @@ async def list_scraped_groups(
     filtered_groups: list[tuple[ScrapedGroup, int, int]] = []
     for group, members_total, messages_total in rows:
         try:
-            await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
+            await _ensure_scraped_group_access(
+                scraped_group=group, session=session, identity=identity
+            )
         except HTTPException:
             continue
         filtered_groups.append((group, int(members_total or 0), int(messages_total or 0)))
@@ -328,7 +357,9 @@ async def get_scraped_group(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Get details of a scraped group."""
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -356,10 +387,14 @@ async def get_scraped_members(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Get scraped members of a group."""
-    scraped_group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    scraped_group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if scraped_group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped group not found")
-    await _ensure_scraped_group_access(scraped_group=scraped_group, session=session, identity=identity)
+    await _ensure_scraped_group_access(
+        scraped_group=scraped_group, session=session, identity=identity
+    )
 
     offset = (page - 1) * page_size
 
@@ -374,7 +409,9 @@ async def get_scraped_members(
     members = result.scalars().all()
 
     # Get total count
-    count_stmt = select(func.count(ScrapedMember.id)).where(ScrapedMember.scraped_group_id == group_id)
+    count_stmt = select(func.count(ScrapedMember.id)).where(
+        ScrapedMember.scraped_group_id == group_id
+    )
     total = int((await session.execute(count_stmt)).scalar_one() or 0)
 
     return {
@@ -410,10 +447,14 @@ async def get_scraped_messages(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     """Get scraped messages of a group."""
-    scraped_group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    scraped_group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if scraped_group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped group not found")
-    await _ensure_scraped_group_access(scraped_group=scraped_group, session=session, identity=identity)
+    await _ensure_scraped_group_access(
+        scraped_group=scraped_group, session=session, identity=identity
+    )
 
     offset = (page - 1) * page_size
 
@@ -428,7 +469,9 @@ async def get_scraped_messages(
     messages = result.scalars().all()
 
     # Get total count
-    count_stmt = select(func.count(ScrapedMessage.id)).where(ScrapedMessage.scraped_group_id == group_id)
+    count_stmt = select(func.count(ScrapedMessage.id)).where(
+        ScrapedMessage.scraped_group_id == group_id
+    )
     total = int((await session.execute(count_stmt)).scalar_one() or 0)
 
     return {
@@ -465,33 +508,52 @@ async def list_scraped_conversations(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     offset = (page - 1) * page_size
-    total = (await session.execute(select(func.count(ScrapedConversation.id)).where(
-        ScrapedConversation.scraped_group_id == group_id,
-    ))).scalar_one()
-    rows = (await session.execute(
-        select(ScrapedConversation).where(
-            ScrapedConversation.scraped_group_id == group_id,
-        ).order_by(desc(ScrapedConversation.last_message_at)).offset(offset).limit(page_size)
-    )).scalars().all()
+    total = (
+        await session.execute(
+            select(func.count(ScrapedConversation.id)).where(
+                ScrapedConversation.scraped_group_id == group_id,
+            )
+        )
+    ).scalar_one()
+    rows = (
+        (
+            await session.execute(
+                select(ScrapedConversation)
+                .where(
+                    ScrapedConversation.scraped_group_id == group_id,
+                )
+                .order_by(desc(ScrapedConversation.last_message_at))
+                .offset(offset)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
-        "conversations": [{
-            "id": c.id,
-            "root_message_id": c.root_message_id,
-            "title": c.title,
-            "root_sender_name": c.root_sender_name,
-            "participant_count": c.participant_count,
-            "message_count": c.message_count,
-            "first_message_at": c.first_message_at.isoformat() if c.first_message_at else None,
-            "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
-            "is_topic": c.is_topic,
-        } for c in rows],
+        "conversations": [
+            {
+                "id": c.id,
+                "root_message_id": c.root_message_id,
+                "title": c.title,
+                "root_sender_name": c.root_sender_name,
+                "participant_count": c.participant_count,
+                "message_count": c.message_count,
+                "first_message_at": c.first_message_at.isoformat() if c.first_message_at else None,
+                "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
+                "is_topic": c.is_topic,
+            }
+            for c in rows
+        ],
     }
 
 
@@ -502,31 +564,48 @@ async def get_conversation_messages(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> list[dict[str, Any]]:
-    conv = (await session.execute(select(ScrapedConversation).where(
-        ScrapedConversation.id == conv_id,
-        ScrapedConversation.scraped_group_id == group_id,
-    ))).scalar_one_or_none()
+    conv = (
+        await session.execute(
+            select(ScrapedConversation).where(
+                ScrapedConversation.id == conv_id,
+                ScrapedConversation.scraped_group_id == group_id,
+            )
+        )
+    ).scalar_one_or_none()
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     root_id = conv.root_message_id
-    messages = (await session.execute(
-        select(ScrapedMessage).where(
-            ScrapedMessage.scraped_group_id == group_id,
-            (ScrapedMessage.message_id == root_id) | (ScrapedMessage.reply_to_message_id == root_id) | (ScrapedMessage.reply_to_top_id == root_id),
-        ).order_by(ScrapedMessage.message_date.asc())
-    )).scalars().all()
-    return [{
-        "id": m.id,
-        "message_id": m.message_id,
-        "sender_user_id": m.sender_user_id,
-        "sender_username": m.sender_username,
-        "sender_first_name": m.sender_first_name,
-        "message_text": m.message_text,
-        "message_type": m.message_type,
-        "message_date": m.message_date.isoformat() if m.message_date else None,
-        "reply_to_message_id": m.reply_to_message_id,
-        "reply_to_top_id": m.reply_to_top_id,
-    } for m in messages]
+    messages = (
+        (
+            await session.execute(
+                select(ScrapedMessage)
+                .where(
+                    ScrapedMessage.scraped_group_id == group_id,
+                    (ScrapedMessage.message_id == root_id)
+                    | (ScrapedMessage.reply_to_message_id == root_id)
+                    | (ScrapedMessage.reply_to_top_id == root_id),
+                )
+                .order_by(ScrapedMessage.message_date.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        {
+            "id": m.id,
+            "message_id": m.message_id,
+            "sender_user_id": m.sender_user_id,
+            "sender_username": m.sender_username,
+            "sender_first_name": m.sender_first_name,
+            "message_text": m.message_text,
+            "message_type": m.message_type,
+            "message_date": m.message_date.isoformat() if m.message_date else None,
+            "reply_to_message_id": m.reply_to_message_id,
+            "reply_to_top_id": m.reply_to_top_id,
+        }
+        for m in messages
+    ]
 
 
 class ExtractKnowledgeRequest(BaseModel):
@@ -540,14 +619,19 @@ async def extract_group_knowledge(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
     from bot.services.knowledge_extractor import KnowledgeExtractor
+
     extractor = KnowledgeExtractor(session)
-    result = await extractor.extract_knowledge(scraped_group_id=group_id, max_messages=request.max_messages)
+    result = await extractor.extract_knowledge(
+        scraped_group_id=group_id, max_messages=request.max_messages
+    )
     return result
 
 
@@ -560,7 +644,9 @@ async def list_group_knowledge(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -568,26 +654,35 @@ async def list_group_knowledge(
     stmt = select(GroupKnowledge).where(GroupKnowledge.scraped_group_id == group_id)
     if knowledge_type:
         stmt = stmt.where(GroupKnowledge.knowledge_type == knowledge_type)
-    stmt = stmt.order_by(GroupKnowledge.confidence.desc()).offset((page - 1) * page_size).limit(page_size)
+    stmt = (
+        stmt.order_by(GroupKnowledge.confidence.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
 
     rows = (await session.execute(stmt)).scalars().all()
-    total = (await session.execute(
-        select(func.count(GroupKnowledge.id)).where(GroupKnowledge.scraped_group_id == group_id)
-    )).scalar_one()
+    total = (
+        await session.execute(
+            select(func.count(GroupKnowledge.id)).where(GroupKnowledge.scraped_group_id == group_id)
+        )
+    ).scalar_one()
 
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
-        "items": [{
-            "id": k.id,
-            "knowledge_type": k.knowledge_type,
-            "title": k.title,
-            "content": k.content,
-            "confidence": k.confidence,
-            "first_seen": k.first_seen.isoformat() if k.first_seen else None,
-            "last_updated": k.last_updated.isoformat() if k.last_updated else None,
-        } for k in rows],
+        "items": [
+            {
+                "id": k.id,
+                "knowledge_type": k.knowledge_type,
+                "title": k.title,
+                "content": k.content,
+                "confidence": k.confidence,
+                "first_seen": k.first_seen.isoformat() if k.first_seen else None,
+                "last_updated": k.last_updated.isoformat() if k.last_updated else None,
+            }
+            for k in rows
+        ],
     }
 
 
@@ -599,7 +694,9 @@ async def list_daily_summaries(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
 
@@ -611,22 +708,29 @@ async def list_daily_summaries(
         .limit(page_size)
     )
     rows = (await session.execute(stmt)).scalars().all()
-    total = (await session.execute(
-        select(func.count(ScrapedDailySummary.id)).where(ScrapedDailySummary.scraped_group_id == group_id)
-    )).scalar_one()
+    total = (
+        await session.execute(
+            select(func.count(ScrapedDailySummary.id)).where(
+                ScrapedDailySummary.scraped_group_id == group_id
+            )
+        )
+    ).scalar_one()
 
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
-        "items": [{
-            "id": s.id,
-            "date": s.date.isoformat() if s.date else None,
-            "message_count": s.message_count,
-            "active_users": s.active_users,
-            "top_topics": s.top_topics,
-            "summary": s.summary,
-        } for s in rows],
+        "items": [
+            {
+                "id": s.id,
+                "date": s.date.isoformat() if s.date else None,
+                "message_count": s.message_count,
+                "active_users": s.active_users,
+                "top_topics": s.top_topics,
+                "summary": s.summary,
+            }
+            for s in rows
+        ],
     }
 
 
@@ -646,7 +750,9 @@ async def search_messages(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -679,7 +785,9 @@ async def export_group_data(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ):
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -694,7 +802,11 @@ async def export_group_data(
 
     media_type = "text/csv" if format == "csv" else "application/json"
     filename = f"{data_type}_{group.tg_group_id}.{format}"
-    return Response(content=data, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ─── Member Leaderboard ────────────────────────────────────────────────────
@@ -708,7 +820,9 @@ async def member_leaderboard(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -732,7 +846,9 @@ async def extract_leads_endpoint(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
@@ -750,13 +866,17 @@ async def list_leads(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
     service = ScraperService(session)
-    return await service.list_leads(tg_group_id=int(group.tg_group_id), status=status, page=page, page_size=page_size)
+    return await service.list_leads(
+        tg_group_id=int(group.tg_group_id), status=status, page=page, page_size=page_size
+    )
 
 
 class UpdateLeadRequest(BaseModel):
@@ -772,11 +892,15 @@ async def update_lead(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, str]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
 
-    lead = (await session.execute(select(ScrapedLead).where(ScrapedLead.id == lead_id))).scalar_one_or_none()
+    lead = (
+        await session.execute(select(ScrapedLead).where(ScrapedLead.id == lead_id))
+    ).scalar_one_or_none()
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -796,7 +920,9 @@ async def get_nudges(
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, Any]:
-    group = (await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))).scalar_one_or_none()
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)

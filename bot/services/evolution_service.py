@@ -32,13 +32,15 @@ class EvolutionSettings:
     @classmethod
     def from_env(cls) -> EvolutionSettings:
         return cls(
-            enabled=os.getenv("EVOLUTION_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+            enabled=os.getenv("EVOLUTION_ENABLED", "false").strip().lower()
+            in {"1", "true", "yes", "on"},
             api_base_url=(os.getenv("EVOLUTION_API_BASE_URL") or "").strip() or None,
             api_key=(os.getenv("EVOLUTION_API_KEY") or "").strip() or None,
             webhook_base_url=(os.getenv("EVOLUTION_WEBHOOK_BASE_URL") or "").strip() or None,
             webhook_secret=(os.getenv("EVOLUTION_WEBHOOK_SECRET") or "").strip() or None,
             timeout_seconds=float(os.getenv("EVOLUTION_TIMEOUT_SECONDS", "10")),
-            send_ai_replies=os.getenv("SEND_AI_REPLIES", "false").strip().lower() in {"1", "true", "yes", "on"},
+            send_ai_replies=os.getenv("SEND_AI_REPLIES", "false").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
 
     @property
@@ -80,7 +82,9 @@ class EvolutionWhatsAppService:
         if expected and provided_secret != expected:
             raise EvolutionWebhookAuthError("Invalid Evolution webhook secret")
 
-    async def create_instance(self, *, tenant_id: int, channel_account_id: int, display_name: str) -> EvolutionChannelState:
+    async def create_instance(
+        self, *, tenant_id: int, channel_account_id: int, display_name: str
+    ) -> EvolutionChannelState:
         instance_name = self.build_instance_name(tenant_id, channel_account_id)
         payload = {
             "instanceName": instance_name,
@@ -90,8 +94,12 @@ class EvolutionWhatsAppService:
             "displayName": display_name,
         }
         create_response = await self._request("POST", "/instance/create", json=payload)
-        await self.configure_webhook(channel_account_id=channel_account_id, instance_name=instance_name)
-        status_payload = await self._safe_request("GET", f"/instance/connectionState/{instance_name}") or {}
+        await self.configure_webhook(
+            channel_account_id=channel_account_id, instance_name=instance_name
+        )
+        status_payload = (
+            await self._safe_request("GET", f"/instance/connectionState/{instance_name}") or {}
+        )
         qr_payload = await self._safe_request("GET", f"/instance/qrcode/{instance_name}") or {}
         return EvolutionChannelState(
             external_account_id=instance_name,
@@ -114,7 +122,9 @@ class EvolutionWhatsAppService:
     async def get_qr_code(self, channel_account: ChannelAccount) -> EvolutionChannelState:
         instance_name = self._require_instance_name(channel_account)
         payload = await self._request("GET", f"/instance/qrcode/{instance_name}")
-        status_payload = await self._safe_request("GET", f"/instance/connectionState/{instance_name}") or {}
+        status_payload = (
+            await self._safe_request("GET", f"/instance/connectionState/{instance_name}") or {}
+        )
         return EvolutionChannelState(
             external_account_id=instance_name,
             status=self._map_status(self._extract_status(status_payload)),
@@ -138,7 +148,9 @@ class EvolutionWhatsAppService:
             metadata={"provider": "evolution", "instance": instance_name},
         )
 
-    async def send_message(self, channel_account: ChannelAccount, *, to: str, text: str) -> dict[str, Any]:
+    async def send_message(
+        self, channel_account: ChannelAccount, *, to: str, text: str
+    ) -> dict[str, Any]:
         instance_name = self._require_instance_name(channel_account)
         payload = await self._request(
             "POST",
@@ -152,7 +164,9 @@ class EvolutionWhatsAppService:
             "raw": payload,
         }
 
-    async def configure_webhook(self, *, channel_account_id: int, instance_name: str) -> dict[str, Any]:
+    async def configure_webhook(
+        self, *, channel_account_id: int, instance_name: str
+    ) -> dict[str, Any]:
         url = self._build_webhook_url(channel_account_id)
         if url is None:
             return {"ok": False, "reason": "missing-webhook-base-url"}
@@ -206,7 +220,9 @@ class EvolutionWhatsAppService:
         return httpx.AsyncClient(
             base_url=self.settings.api_base_url.rstrip("/"),
             headers={"apikey": self.settings.api_key},
-            timeout=httpx.Timeout(self.settings.timeout_seconds, connect=min(self.settings.timeout_seconds, 5.0)),
+            timeout=httpx.Timeout(
+                self.settings.timeout_seconds, connect=min(self.settings.timeout_seconds, 5.0)
+            ),
             transport=self._transport,
         )
 
@@ -241,10 +257,16 @@ class EvolutionWhatsAppService:
         candidates = [
             payload.get("state"),
             payload.get("status"),
-            payload.get("instance", {}).get("state") if isinstance(payload.get("instance"), dict) else None,
-            payload.get("instance", {}).get("status") if isinstance(payload.get("instance"), dict) else None,
+            payload.get("instance", {}).get("state")
+            if isinstance(payload.get("instance"), dict)
+            else None,
+            payload.get("instance", {}).get("status")
+            if isinstance(payload.get("instance"), dict)
+            else None,
             payload.get("data", {}).get("state") if isinstance(payload.get("data"), dict) else None,
-            payload.get("data", {}).get("status") if isinstance(payload.get("data"), dict) else None,
+            payload.get("data", {}).get("status")
+            if isinstance(payload.get("data"), dict)
+            else None,
         ]
         for candidate in candidates:
             if candidate:
@@ -256,9 +278,15 @@ class EvolutionWhatsAppService:
             payload.get("base64"),
             payload.get("qrcode"),
             payload.get("qrCode"),
-            payload.get("data", {}).get("base64") if isinstance(payload.get("data"), dict) else None,
-            payload.get("data", {}).get("qrcode") if isinstance(payload.get("data"), dict) else None,
-            payload.get("data", {}).get("qrCode") if isinstance(payload.get("data"), dict) else None,
+            payload.get("data", {}).get("base64")
+            if isinstance(payload.get("data"), dict)
+            else None,
+            payload.get("data", {}).get("qrcode")
+            if isinstance(payload.get("data"), dict)
+            else None,
+            payload.get("data", {}).get("qrCode")
+            if isinstance(payload.get("data"), dict)
+            else None,
         ]
         for candidate in candidates:
             if not candidate:
@@ -277,7 +305,8 @@ class EvolutionWhatsAppService:
             payload.get("id"),
             payload.get("messageId"),
             payload.get("data", {}).get("key", {}).get("id")
-            if isinstance(payload.get("data"), dict) and isinstance(payload["data"].get("key"), dict)
+            if isinstance(payload.get("data"), dict)
+            and isinstance(payload["data"].get("key"), dict)
             else None,
         ]
         for candidate in candidates:

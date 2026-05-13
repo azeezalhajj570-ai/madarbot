@@ -11,8 +11,21 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from bot.db.base import Base
-from bot.db.models import DailyGroupSummary, Group, GroupAdminRole, GroupMessageActivity, GroupSummarySettings, ModerationLog, User
-from bot.summaries.collector import collect_group_activity, extract_link_domains, is_question_text, record_group_message_activity
+from bot.db.models import (
+    DailyGroupSummary,
+    Group,
+    GroupAdminRole,
+    GroupMessageActivity,
+    GroupSummarySettings,
+    ModerationLog,
+    User,
+)
+from bot.summaries.collector import (
+    collect_group_activity,
+    extract_link_domains,
+    is_question_text,
+    record_group_message_activity,
+)
 from bot.summaries.generator import DeterministicSummaryGenerator
 from bot.summaries.service import DailyAdminSummaryService
 
@@ -112,7 +125,9 @@ async def _seed_group(db_session, *, tg_group_id: int = -100991) -> Group:
     owner = User(tg_user_id=7001, username="owner", full_name="Owner", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=tg_group_id, title="Summary Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=tg_group_id, title="Summary Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -140,9 +155,35 @@ async def test_message_collection_counts(db_session) -> None:
     now = datetime.utcnow()
     db_session.add_all(
         [
-            GroupMessageActivity(group_id=group.id, message_id=1, user_id=1, username="alice", text_preview="BTC now", normalized_text="btc now", created_at=now),
-            GroupMessageActivity(group_id=group.id, message_id=2, user_id=2, username="bob", text_preview="See https://example.com", normalized_text="see", has_link=True, link_domains=["example.com"], created_at=now + timedelta(minutes=1)),
-            GroupMessageActivity(group_id=group.id, message_id=3, user_id=1, username="alice", text_preview="Binance update", normalized_text="binance update", created_at=now + timedelta(minutes=2)),
+            GroupMessageActivity(
+                group_id=group.id,
+                message_id=1,
+                user_id=1,
+                username="alice",
+                text_preview="BTC now",
+                normalized_text="btc now",
+                created_at=now,
+            ),
+            GroupMessageActivity(
+                group_id=group.id,
+                message_id=2,
+                user_id=2,
+                username="bob",
+                text_preview="See https://example.com",
+                normalized_text="see",
+                has_link=True,
+                link_domains=["example.com"],
+                created_at=now + timedelta(minutes=1),
+            ),
+            GroupMessageActivity(
+                group_id=group.id,
+                message_id=3,
+                user_id=1,
+                username="alice",
+                text_preview="Binance update",
+                normalized_text="binance update",
+                created_at=now + timedelta(minutes=2),
+            ),
         ]
     )
     await db_session.commit()
@@ -181,14 +222,44 @@ async def test_top_users_sorted_by_count(db_session) -> None:
     group = await _seed_group(db_session, tg_group_id=-100993)
     now = datetime.utcnow()
     rows = [
-        GroupMessageActivity(group_id=group.id, message_id=1, user_id=10, username="alice", text_preview="a", normalized_text="a", created_at=now),
-        GroupMessageActivity(group_id=group.id, message_id=2, user_id=10, username="alice", text_preview="b", normalized_text="b", created_at=now),
-        GroupMessageActivity(group_id=group.id, message_id=3, user_id=11, username="bob", text_preview="c", normalized_text="c", created_at=now),
+        GroupMessageActivity(
+            group_id=group.id,
+            message_id=1,
+            user_id=10,
+            username="alice",
+            text_preview="a",
+            normalized_text="a",
+            created_at=now,
+        ),
+        GroupMessageActivity(
+            group_id=group.id,
+            message_id=2,
+            user_id=10,
+            username="alice",
+            text_preview="b",
+            normalized_text="b",
+            created_at=now,
+        ),
+        GroupMessageActivity(
+            group_id=group.id,
+            message_id=3,
+            user_id=11,
+            username="bob",
+            text_preview="c",
+            normalized_text="c",
+            created_at=now,
+        ),
     ]
     db_session.add_all(rows)
     await db_session.commit()
 
-    report = await collect_group_activity(db_session, group_id=group.id, start_at=now - timedelta(days=1), end_at=now + timedelta(days=1), max_message_samples=100)
+    report = await collect_group_activity(
+        db_session,
+        group_id=group.id,
+        start_at=now - timedelta(days=1),
+        end_at=now + timedelta(days=1),
+        max_message_samples=100,
+    )
     assert [user["user_id"] for user in report.top_users] == [10, 11]
 
 
@@ -216,7 +287,13 @@ async def test_top_topics_include_relevant_keywords(db_session) -> None:
         )
     await db_session.commit()
 
-    report = await collect_group_activity(db_session, group_id=group.id, start_at=now - timedelta(days=1), end_at=now + timedelta(days=1), max_message_samples=100)
+    report = await collect_group_activity(
+        db_session,
+        group_id=group.id,
+        start_at=now - timedelta(days=1),
+        end_at=now + timedelta(days=1),
+        max_message_samples=100,
+    )
     lowered = " ".join(report.top_topics).lower()
     assert "btc" in lowered
     assert "trading" in lowered or "binance" in lowered
@@ -228,13 +305,36 @@ async def test_unanswered_questions_detected(db_session) -> None:
     now = datetime.utcnow()
     db_session.add_all(
         [
-            GroupMessageActivity(group_id=group.id, message_id=1, user_id=300, username="member", text_preview="Is today's Zoom link changed?", normalized_text="is today s zoom link changed", is_question=True, created_at=now),
-            GroupMessageActivity(group_id=group.id, message_id=2, user_id=301, username="member2", text_preview="Random follow up", normalized_text="random follow up", created_at=now + timedelta(minutes=2)),
+            GroupMessageActivity(
+                group_id=group.id,
+                message_id=1,
+                user_id=300,
+                username="member",
+                text_preview="Is today's Zoom link changed?",
+                normalized_text="is today s zoom link changed",
+                is_question=True,
+                created_at=now,
+            ),
+            GroupMessageActivity(
+                group_id=group.id,
+                message_id=2,
+                user_id=301,
+                username="member2",
+                text_preview="Random follow up",
+                normalized_text="random follow up",
+                created_at=now + timedelta(minutes=2),
+            ),
         ]
     )
     await db_session.commit()
 
-    report = await collect_group_activity(db_session, group_id=group.id, start_at=now - timedelta(days=1), end_at=now + timedelta(days=1), max_message_samples=100)
+    report = await collect_group_activity(
+        db_session,
+        group_id=group.id,
+        start_at=now - timedelta(days=1),
+        end_at=now + timedelta(days=1),
+        max_message_samples=100,
+    )
     assert "Zoom link" in report.unanswered_questions[0]
 
 
@@ -242,17 +342,51 @@ async def test_unanswered_questions_detected(db_session) -> None:
 async def test_moderation_events_included(db_session) -> None:
     group = await _seed_group(db_session, tg_group_id=-100996)
     now = datetime.utcnow()
-    db_session.add(GroupMessageActivity(group_id=group.id, message_id=1, user_id=1, username="alice", text_preview="test", normalized_text="test", created_at=now))
+    db_session.add(
+        GroupMessageActivity(
+            group_id=group.id,
+            message_id=1,
+            user_id=1,
+            username="alice",
+            text_preview="test",
+            normalized_text="test",
+            created_at=now,
+        )
+    )
     db_session.add_all(
         [
-            ModerationLog(group_id=group.id, action="delete_spam", target_user_id=12, admin_user_id=7001, reason="spam", details={}, created_at=now),
-            ModerationLog(group_id=group.id, action="warn_spam", target_user_id=12, admin_user_id=7001, reason="spam", details={}, created_at=now),
+            ModerationLog(
+                group_id=group.id,
+                action="delete_spam",
+                target_user_id=12,
+                admin_user_id=7001,
+                reason="spam",
+                details={},
+                created_at=now,
+            ),
+            ModerationLog(
+                group_id=group.id,
+                action="warn_spam",
+                target_user_id=12,
+                admin_user_id=7001,
+                reason="spam",
+                details={},
+                created_at=now,
+            ),
         ]
     )
     await db_session.commit()
 
-    report = await collect_group_activity(db_session, group_id=group.id, start_at=now - timedelta(days=1), end_at=now + timedelta(days=1), max_message_samples=100)
-    result = await DeterministicSummaryGenerator().generate_daily_summary(group, GroupSummarySettings(group_id=group.id), report)
+    report = await collect_group_activity(
+        db_session,
+        group_id=group.id,
+        start_at=now - timedelta(days=1),
+        end_at=now + timedelta(days=1),
+        max_message_samples=100,
+    )
+    result = await DeterministicSummaryGenerator().generate_daily_summary(
+        group, GroupSummarySettings(group_id=group.id), report
+    )
     assert report.suspicious_messages_count == 2
     assert report.deleted_messages_count == 1
     assert any("delete spam" in item for item in result.moderation_highlights)
@@ -266,7 +400,15 @@ async def test_summary_idempotency(db_session) -> None:
     first = await service.generate_summary_for_group(group.id, date(2026, 4, 26), deliver=False)
     second = await service.generate_summary_for_group(group.id, date(2026, 4, 26), deliver=False)
 
-    rows = (await db_session.execute(select(DailyGroupSummary).where(DailyGroupSummary.group_id == group.id))).scalars().all()
+    rows = (
+        (
+            await db_session.execute(
+                select(DailyGroupSummary).where(DailyGroupSummary.group_id == group.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert first.id == second.id
     assert len(rows) == 1
 
@@ -302,5 +444,9 @@ async def test_record_group_message_activity_uses_preview_only(db_session) -> No
     await record_group_message_activity(db_session, group=group, message=message)
     await db_session.commit()
 
-    activity = (await db_session.execute(select(GroupMessageActivity).where(GroupMessageActivity.group_id == group.id))).scalar_one()
+    activity = (
+        await db_session.execute(
+            select(GroupMessageActivity).where(GroupMessageActivity.group_id == group.id)
+        )
+    ).scalar_one()
     assert len(activity.text_preview) == 300

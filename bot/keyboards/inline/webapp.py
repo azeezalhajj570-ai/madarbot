@@ -9,4 +9,3 @@ def open_dashboard_inline_keyboard(button_text: str, webapp_url: str) -> InlineK
             [InlineKeyboardButton(text=button_text, web_app=WebAppInfo(url=webapp_url))],
         ]
     )
-

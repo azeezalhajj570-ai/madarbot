@@ -73,7 +73,6 @@ async def start_handler(message: Message, state: FSMContext) -> None:
     show_buttons = await is_group_admin(message)
     if message.chat.type == "private":
         show_buttons = allow_private_dashboard
-    menu_key = "agents_main_menu" if app_kind == "agents" else "main_menu"
     await message.answer(
         t("start_intro", lang),
         reply_markup=_main_menu_markup(

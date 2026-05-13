@@ -29,7 +29,9 @@ def _set_member_status(fake_bot, chat_id: int, user_id: int, status: str) -> Non
 
 @pytest.mark.asyncio
 async def test_auto_approve_when_all_groups_joined(
-    db_session, fake_bot, monkeypatch,
+    db_session,
+    fake_bot,
+    monkeypatch,
 ):
     """User is already a member of all required gate groups — should auto-approve."""
     user = UserModel(tg_user_id=777, username="testuser", full_name="Test User")
@@ -50,11 +52,13 @@ async def test_auto_approve_when_all_groups_joined(
 
     async def mock_resolve(session, tg_id):
         return group
+
     monkeypatch.setattr(join_request_module, "resolve_group_by_tg_id", mock_resolve)
 
     @asynccontextmanager
     async def mock_session_local():
         yield db_session
+
     monkeypatch.setattr(join_request_module, "SessionLocal", mock_session_local)
 
     # User is a member of the required gate group
@@ -87,7 +91,9 @@ async def test_auto_approve_when_all_groups_joined(
 
 @pytest.mark.asyncio
 async def test_pending_created_when_missing_groups(
-    db_session, fake_bot, monkeypatch,
+    db_session,
+    fake_bot,
+    monkeypatch,
 ):
     """User is NOT in a required gate group — create pending record + notify user."""
     user = UserModel(tg_user_id=777, username="testuser", full_name="Test User")
@@ -108,11 +114,13 @@ async def test_pending_created_when_missing_groups(
 
     async def mock_resolve(session, tg_id):
         return group
+
     monkeypatch.setattr(join_request_module, "resolve_group_by_tg_id", mock_resolve)
 
     @asynccontextmanager
     async def mock_session_local():
         yield db_session
+
     monkeypatch.setattr(join_request_module, "SessionLocal", mock_session_local)
 
     # User is NOT in the required gate group
@@ -120,7 +128,9 @@ async def test_pending_created_when_missing_groups(
 
     # Required gate group info for the verification keyboard
     fake_bot.chats[required_tg_id] = SimpleNamespace(
-        id=required_tg_id, title="Gate Group", username="gate_group",
+        id=required_tg_id,
+        title="Gate Group",
+        username="gate_group",
     )
 
     user_tg = TGUser(id=777, is_bot=False, first_name="Test User")
@@ -159,7 +169,9 @@ async def test_pending_created_when_missing_groups(
 
 @pytest.mark.asyncio
 async def test_refresh_detects_user_joined_gate_group(
-    db_session, fake_bot, monkeypatch,
+    db_session,
+    fake_bot,
+    monkeypatch,
 ):
     """After pending, user joins gate group — refresh callback detects it."""
     user = UserModel(tg_user_id=777, username="testuser", full_name="Test User")
@@ -180,17 +192,21 @@ async def test_refresh_detects_user_joined_gate_group(
 
     async def mock_resolve(session, tg_id):
         return group
+
     monkeypatch.setattr(join_request_module, "resolve_group_by_tg_id", mock_resolve)
 
     @asynccontextmanager
     async def mock_session_local():
         yield db_session
+
     monkeypatch.setattr(join_request_module, "SessionLocal", mock_session_local)
     monkeypatch.setattr(join_request_callbacks_module, "SessionLocal", mock_session_local)
 
     _set_member_status(fake_bot, required_tg_id, 777, "left")
     fake_bot.chats[required_tg_id] = SimpleNamespace(
-        id=required_tg_id, title="Gate Group", username="gate_group",
+        id=required_tg_id,
+        title="Gate Group",
+        username="gate_group",
     )
 
     user_tg = TGUser(id=777, is_bot=False, first_name="Test User")
@@ -221,7 +237,10 @@ async def test_refresh_detects_user_joined_gate_group(
     from tests.conftest import FakeCallbackQuery, FakeMessage
 
     msg = FakeMessage(
-        chat_id=777, chat_type="private", user_id=777, text="check",
+        chat_id=777,
+        chat_type="private",
+        user_id=777,
+        text="check",
         bot=fake_bot,
     )
     cb = FakeCallbackQuery(

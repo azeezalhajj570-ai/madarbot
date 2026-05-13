@@ -80,10 +80,21 @@ def build_scraped_message_row(
 
 def serialize_participant_data(participant: Any) -> dict:
     raw_data = {}
-    for attr in ["id", "access_hash", "username", "first_name", "last_name", "phone", "bot", "premium"]:
+    for attr in [
+        "id",
+        "access_hash",
+        "username",
+        "first_name",
+        "last_name",
+        "phone",
+        "bot",
+        "premium",
+    ]:
         value = getattr(participant, attr, None)
         if value is not None:
-            raw_data[attr] = str(value) if not isinstance(value, (int, float, bool, str, type(None))) else value
+            raw_data[attr] = (
+                str(value) if not isinstance(value, (int, float, bool, str, type(None))) else value
+            )
     return raw_data
 
 
@@ -186,10 +197,16 @@ def build_message_row_from_msg(
         media = message.media
         if hasattr(media, "photo"):
             message_type = "photo"
-            media_file_id = str(getattr(media.photo, "id", None)) if hasattr(media, "photo") else None
+            media_file_id = (
+                str(getattr(media.photo, "id", None)) if hasattr(media, "photo") else None
+            )
         elif hasattr(media, "document"):
             message_type = "document"
-            media_file_id = str(getattr(media.document, "id", None)) if getattr(media, "document", None) else None
+            media_file_id = (
+                str(getattr(media.document, "id", None))
+                if getattr(media, "document", None)
+                else None
+            )
             if hasattr(media, "video"):
                 message_type = "video"
 

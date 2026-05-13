@@ -4,7 +4,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from telethon.errors import FloodWaitError, RPCError, UserAlreadyParticipantError, UserPrivacyRestrictedError
+from telethon.errors import (
+    FloodWaitError,
+    RPCError,
+    UserAlreadyParticipantError,
+    UserPrivacyRestrictedError,
+)
 from telethon.tl.functions.channels import InviteToChannelRequest
 from telethon.tl.functions.messages import AddChatUserRequest
 from telethon.tl.types import Channel, Chat, ChatPhotoEmpty, User

@@ -25,11 +25,15 @@ class AdminRoleService:
     ) -> dict[str, Any]:
         requester = await PermissionService(self.session).user_level(group_id, actor_user_id)
         if requester is None or requester < 30:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only super admins can manage roles")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only super admins can manage roles"
+            )
 
         existing = (
             await self.session.execute(
-                select(GroupAdminRole).where(GroupAdminRole.group_id == group_id, GroupAdminRole.user_id == user_id)
+                select(GroupAdminRole).where(
+                    GroupAdminRole.group_id == group_id, GroupAdminRole.user_id == user_id
+                )
             )
         ).scalar_one_or_none()
         if existing:

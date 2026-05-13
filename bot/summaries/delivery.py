@@ -10,7 +10,9 @@ from bot.db.models import DailyGroupSummary, Group, GroupAdminRole, GroupSummary
 logger = structlog.get_logger(__name__)
 
 
-async def _admin_recipients(session: AsyncSession, group: Group, settings: GroupSummarySettings) -> list[int]:
+async def _admin_recipients(
+    session: AsyncSession, group: Group, settings: GroupSummarySettings
+) -> list[int]:
     recipients: list[int] = []
     if settings.admin_chat_id is not None:
         recipients.append(int(settings.admin_chat_id))
@@ -25,7 +27,15 @@ async def _admin_recipients(session: AsyncSession, group: Group, settings: Group
     if owner_tg_id is not None:
         recipients.append(int(owner_tg_id))
 
-    admin_ids = (await session.execute(select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group.id))).scalars().all()
+    admin_ids = (
+        (
+            await session.execute(
+                select(GroupAdminRole.user_id).where(GroupAdminRole.group_id == group.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     recipients.extend(int(user_id) for user_id in admin_ids)
 
     unique: list[int] = []
@@ -56,7 +66,9 @@ async def send_daily_summary(
         if settings.admin_chat_id is not None:
             recipients = [int(settings.admin_chat_id)]
         else:
-            logger.warning("group_admin_thread mode requires admin_chat_id to be set", group_id=group.id)
+            logger.warning(
+                "group_admin_thread mode requires admin_chat_id to be set", group_id=group.id
+            )
     if not recipients:
         return "generated"
 

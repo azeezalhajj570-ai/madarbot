@@ -21,7 +21,9 @@ async def test_agent_listener_dispatches_messages_for_selected_agent_group(
     owner = User(tg_user_id=9201, username="owner9201", full_name="Owner 9201", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-1009201, title="Listener Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-1009201, title="Listener Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
@@ -51,7 +53,10 @@ async def test_agent_listener_dispatches_messages_for_selected_agent_group(
     seen_logs: list[dict[str, object]] = []
     monkeypatch.setattr("bot.agents.listener.SessionLocal", session_factory)
     monkeypatch.setattr("bot.agents.listener.dispatch_agent_job", dispatch_mock)
-    monkeypatch.setattr("bot.agents.listener.logger.info", lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}))
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.info",
+        lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}),
+    )
 
     manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
     handled = await manager._dispatch_agent_message(
@@ -67,7 +72,15 @@ async def test_agent_listener_dispatches_messages_for_selected_agent_group(
     )
 
     async with session_factory() as verification_session:
-        jobs = (await verification_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))).scalars().all()
+        jobs = (
+            (
+                await verification_session.execute(
+                    select(AgentJob).where(AgentJob.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert handled is True
     assert len(jobs) == 1
     assert jobs[0].job_type == "automation_task"
@@ -86,8 +99,12 @@ async def test_agent_listener_ignores_messages_for_unselected_group(
     owner = User(tg_user_id=9202, username="owner9202", full_name="Owner 9202", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    selected_group = Group(tg_group_id=-1009202, title="Selected Group", owner_user_id=owner.id, is_active=True)
-    other_group = Group(tg_group_id=-1009203, title="Other Group", owner_user_id=owner.id, is_active=True)
+    selected_group = Group(
+        tg_group_id=-1009202, title="Selected Group", owner_user_id=owner.id, is_active=True
+    )
+    other_group = Group(
+        tg_group_id=-1009203, title="Other Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add_all([selected_group, other_group])
     await db_session.flush()
     db_session.add_all(
@@ -122,7 +139,10 @@ async def test_agent_listener_ignores_messages_for_unselected_group(
     seen_logs: list[dict[str, object]] = []
     monkeypatch.setattr("bot.agents.listener.SessionLocal", session_factory)
     monkeypatch.setattr("bot.agents.listener.dispatch_agent_job", dispatch_mock)
-    monkeypatch.setattr("bot.agents.listener.logger.info", lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}))
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.info",
+        lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}),
+    )
 
     manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
     handled = await manager._dispatch_agent_message(
@@ -138,7 +158,15 @@ async def test_agent_listener_ignores_messages_for_unselected_group(
     )
 
     async with session_factory() as verification_session:
-        jobs = (await verification_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))).scalars().all()
+        jobs = (
+            (
+                await verification_session.execute(
+                    select(AgentJob).where(AgentJob.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert handled is False
     assert jobs == []
     dispatch_mock.assert_not_called()
@@ -151,7 +179,10 @@ async def test_agent_listener_does_not_log_incoming_messages_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen_logs: list[dict[str, object]] = []
-    monkeypatch.setattr("bot.agents.listener.logger.info", lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}))
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.info",
+        lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}),
+    )
 
     manager = AgentListenerManager(bot=fake_bot)
 
@@ -165,7 +196,9 @@ async def test_agent_listener_does_not_log_incoming_messages_by_default(
             return type("Chat", (), {"title": ""})()
 
         async def get_sender(self):
-            return type("Sender", (), {"first_name": "Qu", "last_name": "", "username": "user77001"})()
+            return type(
+                "Sender", (), {"first_name": "Qu", "last_name": "", "username": "user77001"}
+            )()
 
     dispatch_mock = AsyncMock()
     monkeypatch.setattr(manager, "_dispatch_agent_message", dispatch_mock)
@@ -182,7 +215,10 @@ async def test_agent_listener_can_log_incoming_messages_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen_logs: list[dict[str, object]] = []
-    monkeypatch.setattr("bot.agents.listener.logger.info", lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}))
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.info",
+        lambda event_name, **kwargs: seen_logs.append({"event_name": event_name, **kwargs}),
+    )
 
     manager = AgentListenerManager(bot=fake_bot, log_message_events=True)
 
@@ -196,7 +232,9 @@ async def test_agent_listener_can_log_incoming_messages_when_enabled(
             return type("Chat", (), {"title": ""})()
 
         async def get_sender(self):
-            return type("Sender", (), {"first_name": "Qu", "last_name": "", "username": "user77001"})()
+            return type(
+                "Sender", (), {"first_name": "Qu", "last_name": "", "username": "user77001"}
+            )()
 
     dispatch_mock = AsyncMock()
     monkeypatch.setattr(manager, "_dispatch_agent_message", dispatch_mock)
@@ -231,7 +269,9 @@ async def test_agent_listener_stops_retrying_when_session_is_revoked(
     owner = User(tg_user_id=9204, username="owner9204", full_name="Owner 9204", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    group = Group(tg_group_id=-1009204, title="Revoked Session Group", owner_user_id=owner.id, is_active=True)
+    group = Group(
+        tg_group_id=-1009204, title="Revoked Session Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     agent = Agent(
@@ -258,7 +298,9 @@ async def test_agent_listener_stops_retrying_when_session_is_revoked(
         async def mark_failed(self, agent_id: int) -> None:
             self.mark_failed_calls += 1
             async with session_factory() as session:
-                stored = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one()
+                stored = (
+                    await session.execute(select(Agent).where(Agent.id == agent_id))
+                ).scalar_one()
                 stored.status = "failed"
                 stored.auth_state = "failed"
                 await session.commit()
@@ -267,8 +309,14 @@ async def test_agent_listener_stops_retrying_when_session_is_revoked(
     sleep = AsyncMock()
     exception_logs: list[dict[str, object]] = []
     warning_logs: list[dict[str, object]] = []
-    monkeypatch.setattr("bot.agents.listener.logger.exception", lambda event_name, **kwargs: exception_logs.append({"event_name": event_name, **kwargs}))
-    monkeypatch.setattr("bot.agents.listener.logger.warning", lambda event_name, **kwargs: warning_logs.append({"event_name": event_name, **kwargs}))
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.exception",
+        lambda event_name, **kwargs: exception_logs.append({"event_name": event_name, **kwargs}),
+    )
+    monkeypatch.setattr(
+        "bot.agents.listener.logger.warning",
+        lambda event_name, **kwargs: warning_logs.append({"event_name": event_name, **kwargs}),
+    )
 
     manager = AgentListenerManager(
         bot=fake_bot,
@@ -280,7 +328,9 @@ async def test_agent_listener_stops_retrying_when_session_is_revoked(
     await manager._run_agent_listener(agent.id)
 
     async with session_factory() as verification_session:
-        stored = (await verification_session.execute(select(Agent).where(Agent.id == agent.id))).scalar_one()
+        stored = (
+            await verification_session.execute(select(Agent).where(Agent.id == agent.id))
+        ).scalar_one()
 
     assert fake_session_manager.get_client_calls == 1
     assert fake_session_manager.mark_failed_calls == 1
@@ -288,7 +338,9 @@ async def test_agent_listener_stops_retrying_when_session_is_revoked(
     assert stored.status == "failed"
     assert stored.auth_state == "failed"
     assert any(item["event_name"] == "agent_listener_failed" for item in exception_logs)
-    assert any(item["event_name"] == "agent_listener_stopped_terminal_error" for item in warning_logs)
+    assert any(
+        item["event_name"] == "agent_listener_stopped_terminal_error" for item in warning_logs
+    )
 
 
 @pytest.mark.asyncio
@@ -300,7 +352,9 @@ async def test_agent_listener_persists_any_seen_group_message(
     owner = User(tg_user_id=9205, username="owner9205", full_name="Owner 9205", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    home_group = Group(tg_group_id=-1009205, title="Home Group", owner_user_id=owner.id, is_active=True)
+    home_group = Group(
+        tg_group_id=-1009205, title="Home Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add(home_group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=home_group.id, user_id=owner.tg_user_id, role="owner"))
@@ -329,12 +383,20 @@ async def test_agent_listener_persists_any_seen_group_message(
             return type("Chat", (), {"title": "Remote Listener Group"})()
 
         async def get_sender(self):
-            return type("Sender", (), {"first_name": "Remote", "last_name": "User", "username": "remote77005"})()
+            return type(
+                "Sender",
+                (),
+                {"first_name": "Remote", "last_name": "User", "username": "remote77005"},
+            )()
 
     await manager._handle_telethon_message(agent.id, FakeEvent())
 
     async with session_factory() as verification_session:
-        persisted_group = (await verification_session.execute(select(Group).where(Group.tg_group_id == -1005550001))).scalar_one()
+        persisted_group = (
+            await verification_session.execute(
+                select(Group).where(Group.tg_group_id == -1005550001)
+            )
+        ).scalar_one()
         persisted_member = (
             await verification_session.execute(
                 select(GroupMember).where(
@@ -374,8 +436,12 @@ async def test_agent_listener_dispatches_remote_group_binding_stored_on_home_gro
     owner = User(tg_user_id=9206, username="owner9206", full_name="Owner 9206", language_code="en")
     db_session.add(owner)
     await db_session.flush()
-    home_group = Group(tg_group_id=-1009206, title="Home Listener Group", owner_user_id=owner.id, is_active=True)
-    remote_group = Group(tg_group_id=-1009207, title="Remote Listener Group", owner_user_id=owner.id, is_active=True)
+    home_group = Group(
+        tg_group_id=-1009206, title="Home Listener Group", owner_user_id=owner.id, is_active=True
+    )
+    remote_group = Group(
+        tg_group_id=-1009207, title="Remote Listener Group", owner_user_id=owner.id, is_active=True
+    )
     db_session.add_all([home_group, remote_group])
     await db_session.flush()
     db_session.add_all(
@@ -400,9 +466,18 @@ async def test_agent_listener_dispatches_remote_group_binding_stored_on_home_gro
     async def fake_list_managed_member_groups(self, *, actor_user_id: int, agent_id: int):
         assert actor_user_id == owner.tg_user_id
         assert agent_id == agent.id
-        return [{"tg_group_id": remote_group.tg_group_id, "title": remote_group.title, "id": remote_group.id}]
+        return [
+            {
+                "tg_group_id": remote_group.tg_group_id,
+                "title": remote_group.title,
+                "id": remote_group.id,
+            }
+        ]
 
-    monkeypatch.setattr("bot.agents.service.AgentService.list_managed_member_groups", fake_list_managed_member_groups)
+    monkeypatch.setattr(
+        "bot.agents.service.AgentService.list_managed_member_groups",
+        fake_list_managed_member_groups,
+    )
     await TaskService(db_session, dispatch_agent_job=lambda _job_id: None).save_assignment(
         actor_user_id=owner.tg_user_id,
         group_id=home_group.id,
@@ -432,7 +507,15 @@ async def test_agent_listener_dispatches_remote_group_binding_stored_on_home_gro
     )
 
     async with session_factory() as verification_session:
-        jobs = (await verification_session.execute(select(AgentJob).where(AgentJob.agent_id == agent.id))).scalars().all()
+        jobs = (
+            (
+                await verification_session.execute(
+                    select(AgentJob).where(AgentJob.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     assert handled is True
     assert len(jobs) == 1

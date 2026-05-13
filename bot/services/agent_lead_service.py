@@ -13,7 +13,6 @@ from bot.db.models import AgentLead
 
 
 class AgentLeadService:
-
     VALID_STATUSES = ("new", "contacted", "interested", "converted", "junk", "dismissed")
 
     def __init__(self, session: AsyncSession) -> None:
@@ -138,7 +137,11 @@ class AgentLeadService:
             count_stmt = count_stmt.where(AgentLead.lead_label == lead_label)
 
         total = (await self.session.execute(count_stmt)).scalar_one()
-        stmt = stmt.order_by(desc(AgentLead.created_at)).offset((page - 1) * page_size).limit(page_size)
+        stmt = (
+            stmt.order_by(desc(AgentLead.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         rows = (await self.session.execute(stmt)).scalars().all()
 
         return {
@@ -150,7 +153,9 @@ class AgentLeadService:
         }
 
     async def get_lead(self, *, lead_id: int) -> AgentLead:
-        lead = (await self.session.execute(select(AgentLead).where(AgentLead.id == lead_id))).scalar_one_or_none()
+        lead = (
+            await self.session.execute(select(AgentLead).where(AgentLead.id == lead_id))
+        ).scalar_one_or_none()
         if lead is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found")
         return lead
@@ -211,13 +216,17 @@ class AgentLeadService:
         if group_id is not None:
             base = base.where(AgentLead.group_id == group_id)
 
-        total = (await self.session.execute(select(func.count(AgentLead.id)).where(base.whereclause))).scalar_one()
+        total = (
+            await self.session.execute(select(func.count(AgentLead.id)).where(base.whereclause))
+        ).scalar_one()
 
         status_counts: dict[str, int] = {}
         for s in self.VALID_STATUSES:
-            count = (await self.session.execute(
-                select(func.count(AgentLead.id)).where(base.whereclause, AgentLead.status == s)
-            )).scalar_one()
+            count = (
+                await self.session.execute(
+                    select(func.count(AgentLead.id)).where(base.whereclause, AgentLead.status == s)
+                )
+            ).scalar_one()
             status_counts[s] = count
 
         return {
@@ -245,7 +254,9 @@ class AgentLeadService:
             "contact_info": lead.contact_info,
             "notes": lead.notes,
             "confidence": lead.confidence,
-            "last_contacted_at": lead.last_contacted_at.isoformat() if lead.last_contacted_at else None,
+            "last_contacted_at": lead.last_contacted_at.isoformat()
+            if lead.last_contacted_at
+            else None,
             "converted_at": lead.converted_at.isoformat() if lead.converted_at else None,
             "captured_at": lead.captured_at.isoformat() if lead.captured_at else None,
             "created_at": lead.created_at.isoformat() if lead.created_at else None,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import Any
 
 from aiogram import Bot
@@ -83,7 +82,11 @@ class UserAgentExecutor:
         if not settings.telegram_api_id or not settings.telegram_api_hash:
             return False
 
-        managed_client = TelegramClient(StringSession(agent.session_string), settings.telegram_api_id, settings.telegram_api_hash)
+        managed_client = TelegramClient(
+            StringSession(agent.session_string),
+            settings.telegram_api_id,
+            settings.telegram_api_hash,
+        )
         await managed_client.connect()
         try:
             task_store = AgentTaskStore(session)
@@ -95,7 +98,9 @@ class UserAgentExecutor:
                 activity_service=activity_service,
                 approval_service=approval_service,
             )
-            return await runtime.execute(client=managed_client, agent=agent, job=job, session=session)
+            return await runtime.execute(
+                client=managed_client, agent=agent, job=job, session=session
+            )
         finally:
             await managed_client.disconnect()
 
@@ -105,7 +110,7 @@ class AddContactRuntime:
         from bot.services.group_service import canonical_tg_group_id
         from bot.db.models import ScrapedGroup
         from telethon.tl.types import InputPeerChannel, InputPeerChat
-        
+
         canonical_id = canonical_tg_group_id(tg_group_id)
         try:
             return await client.get_entity(tg_group_id)
@@ -117,7 +122,14 @@ class AddContactRuntime:
                     g_access_hash = group_record.raw_data.get("access_hash")
                     if g_access_hash:
                         if group_record.group_type in {"channel", "supergroup"}:
-                            return await client.get_entity(InputPeerChannel(channel_id=abs(canonical_id) % (10**10) if canonical_id < -10**12 else abs(canonical_id), access_hash=int(g_access_hash)))
+                            return await client.get_entity(
+                                InputPeerChannel(
+                                    channel_id=abs(canonical_id) % (10**10)
+                                    if canonical_id < -(10**12)
+                                    else abs(canonical_id),
+                                    access_hash=int(g_access_hash),
+                                )
+                            )
                         else:
                             return await client.get_entity(InputPeerChat(chat_id=abs(canonical_id)))
             raise
@@ -126,15 +138,17 @@ class AddContactRuntime:
         user_id = payload.get("user_id")
         if not user_id:
             raise ValueError("user_id is required to add contact")
-            
+
         user_id_int = int(user_id)
         if user_id_int < 0:
-             raise ValueError(f"Invalid user_id {user_id}: Cannot add a group or channel as a contact.")
+            raise ValueError(
+                f"Invalid user_id {user_id}: Cannot add a group or channel as a contact."
+            )
 
         username = payload.get("username")
         tg_group_id = payload.get("tg_group_id")
         group_title = str(payload.get("group_title") or "Group").strip()
-        
+
         # Implementation of naming convention: [Suffix] [GroupID] [GroupName] - [Name]
         agent_phone = str(agent.phone_number or "NoPhone").strip()
         phone_suffix = agent_phone[-4:] if len(agent_phone) >= 4 else agent_phone
@@ -154,7 +168,7 @@ class AddContactRuntime:
 
         # Prime the cache to avoid "Could not find the input entity"
         target_peer = None
-        
+
         # 1. Try by username
         if username:
             try:
@@ -165,9 +179,14 @@ class AddContactRuntime:
         # 2. Try database-backed access hash (Persistent fallback)
         if target_peer is None:
             from telethon.tl.types import InputPeerUser
+
             async with SessionLocal() as session:
                 # Prefer records with access_hash
-                stmt = select(ScrapedMember).where(ScrapedMember.tg_user_id == user_id_int).order_by(ScrapedMember.scraped_at.desc())
+                stmt = (
+                    select(ScrapedMember)
+                    .where(ScrapedMember.tg_user_id == user_id_int)
+                    .order_by(ScrapedMember.scraped_at.desc())
+                )
                 results = (await session.execute(stmt)).scalars().all()
                 member_record = next((r for r in results if r.raw_data.get("access_hash")), None)
                 if not member_record and results:
@@ -176,7 +195,9 @@ class AddContactRuntime:
                 if member_record and member_record.raw_data:
                     access_hash = member_record.raw_data.get("access_hash")
                     if access_hash:
-                        target_peer = InputPeerUser(user_id=user_id_int, access_hash=int(access_hash))
+                        target_peer = InputPeerUser(
+                            user_id=user_id_int, access_hash=int(access_hash)
+                        )
 
         # 3. Try official group fetching (Chat context priming)
         if target_peer is None and tg_group_id:
@@ -189,7 +210,12 @@ class AddContactRuntime:
                             target_peer = await client.get_input_entity(u)
                             break
             except Exception as exc:
-                logger.warning("add_contact_prime_group_failed", user_id=user_id_int, tg_group_id=tg_group_id, error=str(exc))
+                logger.warning(
+                    "add_contact_prime_group_failed",
+                    user_id=user_id_int,
+                    tg_group_id=tg_group_id,
+                    error=str(exc),
+                )
 
         # 4. Fallback to direct resolution
         if target_peer is None:
@@ -208,9 +234,13 @@ class AddContactRuntime:
         from telethon.tl.functions.contacts import AddContactRequest
 
         # Final type safety check: only users can be added as contacts
-        is_user = isinstance(target_peer, (InputPeerUser, InputUser, InputPeerSelf)) or (isinstance(target_peer, int) and target_peer > 0)
+        is_user = isinstance(target_peer, (InputPeerUser, InputUser, InputPeerSelf)) or (
+            isinstance(target_peer, int) and target_peer > 0
+        )
         if not is_user:
-             raise ValueError(f"Entity {user_id_int} is not a valid Telegram user and cannot be added to contacts.")
+            raise ValueError(
+                f"Entity {user_id_int} is not a valid Telegram user and cannot be added to contacts."
+            )
 
         try:
             await client(
@@ -269,7 +299,9 @@ class GroupMemberBroadcastRuntime:
                 pid = getattr(participant, "id", None)
                 if pid is None:
                     continue
-                if bool(normalized.get("skip_bots", True)) and bool(getattr(participant, "bot", False)):
+                if bool(normalized.get("skip_bots", True)) and bool(
+                    getattr(participant, "bot", False)
+                ):
                     continue
                 if bool(getattr(participant, "deleted", False)):
                     continue
@@ -295,12 +327,16 @@ class GroupMemberBroadcastRuntime:
             for index, recipient_id in enumerate(remaining):
                 cooldown_mins = getattr(agent, "cooldown_minutes", None)
                 if cooldown_mins is not None and cooldown_mins > 0:
-                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
+                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(
+                        agent.id, cooldown_mins
+                    )
                     if in_cooldown:
                         payload["progress"]["stopped_at"] = index
                         payload["progress"]["stop_reason"] = "cooldown"
                         payload["progress"]["retry_after"] = int(cd_remaining)
-                        raise _translate_client_exception(Exception(f"Agent cooldown: {cd_remaining}s")) or Exception(f"Cooldown: {cd_remaining}s")
+                        raise _translate_client_exception(
+                            Exception(f"Agent cooldown: {cd_remaining}s")
+                        ) or Exception(f"Cooldown: {cd_remaining}s")
 
                 max_per_hour = getattr(agent, "max_actions_per_hour", None)
                 if max_per_hour is not None and max_per_hour > 0:
@@ -361,7 +397,9 @@ class GroupMemberBroadcastRuntime:
 
 
 class ScraperRuntime:
-    async def execute(self, *, client, agent: Agent, payload: dict[str, Any], job_type: str | None = None) -> dict[str, Any]:
+    async def execute(
+        self, *, client, agent: Agent, payload: dict[str, Any], job_type: str | None = None
+    ) -> dict[str, Any]:
         from bot.services.scraper_service import ScraperService
 
         async with SessionLocal() as session:
@@ -372,7 +410,9 @@ class ScraperRuntime:
                 raise ValueError("tg_group_id is required for scraper jobs")
 
             if active_job_type == SCRAPER_GROUP_INFO_JOB_TYPE:
-                result = await service._scrape_group_info_dict(agent_id=agent.id, tg_group_id=int(tg_group_id), client=client)
+                result = await service._scrape_group_info_dict(
+                    agent_id=agent.id, tg_group_id=int(tg_group_id), client=client
+                )
                 return {
                     "job_type": active_job_type,
                     "tg_group_id": int(tg_group_id),
@@ -393,7 +433,9 @@ class ScraperRuntime:
                 }
             elif active_job_type == SCRAPER_MESSAGES_JOB_TYPE:
                 scan_strategy = payload.get("scan_strategy", "auto")
-                max_age_days = int(payload.get("max_age_days", 30)) if payload.get("max_age_days") else None
+                max_age_days = (
+                    int(payload.get("max_age_days", 30)) if payload.get("max_age_days") else None
+                )
 
                 if scan_strategy == "checkpoint":
                     result = await service.scrape_messages_checkpointed(
@@ -429,7 +471,9 @@ class ScraperRuntime:
             elif active_job_type == SCRAPER_FULL_GROUP_JOB_TYPE:
                 scrape_members = payload.get("scrape_members", True)
                 scrape_messages = payload.get("scrape_messages", True)
-                max_age_days = int(payload.get("max_age_days", 30)) if payload.get("max_age_days") else None
+                max_age_days = (
+                    int(payload.get("max_age_days", 30)) if payload.get("max_age_days") else None
+                )
                 scan_strategy = payload.get("scan_strategy", "auto")
                 result = await service.scrape_full_group(
                     agent_id=agent.id,
@@ -491,6 +535,7 @@ class AgentTaskRuntime:
             )
 
             from redis.asyncio import Redis
+
             redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
             limiter = AgentRateLimiter(redis_client)
 
@@ -499,13 +544,17 @@ class AgentTaskRuntime:
                 if cooldown_mins is not None and cooldown_mins > 0:
                     in_cooldown, remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
                     if in_cooldown:
-                        logger.warning("agent_in_cooldown", agent_id=agent.id, remaining_seconds=remaining)
+                        logger.warning(
+                            "agent_in_cooldown", agent_id=agent.id, remaining_seconds=remaining
+                        )
                         return False
 
                 safety_enabled = getattr(agent, "safety_mode_enabled", True)
                 safety_until = getattr(agent, "safety_mode_until", None)
                 if await limiter.check_safety_mode(agent.id, safety_enabled, safety_until):
-                    logger.info("agent_in_safety_mode", agent_id=agent.id, safety_until=safety_until)
+                    logger.info(
+                        "agent_in_safety_mode", agent_id=agent.id, safety_until=safety_until
+                    )
                     result = await definition.handler(task_config, event)
                     if isinstance(result, dict):
                         result["_safety_mode"] = True
@@ -519,11 +568,20 @@ class AgentTaskRuntime:
                 if max_per_hour is not None:
                     allowed, count = await limiter.check_and_increment(agent.id, int(max_per_hour))
                     if not allowed:
-                        logger.warning("agent_rate_limit_exceeded", agent_id=agent.id, limit=max_per_hour, count=count)
+                        logger.warning(
+                            "agent_rate_limit_exceeded",
+                            agent_id=agent.id,
+                            limit=max_per_hour,
+                            count=count,
+                        )
                         cooldown_mins = getattr(agent, "cooldown_minutes", None)
                         if cooldown_mins is not None and cooldown_mins > 0:
                             await limiter.start_cooldown(agent.id, cooldown_mins)
-                            logger.warning("agent_entered_cooldown", agent_id=agent.id, cooldown_minutes=cooldown_mins)
+                            logger.warning(
+                                "agent_entered_cooldown",
+                                agent_id=agent.id,
+                                cooldown_minutes=cooldown_mins,
+                            )
                         return False
 
                 min_delay = (
@@ -535,6 +593,7 @@ class AgentTaskRuntime:
                     wait_seconds = await limiter.enforce_delay(agent.id, float(min_delay))
                     if wait_seconds > 0:
                         import asyncio
+
                         await asyncio.sleep(wait_seconds)
 
             finally:
@@ -546,10 +605,10 @@ class AgentTaskRuntime:
                 target_user_id = approval_request.get("target_user_id")
                 if target_user_id is None:
                     raise ValueError("Approval requests require target_user_id")
-                
+
                 group_id = event_payload.get("group_id")
                 destination = approval_request.get("chat_id") or group_id
-                
+
                 if self.approval_service and group_id:
                     bot = Bot(token=get_settings().bot_token)
                     try:
@@ -560,10 +619,16 @@ class AgentTaskRuntime:
                             agent_id=agent.id,
                             destination=destination,
                             prompt_text=str(approval_request.get("prompt_text") or "").strip(),
-                            private_reply_text=str(approval_request.get("private_reply_text") or "").strip(),
+                            private_reply_text=str(
+                                approval_request.get("private_reply_text") or ""
+                            ).strip(),
                             target_user_id=int(target_user_id),
-                            source_group_title=str(approval_request.get("source_group_title") or "").strip(),
-                            original_message_text=str(approval_request.get("original_message_text") or "").strip(),
+                            source_group_title=str(
+                                approval_request.get("source_group_title") or ""
+                            ).strip(),
+                            original_message_text=str(
+                                approval_request.get("original_message_text") or ""
+                            ).strip(),
                             source_chat_id=approval_request.get("source_chat_id"),
                             source_message_id=approval_request.get("source_message_id"),
                             bot=bot,
@@ -584,7 +649,9 @@ class AgentTaskRuntime:
                     reason=result.get("reason"),
                 )
                 if task_key == "lead_capture":
-                    await self._capture_lead(agent=agent, session=session, event=event, result=result)
+                    await self._capture_lead(
+                        agent=agent, session=session, event=event, result=result
+                    )
                 if self.activity_service and assignment_id:
                     await self.activity_service.record_activity(
                         assignment_id=str(assignment_id),
@@ -613,12 +680,14 @@ class AgentTaskRuntime:
                 delete_after = result.get("delete_after_seconds", 0)
                 if delete_after > 0 and sent is not None:
                     bot_message_id = sent.id
+
                     async def _delete_later():
                         await asyncio.sleep(delete_after)
                         try:
                             await client.delete_messages(chat_id, [bot_message_id])
                         except Exception:
                             pass
+
                     asyncio.ensure_future(_delete_later())
 
             if self.activity_service and assignment_id:
@@ -629,7 +698,9 @@ class AgentTaskRuntime:
 
             return True
         except Exception as exc:
-            logger.exception("agent_task_execution_failed", task_key=task_key, assignment_id=assignment_id)
+            logger.exception(
+                "agent_task_execution_failed", task_key=task_key, assignment_id=assignment_id
+            )
             if self.activity_service and assignment_id:
                 await self.activity_service.record_activity(
                     assignment_id=str(assignment_id),
@@ -638,9 +709,7 @@ class AgentTaskRuntime:
                 )
             raise
 
-    async def _capture_lead(
-        self, *, agent, session, event: "TaskEvent", result: dict
-    ) -> None:
+    async def _capture_lead(self, *, agent, session, event: "TaskEvent", result: dict) -> None:
         try:
             from bot.services.agent_lead_service import AgentLeadService
 
@@ -652,7 +721,9 @@ class AgentTaskRuntime:
                 tg_user_id=event.user_id,
                 username=str(event.payload.get("username") or ""),
                 first_name=str(event.payload.get("first_name") or ""),
-                last_name=str(event.payload.get("full_name") or "").split()[-1] if event.payload.get("full_name") else None,
+                last_name=str(event.payload.get("full_name") or "").split()[-1]
+                if event.payload.get("full_name")
+                else None,
                 source_group_tg_id=event.payload.get("chat_id") or event.group_id,
                 source_group_title=str(event.payload.get("group_title") or ""),
                 source_message_id=event.payload.get("message_id"),

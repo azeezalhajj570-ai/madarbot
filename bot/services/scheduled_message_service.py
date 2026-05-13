@@ -16,6 +16,8 @@ _CRON_FIELD_RANGES = (
     (1, 12),
     (0, 6),
 )
+
+
 class ScheduledMessageService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -64,7 +66,9 @@ class ScheduledMessageService:
     async def delete_entry(self, *, group_id: int, entry_id: str) -> bool:
         return await self.store.delete_entry(group_id, entry_id)
 
-    async def mark_delivered(self, *, group_id: int, entry_id: str, delivered_at: datetime | None = None) -> dict[str, Any] | None:
+    async def mark_delivered(
+        self, *, group_id: int, entry_id: str, delivered_at: datetime | None = None
+    ) -> dict[str, Any] | None:
         delivered = delivered_at or datetime.utcnow()
         entries = await self.store.list_entries(group_id)
         updated: list[ScheduledMessageEntry] = []
@@ -114,7 +118,9 @@ class ScheduledMessageService:
         await self.store.replace_entries(group_id, updated)
         return result.to_dict()
 
-    async def due_entries(self, *, group_id: int, now: datetime | None = None) -> list[dict[str, Any]]:
+    async def due_entries(
+        self, *, group_id: int, now: datetime | None = None
+    ) -> list[dict[str, Any]]:
         current = now or datetime.utcnow()
         due: list[dict[str, Any]] = []
         for entry in await self.store.list_entries(group_id):
@@ -161,7 +167,9 @@ class ScheduledMessageService:
         return None
 
     @staticmethod
-    def _parse_cron_expression(raw: str) -> tuple[set[int], set[int], set[int], set[int], set[int]] | None:
+    def _parse_cron_expression(
+        raw: str,
+    ) -> tuple[set[int], set[int], set[int], set[int], set[int]] | None:
         parts = raw.strip().split()
         if len(parts) != 5:
             return None
@@ -181,7 +189,9 @@ class ScheduledMessageService:
         return tuple(fields)  # type: ignore[return-value]
 
     @staticmethod
-    def _parse_cron_field(raw: str, *, minimum: int, maximum: int, sunday_alias: bool = False) -> set[int] | None:
+    def _parse_cron_field(
+        raw: str, *, minimum: int, maximum: int, sunday_alias: bool = False
+    ) -> set[int] | None:
         values: set[int] = set()
         for chunk in raw.split(","):
             item = chunk.strip()
@@ -199,7 +209,9 @@ class ScheduledMessageService:
         return values
 
     @staticmethod
-    def _parse_cron_chunk(raw: str, *, minimum: int, maximum: int, sunday_alias: bool = False) -> set[int] | None:
+    def _parse_cron_chunk(
+        raw: str, *, minimum: int, maximum: int, sunday_alias: bool = False
+    ) -> set[int] | None:
         if raw == "*":
             return set(range(minimum, maximum + 1))
 
@@ -244,7 +256,9 @@ class ScheduledMessageService:
         return None
 
     @staticmethod
-    def _cron_matches(dt: datetime, schedule: tuple[set[int], set[int], set[int], set[int], set[int]]) -> bool:
+    def _cron_matches(
+        dt: datetime, schedule: tuple[set[int], set[int], set[int], set[int], set[int]]
+    ) -> bool:
         minute, hour, day, month, weekday = schedule
         return (
             dt.minute in minute
@@ -255,6 +269,8 @@ class ScheduledMessageService:
         )
 
     async def _ensure_group_exists(self, group_id: int) -> None:
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             raise ValueError("Group not found")

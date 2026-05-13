@@ -74,7 +74,9 @@ class MenuEngine:
             kb.adjust(1, len(nav), 1)
         return kb.as_markup()
 
-    def empty_group_selector(self, lang: str, add_group_url: str | None = None) -> InlineKeyboardMarkup:
+    def empty_group_selector(
+        self, lang: str, add_group_url: str | None = None
+    ) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
         if add_group_url:
             kb.button(text=t("add_group", lang), url=add_group_url)
@@ -115,7 +117,9 @@ class MenuEngine:
         kb.adjust(1)
         return kb.as_markup()
 
-    def numeric_slider(self, schema: SettingSchema, current: int, lang: str) -> InlineKeyboardMarkup:
+    def numeric_slider(
+        self, schema: SettingSchema, current: int, lang: str
+    ) -> InlineKeyboardMarkup:
         kb = InlineKeyboardBuilder()
         min_value = schema.min if schema.min is not None else 0
         max_value = schema.max if schema.max is not None else 100

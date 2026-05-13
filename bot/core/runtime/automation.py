@@ -7,7 +7,12 @@ from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.core.runtime.actions import SendRuntimeMessageAction
-from bot.core.runtime.audit import AuditEntry, ModerationLogAuditSink, RuntimeAuditService, serialize_guard_result
+from bot.core.runtime.audit import (
+    AuditEntry,
+    ModerationLogAuditSink,
+    RuntimeAuditService,
+    serialize_guard_result,
+)
 from bot.core.runtime.events import RuntimeEvent, RuntimeEventType
 from bot.core.runtime.executors import ActionExecutorRegistry
 from bot.core.runtime.guards import GuardDecision, GuardPipeline, GuardResult
@@ -76,7 +81,9 @@ class HasMessageOperationGuard:
     async def evaluate(self, event: RuntimeEvent, action: SendRuntimeMessageAction) -> GuardResult:
         _ = event
         has_text = bool(str(action.text or "").strip())
-        has_forward = action.forward_from_chat_id is not None and action.forward_message_id is not None
+        has_forward = (
+            action.forward_from_chat_id is not None and action.forward_message_id is not None
+        )
         has_copy = action.copy_from_chat_id is not None and action.copy_message_id is not None
         if not (has_text or has_forward or has_copy):
             return GuardResult(
@@ -93,7 +100,11 @@ class ValidDestinationGuard:
         _ = event
         destination = action.chat_id
         if destination in (None, ""):
-            return GuardResult(decision=GuardDecision.DENY, code="missing_destination", reason="Destination chat is missing")
+            return GuardResult(
+                decision=GuardDecision.DENY,
+                code="missing_destination",
+                reason="Destination chat is missing",
+            )
         return GuardResult(decision=GuardDecision.ALLOW)
 
 
@@ -265,12 +276,17 @@ class AutomationRuntimeService:
         audit_action: str,
         target_user_id: int | None = None,
     ) -> dict[str, Any]:
-        guard_result = await GuardPipeline(guards=[ValidDestinationGuard(), HasMessageOperationGuard()]).evaluate(event, action)
+        guard_result = await GuardPipeline(
+            guards=[ValidDestinationGuard(), HasMessageOperationGuard()]
+        ).evaluate(event, action)
         if guard_result.decision == GuardDecision.DENY:
             return {"status": "skipped", "reason": guard_result.reason}
 
         registry = ActionExecutorRegistry()
-        registry.register("send_runtime_message", lambda runtime_action: self._send_message(runtime_action, bot=bot))
+        registry.register(
+            "send_runtime_message",
+            lambda runtime_action: self._send_message(runtime_action, bot=bot),
+        )
         result = await registry.execute(action)
 
         await RuntimeAuditService(ModerationLogAuditSink(self.session)).record(

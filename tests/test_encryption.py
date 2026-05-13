@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 from bot.utils.encryption import decrypt_value, encrypt_value
 
 
 def test_encrypt_decrypt_roundtrip_with_key() -> None:
     from cryptography.fernet import Fernet
+
     key = Fernet.generate_key().decode()
     with patch("bot.utils.encryption.get_settings") as mock_settings:
         mock_settings.return_value.session_encryption_key = key

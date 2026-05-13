@@ -46,7 +46,9 @@ class PluginManager:
         for module_name in self.discover():
             await self.load_plugin(module_name, dispatcher, event_bus)
 
-    async def load_plugin(self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus) -> None:
+    async def load_plugin(
+        self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus
+    ) -> None:
         if module_name in self._loaded:
             return
         module = importlib.import_module(module_name)
@@ -58,14 +60,18 @@ class PluginManager:
             instance=plugin,
         )
 
-    async def unload_plugin(self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus) -> None:
+    async def unload_plugin(
+        self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus
+    ) -> None:
         loaded = self._loaded.get(module_name)
         if not loaded:
             return
         await loaded.instance.teardown(dispatcher, event_bus)
         self._loaded.pop(module_name, None)
 
-    async def reload_plugin(self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus) -> None:
+    async def reload_plugin(
+        self, module_name: str, dispatcher: Dispatcher, event_bus: EventBus
+    ) -> None:
         loaded = self._loaded.get(module_name)
         if loaded:
             await loaded.instance.teardown(dispatcher, event_bus)
@@ -90,10 +96,14 @@ class PluginManager:
     def loaded_plugins(self) -> list[LoadedPlugin]:
         return list(self._loaded.values())
 
-    async def enable_for_group(self, session: AsyncSession, group_id: int, plugin_name: str) -> None:
+    async def enable_for_group(
+        self, session: AsyncSession, group_id: int, plugin_name: str
+    ) -> None:
         await PluginService(session).set_enabled(group_id, plugin_name, True)
 
-    async def disable_for_group(self, session: AsyncSession, group_id: int, plugin_name: str) -> None:
+    async def disable_for_group(
+        self, session: AsyncSession, group_id: int, plugin_name: str
+    ) -> None:
         await PluginService(session).set_enabled(group_id, plugin_name, False)
 
     def discover_schema_catalog(self) -> dict[str, list[SettingSchema]]:

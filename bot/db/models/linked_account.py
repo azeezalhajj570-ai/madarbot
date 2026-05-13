@@ -17,7 +17,18 @@ from typing import Optional
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.db.base import Base
@@ -28,14 +39,22 @@ class LinkedAccount(Base):
 
     Replaces: agents, accounts
     """
+
     __tablename__ = "linked_accounts"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "provider", "external_account_id", name="uq_linked_account_tenant_provider_ext"),
+        UniqueConstraint(
+            "tenant_id",
+            "provider",
+            "external_account_id",
+            name="uq_linked_account_tenant_provider_ext",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
-    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="telegram", index=True)
+    provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="telegram", index=True
+    )
     # telegram, whatsapp, instagram (future)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     external_account_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -48,7 +67,9 @@ class LinkedAccount(Base):
     phone_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
     # active, disconnected, suspended, banned
-    auth_state: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)
+    auth_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", index=True
+    )
     # active, pending_2fa, awaiting_code, failed
     # Rate limiting
     max_actions_per_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -57,17 +78,22 @@ class LinkedAccount(Base):
     cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Safety
     safety_mode_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    safety_mode_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    safety_mode_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Metadata blob (e.g. provider-specific info)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
     # Relationships
     groups_rel: Mapped[list["LinkedAccountGroup"]] = relationship(
-        back_populates="linked_account", cascade="all, delete-orphan",
+        back_populates="linked_account",
+        cascade="all, delete-orphan",
     )
     task_runs: Mapped[list["TaskRun"]] = relationship(back_populates="linked_account")
 
@@ -77,6 +103,7 @@ class LinkedAccountGroup(Base):
 
     Replaces: account_groups, agent.group_id (single-group FK on agents)
     """
+
     __tablename__ = "linked_account_groups"
     __table_args__ = (
         UniqueConstraint("linked_account_id", "group_id", name="uq_linked_account_group"),
@@ -84,7 +111,8 @@ class LinkedAccountGroup(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     linked_account_id: Mapped[int] = mapped_column(
-        ForeignKey("linked_accounts.id", ondelete="CASCADE"), index=True,
+        ForeignKey("linked_accounts.id", ondelete="CASCADE"),
+        index=True,
     )
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="member", index=True)
@@ -92,7 +120,9 @@ class LinkedAccountGroup(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
 
     # Relationships

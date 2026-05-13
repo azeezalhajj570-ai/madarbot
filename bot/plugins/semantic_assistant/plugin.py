@@ -54,7 +54,11 @@ class SemanticAssistantPlugin:
 
         async with SessionLocal() as session:
             group = (
-                await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id)))))
+                await session.execute(
+                    select(Group).where(
+                        Group.tg_group_id.in_(tg_group_id_candidates(int(event.group_id)))
+                    )
+                )
             ).scalar_one_or_none()
             if group is None:
                 return
@@ -62,9 +66,15 @@ class SemanticAssistantPlugin:
                 return
 
             settings_service = SettingsService(session)
-            service_name = str(await settings_service.get_one(group.id, "semantic_assistant_service_name") or "").strip()
-            resource_scope = str(await settings_service.get_one(group.id, "semantic_assistant_resource_scope") or "").strip()
-            reply_prefix = str(await settings_service.get_one(group.id, "semantic_assistant_reply_prefix") or "").strip()
+            service_name = str(
+                await settings_service.get_one(group.id, "semantic_assistant_service_name") or ""
+            ).strip()
+            resource_scope = str(
+                await settings_service.get_one(group.id, "semantic_assistant_resource_scope") or ""
+            ).strip()
+            reply_prefix = str(
+                await settings_service.get_one(group.id, "semantic_assistant_reply_prefix") or ""
+            ).strip()
             top_k = await settings_service.get_one(group.id, "semantic_assistant_top_k")
 
         service = SemanticSearchService(

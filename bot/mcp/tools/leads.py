@@ -6,7 +6,6 @@ from mcp.types import ToolAnnotations
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -40,7 +39,6 @@ def register_lead_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_leads(
         agent_id: int | None = None,
@@ -50,7 +48,7 @@ def register_lead_tools(server: FastMCP) -> None:
         page_size: int = 25,
     ) -> str:
         """List leads with optional filters."""
-        ctx = resolve_mcp_context()
+        resolve_mcp_context()
         async with SessionLocal() as session:
             service = AgentLeadService(session)
             result_data = await service.list_leads(
@@ -69,7 +67,6 @@ def register_lead_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_lead(lead_id: int) -> str:
         """Get a single lead by ID."""
@@ -100,7 +97,6 @@ def register_lead_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_update_lead_status(
         lead_id: int,
@@ -139,7 +135,6 @@ def register_lead_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_add_lead_note(lead_id: int, note: str) -> str:
         """Add a note to a lead. Requires MCP_READONLY=false."""
@@ -173,7 +168,6 @@ def register_lead_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
-
     )
     async def madarbot_delete_lead(lead_id: int, confirm: bool = False) -> str:
         """Delete a lead. Requires confirmation and MCP_READONLY=false."""

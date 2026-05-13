@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,13 +30,19 @@ async def create_mcp_token(
 ) -> dict[str, Any]:
     name = payload.name.strip()
     if not name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Token name is required")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Token name is required"
+        )
     if len(name) > 128:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Token name too long (max 128)")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Token name too long (max 128)"
+        )
 
     expires_at: datetime | None = None
     if payload.expires_in_days:
-        expires_at = datetime.now(timezone.utc).replace(microsecond=0) + __import__("datetime").timedelta(days=payload.expires_in_days)
+        expires_at = datetime.now(timezone.utc).replace(microsecond=0) + __import__(
+            "datetime"
+        ).timedelta(days=payload.expires_in_days)
 
     token, record = await MCPTokenService(session).create_token(
         tg_user_id=identity.user_id,
@@ -65,7 +71,9 @@ async def revoke_mcp_token(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    record = await MCPTokenService(session).revoke_token(token_id=token_id, tg_user_id=identity.user_id)
+    record = await MCPTokenService(session).revoke_token(
+        token_id=token_id, tg_user_id=identity.user_id
+    )
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
     return {"status": "ok", "token_data": MCPTokenService.serialize(record)}

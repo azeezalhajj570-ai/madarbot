@@ -41,9 +41,10 @@ async def _update_agent_job(
 ) -> None:
     if agent_job_id is None:
         return
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
-        job = (await session.execute(select(AgentJob).where(AgentJob.id == agent_job_id))).scalar_one_or_none()
+        job = (
+            await session.execute(select(AgentJob).where(AgentJob.id == agent_job_id))
+        ).scalar_one_or_none()
         if job is None:
             return
         payload = dict(job.job_payload or {})
@@ -59,9 +60,10 @@ async def _update_agent_job(
 async def _load_runnable_agent_job(agent_job_id: int | None) -> AgentJob | None:
     if agent_job_id is None:
         return None
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
-        job = (await session.execute(select(AgentJob).where(AgentJob.id == agent_job_id))).scalar_one_or_none()
+        job = (
+            await session.execute(select(AgentJob).where(AgentJob.id == agent_job_id))
+        ).scalar_one_or_none()
         if job is None:
             return None
         if job.status in {"aborted", "completed"}:
@@ -77,7 +79,6 @@ async def _write_membership_audit(
     result: str,
     flood_wait_seconds: int | None = None,
 ) -> None:
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
         session.add(
             MembershipAuditLog(
@@ -93,7 +94,6 @@ async def _write_membership_audit(
 
 
 async def _mark_group_member_added(*, group_id: int, user_id: int) -> None:
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
         existing = (
             await session.execute(
@@ -121,9 +121,10 @@ async def _run_add_user_to_group_task(group_id: int, user_id: int, requested_by:
     bound_logger = logger.bind(group_id=group_id, user_id=user_id, requested_by=requested_by)
     bound_logger.info("membership_add_task_started")
 
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
-        group = (await session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             bound_logger.warning("membership_add_group_missing")
             return
@@ -209,7 +210,11 @@ def add_user_to_group_task(
     target_tg_group_id: int | None = None,
     agent_job_id: int | None = None,
 ) -> None:
-    asyncio.run(_run_add_user_to_group_task_with_agent(group_id, user_id, requested_by, agent_id, target_tg_group_id, agent_job_id))
+    asyncio.run(
+        _run_add_user_to_group_task_with_agent(
+            group_id, user_id, requested_by, agent_id, target_tg_group_id, agent_job_id
+        )
+    )
 
 
 async def _run_add_user_to_group_task_with_agent(
@@ -235,12 +240,15 @@ async def _run_add_user_to_group_task_with_agent(
         return
     await _update_agent_job(agent_job_id=agent_job_id, status="running")
 
-    from bot.db.session import SessionLocal
     async with SessionLocal() as session:
-        group = (await session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if group is None:
             bound_logger.warning("membership_add_group_missing")
-            await _update_agent_job(agent_job_id=agent_job_id, status="failed", error="Target group not found")
+            await _update_agent_job(
+                agent_job_id=agent_job_id, status="failed", error="Target group not found"
+            )
             return
 
         existing_member = (
@@ -261,7 +269,9 @@ async def _run_add_user_to_group_task_with_agent(
             if agent_id is not None:
                 agent_query = agent_query.where(Agent.id == agent_id)
             else:
-                agent_query = agent_query.where(Agent.group_id == group_id).order_by(desc(Agent.updated_at), desc(Agent.id))
+                agent_query = agent_query.where(Agent.group_id == group_id).order_by(
+                    desc(Agent.updated_at), desc(Agent.id)
+                )
             agent = (await session.execute(agent_query)).scalars().first()
             if agent is None:
                 result = AddUserResult(success=False, error_code=ERROR_UNKNOWN)
@@ -312,7 +322,10 @@ async def _run_add_user_to_group_task_with_agent(
         await _update_agent_job(
             agent_job_id=agent_job_id,
             status="completed",
-            result={"user_id": user_id, "target_tg_group_id": int(target_tg_group_id or group.tg_group_id)},
+            result={
+                "user_id": user_id,
+                "target_tg_group_id": int(target_tg_group_id or group.tg_group_id),
+            },
         )
         bound_logger.info("membership_add_task_succeeded", error_code=None, flood_wait_seconds=None)
         return
@@ -321,7 +334,11 @@ async def _run_add_user_to_group_task_with_agent(
         await _update_agent_job(
             agent_job_id=agent_job_id,
             status="completed",
-            result={"user_id": user_id, "target_tg_group_id": int(target_tg_group_id or group.tg_group_id), "skipped": "already_member"},
+            result={
+                "user_id": user_id,
+                "target_tg_group_id": int(target_tg_group_id or group.tg_group_id),
+                "skipped": "already_member",
+            },
         )
     else:
         await _update_agent_job(

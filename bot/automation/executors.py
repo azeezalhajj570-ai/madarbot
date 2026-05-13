@@ -57,15 +57,24 @@ class BotTaskExecutor(BaseTaskExecutor):
         self.dispatch_delete_message = dispatch_delete_message
         self.automation_runtime = automation_runtime
 
-    def _schedule_delete(self, *, delay_seconds: int, chat_id: int | str, message_id: int | None) -> None:
-        if self.dispatch_delete_message and delay_seconds > 0 and message_id is not None and isinstance(chat_id, int):
+    def _schedule_delete(
+        self, *, delay_seconds: int, chat_id: int | str, message_id: int | None
+    ) -> None:
+        if (
+            self.dispatch_delete_message
+            and delay_seconds > 0
+            and message_id is not None
+            and isinstance(chat_id, int)
+        ):
             self.dispatch_delete_message(
                 delay_seconds=delay_seconds,
                 chat_id=chat_id,
                 message_id=message_id,
             )
 
-    async def execute(self, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent) -> dict[str, Any]:
+    async def execute(
+        self, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent
+    ) -> dict[str, Any]:
         bot = event.payload.get("bot")
         if bot is None:
             raise ValueError("Bot executor requires bot in event payload")
@@ -73,7 +82,11 @@ class BotTaskExecutor(BaseTaskExecutor):
         result = await task.handler(assignment.config, event)
         if result.get("reply_markup") is None:
             result["reply_markup"] = _build_inline_keyboard(result.get("inline_buttons"))
-        if self.automation_runtime is not None and task.key == "reply_message" and result.get("text"):
+        if (
+            self.automation_runtime is not None
+            and task.key == "reply_message"
+            and result.get("text")
+        ):
             return await self.automation_runtime.execute_keyword_reply(
                 KeywordReplyRequest(
                     group_id=event.group_id,
@@ -183,11 +196,15 @@ class AgentJobExecutor(BaseTaskExecutor):
         self.agent_service = agent_service
         self.dispatch_job = dispatch_job
 
-    async def execute(self, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent) -> dict[str, Any]:
+    async def execute(
+        self, task: TaskDefinition, assignment: TaskAssignment, event: TaskEvent
+    ) -> dict[str, Any]:
         if assignment.agent_id is None:
             raise ValueError("Agent executor requires agent_id")
         agent = (
-            await self.agent_service.session.execute(select(Agent).where(Agent.id == assignment.agent_id))
+            await self.agent_service.session.execute(
+                select(Agent).where(Agent.id == assignment.agent_id)
+            )
         ).scalar_one_or_none()
         if agent is None or agent.auth_state != "active":
             logger.warning(

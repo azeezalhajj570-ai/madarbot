@@ -2,12 +2,13 @@
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from bot.db.models.faq import FAQMode, FAQSourceType, FAQInteractionStatus, UnansweredQuestionStatus
+
 
 class FAQSettingsSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     enabled: bool = False
     safe_mode: bool = True
     default_mode: FAQMode = FAQMode.ADMIN_SUGGESTION
@@ -30,6 +31,7 @@ class FAQEntryCreate(BaseModel):
     source_ref: Optional[str] = None
     enabled: bool = True
 
+
 class FAQEntryUpdate(BaseModel):
     question: Optional[str] = None
     answer: Optional[str] = None
@@ -37,6 +39,7 @@ class FAQEntryUpdate(BaseModel):
     language: Optional[str] = None
     category: Optional[str] = None
     enabled: Optional[bool] = None
+
 
 class FAQEntrySchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -88,11 +91,13 @@ class UnansweredQuestionSchema(BaseModel):
 class FAQTestMatchRequest(BaseModel):
     question: str
 
+
 class FAQTestMatchResponse(BaseModel):
     matched: bool
     confidence: float
     entry_id: Optional[int] = None
     answer: Optional[str] = None
+
 
 class FAQAnswerPayload(BaseModel):
     answer: str

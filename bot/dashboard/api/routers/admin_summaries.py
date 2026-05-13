@@ -106,7 +106,9 @@ async def put_group_summary_settings(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     await ensure_group_admin(group_id, session, identity)
-    settings = await DailyAdminSummaryService(session).update_settings(group_id, payload.model_dump())
+    settings = await DailyAdminSummaryService(session).update_settings(
+        group_id, payload.model_dump()
+    )
     return _serialize_settings(settings)
 
 
@@ -133,7 +135,9 @@ async def get_group_summary(
     await ensure_group_admin(group_id, session, identity)
     summary = (
         await session.execute(
-            select(DailyGroupSummary).where(DailyGroupSummary.group_id == group_id, DailyGroupSummary.id == summary_id)
+            select(DailyGroupSummary).where(
+                DailyGroupSummary.group_id == group_id, DailyGroupSummary.id == summary_id
+            )
         )
     ).scalar_one_or_none()
     if summary is None:

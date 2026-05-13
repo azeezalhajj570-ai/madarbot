@@ -111,7 +111,11 @@ async def get_messaging_context(
     service = MessagingService(session)
 
     if authorization:
-        token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else authorization.strip()
+        token = (
+            authorization[7:].strip()
+            if authorization.lower().startswith("bearer ")
+            else authorization.strip()
+        )
         try:
             return await service.authenticate_bearer_token(token)
         except MessagingAuthError as exc:
@@ -137,7 +141,9 @@ def _serialize_channel(channel: ChannelAccount) -> dict[str, Any]:
     }
 
 
-def _serialize_conversation(conversation: Conversation, contact: Contact | None = None) -> dict[str, Any]:
+def _serialize_conversation(
+    conversation: Conversation, contact: Contact | None = None
+) -> dict[str, Any]:
     return {
         "id": str(conversation.id),
         "channelAccountId": str(conversation.channel_account_id),
@@ -153,9 +159,21 @@ def _serialize_conversation(conversation: Conversation, contact: Contact | None 
 
 def _serialize_message(message: Message) -> dict[str, Any]:
     raw_payload = message.raw_payload or {}
-    delivery = raw_payload.get("delivery") if isinstance(raw_payload.get("delivery"), dict) else None
+    delivery = (
+        raw_payload.get("delivery") if isinstance(raw_payload.get("delivery"), dict) else None
+    )
     safe_payload: dict[str, Any] = {}
-    for key in ("source", "reason", "confidence", "safetyCategory", "autoSendRequested", "edited", "editedAt", "discarded", "discardedAt"):
+    for key in (
+        "source",
+        "reason",
+        "confidence",
+        "safetyCategory",
+        "autoSendRequested",
+        "edited",
+        "editedAt",
+        "discarded",
+        "discardedAt",
+    ):
         if key in raw_payload:
             safe_payload[key] = raw_payload[key]
     if delivery:
@@ -195,7 +213,10 @@ def _notification_service(session: AsyncSession) -> NotificationService:
 
 
 @router.get("/me")
-async def get_me(context: MessagingAuthContext = Depends(get_messaging_context), session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+async def get_me(
+    context: MessagingAuthContext = Depends(get_messaging_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
     return await MessagingService(session).get_me(context.user)
 
 
@@ -263,7 +284,9 @@ async def patch_business_profile(
     context: MessagingAuthContext = Depends(get_messaging_context),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    tenant = await MessagingService(session).update_business_profile(context.tenant, body.model_dump())
+    tenant = await MessagingService(session).update_business_profile(
+        context.tenant, body.model_dump()
+    )
     return await MessagingService(session).get_tenant_payload(tenant)
 
 
@@ -340,12 +363,15 @@ async def get_conversations(
     contacts = {
         contact.id: contact
         for contact in (
-            await session.execute(
-                select(Contact).where(Contact.tenant_id == context.tenant.id)
-            )
+            await session.execute(select(Contact).where(Contact.tenant_id == context.tenant.id))
         ).scalars()
     }
-    return {"conversations": [_serialize_conversation(conversation, contacts.get(conversation.contact_id)) for conversation in conversations]}
+    return {
+        "conversations": [
+            _serialize_conversation(conversation, contacts.get(conversation.contact_id))
+            for conversation in conversations
+        ]
+    }
 
 
 @router.get("/conversations/{conversation_id}")
@@ -375,7 +401,9 @@ async def post_conversation_message(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     try:
-        message = await MessagingService(session).send_message(context.tenant.id, conversation_id, body.text)
+        message = await MessagingService(session).send_message(
+            context.tenant.id, conversation_id, body.text
+        )
     except MessagingAuthError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MessagingIntegrationError as exc:
@@ -390,7 +418,9 @@ async def post_conversation_handoff(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     try:
-        conversation = await MessagingService(session).handoff_conversation(context.tenant.id, conversation_id)
+        conversation = await MessagingService(session).handoff_conversation(
+            context.tenant.id, conversation_id
+        )
     except MessagingAuthError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     result = await session.execute(select(Contact).where(Contact.id == conversation.contact_id))
@@ -406,7 +436,9 @@ async def patch_message_draft(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     try:
-        message = await MessagingService(session).update_draft_message(context.tenant.id, message_id, text=body.text)
+        message = await MessagingService(session).update_draft_message(
+            context.tenant.id, message_id, text=body.text
+        )
     except MessagingAuthError as exc:
         detail = str(exc)
         status_code = 404 if detail == "Message not found" else 400
@@ -572,7 +604,9 @@ async def get_analytics(
 async def post_evolution_webhook(
     channel_account_id: int,
     payload: dict[str, Any],
-    x_evolution_webhook_secret: str | None = Header(default=None, alias="X-Evolution-Webhook-Secret"),
+    x_evolution_webhook_secret: str | None = Header(
+        default=None, alias="X-Evolution-Webhook-Secret"
+    ),
     secret: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:

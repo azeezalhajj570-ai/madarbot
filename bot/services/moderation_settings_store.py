@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bot.services.settings_service import GroupSettingAdapter, SettingsService, parse_bool_setting, parse_int_setting
+from bot.services.settings_service import (
+    GroupSettingAdapter,
+    SettingsService,
+    parse_bool_setting,
+    parse_int_setting,
+)
 
 
 @dataclass
@@ -65,7 +70,9 @@ class ModerationSettingsStore:
             join_request_verify=bool(values["join_request_verify"]),
         )
 
-    async def is_feature_enabled(self, group_id: int, feature_key: str, *, default: bool = True) -> bool:
+    async def is_feature_enabled(
+        self, group_id: int, feature_key: str, *, default: bool = True
+    ) -> bool:
         settings = await self.get_settings(group_id)
         value = getattr(settings, feature_key, None)
         if isinstance(value, bool):

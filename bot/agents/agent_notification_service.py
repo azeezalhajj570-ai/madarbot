@@ -69,14 +69,21 @@ class AgentNotificationService(AgentServiceSupport):
             stmt = stmt.where(AgentNotification.agent_id == agent_id)
         elif group_id is not None:
             await self.ensure_group_admin(group_id, actor_user_id)
-            stmt = stmt.where(AgentNotification.group_id == group_id, AgentNotification.agent_id.is_(None))
+            stmt = stmt.where(
+                AgentNotification.group_id == group_id, AgentNotification.agent_id.is_(None)
+            )
 
         items = (
-            await self.session.execute(
-                stmt.order_by(desc(AgentNotification.created_at), desc(AgentNotification.id))
-                .limit(normalized_limit)
+            (
+                await self.session.execute(
+                    stmt.order_by(
+                        desc(AgentNotification.created_at), desc(AgentNotification.id)
+                    ).limit(normalized_limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         unseen_stmt = select(func.count(AgentNotification.id)).where(
             AgentNotification.is_seen.is_(False),
@@ -93,7 +100,9 @@ class AgentNotificationService(AgentServiceSupport):
             "unseen_count": unseen_count,
         }
 
-    async def mark_all_seen(self, *, actor_user_id: int, agent_id: int | None = None, group_id: int | None = None) -> int:
+    async def mark_all_seen(
+        self, *, actor_user_id: int, agent_id: int | None = None, group_id: int | None = None
+    ) -> int:
         if agent_id is None and group_id is None:
             return 0
 

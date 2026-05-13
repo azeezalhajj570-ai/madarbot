@@ -6,7 +6,6 @@ from mcp.types import ToolAnnotations
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -18,7 +17,6 @@ def register_notification_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_notifications(
         agent_id: int | None = None,
@@ -44,7 +42,6 @@ def register_notification_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_mark_notifications_seen(
         agent_id: int | None = None,
@@ -74,7 +71,6 @@ def register_notification_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_unseen_count(
         agent_id: int | None = None,

@@ -66,7 +66,9 @@ async def webapp_group_tasks(
     bot: Bot = Depends(get_bot),
 ) -> list[dict]:
     try:
-        return await _runtime(session, bot).list_assignments(actor_user_id=identity.user_id, group_id=group_id)
+        return await _runtime(session, bot).list_assignments(
+            actor_user_id=identity.user_id, group_id=group_id
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
@@ -83,6 +85,7 @@ async def webapp_save_group_task(
     await ensure_group_admin(group_id, session, identity)
     try:
         from bot.services.task_assignment_store import TaskAssignmentStore
+
         assignments = await TaskAssignmentStore(session).list_assignments(group_id=group_id)
         await check_plan_limit(session, identity, "automation_tasks", len(assignments))
         assignment = await _runtime(session, bot).save_assignment(
@@ -102,7 +105,9 @@ async def webapp_save_group_task(
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return {"status": "ok", "assignment": assignment}
 
 
@@ -118,7 +123,8 @@ async def webapp_update_group_task(
 ) -> dict[str, object]:
     try:
         existing_list = await _runtime(session, bot).list_assignments(
-            actor_user_id=identity.user_id, group_id=group_id,
+            actor_user_id=identity.user_id,
+            group_id=group_id,
         )
         found = next((a for a in existing_list if a["assignment_id"] == assignment_id), None)
         if not found:
@@ -129,19 +135,31 @@ async def webapp_update_group_task(
             group_id=group_id,
             assignment_id=assignment_id,
             task_key=payload.task_key if payload.task_key is not None else found["task_key"],
-            executor_type=payload.executor_type if payload.executor_type is not None else found["executor_type"],
+            executor_type=payload.executor_type
+            if payload.executor_type is not None
+            else found["executor_type"],
             enabled=payload.enabled if payload.enabled is not None else found["enabled"],
-            conditions=payload.conditions if payload.conditions is not None else found["conditions"],
+            conditions=payload.conditions
+            if payload.conditions is not None
+            else found["conditions"],
             config=payload.config if payload.config is not None else found["config"],
             agent_id=payload.agent_id if payload.agent_id is not None else found.get("agent_id"),
-            group_ids=payload.group_ids if payload.group_ids is not None else found.get("group_ids", []),
-            group_tg_ids=payload.group_tg_ids if payload.group_tg_ids is not None else found.get("group_tg_ids", []),
-            group_titles=payload.group_titles if payload.group_titles is not None else found.get("group_titles", []),
+            group_ids=payload.group_ids
+            if payload.group_ids is not None
+            else found.get("group_ids", []),
+            group_tg_ids=payload.group_tg_ids
+            if payload.group_tg_ids is not None
+            else found.get("group_tg_ids", []),
+            group_titles=payload.group_titles
+            if payload.group_titles is not None
+            else found.get("group_titles", []),
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return {"status": "ok", "assignment": assignment}
 
 
@@ -189,6 +207,7 @@ async def webapp_create_scheduled_message(
     await ensure_group_admin(group_id, session, identity)
     try:
         from bot.services.scheduled_message_service import ScheduledMessageService
+
         svc = ScheduledMessageService(session)
         existing = await svc.list_entries(group_id=group_id)
         current_count = len([e for e in existing if e.get("status") == "pending"])
@@ -201,7 +220,9 @@ async def webapp_create_scheduled_message(
             delete_after_seconds=payload.delete_after_seconds,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return {"status": "ok", "scheduled_message": entry}
 
 
@@ -218,10 +239,13 @@ async def webapp_update_scheduled_message(
     await ensure_group_admin(group_id, session, identity)
     try:
         from bot.services.scheduled_message_service import ScheduledMessageService
+
         svc = ScheduledMessageService(session)
         existing = await svc.get_entry(group_id=group_id, entry_id=entry_id)
         if not existing:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheduled message not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Scheduled message not found"
+            )
 
         text = payload.text if payload.text is not None else existing["text"]
 
@@ -232,7 +256,11 @@ async def webapp_update_scheduled_message(
         else:
             schedule = existing["send_at"].replace("T", " ")
 
-        delete_after_seconds = payload.delete_after_seconds if payload.delete_after_seconds is not None else existing.get("delete_after_seconds")
+        delete_after_seconds = (
+            payload.delete_after_seconds
+            if payload.delete_after_seconds is not None
+            else existing.get("delete_after_seconds")
+        )
 
         entry = await _runtime(session, bot).update_scheduled_message(
             actor_user_id=identity.user_id,
@@ -245,7 +273,9 @@ async def webapp_update_scheduled_message(
     except HTTPException:
         raise
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return {"status": "ok", "scheduled_message": entry}
 
 
@@ -266,8 +296,11 @@ async def webapp_send_scheduled_message_now(
             bot=bot,
         )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)
+        ) from exc
     return {"status": "ok", "result": result}
+
 
 @router.delete("/api/admin/groups/{group_id}/scheduled-messages/{entry_id}")
 @router.delete("/webapp/groups/{group_id}/scheduled-messages/{entry_id}")
@@ -279,7 +312,9 @@ async def webapp_delete_scheduled_message(
     bot: Bot = Depends(get_bot),
 ) -> dict[str, object]:
     await ensure_group_admin(group_id, session, identity)
-    deleted = await _runtime(session, bot).delete_scheduled_message(actor_user_id=identity.user_id, group_id=group_id, entry_id=entry_id)
+    deleted = await _runtime(session, bot).delete_scheduled_message(
+        actor_user_id=identity.user_id, group_id=group_id, entry_id=entry_id
+    )
     return {"status": "ok" if deleted else "missing", "deleted": deleted}
 
 

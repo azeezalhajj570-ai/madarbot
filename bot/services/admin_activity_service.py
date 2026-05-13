@@ -11,9 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
 from bot.core.runtime.audit import AuditEntry, ModerationLogAuditSink, RuntimeAuditService
-from bot.db.models import Group, GroupSetting, ModerationEvent, ModerationLog, PluginEnabled, ScrapedGroup, ScrapedMember, ScrapedMessage, Warning
+from bot.db.models import (
+    Group,
+    GroupSetting,
+    ModerationEvent,
+    ModerationLog,
+    PluginEnabled,
+    ScrapedGroup,
+    ScrapedMember,
+    ScrapedMessage,
+    Warning,
+)
 from bot.db.models.agent import AgentLead
 from bot.services.group_service import tg_group_id_candidates
+
 
 class AdminActivityService:
     def __init__(self, session: AsyncSession, *, bot_factory: type[Bot] | None = None) -> None:
@@ -21,24 +32,36 @@ class AdminActivityService:
         self.bot_factory = bot_factory or Bot
 
     async def build_group_overview(self, *, group_id: int) -> dict[str, Any]:
-        group = (await self.session.execute(select(Group).where(Group.id == group_id))).scalar_one_or_none()
+        group = (
+            await self.session.execute(select(Group).where(Group.id == group_id))
+        ).scalar_one_or_none()
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
         settings_count = (
-            await self.session.execute(select(func.count(GroupSetting.id)).where(GroupSetting.group_id == group_id))
+            await self.session.execute(
+                select(func.count(GroupSetting.id)).where(GroupSetting.group_id == group_id)
+            )
         ).scalar_one()
         enabled_plugins = (
             await self.session.execute(
-                select(func.count(PluginEnabled.id)).where(PluginEnabled.group_id == group_id, PluginEnabled.enabled.is_(True))
+                select(func.count(PluginEnabled.id)).where(
+                    PluginEnabled.group_id == group_id, PluginEnabled.enabled.is_(True)
+                )
             )
         ).scalar_one()
         warning_total = (
-            await self.session.execute(select(func.coalesce(func.sum(Warning.count), 0)).where(Warning.group_id == group_id))
+            await self.session.execute(
+                select(func.coalesce(func.sum(Warning.count), 0)).where(
+                    Warning.group_id == group_id
+                )
+            )
         ).scalar_one()
         total_leads = (
             await self.session.execute(
-                select(func.count(func.distinct(ModerationLog.target_user_id))).where(ModerationLog.group_id == group_id, ModerationLog.action == "lead_captured")
+                select(func.count(func.distinct(ModerationLog.target_user_id))).where(
+                    ModerationLog.group_id == group_id, ModerationLog.action == "lead_captured"
+                )
             )
         ).scalar_one()
 
@@ -51,7 +74,13 @@ class AdminActivityService:
         total_leads = int(total_leads) + int(agent_leads_count)
         recent_rows = (
             await self.session.execute(
-                select(ModerationLog.action, ModerationLog.reason, ModerationLog.admin_user_id, ModerationLog.created_at, ModerationLog.details)
+                select(
+                    ModerationLog.action,
+                    ModerationLog.reason,
+                    ModerationLog.admin_user_id,
+                    ModerationLog.created_at,
+                    ModerationLog.details,
+                )
                 .where(ModerationLog.group_id == group_id)
                 .order_by(desc(ModerationLog.created_at))
                 .limit(20)
@@ -66,7 +95,11 @@ class AdminActivityService:
             )
         ).scalar_one()
         scraped_group = (
-            await self.session.execute(select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(tg_group_id_candidates(int(group.tg_group_id)))))
+            await self.session.execute(
+                select(ScrapedGroup).where(
+                    ScrapedGroup.tg_group_id.in_(tg_group_id_candidates(int(group.tg_group_id)))
+                )
+            )
         ).scalar_one_or_none()
         scraped_members_count = 0
         scraped_messages_count = 0
@@ -74,7 +107,9 @@ class AdminActivityService:
             scraped_members_count = int(
                 (
                     await self.session.execute(
-                        select(func.count(ScrapedMember.id)).where(ScrapedMember.scraped_group_id == scraped_group.id)
+                        select(func.count(ScrapedMember.id)).where(
+                            ScrapedMember.scraped_group_id == scraped_group.id
+                        )
                     )
                 ).scalar_one()
                 or 0
@@ -82,7 +117,9 @@ class AdminActivityService:
             scraped_messages_count = int(
                 (
                     await self.session.execute(
-                        select(func.count(ScrapedMessage.id)).where(ScrapedMessage.scraped_group_id == scraped_group.id)
+                        select(func.count(ScrapedMessage.id)).where(
+                            ScrapedMessage.scraped_group_id == scraped_group.id
+                        )
                     )
                 ).scalar_one()
                 or 0
@@ -172,7 +209,12 @@ class AdminActivityService:
     async def list_leads(self, *, group_id: int) -> list[dict[str, Any]]:
         rows = (
             await self.session.execute(
-                select(ModerationLog.target_user_id, ModerationLog.reason, ModerationLog.details, ModerationLog.created_at)
+                select(
+                    ModerationLog.target_user_id,
+                    ModerationLog.reason,
+                    ModerationLog.details,
+                    ModerationLog.created_at,
+                )
                 .where(ModerationLog.group_id == group_id, ModerationLog.action == "lead_captured")
                 .order_by(desc(ModerationLog.created_at), desc(ModerationLog.id))
                 .limit(50)
@@ -192,8 +234,17 @@ class AdminActivityService:
     async def list_notification_reports(self, *, group_id: int, limit: int) -> list[dict[str, Any]]:
         rows = (
             await self.session.execute(
-                select(ModerationLog.id, ModerationLog.target_user_id, ModerationLog.reason, ModerationLog.details, ModerationLog.created_at)
-                .where(ModerationLog.group_id == group_id, ModerationLog.action == "destination_notified")
+                select(
+                    ModerationLog.id,
+                    ModerationLog.target_user_id,
+                    ModerationLog.reason,
+                    ModerationLog.details,
+                    ModerationLog.created_at,
+                )
+                .where(
+                    ModerationLog.group_id == group_id,
+                    ModerationLog.action == "destination_notified",
+                )
                 .order_by(desc(ModerationLog.created_at), desc(ModerationLog.id))
                 .limit(limit)
             )
@@ -237,7 +288,9 @@ class AdminActivityService:
             )
         ).scalar_one_or_none()
         if log_row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification report not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Notification report not found"
+            )
 
         details = dict(log_row.details or {})
         destination_chat_id = self._resolve_destination_chat_id(details)
@@ -330,7 +383,10 @@ class AdminActivityService:
         if destination_chat_id in (None, ""):
             source_chat_id_raw = details.get("source_chat_id")
             if source_chat_id_raw in (None, ""):
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Notification destination chat is missing")
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Notification destination chat is missing",
+                )
             try:
                 destination_chat_id = int(source_chat_id_raw)
             except (TypeError, ValueError):
@@ -339,7 +395,10 @@ class AdminActivityService:
         if isinstance(destination_chat_id, str):
             destination_chat_id = destination_chat_id.strip()
             if not destination_chat_id:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Notification destination chat is invalid")
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Notification destination chat is invalid",
+                )
             if destination_chat_id.lstrip("-").isdigit():
                 destination_chat_id = int(destination_chat_id)
         return destination_chat_id
@@ -349,7 +408,10 @@ class AdminActivityService:
         destination_message_id_raw = details.get("destination_message_id")
         if destination_message_id_raw in (None, ""):
             destination_message_id_raw = details.get("sent_message_id")
-        if destination_message_id_raw in (None, "") and details.get("destination_chat_id") in (None, ""):
+        if destination_message_id_raw in (None, "") and details.get("destination_chat_id") in (
+            None,
+            "",
+        ):
             destination_message_id_raw = details.get("source_message_id")
         if destination_message_id_raw in (None, ""):
             return None

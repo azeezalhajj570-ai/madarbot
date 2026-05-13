@@ -9,7 +9,12 @@ from bot.config import get_settings
 from bot.db.models import Group
 from bot.keyboards.reply import main_menu_keyboard
 from bot.db.session import SessionLocal
-from bot.services.group_service import canonical_tg_group_id, sync_group_admin_roles, tg_group_id_candidates, upsert_group
+from bot.services.group_service import (
+    canonical_tg_group_id,
+    sync_group_admin_roles,
+    tg_group_id_candidates,
+    upsert_group,
+)
 from bot.services.menu_button_service import configure_private_chat_menu_button, resolve_webapp_url
 from bot.services.private_access_gate_service import enforce_private_access_gate
 from bot.services.subscription_service import SubscriptionService
@@ -27,19 +32,23 @@ async def private_fallback(message: Message) -> None:
     owners = set(get_settings().bot_owner_ids)
     async with SessionLocal() as session:
         if message.from_user:
-            lang = await UserService(session).resolve_language(message.from_user.id, fallback=fallback)
+            lang = await UserService(session).resolve_language(
+                message.from_user.id, fallback=fallback
+            )
             await SubscriptionService(session).ensure_free_plan(
                 tg_user_id=message.from_user.id,
                 username=message.from_user.username,
                 full_name=message.from_user.full_name,
                 language_code=message.from_user.language_code,
             )
-        is_subscribed = bool(message.from_user) and await SubscriptionService(session).has_active_subscription(
-            tg_user_id=message.from_user.id
-        )
+        is_subscribed = bool(message.from_user) and await SubscriptionService(
+            session
+        ).has_active_subscription(tg_user_id=message.from_user.id)
     if await enforce_private_access_gate(message, lang):
         return
-    can_open_dashboard = bool(message.from_user) and (is_subscribed or message.from_user.id in owners)
+    can_open_dashboard = bool(message.from_user) and (
+        is_subscribed or message.from_user.id in owners
+    )
     logger.info(
         "private_fallback_triggered",
         chat_id=message.chat.id,
@@ -110,12 +119,30 @@ async def my_chat_member_fallback(event: ChatMemberUpdated) -> None:
                 tg_group_id=group.tg_group_id,
                 title=group.title,
             )
-            await sync_group_admin_roles(session, bot=event.bot, group=group, fallback_actor=event.from_user)
+            await sync_group_admin_roles(
+                session, bot=event.bot, group=group, fallback_actor=event.from_user
+            )
         elif old_status in active_statuses and new_status in {"left", "kicked"}:
             rows = (
-                await session.execute(select(Group).where(Group.tg_group_id.in_(tg_group_id_candidates(event.chat.id))))
-            ).scalars().all()
-            group = next((item for item in rows if canonical_tg_group_id(item.tg_group_id) == canonical_tg_group_id(event.chat.id)), None)
+                (
+                    await session.execute(
+                        select(Group).where(
+                            Group.tg_group_id.in_(tg_group_id_candidates(event.chat.id))
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            group = next(
+                (
+                    item
+                    for item in rows
+                    if canonical_tg_group_id(item.tg_group_id)
+                    == canonical_tg_group_id(event.chat.id)
+                ),
+                None,
+            )
             if group:
                 group.is_active = False
                 logger.info(

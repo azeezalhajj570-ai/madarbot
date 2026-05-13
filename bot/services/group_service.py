@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import BigInteger, func, or_, select
+from sqlalchemy import BigInteger, func, select
 from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -35,7 +35,9 @@ def canonical_tg_group_id(tg_group_id: int) -> int:
     if tg_group_id > 0 and text.startswith("100"):
         return -int(text)
     candidates = tg_group_id_candidates(tg_group_id)
-    return min(candidates, key=lambda value: (0 if str(value).startswith("-100") else 1, abs(value)))
+    return min(
+        candidates, key=lambda value: (0 if str(value).startswith("-100") else 1, abs(value))
+    )
 
 
 def _match_tg_user_ids(column, tg_user_ids: Sequence[int], dialect_name: str):
@@ -81,21 +83,33 @@ async def bulk_upsert_group_members(
     normalized_members = list(normalized_members_by_tg_id.values())
     unique_tg_user_ids = list(normalized_members_by_tg_id.keys())
     existing_users = (
-        await session.execute(
-            select(User).where(_match_tg_user_ids(User.tg_user_id, unique_tg_user_ids, dialect_name))
-        )
-    ).scalars().all()
-    existing_group_members = (
-        await session.execute(
-            select(GroupMember).where(
-                GroupMember.group_id == group_id,
-                _match_tg_user_ids(GroupMember.tg_user_id, unique_tg_user_ids, dialect_name),
+        (
+            await session.execute(
+                select(User).where(
+                    _match_tg_user_ids(User.tg_user_id, unique_tg_user_ids, dialect_name)
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
+    existing_group_members = (
+        (
+            await session.execute(
+                select(GroupMember).where(
+                    GroupMember.group_id == group_id,
+                    _match_tg_user_ids(GroupMember.tg_user_id, unique_tg_user_ids, dialect_name),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     existing_users_by_tg_id = {int(user.tg_user_id): user for user in existing_users}
-    existing_members_by_tg_id = {int(member.tg_user_id): member for member in existing_group_members}
+    existing_members_by_tg_id = {
+        int(member.tg_user_id): member for member in existing_group_members
+    }
     default_language = get_settings().default_language
 
     user_rows: list[dict[str, Any]] = []
@@ -166,7 +180,9 @@ async def bulk_upsert_group_members(
         )
 
     if group_member_rows:
-        group_member_insert = _build_insert(GroupMember.__table__, dialect_name).values(group_member_rows)
+        group_member_insert = _build_insert(GroupMember.__table__, dialect_name).values(
+            group_member_rows
+        )
         await session.execute(
             group_member_insert.on_conflict_do_update(
                 index_elements=[GroupMember.group_id, GroupMember.tg_user_id],
@@ -192,7 +208,9 @@ async def _get_or_create_user(
     full_name: str | None,
     language_code: str | None,
 ) -> User:
-    user = (await session.execute(select(User).where(User.tg_user_id == tg_user_id))).scalar_one_or_none()
+    user = (
+        await session.execute(select(User).where(User.tg_user_id == tg_user_id))
+    ).scalar_one_or_none()
     if user:
         user.username = username
         user.full_name = full_name
@@ -220,12 +238,16 @@ def _select_scoped_group(
     if owner_db_user_id is not None:
         owned_rows = [row for row in rows if row.owner_user_id == owner_db_user_id]
         if owned_rows:
-            return next((row for row in owned_rows if row.tg_group_id == tg_group_id), owned_rows[0])
+            return next(
+                (row for row in owned_rows if row.tg_group_id == tg_group_id), owned_rows[0]
+            )
 
         # Allow a single legacy unowned row to be adopted into the caller's scope.
         unowned_rows = [row for row in rows if row.owner_user_id is None]
         if unowned_rows and len(unowned_rows) == len(rows):
-            return next((row for row in unowned_rows if row.tg_group_id == tg_group_id), unowned_rows[0])
+            return next(
+                (row for row in unowned_rows if row.tg_group_id == tg_group_id), unowned_rows[0]
+            )
         return None
 
     unowned_rows = [row for row in rows if row.owner_user_id is None]
@@ -281,7 +303,11 @@ async def upsert_group(
 ) -> Group:
     tg_group_id = canonical_tg_group_id(int(tg_group_id))
     candidates = tg_group_id_candidates(tg_group_id)
-    rows = (await session.execute(select(Group).where(Group.tg_group_id.in_(candidates)))).scalars().all()
+    rows = (
+        (await session.execute(select(Group).where(Group.tg_group_id.in_(candidates))))
+        .scalars()
+        .all()
+    )
     group = _select_scoped_group(rows, tg_group_id=tg_group_id, owner_db_user_id=owner_user_id)
 
     if group:
@@ -321,8 +347,14 @@ async def upsert_group(
             group = (await session.execute(select(Group).where(Group.id == group_id))).scalar_one()
             return group
         except IntegrityError:
-            rows = (await session.execute(select(Group).where(Group.tg_group_id.in_(candidates)))).scalars().all()
-            group = _select_scoped_group(rows, tg_group_id=tg_group_id, owner_db_user_id=owner_user_id)
+            rows = (
+                (await session.execute(select(Group).where(Group.tg_group_id.in_(candidates))))
+                .scalars()
+                .all()
+            )
+            group = _select_scoped_group(
+                rows, tg_group_id=tg_group_id, owner_db_user_id=owner_user_id
+            )
             if group:
                 return group
             raise
@@ -432,11 +464,15 @@ class GroupService:
             canonical_id = canonical_tg_group_id(int(row.tg_group_id))
             current = canonical_items.get(canonical_id)
             if self._prefer_row(current, row):
-                canonical_items[canonical_id] = {"id": row.id, "title": row.title, "tg_group_id": row.tg_group_id}
+                canonical_items[canonical_id] = {
+                    "id": row.id,
+                    "title": row.title,
+                    "tg_group_id": row.tg_group_id,
+                }
         items = [{"id": item["id"], "title": item["title"]} for item in canonical_items.values()]
         items.sort(key=lambda item: str(item["title"]).lower())
         return paginate(items, page=page, page_size=page_size)
-    
+
     async def list_admin_groups_all(self, user_id: int) -> list[dict]:
         stmt = (
             select(Group.id, Group.title, Group.tg_group_id, Group.created_at)
@@ -450,7 +486,11 @@ class GroupService:
             canonical_id = canonical_tg_group_id(int(row.tg_group_id))
             current = canonical_items.get(canonical_id)
             if self._prefer_row(current, row):
-                canonical_items[canonical_id] = {"id": row.id, "title": row.title, "tg_group_id": row.tg_group_id}
+                canonical_items[canonical_id] = {
+                    "id": row.id,
+                    "title": row.title,
+                    "tg_group_id": row.tg_group_id,
+                }
         items = list(canonical_items.values())
         items.sort(key=lambda item: str(item["title"]).lower())
         return items
@@ -473,7 +513,9 @@ class GroupService:
 
             group.title = getattr(chat, "title", None) or group.title
             group.is_active = True
-            await sync_group_admin_roles(self.session, bot=bot, group=group, fallback_actor=fallback_actor)
+            await sync_group_admin_roles(
+                self.session, bot=bot, group=group, fallback_actor=fallback_actor
+            )
             refreshed += 1
 
         await self.session.commit()
@@ -514,6 +556,8 @@ class GroupService:
                 )
             ).scalar_one_or_none()
             if role is None:
-                self.session.add(GroupAdminRole(group_id=group.id, user_id=owner_tg_user_id, role="owner"))
+                self.session.add(
+                    GroupAdminRole(group_id=group.id, user_id=owner_tg_user_id, role="owner")
+                )
         await self.session.flush()
         return group

@@ -83,14 +83,18 @@ async def test_approve_supersedes_other_approved_for_same_user(db_session) -> No
     )
 
     old_row = (
-        await db_session.execute(select(SubscriptionRequest).where(SubscriptionRequest.id == old_id))
+        await db_session.execute(
+            select(SubscriptionRequest).where(SubscriptionRequest.id == old_id)
+        )
     ).scalar_one()
     assert old_row.status == SubscriptionStatus.SUPERSEDED.value
     assert old_row.response == "Welcome"
     assert old_row.response_by == 7000
 
     new_row = (
-        await db_session.execute(select(SubscriptionRequest).where(SubscriptionRequest.id == new_id))
+        await db_session.execute(
+            select(SubscriptionRequest).where(SubscriptionRequest.id == new_id)
+        )
     ).scalar_one()
     assert new_row.status == SubscriptionStatus.APPROVED.value
     assert new_row.response == "Latest"
@@ -133,7 +137,9 @@ async def test_stripe_agent_subscription_checkout_activates_agents_plan(db_sessi
     assert result["status"] == "activated"
 
     row = (
-        await db_session.execute(select(SubscriptionRequest).where(SubscriptionRequest.tg_user_id == uid))
+        await db_session.execute(
+            select(SubscriptionRequest).where(SubscriptionRequest.tg_user_id == uid)
+        )
     ).scalar_one()
     assert row.status == SubscriptionStatus.APPROVED.value
     assert row.plan == "business"

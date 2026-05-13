@@ -56,7 +56,9 @@ def _format_operation_time(value: str | None) -> str:
         return value
 
 
-def _build_operation_report(*, payload: dict, actor_label: str, status: str, reply_text: str) -> str:
+def _build_operation_report(
+    *, payload: dict, actor_label: str, status: str, reply_text: str
+) -> str:
     source_group = str(payload.get("source_group_title") or "Unknown group").strip()
     original_message = str(payload.get("original_message_text") or "[No message text]").strip()
     destination = str(payload.get("destination") or "Unknown destination").strip()
@@ -67,7 +69,9 @@ def _build_operation_report(*, payload: dict, actor_label: str, status: str, rep
     agent_label = str(payload.get("agent_label") or "").strip() or (
         f"Agent #{payload['agent_id']}" if payload.get("agent_id") is not None else "Unknown agent"
     )
-    timestamp = _format_operation_time(str(payload.get("acted_at") or payload.get("created_at") or ""))
+    timestamp = _format_operation_time(
+        str(payload.get("acted_at") or payload.get("created_at") or "")
+    )
     return "\n".join(
         [
             "Notification Report",
@@ -184,8 +188,12 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
                 token=token,
                 status="editing",
                 acted_by_user_id=call.from_user.id if call.from_user else None,
-                acted_by_username=getattr(call.from_user, "username", None) if call.from_user else None,
-                acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip() if call.from_user else None,
+                acted_by_username=getattr(call.from_user, "username", None)
+                if call.from_user
+                else None,
+                acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip()
+                if call.from_user
+                else None,
             )
             if call.message is not None:
                 try:
@@ -194,7 +202,11 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
                         reply_markup=None,
                     )
                 except Exception:
-                    logger.warning("notify_destination_callback_ack_edit_failed", token=token, group_id=group_id)
+                    logger.warning(
+                        "notify_destination_callback_ack_edit_failed",
+                        token=token,
+                        group_id=group_id,
+                    )
             logger.info(
                 "notify_destination_callback_edit_requested",
                 group_id=group_id,
@@ -235,8 +247,12 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
                 token=token,
                 status="approved",
                 acted_by_user_id=call.from_user.id if call.from_user else None,
-                acted_by_username=getattr(call.from_user, "username", None) if call.from_user else None,
-                acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip() if call.from_user else None,
+                acted_by_username=getattr(call.from_user, "username", None)
+                if call.from_user
+                else None,
+                acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip()
+                if call.from_user
+                else None,
             )
             if updated is not None:
                 await activity_service.log_notify_destination_confirmation(
@@ -247,10 +263,16 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
                     token=token,
                     status="approved",
                     confirmed_by_user_id=call.from_user.id if call.from_user else None,
-                    confirmed_by_username=getattr(call.from_user, "username", None) if call.from_user else None,
-                    confirmed_by_name=str(getattr(call.from_user, "full_name", "") or "").strip() if call.from_user else None,
+                    confirmed_by_username=getattr(call.from_user, "username", None)
+                    if call.from_user
+                    else None,
+                    confirmed_by_name=str(getattr(call.from_user, "full_name", "") or "").strip()
+                    if call.from_user
+                    else None,
                     destination=str(updated.get("destination") or ""),
-                    agent_id=int(updated["agent_id"]) if updated.get("agent_id") is not None else None,
+                    agent_id=int(updated["agent_id"])
+                    if updated.get("agent_id") is not None
+                    else None,
                 )
             await _replace_prompt_with_report(
                 call.message,
@@ -277,7 +299,9 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
             status="declined",
             acted_by_user_id=call.from_user.id if call.from_user else None,
             acted_by_username=getattr(call.from_user, "username", None) if call.from_user else None,
-            acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip() if call.from_user else None,
+            acted_by_name=str(getattr(call.from_user, "full_name", "") or "").strip()
+            if call.from_user
+            else None,
         )
         if updated is not None:
             await activity_service.log_notify_destination_confirmation(
@@ -288,8 +312,12 @@ async def handle_notify_destination_approval(call: CallbackQuery) -> None:
                 token=token,
                 status="declined",
                 confirmed_by_user_id=call.from_user.id if call.from_user else None,
-                confirmed_by_username=getattr(call.from_user, "username", None) if call.from_user else None,
-                confirmed_by_name=str(getattr(call.from_user, "full_name", "") or "").strip() if call.from_user else None,
+                confirmed_by_username=getattr(call.from_user, "username", None)
+                if call.from_user
+                else None,
+                confirmed_by_name=str(getattr(call.from_user, "full_name", "") or "").strip()
+                if call.from_user
+                else None,
                 destination=str(updated.get("destination") or ""),
                 agent_id=int(updated["agent_id"]) if updated.get("agent_id") is not None else None,
             )
@@ -330,7 +358,9 @@ async def handle_notify_destination_edit_reply(message: Message) -> None:
     async with db_session.SessionLocal() as session:
         service = NotifyDestinationApprovalService(session)
         activity_service = TaskActivityService(session)
-        found = await service.find_prompt_by_control_message(destination=destination, prompt_message_id=int(prompt_message_id))
+        found = await service.find_prompt_by_control_message(
+            destination=destination, prompt_message_id=int(prompt_message_id)
+        )
         if found is None:
             return
         group_id, payload = found

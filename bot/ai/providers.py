@@ -38,7 +38,9 @@ class OpenAIProvider:
             "text": {"format": {"type": "json_object"}},
         }
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
+            response = await client.post(
+                "https://api.openai.com/v1/responses", headers=headers, json=payload
+            )
         if response.status_code >= 400:
             raise AIProviderError(f"openai_http_{response.status_code}")
         data = response.json()

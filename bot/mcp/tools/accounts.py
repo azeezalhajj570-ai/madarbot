@@ -69,7 +69,6 @@ def register_account_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_list_accounts() -> str:
         """List all linked Telegram accounts for the MCP actor."""
@@ -86,7 +85,6 @@ def register_account_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_get_account(agent_id: int) -> str:
         """Get details of a specific linked account by agent_id."""
@@ -116,7 +114,6 @@ def register_account_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
-
     )
     async def madarbot_update_account(
         agent_id: int,
@@ -158,7 +155,6 @@ def register_account_tools(server: FastMCP) -> None:
 
     @server.tool(
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
-
     )
     async def madarbot_delete_account(agent_id: int, confirm: bool = False) -> str:
         """Delete a linked account. Requires confirmation and MCP_READONLY=false."""
@@ -180,7 +176,9 @@ def register_account_tools(server: FastMCP) -> None:
         async with SessionLocal() as session:
             service = AgentService(session)
             try:
-                deleted = await service.unlink_agent(actor_user_id=ctx.actor_user_id, agent_id=agent_id)
+                deleted = await service.unlink_agent(
+                    actor_user_id=ctx.actor_user_id, agent_id=agent_id
+                )
                 if deleted:
                     result = success_response(
                         content="Account deleted successfully",

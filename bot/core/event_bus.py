@@ -38,7 +38,9 @@ class EventBus:
         handlers = list(self._subscribers.get(event.name, []))
         if not handlers:
             return
-        results = await asyncio.gather(*(handler(event) for handler in handlers), return_exceptions=True)
+        results = await asyncio.gather(
+            *(handler(event) for handler in handlers), return_exceptions=True
+        )
         for result in results:
             if isinstance(result, Exception):
                 logger.exception("event_handler_error", event_name=event.name, error=str(result))
