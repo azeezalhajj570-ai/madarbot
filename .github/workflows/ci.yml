@@ -29,8 +29,8 @@ jobs:
       - name: Lint Python
         run: ruff check .
 
-      - name: Run Python tests
-        run: pytest
+      - name: Run Python tests without Docker services
+        run: pytest -m "not integration"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
