@@ -2330,7 +2330,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
   const [excludeBots, setExcludeBots] = useState(true)
-  const [showSentOnly, setShowSentOnly] = useState(false)
+  const [excludeSent, setExcludeSent] = useState(false)
   const [showFiltersOpen, setShowFiltersOpen] = useState(false)
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
@@ -2518,7 +2518,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     let cancelled = false
     setLoadingBulkMembers(true)
     setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, 'message_count', showAdminsOnly, showBotsOnly)
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, 'message_count', false, false)
       .then((page) => {
         if (cancelled) {
           return
@@ -2546,7 +2546,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     return () => {
       cancelled = true
     }
-  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage, showAdminsOnly, showBotsOnly])
+  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage])
 
   async function saveTask() {
     if (taskKey === SCRAPE_TASK_KEY) {
@@ -2884,7 +2884,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button
                       tone="secondary"
                       onClick={() => {
-                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
+                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(excludeSent && m.sent_by_agent))
                         setBulkSelectedMembers((current) => {
                           const next = [...current]
                           candidates.forEach((member) => {
@@ -2908,8 +2908,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       type="button"
                       onClick={() => setShowFiltersOpen(!showFiltersOpen)}
                       style={{
-                        background: showFiltersOpen || !excludeAdmins || !excludeBots || showSentOnly ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
-                        color: showFiltersOpen || !excludeAdmins || !excludeBots || showSentOnly ? '#fff' : 'var(--miniapp-text-primary)',
+                        background: showFiltersOpen || !excludeAdmins || !excludeBots || excludeSent ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
+                        color: showFiltersOpen || !excludeAdmins || !excludeBots || excludeSent ? '#fff' : 'var(--miniapp-text-primary)',
                         border: '1px solid var(--miniapp-border-soft)',
                         borderRadius: 12,
                         padding: '10px 12px',
@@ -2923,14 +2923,14 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     </button>
                     {showFiltersOpen ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button tone={excludeAdmins ? 'primary' : 'secondary'} onClick={() => { setExcludeAdmins(!excludeAdmins); setShowSentOnly(false) }}>
+                        <Button tone={excludeAdmins ? 'primary' : 'secondary'} onClick={() => { setExcludeAdmins(!excludeAdmins) }}>
                           {excludeAdmins ? '✓ ' : ''}Exclude admins
                         </Button>
-                        <Button tone={excludeBots ? 'primary' : 'secondary'} onClick={() => { setExcludeBots(!excludeBots); setShowSentOnly(false) }}>
+                        <Button tone={excludeBots ? 'primary' : 'secondary'} onClick={() => { setExcludeBots(!excludeBots) }}>
                           {excludeBots ? '✓ ' : ''}Exclude bots
                         </Button>
-                        <Button tone={showSentOnly ? 'primary' : 'secondary'} onClick={() => { setShowSentOnly(!showSentOnly) }}>
-                          {showSentOnly ? '✓ ' : ''}Sent only
+                        <Button tone={excludeSent ? 'primary' : 'secondary'} onClick={() => { setExcludeSent(!excludeSent) }}>
+                          {excludeSent ? '✓ ' : ''}Exclude sent
                         </Button>
                       </div>
                     ) : null}
@@ -2946,7 +2946,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     }}
                   >
                     {(() => {
-                      const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
+                      const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(excludeSent && m.sent_by_agent))
                       if (!filtered.length) {
                         return <Note>No matching members — try adjusting filters</Note>
                       }

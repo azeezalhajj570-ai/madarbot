@@ -65,6 +65,11 @@ def _trim_message(value: str, limit: int = 96) -> str:
     return f"{text[: limit - 3].rstrip()}..."
 
 
+def _format_timestamp() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def _build_job_notification(
     job: AgentJob, *, status: str, result: dict | None = None, error: str | None = None
 ) -> tuple[str, str, str, dict[str, object]] | None:
@@ -150,12 +155,13 @@ def _build_job_notification(
             "mode": mode,
         }
         if status == JOB_STATUS_COMPLETED:
+            ts = _format_timestamp()
             if mode == "forward":
-                body = "Original message forwarded."
+                body = f"Original message forwarded. — {ts}"
             elif mode in ("public", "group"):
-                body = "Lead message sent in group."
+                body = f"Lead message sent in group. — {ts}"
             else:
-                body = f"Contact sent to user {tg_user_id}."
+                body = f"Contact sent to user {tg_user_id}. — {ts}"
             return ("lead_message_sent", "Lead contacted", body, notification_payload)
         if status == JOB_STATUS_FAILED:
             return (
@@ -228,6 +234,7 @@ def _build_job_notification(
             "members_from_messages": members_from_messages,
         }
         if status == JOB_STATUS_COMPLETED:
+            ts = _format_timestamp()
             if job.job_type == SCRAPER_GROUP_INFO_JOB_TYPE:
                 body = group_title or "Group details refreshed."
             elif job.job_type == SCRAPER_MESSAGES_JOB_TYPE:
@@ -238,6 +245,7 @@ def _build_job_notification(
                 body = f"{members_count} members synced and {messages_count} messages scraped."
             if group_title and job.job_type != SCRAPER_GROUP_INFO_JOB_TYPE:
                 body = f"{group_title}: {body}"
+            body = f"{body} — {ts}"
             return ("scrape_completed", "Scrape finished", body, notification_payload)
         if status == JOB_STATUS_FAILED:
             prefix = f"{group_title}: " if group_title else ""
