@@ -18,10 +18,17 @@ from bot.agents.exceptions import (
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    JOB_STATUS_PENDING,
+    JOB_STATUS_QUEUED,
+    JOB_STATUS_RUNNING,
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_FAILED,
+    JOB_STATUS_ABORTED,
     SCRAPER_FULL_GROUP_JOB_TYPE,
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
+    normalize_group_member_broadcast_payload,
 )
 from bot.agents.runtime import (
     AddContactRuntime,
@@ -81,14 +88,15 @@ def _build_job_notification(
             "failed_count": failed_count,
             "selected_count": selected_count,
         }
-        if status == "completed":
+        if status == JOB_STATUS_COMPLETED:
             body = f"Sent to {sent_count} members."
             if failed_count:
                 body = f"Sent to {sent_count} members, {failed_count} failed."
-            if group_title:
-                body = f"{group_title}: {body}"
-            return ("bulk_message_completed", "Bulk message sent", body, notification_payload)
-        if status == "failed":
+            failures = result_payload.get("failures", [])
+            if isinstance(failures, list) and len(failures) > 5:
+                body += f" {len(failures)} total failures."
+            return "Bulk message completed", body, notification_payload
+        if status == JOB_STATUS_FAILED:
             prefix = f"{group_title}: " if group_title else ""
             return (
                 "bulk_message_failed",
@@ -116,14 +124,14 @@ def _build_job_notification(
             "user_id": user_id,
             "full_name": full_name,
         }
-        if status == "completed":
+        if status == JOB_STATUS_COMPLETED:
             return (
                 "contact_saved",
                 "Contact saved",
                 f"{full_name} ({user_id}) has been added to your Telegram contacts.",
                 notification_payload,
             )
-        if status == "failed":
+        if status == JOB_STATUS_FAILED:
             return (
                 "contact_save_failed",
                 "Failed to save contact",
@@ -142,7 +150,7 @@ def _build_job_notification(
             "message": _trim_message(msg_text, 80) if msg_text else "",
             "mode": mode,
         }
-        if status == "completed":
+        if status == JOB_STATUS_COMPLETED:
             if mode == "forward":
                 body = "Original message forwarded."
             elif mode in ("public", "group"):
@@ -150,7 +158,7 @@ def _build_job_notification(
             else:
                 body = f"Contact sent to user {tg_user_id}."
             return ("lead_message_sent", "Lead contacted", body, notification_payload)
-        if status == "failed":
+        if status == JOB_STATUS_FAILED:
             return (
                 "lead_message_failed",
                 "Failed to contact lead",
@@ -173,14 +181,14 @@ def _build_job_notification(
             "destination": destination,
             "group_title": group_title,
         }
-        if status == "completed":
+        if status == JOB_STATUS_COMPLETED:
             body = f"{_task_label(task_key).title()} executed."
             if keyword:
                 body = f'{_task_label(task_key).title()} ran for "{_trim_message(keyword, 40)}".'
             elif group_title:
                 body = f"{_task_label(task_key).title()} executed for {group_title}."
             return ("task_completed", "Task executed", body, notification_payload)
-        if status == "failed":
+        if status == JOB_STATUS_FAILED:
             return (
                 "task_failed",
                 "Task failed",
@@ -220,7 +228,7 @@ def _build_job_notification(
             "members_direct": members_direct,
             "members_from_messages": members_from_messages,
         }
-        if status == "completed":
+        if status == JOB_STATUS_COMPLETED:
             if job.job_type == SCRAPER_GROUP_INFO_JOB_TYPE:
                 body = group_title or "Group details refreshed."
             elif job.job_type == SCRAPER_MESSAGES_JOB_TYPE:
@@ -232,7 +240,7 @@ def _build_job_notification(
             if group_title and job.job_type != SCRAPER_GROUP_INFO_JOB_TYPE:
                 body = f"{group_title}: {body}"
             return ("scrape_completed", "Scrape finished", body, notification_payload)
-        if status == "failed":
+        if status == JOB_STATUS_FAILED:
             prefix = f"{group_title}: " if group_title else ""
             return (
                 "scrape_failed",
@@ -242,7 +250,7 @@ def _build_job_notification(
             )
         return None
 
-    if status == "failed":
+    if status == JOB_STATUS_FAILED:
         return (
             "job_failed",
             "Job failed",
@@ -308,7 +316,7 @@ async def _set_job_state(
         job.job_payload = payload
         job.status = status
         await session.commit()
-        if status in {"completed", "failed"}:
+        if status in {JOB_STATUS_COMPLETED, JOB_STATUS_FAILED}:
             await _create_job_notification(session, job, status=status, result=result, error=error)
         return job
     except Exception:
@@ -395,11 +403,11 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         if job is None:
             bound_logger.warning("agent_job_missing")
             return
-        if job.status in {"completed", "aborted"}:
+        if job.status in {JOB_STATUS_COMPLETED, JOB_STATUS_ABORTED}:
             bound_logger.info("agent_job_skipped", status=job.status)
             return
-        if job.status != "completed":
-            job.status = "running"
+        if job.status in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_ENQUEUE_FAILED}:
+            job.status = JOB_STATUS_RUNNING
             await session.commit()
 
         try:
@@ -417,7 +425,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         client=client, agent=agent, job=job, session=session
                     )
                     if handled:
-                        await _set_job_state(session, job_id, "completed")
+                        await _set_job_state(session, job_id, JOB_STATUS_COMPLETED)
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
                     broadcast_payload["job_id"] = job.id
@@ -452,19 +460,19 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         )
                         handled = True
                         return
-                    await _set_job_state(session, job_id, "completed", result=result)
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(
                         client=client, agent=agent, payload=dict(job.job_payload or {})
                     )
-                    await _set_job_state(session, job_id, "completed", result=result)
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 elif job.job_type == "send_lead_message":
                     result = await _handle_send_lead_message(
                         client=client, session=session, job=job
                     )
-                    await _set_job_state(session, job_id, "completed", result=result)
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 elif job.job_type in {
                     SCRAPER_GROUP_INFO_JOB_TYPE,
@@ -478,11 +486,11 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         payload=dict(job.job_payload or {}),
                         job_type=job.job_type,
                     )
-                    await _set_job_state(session, job_id, "completed", result=result)
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 if not handled:
                     await _set_job_state(
-                        session, job_id, "failed", error=f"Unhandled job type: {job.job_type}"
+                        session, job_id, JOB_STATUS_FAILED, error=f"Unhandled job type: {job.job_type}"
                     )
                     bound_logger.warning("agent_job_unhandled", job_type=job.job_type)
                     return
@@ -491,7 +499,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
             await _set_job_state(
-                session, job_id, "pending", error=f"Flood wait for {exc.retry_after} seconds"
+                session, job_id, JOB_STATUS_PENDING, error=f"Flood wait for {exc.retry_after} seconds"
             )
             bound_logger.warning("agent_job_flood_wait", retry_after=exc.retry_after)
             execute_agent_job.send_with_options(
@@ -501,7 +509,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         except AgentSessionError as exc:
             if isinstance(exc, AgentSessionRevokedError):
                 await session_manager.mark_failed(agent_id)
-            await _set_job_state(session, job_id, "failed", error=str(exc))
+            await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=str(exc))
             bound_logger.warning("agent_job_session_failed", error=str(exc))
             return
         except AgentBannedError:
@@ -513,12 +521,12 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 agent.status = "banned"
                 agent.auth_state = "banned"
                 await session.commit()
-            await _set_job_state(session, job_id, "failed", error="Agent account is banned")
+            await _set_job_state(session, job_id, JOB_STATUS_FAILED, error="Agent account is banned")
             bound_logger.critical("agent_job_banned")
             return
         except Exception as exc:
             if final_attempt:
-                await _set_job_state(session, job_id, "failed", error=str(exc))
+                await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=str(exc))
             bound_logger.exception("agent_job_failed")
             raise
 
