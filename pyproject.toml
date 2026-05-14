@@ -26,6 +26,7 @@ dependencies = [
   "cryptography>=42.0.0",
   "stripe>=9.0.0",
   "strenum>=0.4.10",
+  "mcp>=1.0.0",
 ]
 
 [project.scripts]
