@@ -98,6 +98,15 @@ class AgentJobCreateRequest(BaseModel):
     job_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class BulkPreflightRequest(BaseModel):
+    source_group_id: int
+    source_group_title: str = ""
+    message: str = Field(min_length=1)
+    selected_user_ids: list[int] = Field(min_length=0)
+    threshold: int = Field(default=25, ge=1, le=500)
+    interval_seconds: float = Field(default=15, ge=0)
+
+
 class AgentSafetyUpdateRequest(BaseModel):
     max_actions_per_hour: int | None = Field(default=None, ge=1, le=1000)
     max_messages_per_day: int | None = Field(default=None, ge=1, le=5000)

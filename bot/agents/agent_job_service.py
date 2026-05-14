@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import AgentJobOwnership
@@ -11,7 +11,7 @@ from bot.agents.jobs import (
     normalize_group_member_broadcast_payload,
 )
 from bot.core.event_bus import EventBus
-from bot.db.models import Agent, AgentJob
+from bot.db.models import Agent, AgentJob, ScrapedMember, SentBroadcastMessage
 
 from .agent_notification_service import AgentNotificationService
 from .service_support import AgentServiceSupport
@@ -65,6 +65,18 @@ class AgentJobService(AgentServiceSupport):
         normalized_payload = dict(job_payload or {})
         if normalized_job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
             normalized_payload = normalize_group_member_broadcast_payload(normalized_payload)
+            exclusions = await self.compute_bulk_exclusions(
+                agent=agent,
+                source_group_id=normalized_payload["source_group_id"],
+                message=normalized_payload["message"],
+                selected_user_ids=normalized_payload["selected_user_ids"],
+            )
+            normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
+            normalized_payload["exclusion_counts"] = {
+                k: exclusions[k] for k in ("total", "admins_excluded", "bots_excluded", "already_sent_excluded", "final_count")
+            }
+            if exclusions["final_count"] == 0:
+                raise ValueError("All recipients were excluded (admins, bots, already-sent)")
             await self._validate_broadcast_preflight(agent, normalized_payload)
 
         job = AgentJob(
@@ -195,6 +207,121 @@ class AgentJobService(AgentServiceSupport):
         await self.session.delete(job)
         await self.session.commit()
         return True
+
+    async def compute_bulk_exclusions(
+        self,
+        *,
+        agent: Agent,
+        source_group_id: int,
+        message: str,
+        selected_user_ids: list[int],
+    ) -> dict[str, Any]:
+        """Compute exclusion counts and return filtered user IDs.
+
+        Shared between the preflight endpoint and job creation.
+        Always excludes admins, bots, and already-sent recipients.
+        """
+        import hashlib
+        from datetime import datetime, timedelta, timezone
+
+        total = len(selected_user_ids)
+        if not selected_user_ids:
+            return {
+                "total": 0,
+                "admins_excluded": 0,
+                "bots_excluded": 0,
+                "already_sent_excluded": 0,
+                "final_count": 0,
+                "filtered_user_ids": [],
+            }
+
+        # Fetch scraped member data for selected users
+        members_data = (
+            await self.session.execute(
+                select(
+                    ScrapedMember.tg_user_id,
+                    ScrapedMember.role,
+                    ScrapedMember.is_bot,
+                    ScrapedMember.phone,
+                    ScrapedMember.username,
+                ).where(
+                    ScrapedMember.tg_group_id == source_group_id,
+                    ScrapedMember.tg_user_id.in_(selected_user_ids),
+                )
+            )
+        ).all()
+
+        member_map: dict[int, dict[str, Any]] = {}
+        phones: list[str] = []
+        usernames: list[str] = []
+        for row in members_data:
+            member_map[int(row.tg_user_id)] = {
+                "role": row.role or "member",
+                "is_bot": bool(row.is_bot),
+                "phone": row.phone,
+                "username": row.username,
+            }
+            if row.phone:
+                normalized = row.phone.strip()
+                if normalized not in phones:
+                    phones.append(normalized)
+            if row.username:
+                normalized = row.username.strip().lower()
+                if normalized not in usernames:
+                    usernames.append(normalized)
+
+        # Separate admins, bots, and others
+        admins: set[int] = set()
+        bots: set[int] = set()
+        for uid in selected_user_ids:
+            info = member_map.get(uid)
+            if info is None:
+                continue
+            if info["role"] in ("admin", "creator"):
+                admins.add(uid)
+            if info["is_bot"]:
+                bots.add(uid)
+
+        # Determine already-sent from sent_broadcast_messages
+        message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+        already_sent_set: set[int] = set()
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        identity_filters = [SentBroadcastMessage.tg_user_id.in_(selected_user_ids)]
+        if phones:
+            identity_filters.append(SentBroadcastMessage.phone_number.in_(phones))
+        if usernames:
+            identity_filters.append(SentBroadcastMessage.username.in_(usernames))
+        sent_rows = (
+            await self.session.execute(
+                select(SentBroadcastMessage.tg_user_id).where(
+                    SentBroadcastMessage.agent_id == agent.id,
+                    SentBroadcastMessage.tg_group_id == source_group_id,
+                    SentBroadcastMessage.message_hash == message_hash,
+                    SentBroadcastMessage.sent_at >= seven_days_ago,
+                    SentBroadcastMessage.status == "sent",
+                    or_(*identity_filters),
+                )
+            )
+        ).all()
+        for row in sent_rows:
+            if row[0] is not None:
+                already_sent_set.add(int(row[0]))
+
+        # Build filtered list: exclude admins, bots, already-sent
+        excluded: set[int] = set()
+        excluded.update(admins)
+        excluded.update(bots)
+        excluded.update(already_sent_set)
+        filtered = [uid for uid in selected_user_ids if uid not in excluded]
+
+        return {
+            "total": total,
+            "admins_excluded": len(admins),
+            "bots_excluded": len(bots),
+            "already_sent_excluded": len(already_sent_set),
+            "final_count": len(filtered),
+            "filtered_user_ids": filtered,
+        }
 
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:
         from bot.config import get_settings

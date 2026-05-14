@@ -279,7 +279,7 @@ class GroupMemberBroadcastRuntime:
         from bot.utils.rate_limiter import AgentRateLimiter
         from bot.db.models.agent import SentBroadcastMessage
         from redis.asyncio import Redis
-        from sqlalchemy import select
+        from sqlalchemy import or_, select
 
         normalized = normalize_group_member_broadcast_payload(payload)
 
@@ -301,6 +301,7 @@ class GroupMemberBroadcastRuntime:
             source_group_id = int(normalized["source_group_id"])
             group_entity = await AddContactRuntime().resolve_group_entity(client, source_group_id)
             recipients: list[int] = []
+            recipient_identities: dict[int, dict[str, str | None]] = {}
             async for participant in client.iter_participants(group_entity):
                 pid = getattr(participant, "id", None)
                 if pid is None:
@@ -315,7 +316,15 @@ class GroupMemberBroadcastRuntime:
                     continue
                 if selected_user_ids and int(pid) not in selected_user_ids:
                     continue
-                recipients.append(int(pid))
+                uid = int(pid)
+                recipients.append(uid)
+                participant_phone = getattr(participant, "phone", None)
+                participant_username = getattr(participant, "username", None)
+                if participant_phone or participant_username:
+                    recipient_identities[uid] = {
+                        "phone": str(participant_phone).strip() if participant_phone else None,
+                        "username": str(participant_username).strip().lower() if participant_username else None,
+                    }
 
             recipients_set = set(recipients)
             recipients = [r for r in recipients if r not in already_sent]
@@ -326,6 +335,13 @@ class GroupMemberBroadcastRuntime:
             recently_sent: set[int] = set()
             if session is not None:
                 seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+                phones = [v["phone"] for v in recipient_identities.values() if v.get("phone")]
+                usernames = [v["username"] for v in recipient_identities.values() if v.get("username")]
+                identity_filters = [SentBroadcastMessage.tg_user_id.in_(recipients)]
+                if phones:
+                    identity_filters.append(SentBroadcastMessage.phone_number.in_(phones))
+                if usernames:
+                    identity_filters.append(SentBroadcastMessage.username.in_(usernames))
                 result = await session.execute(
                     select(SentBroadcastMessage.tg_user_id).where(
                         SentBroadcastMessage.agent_id == agent.id,
@@ -333,6 +349,7 @@ class GroupMemberBroadcastRuntime:
                         SentBroadcastMessage.message_hash == message_hash,
                         SentBroadcastMessage.sent_at >= seven_days_ago,
                         SentBroadcastMessage.status == "sent",
+                        or_(*identity_filters),
                     )
                 )
                 recently_sent = {row[0] for row in result if row[0] is not None}
@@ -392,11 +409,14 @@ class GroupMemberBroadcastRuntime:
                     success_count += 1
                     already_sent.add(recipient_id)
                     if session is not None:
+                        identity = recipient_identities.get(recipient_id, {})
                         session.add(
                             SentBroadcastMessage(
                                 agent_id=agent.id,
                                 job_id=payload.get("job_id"),
                                 tg_user_id=recipient_id,
+                                phone_number=identity.get("phone"),
+                                username=identity.get("username"),
                                 tg_group_id=source_group_id,
                                 message_text=message,
                                 message_hash=message_hash,

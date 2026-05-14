@@ -213,6 +213,15 @@ export interface AgentGroupMembersPage {
   page_size: number
 }
 
+export interface BulkPreflightResult {
+  total: number
+  admins_excluded: number
+  bots_excluded: number
+  already_sent_excluded: number
+  final_count: number
+  filtered_user_ids: number[]
+}
+
 export interface AgentGroupMemberMessage {
   message_id: number
   text?: string | null
