@@ -65,25 +65,27 @@ class AgentJobService(AgentServiceSupport):
         normalized_payload = dict(job_payload or {})
         if normalized_job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
             normalized_payload = normalize_group_member_broadcast_payload(normalized_payload)
-            exclusions = await self.compute_bulk_exclusions(
-                agent=agent,
-                source_group_id=normalized_payload["source_group_id"],
-                message=normalized_payload["message"],
-                selected_user_ids=normalized_payload["selected_user_ids"],
-            )
-            normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
-            normalized_payload["exclusion_counts"] = {
-                k: exclusions[k]
-                for k in (
-                    "total",
-                    "admins_excluded",
-                    "bots_excluded",
-                    "already_sent_excluded",
-                    "final_count",
+            selected_ids = normalized_payload["selected_user_ids"]
+            if selected_ids:
+                exclusions = await self.compute_bulk_exclusions(
+                    agent=agent,
+                    source_group_id=normalized_payload["source_group_id"],
+                    message=normalized_payload["message"],
+                    selected_user_ids=selected_ids,
                 )
-            }
-            if exclusions["final_count"] == 0:
-                raise ValueError("All recipients were excluded (admins, bots, already-sent)")
+                normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
+                normalized_payload["exclusion_counts"] = {
+                    k: exclusions[k]
+                    for k in (
+                        "total",
+                        "admins_excluded",
+                        "bots_excluded",
+                        "already_sent_excluded",
+                        "final_count",
+                    )
+                }
+                if exclusions["final_count"] == 0:
+                    raise ValueError("All recipients were excluded (admins, bots, already-sent)")
             await self._validate_broadcast_preflight(agent, normalized_payload)
 
         job = AgentJob(

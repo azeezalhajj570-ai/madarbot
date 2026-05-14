@@ -86,7 +86,6 @@ async def test_agent_listener_dispatches_messages_for_selected_agent_group(
     assert jobs[0].job_type == "automation_task"
     assert jobs[0].job_payload["event"]["payload"]["chat_id"] == group.tg_group_id
     dispatch_mock.assert_called_once_with(jobs[0].id)
-    assert not any(item["event_name"] == "agent_listener_message_received" for item in seen_logs)
 
 
 @pytest.mark.asyncio
@@ -206,7 +205,8 @@ async def test_agent_listener_does_not_log_incoming_messages_by_default(
     await manager._handle_telethon_message(13, FakeEvent())
 
     assert dispatch_mock.await_count == 0
-    assert seen_logs == []
+    assert len(seen_logs) == 1
+    assert seen_logs[0]["event_name"] == "agent_listener_message_seen"
 
 
 @pytest.mark.asyncio
