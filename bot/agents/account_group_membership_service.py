@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from sqlalchemy import String, and_, cast, desc, func, inspect, nullslast, or_, select
+from sqlalchemy import String, and_, asc, cast, desc, func, inspect, nullslast, or_, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -443,6 +443,24 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 )
                 order_columns = [
                     nullslast(desc(msg_count_subq.c.message_count)),
+                    desc(ScrapedMember.tg_user_id),
+                ]
+            elif order_by == "message_count_asc":
+                msg_count_subq = (
+                    select(
+                        ScrapedMessage.sender_user_id,
+                        func.count(ScrapedMessage.id).label("message_count"),
+                    )
+                    .where(ScrapedMessage.tg_group_id == canonical_id)
+                    .group_by(ScrapedMessage.sender_user_id)
+                    .subquery()
+                )
+                base_query = base_query.outerjoin(
+                    msg_count_subq,
+                    ScrapedMember.tg_user_id == msg_count_subq.c.sender_user_id,
+                )
+                order_columns = [
+                    nullslast(asc(msg_count_subq.c.message_count)),
                     desc(ScrapedMember.tg_user_id),
                 ]
             else:
