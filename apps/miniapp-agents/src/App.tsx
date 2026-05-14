@@ -2322,14 +2322,14 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkMessage, setBulkMessage] = useState('')
   const [bulkThreshold, setBulkThreshold] = useState('25')
-  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('15')
+  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
   const [bulkMemberQuery, setBulkMemberQuery] = useState('')
   const [bulkMemberResults, setBulkMemberResults] = useState<AgentGroupMember[]>([])
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
-  const [showAdminsOnly, setShowAdminsOnly] = useState(false)
-  const [showBotsOnly, setShowBotsOnly] = useState(false)
+  const [excludeAdmins, setExcludeAdmins] = useState(true)
+  const [excludeBots, setExcludeBots] = useState(true)
   const [showSentOnly, setShowSentOnly] = useState(false)
   const [showFiltersOpen, setShowFiltersOpen] = useState(false)
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
@@ -2593,8 +2593,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       }
 
       const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 15) {
-        setStatus('Interval seconds must be at least 15')
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 5) {
+        setStatus('Interval seconds must be at least 5')
         return
       }
 
@@ -2884,7 +2884,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button
                       tone="secondary"
                       onClick={() => {
-                        const candidates = bulkMemberResults.filter((m) => !(showSentOnly && !m.sent_by_agent))
+                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
                         setBulkSelectedMembers((current) => {
                           const next = [...current]
                           candidates.forEach((member) => {
@@ -2908,8 +2908,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       type="button"
                       onClick={() => setShowFiltersOpen(!showFiltersOpen)}
                       style={{
-                        background: showFiltersOpen || showAdminsOnly || showBotsOnly || showSentOnly ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
-                        color: showFiltersOpen || showAdminsOnly || showBotsOnly || showSentOnly ? '#fff' : 'var(--miniapp-text-primary)',
+                        background: showFiltersOpen || !excludeAdmins || !excludeBots || showSentOnly ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
+                        color: showFiltersOpen || !excludeAdmins || !excludeBots || showSentOnly ? '#fff' : 'var(--miniapp-text-primary)',
                         border: '1px solid var(--miniapp-border-soft)',
                         borderRadius: 12,
                         padding: '10px 12px',
@@ -2923,14 +2923,14 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     </button>
                     {showFiltersOpen ? (
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button tone={showAdminsOnly ? 'primary' : 'secondary'} onClick={() => { setShowAdminsOnly(!showAdminsOnly); setShowBotsOnly(false); setShowSentOnly(false) }}>
-                          {showAdminsOnly ? '✓ ' : ''}Show admins
+                        <Button tone={excludeAdmins ? 'primary' : 'secondary'} onClick={() => { setExcludeAdmins(!excludeAdmins); setShowSentOnly(false) }}>
+                          {excludeAdmins ? '✓ ' : ''}Exclude admins
                         </Button>
-                        <Button tone={showBotsOnly ? 'primary' : 'secondary'} onClick={() => { setShowBotsOnly(!showBotsOnly); setShowAdminsOnly(false); setShowSentOnly(false) }}>
-                          {showBotsOnly ? '✓ ' : ''}Show bots
+                        <Button tone={excludeBots ? 'primary' : 'secondary'} onClick={() => { setExcludeBots(!excludeBots); setShowSentOnly(false) }}>
+                          {excludeBots ? '✓ ' : ''}Exclude bots
                         </Button>
-                        <Button tone={showSentOnly ? 'primary' : 'secondary'} onClick={() => { setShowSentOnly(!showSentOnly); setShowAdminsOnly(false); setShowBotsOnly(false) }}>
-                          {showSentOnly ? '✓ ' : ''}Sent
+                        <Button tone={showSentOnly ? 'primary' : 'secondary'} onClick={() => { setShowSentOnly(!showSentOnly) }}>
+                          {showSentOnly ? '✓ ' : ''}Sent only
                         </Button>
                       </div>
                     ) : null}
@@ -2946,7 +2946,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     }}
                   >
                     {(() => {
-                      const filtered = bulkMemberResults.filter((m) => !(showSentOnly && !m.sent_by_agent))
+                      const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
                       if (!filtered.length) {
                         return <Note>No matching members — try adjusting filters</Note>
                       }
@@ -3605,7 +3605,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
             value={safetyCooldown}
             onChange={setSafetyCooldown}
             type="number"
-            placeholder="e.g. 15"
+            placeholder="e.g. 5"
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ fontSize: 14, fontWeight: 500 }}>
