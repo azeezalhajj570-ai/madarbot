@@ -511,8 +511,6 @@ def fsm_context_factory() -> Callable[..., FSMContext]:
 async def patch_db_dependencies(
     monkeypatch: pytest.MonkeyPatch, session_factory: SessionContextFactory
 ) -> None:
-    from bot.dashboard.api import main as api_main
-    from bot.dashboard.api import owner as owner_api
     from bot.handlers.commands import dashboard, moderation, register_group, start, subscribe
     from bot.handlers import fallback
     from bot.handlers.menu import reply_settings, settings
@@ -538,8 +536,9 @@ async def patch_db_dependencies(
         async with session_factory() as session:
             yield session
 
-    dashboard_app.dependency_overrides[api_main.get_session] = _override_get_session
-    dashboard_app.dependency_overrides[owner_api.get_session] = _override_get_session
+    from bot.db.session import get_session
+
+    dashboard_app.dependency_overrides[get_session] = _override_get_session
     yield
     dashboard_app.dependency_overrides.clear()
 
