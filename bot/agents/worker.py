@@ -67,6 +67,7 @@ def _trim_message(value: str, limit: int = 96) -> str:
 
 def _format_timestamp() -> str:
     from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
