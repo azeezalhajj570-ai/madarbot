@@ -713,6 +713,13 @@ async def webapp_agent_analytics(
 
     lead_stats = await AgentLeadService(session).lead_stats(agent_id=agent.id)
 
+    from bot.agents.jobs import (
+        JOB_STATUS_COMPLETED,
+        JOB_STATUS_FAILED,
+        JOB_STATUS_QUEUED,
+        JOB_STATUS_RUNNING,
+    )
+
     total_jobs = (
         await session.execute(select(func.count(AgentJob.id)).where(AgentJob.agent_id == agent.id))
     ).scalar_one()
@@ -720,7 +727,7 @@ async def webapp_agent_analytics(
     completed_jobs = (
         await session.execute(
             select(func.count(AgentJob.id)).where(
-                AgentJob.agent_id == agent.id, AgentJob.status == "success"
+                AgentJob.agent_id == agent.id, AgentJob.status == JOB_STATUS_COMPLETED
             )
         )
     ).scalar_one()
@@ -728,7 +735,23 @@ async def webapp_agent_analytics(
     failed_jobs = (
         await session.execute(
             select(func.count(AgentJob.id)).where(
-                AgentJob.agent_id == agent.id, AgentJob.status == "failed"
+                AgentJob.agent_id == agent.id, AgentJob.status == JOB_STATUS_FAILED
+            )
+        )
+    ).scalar_one()
+
+    queued_jobs = (
+        await session.execute(
+            select(func.count(AgentJob.id)).where(
+                AgentJob.agent_id == agent.id, AgentJob.status == JOB_STATUS_QUEUED
+            )
+        )
+    ).scalar_one()
+
+    running_jobs = (
+        await session.execute(
+            select(func.count(AgentJob.id)).where(
+                AgentJob.agent_id == agent.id, AgentJob.status == JOB_STATUS_RUNNING
             )
         )
     ).scalar_one()
@@ -749,7 +772,9 @@ async def webapp_agent_analytics(
             "total": total_jobs,
             "completed": completed_jobs,
             "failed": failed_jobs,
-            "pending": total_jobs - completed_jobs - failed_jobs,
+            "queued": queued_jobs,
+            "running": running_jobs,
+            "pending": total_jobs - completed_jobs - failed_jobs - queued_jobs - running_jobs,
         },
         "notifications": {
             "unseen": unseen_notifications,
@@ -764,6 +789,18 @@ async def webapp_agent_analytics(
             else None,
         },
     }
+
+
+@router.post("/api/agents/jobs/reconcile-stale")
+@router.post("/webapp/agents/jobs/reconcile-stale")
+async def webapp_reconcile_stale_jobs(
+    max_hours: int = Query(default=2, ge=1, le=168),
+    mark_failed: bool = Query(default=False),
+) -> dict[str, Any]:
+    """Reconcile stale pending/queued agent jobs older than max_hours."""
+    from bot.agents.dispatch import reconcile_stale_jobs
+
+    return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
 
 
 __all__ = ["router"]

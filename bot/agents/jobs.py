@@ -9,6 +9,16 @@ SCRAPER_MEMBERS_JOB_TYPE = "scraper_members"
 SCRAPER_MESSAGES_JOB_TYPE = "scraper_messages"
 SCRAPER_FULL_GROUP_JOB_TYPE = "scraper_full_group"
 
+# AgentJob statuses
+JOB_STATUS_PENDING = "pending"
+JOB_STATUS_QUEUED = "queued"
+JOB_STATUS_RUNNING = "running"
+JOB_STATUS_COMPLETED = "completed"
+JOB_STATUS_FAILED = "failed"
+JOB_STATUS_ABORTED = "aborted"
+JOB_STATUS_ENQUEUE_FAILED = "enqueue_failed"
+JOB_STATUS_DISPATCH_STALE = "dispatch_stale"
+
 
 def _normalize_group_reference(value: Any) -> int | str:
     if isinstance(value, int):
