@@ -26,7 +26,9 @@ logger = structlog.get_logger(__name__)
 STALE_JOB_THRESHOLD_HOURS = 2
 
 
-async def reconcile_stale_jobs(*, max_hours: int = STALE_JOB_THRESHOLD_HOURS, mark_failed: bool = False) -> dict[str, int]:
+async def reconcile_stale_jobs(
+    *, max_hours: int = STALE_JOB_THRESHOLD_HOURS, mark_failed: bool = False
+) -> dict[str, int]:
     """Find and mark stale pending/queued jobs that were never picked up.
 
     Returns a dict with counts of reconciled jobs.

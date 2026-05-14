@@ -713,7 +713,12 @@ async def webapp_agent_analytics(
 
     lead_stats = await AgentLeadService(session).lead_stats(agent_id=agent.id)
 
-    from bot.agents.jobs import JOB_STATUS_COMPLETED, JOB_STATUS_FAILED, JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_RUNNING, JOB_STATUS_ENQUEUE_FAILED, JOB_STATUS_DISPATCH_STALE
+    from bot.agents.jobs import (
+        JOB_STATUS_COMPLETED,
+        JOB_STATUS_FAILED,
+        JOB_STATUS_QUEUED,
+        JOB_STATUS_RUNNING,
+    )
 
     total_jobs = (
         await session.execute(select(func.count(AgentJob.id)).where(AgentJob.agent_id == agent.id))

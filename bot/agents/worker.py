@@ -28,7 +28,6 @@ from bot.agents.jobs import (
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
-    normalize_group_member_broadcast_payload,
 )
 from bot.agents.runtime import (
     AddContactRuntime,
@@ -490,7 +489,10 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     handled = True
                 if not handled:
                     await _set_job_state(
-                        session, job_id, JOB_STATUS_FAILED, error=f"Unhandled job type: {job.job_type}"
+                        session,
+                        job_id,
+                        JOB_STATUS_FAILED,
+                        error=f"Unhandled job type: {job.job_type}",
                     )
                     bound_logger.warning("agent_job_unhandled", job_type=job.job_type)
                     return
@@ -499,7 +501,10 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
             await _set_job_state(
-                session, job_id, JOB_STATUS_PENDING, error=f"Flood wait for {exc.retry_after} seconds"
+                session,
+                job_id,
+                JOB_STATUS_PENDING,
+                error=f"Flood wait for {exc.retry_after} seconds",
             )
             bound_logger.warning("agent_job_flood_wait", retry_after=exc.retry_after)
             execute_agent_job.send_with_options(
@@ -521,7 +526,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 agent.status = "banned"
                 agent.auth_state = "banned"
                 await session.commit()
-            await _set_job_state(session, job_id, JOB_STATUS_FAILED, error="Agent account is banned")
+            await _set_job_state(
+                session, job_id, JOB_STATUS_FAILED, error="Agent account is banned"
+            )
             bound_logger.critical("agent_job_banned")
             return
         except Exception as exc:
