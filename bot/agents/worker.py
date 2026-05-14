@@ -420,8 +420,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         await _set_job_state(session, job_id, "completed")
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
+                    broadcast_payload["job_id"] = job.id
                     result = await broadcast_runtime.execute(
-                        client=client, agent=agent, payload=broadcast_payload
+                        client=client, agent=agent, payload=broadcast_payload, session=session
                     )
                     progress = result.pop("_progress", None) if isinstance(result, dict) else None
                     if progress and progress.get("stopped_at") is not None:

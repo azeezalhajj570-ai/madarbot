@@ -269,11 +269,17 @@ class GroupMemberBroadcastRuntime:
     def __init__(self, *, sleep=asyncio.sleep) -> None:
         self.sleep = sleep
 
-    async def execute(self, *, client, agent: Agent, payload: dict[str, Any]) -> dict[str, Any]:
+    async def execute(
+        self, *, client, agent: Agent, payload: dict[str, Any], session=None
+    ) -> dict[str, Any]:
         import random
+        import hashlib
+        from datetime import datetime, timedelta, timezone
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
+        from bot.db.models.agent import SentBroadcastMessage
         from redis.asyncio import Redis
+        from sqlalchemy import select
 
         normalized = normalize_group_member_broadcast_payload(payload)
 
@@ -314,12 +320,33 @@ class GroupMemberBroadcastRuntime:
             recipients_set = set(recipients)
             recipients = [r for r in recipients if r not in already_sent]
             total_count = len(recipients_set)
+
+            message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+            dedup_skip_count = 0
+            recently_sent: set[int] = set()
+            if session is not None:
+                seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+                result = await session.execute(
+                    select(SentBroadcastMessage.tg_user_id).where(
+                        SentBroadcastMessage.agent_id == agent.id,
+                        SentBroadcastMessage.tg_group_id == source_group_id,
+                        SentBroadcastMessage.message_hash == message_hash,
+                        SentBroadcastMessage.sent_at >= seven_days_ago,
+                        SentBroadcastMessage.status == "sent",
+                    )
+                )
+                recently_sent = {row[0] for row in result if row[0] is not None}
+            filtered = [r for r in recipients if r not in recently_sent]
+            dedup_skip_count = len(recipients) - len(filtered)
+            recipients = filtered
+
             remaining = recipients[:threshold] if threshold > 0 else recipients
             payload["progress"] = {
                 "total_count": total_count,
                 "success_count": success_count,
                 "failure_count": failure_count,
-                "skipped_count": skipped_count,
+                "skipped_count": skipped_count + dedup_skip_count,
+                "dedup_skipped": dedup_skip_count,
                 "sent_users": list(already_sent),
                 "failures": failures,
             }
@@ -364,6 +391,21 @@ class GroupMemberBroadcastRuntime:
                     await client.send_message(recipient_id, message)
                     success_count += 1
                     already_sent.add(recipient_id)
+                    if session is not None:
+                        session.add(
+                            SentBroadcastMessage(
+                                agent_id=agent.id,
+                                job_id=payload.get("job_id"),
+                                tg_user_id=recipient_id,
+                                tg_group_id=source_group_id,
+                                message_text=message,
+                                message_hash=message_hash,
+                                status="sent",
+                                sent_at=datetime.now(timezone.utc),
+                                created_at=datetime.now(timezone.utc),
+                            )
+                        )
+                        await session.commit()
                     await limiter.record_send(agent.id)
                 except Exception as exc:
                     failure_count += 1
@@ -389,6 +431,7 @@ class GroupMemberBroadcastRuntime:
                 "failure_count": failure_count,
                 "total_count": total_count,
                 "skipped_already_sent": skipped_count,
+                "dedup_skipped": dedup_skip_count,
                 "failures": failures,
                 "_progress": dict(payload.get("progress") or {}),
             }

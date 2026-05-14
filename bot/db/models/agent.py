@@ -22,6 +22,32 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from bot.db.base import Base
 
 
+class SentBroadcastMessage(Base):
+    """Log of sent bulk messages for duplicate detection.
+
+    Each row records one message sent to one recipient as part of a
+    group_member_broadcast job. Used to prevent sending the same message
+    to the same recipient within a configurable timeframe.
+    """
+
+    __tablename__ = "sent_broadcast_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tg_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    message_text: Mapped[str] = mapped_column(Text, nullable=False)
+    message_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="sent", index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class Agent(Base):
     __tablename__ = "agents"
     __table_args__ = (
