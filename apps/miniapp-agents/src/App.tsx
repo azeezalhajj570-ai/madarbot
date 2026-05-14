@@ -910,7 +910,7 @@ function GroupDestinationField({
       {selectedGroup ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Note>{selectedGroup.title} · {selectedGroup.tg_group_id}</Note>
-          <Button tone="secondary" onClick={onClear}>Clear</Button>
+          <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: '18px', color: 'var(--miniapp-clay)', padding: '4px' }} title="Clear">✕</button>
           {syncButton}
         </div>
       ) : null}
@@ -2330,8 +2330,9 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
   const [excludeBots, setExcludeBots] = useState(true)
-  const [excludeSent, setExcludeSent] = useState(false)
+  const [excludeSent, setExcludeSent] = useState(true)
   const [showFiltersOpen, setShowFiltersOpen] = useState(false)
+  const [orderByMsgCount, setOrderByMsgCount] = useState<'desc' | 'asc'>('desc')
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
   const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
@@ -2518,7 +2519,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     let cancelled = false
     setLoadingBulkMembers(true)
     setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, 'message_count', false, false)
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, orderByMsgCount === 'asc' ? 'message_count_asc' : 'message_count', false, false)
       .then((page) => {
         if (cancelled) {
           return
@@ -2546,7 +2547,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     return () => {
       cancelled = true
     }
-  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage])
+  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage, orderByMsgCount])
 
   async function saveTask() {
     if (taskKey === SCRAPE_TASK_KEY) {
@@ -2876,6 +2877,27 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 onChange={setBulkMemberQuery}
                 placeholder={bulkSourceGroup ? 'Search by name, username, or user id' : 'Choose a source group first'}
               />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
+                <span>Sort by messages:</span>
+                <button
+                  type="button"
+                  onClick={() => setOrderByMsgCount(orderByMsgCount === 'asc' ? 'desc' : 'asc')}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--miniapp-border-soft)',
+                    borderRadius: 8,
+                    padding: '4px 10px',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    color: 'var(--miniapp-text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  {orderByMsgCount === 'desc' ? '↓ Most' : '↑ Least'}
+                </button>
+              </div>
               {loadingBulkMembers ? <Note>Searching members...</Note> : null}
               {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
               {!loadingBulkMembers && bulkMemberResults.length ? (
@@ -2901,37 +2923,66 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     >
                       Select all results ({bulkMemberResults.length})
                     </Button>
-                    <Button tone="secondary" onClick={() => { setBulkMemberResults([]); setBulkMemberQuery(''); }}>
-                      Clear results
-                    </Button>
                     <button
                       type="button"
                       onClick={() => setShowFiltersOpen(!showFiltersOpen)}
                       style={{
-                        background: showFiltersOpen || !excludeAdmins || !excludeBots || excludeSent ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
-                        color: showFiltersOpen || !excludeAdmins || !excludeBots || excludeSent ? '#fff' : 'var(--miniapp-text-primary)',
+                        background: showFiltersOpen || !excludeAdmins || !excludeBots || !excludeSent ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
+                        color: showFiltersOpen || !excludeAdmins || !excludeBots || !excludeSent ? '#fff' : 'var(--miniapp-text-primary)',
                         border: '1px solid var(--miniapp-border-soft)',
                         borderRadius: 12,
                         padding: '10px 12px',
-                        fontSize: 18,
+                        fontSize: 16,
                         lineHeight: '18px',
                         cursor: 'pointer',
                       }}
                       title="Filters"
                     >
-                      △
+                      ☰
                     </button>
                     {showFiltersOpen ? (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                        <Button tone={excludeAdmins ? 'primary' : 'secondary'} onClick={() => { setExcludeAdmins(!excludeAdmins) }}>
-                          {excludeAdmins ? '✓ ' : ''}Exclude admins
-                        </Button>
-                        <Button tone={excludeBots ? 'primary' : 'secondary'} onClick={() => { setExcludeBots(!excludeBots) }}>
-                          {excludeBots ? '✓ ' : ''}Exclude bots
-                        </Button>
-                        <Button tone={excludeSent ? 'primary' : 'secondary'} onClick={() => { setExcludeSent(!excludeSent) }}>
-                          {excludeSent ? '✓ ' : ''}Exclude sent
-                        </Button>
+                      <div style={{ display: 'grid', gap: 4, width: '100%', padding: '4px 0' }}>
+                        {[
+                          { label: 'Exclude admins', checked: excludeAdmins, toggle: () => setExcludeAdmins(!excludeAdmins) },
+                          { label: 'Exclude bots', checked: excludeBots, toggle: () => setExcludeBots(!excludeBots) },
+                          { label: 'Exclude sent', checked: excludeSent, toggle: () => setExcludeSent(!excludeSent) },
+                        ].map((item) => (
+                          <div
+                            key={item.label}
+                            onClick={item.toggle}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '6px 4px',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              lineHeight: '18px',
+                              color: 'var(--miniapp-text-primary)',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: 4,
+                                border: '2px solid',
+                                borderColor: item.checked ? 'var(--miniapp-coral)' : 'var(--miniapp-border-soft)',
+                                background: item.checked ? 'var(--miniapp-coral)' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#fff',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {item.checked ? '✓' : ''}
+                            </span>
+                            {item.label}
+                          </div>
+                        ))}
                       </div>
                     ) : null}
                   </div>
@@ -2992,7 +3043,26 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   ) : null}
                 </div>
               ) : null}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {bulkSelectedMembers.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setBulkSelectedMembers([])}
+                    style={{
+                      background: 'var(--miniapp-bg)',
+                      color: 'var(--miniapp-text-primary)',
+                      border: '1px solid var(--miniapp-border-soft)',
+                      borderRadius: 12,
+                      padding: '8px 10px',
+                      fontSize: 16,
+                      lineHeight: '18px',
+                      cursor: 'pointer',
+                    }}
+                    title={`Clear selected (${bulkSelectedMembers.length})`}
+                  >
+                    ✕ {bulkSelectedMembers.length}
+                  </button>
+                ) : null}
                 {bulkSelectedMembers.length ? bulkSelectedMembers.map((member) => (
                   <span
                     key={member.user_id}
