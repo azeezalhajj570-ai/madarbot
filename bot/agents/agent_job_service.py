@@ -73,7 +73,14 @@ class AgentJobService(AgentServiceSupport):
             )
             normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
             normalized_payload["exclusion_counts"] = {
-                k: exclusions[k] for k in ("total", "admins_excluded", "bots_excluded", "already_sent_excluded", "final_count")
+                k: exclusions[k]
+                for k in (
+                    "total",
+                    "admins_excluded",
+                    "bots_excluded",
+                    "already_sent_excluded",
+                    "final_count",
+                )
             }
             if exclusions["final_count"] == 0:
                 raise ValueError("All recipients were excluded (admins, bots, already-sent)")

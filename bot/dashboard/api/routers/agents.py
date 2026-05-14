@@ -517,8 +517,12 @@ async def webapp_update_agent(
     return {"status": "ok", "agent": serialize_agent(updated)}
 
 
-@router.post("/api/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)])
+@router.post(
+    "/api/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)]
+)
 async def webapp_bulk_preflight(
     agent_id: int,
     payload: BulkPreflightRequest,

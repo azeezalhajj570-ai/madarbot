@@ -323,7 +323,9 @@ class GroupMemberBroadcastRuntime:
                 if participant_phone or participant_username:
                     recipient_identities[uid] = {
                         "phone": str(participant_phone).strip() if participant_phone else None,
-                        "username": str(participant_username).strip().lower() if participant_username else None,
+                        "username": str(participant_username).strip().lower()
+                        if participant_username
+                        else None,
                     }
 
             recipients_set = set(recipients)
@@ -336,7 +338,9 @@ class GroupMemberBroadcastRuntime:
             if session is not None:
                 seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
                 phones = [v["phone"] for v in recipient_identities.values() if v.get("phone")]
-                usernames = [v["username"] for v in recipient_identities.values() if v.get("username")]
+                usernames = [
+                    v["username"] for v in recipient_identities.values() if v.get("username")
+                ]
                 identity_filters = [SentBroadcastMessage.tg_user_id.in_(recipients)]
                 if phones:
                     identity_filters.append(SentBroadcastMessage.phone_number.in_(phones))
