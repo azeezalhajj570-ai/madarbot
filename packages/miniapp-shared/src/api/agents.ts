@@ -98,15 +98,15 @@ export async function preflightBulkMessage(agentId: number, payload: {
   return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
 }
 
-export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', onlyAdmins = false, onlyBots = false) {
+export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', excludeAdmins = false, onlyBots = false) {
   return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
     q: query || undefined,
     limit,
     page,
     order_by: orderBy,
+    exclude_admins: excludeAdmins,
     exclude_bots: excludeBots,
-    only_admins: onlyAdmins,
     only_bots: onlyBots,
   })
 }

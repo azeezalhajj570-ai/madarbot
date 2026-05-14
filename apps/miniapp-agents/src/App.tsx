@@ -2336,6 +2336,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
   const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
+  const [scrapingGroup, setScrapingGroup] = useState(false)
   const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
@@ -2519,13 +2520,14 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     let cancelled = false
     setLoadingBulkMembers(true)
     setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, false, bulkMemberPage, orderByMsgCount === 'asc' ? 'message_count_asc' : 'message_count', false, false)
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, excludeBots, bulkMemberPage, orderByMsgCount === 'asc' ? 'message_count_asc' : 'message_count', excludeAdmins, false)
       .then((page) => {
         if (cancelled) {
           return
         }
+        const members = Array.isArray(page?.members) ? page.members : []
         const selectedIds = new Set(bulkSelectedMembers.map((member) => member.user_id))
-        const filteredMembers = page.members.filter((member) => !selectedIds.has(member.user_id))
+        const filteredMembers = members.filter((member) => !selectedIds.has(member.user_id))
         setBulkMemberResults(filteredMembers)
         setBulkMemberTotal(page.total)
         setBulkMemberStatus(filteredMembers.length ? null : 'No matching members found.')
@@ -2817,6 +2819,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   setBulkSourceGroupQuery(group.title)
                   setBulkMemberQuery('')
                   setBulkMemberResults([])
+                  setBulkMemberTotal(0)
                   setBulkSelectedMembers([])
                   setBulkMemberStatus(null)
                 }}
@@ -2825,6 +2828,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   setBulkSourceGroupQuery('')
                   setBulkMemberQuery('')
                   setBulkMemberResults([])
+                  setBulkMemberTotal(0)
                   setBulkSelectedMembers([])
                   setBulkMemberStatus(null)
                 }}
@@ -2877,6 +2881,63 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 onChange={setBulkMemberQuery}
                 placeholder={bulkSourceGroup ? 'Search by name, username, or user id' : 'Choose a source group first'}
               />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {bulkSelectedMembers.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setBulkSelectedMembers([])}
+                    style={{
+                      background: 'var(--miniapp-bg)',
+                      color: 'var(--miniapp-text-primary)',
+                      border: '1px solid var(--miniapp-border-soft)',
+                      borderRadius: 12,
+                      padding: '8px 10px',
+                      fontSize: 16,
+                      lineHeight: '18px',
+                      cursor: 'pointer',
+                    }}
+                    title={`Clear selected (${bulkSelectedMembers.length})`}
+                  >
+                    ✕ {bulkSelectedMembers.length}
+                  </button>
+                ) : null}
+                {bulkSelectedMembers.length ? bulkSelectedMembers.map((member) => (
+                  <span
+                    key={member.user_id}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 999,
+                      border: '1px solid var(--miniapp-border-soft)',
+                      background: 'var(--miniapp-bg)',
+                      fontSize: 12.5,
+                    }}
+                  >
+                    {member.full_name || member.username || `User ${member.user_id}`}
+                    {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
+                    {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
+                    {member.is_bot ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 9, fontWeight: 700 }}>Bot</span> : null}
+                    {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
+                    <button
+                      type="button"
+                      onClick={() => setBulkSelectedMembers((current) => current.filter((entry) => entry.user_id !== member.user_id))}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: 'var(--miniapp-clay)',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                )) : null}
+              </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
                 <span>Sort by messages:</span>
                 <button
@@ -2898,6 +2959,31 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   {orderByMsgCount === 'desc' ? '↓ Most' : '↑ Least'}
                 </button>
               </div>
+              {bulkSourceGroup && !loadingBulkMembers && bulkMemberTotal === 0 && !bulkMemberQuery.trim() ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>No scraped members yet.</div>
+                  <Button
+                    tone="secondary"
+                    disabled={scrapingGroup}
+                    onClick={async () => {
+                      setScrapingGroup(true)
+                      try {
+                        await agentsApi.scrapeAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id)
+                        setBulkMemberQuery(' ')
+                      } catch (error) {
+                        setBulkMemberStatus(error instanceof Error ? error.message : 'Scrape failed')
+                      } finally {
+                        setScrapingGroup(false)
+                      }
+                    }}
+                  >
+                    {scrapingGroup ? 'Scraping...' : 'Scrape group'}
+                  </Button>
+                  <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>
+                    This may take a few minutes.
+                  </div>
+                </div>
+              ) : null}
               {loadingBulkMembers ? <Note>Searching members...</Note> : null}
               {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
               {!loadingBulkMembers && bulkMemberResults.length ? (
@@ -3001,19 +3087,21 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                       if (!filtered.length) {
                         return <Note>No matching members — try adjusting filters</Note>
                       }
-                      return filtered.map((member) => (
+                      const selectedIds = new Set(bulkSelectedMembers.map((m) => m.user_id))
+                      return filtered.map((member) => {
+                      const isSelected = selectedIds.has(member.user_id)
+                      return (
                       <LinkRow
                         key={member.user_id}
                         onClick={() => {
-                          setBulkSelectedMembers((current) => (
-                            current.some((entry) => entry.user_id === member.user_id) ? current : [...current, member]
-                          ))
-                          setBulkMemberQuery('')
-                          setBulkMemberResults([])
-                          setBulkMemberStatus(null)
+                          setBulkSelectedMembers((current) =>
+                            current.some((entry) => entry.user_id === member.user_id) ? current.filter((entry) => entry.user_id !== member.user_id) : [...current, member]
+                          )
                         }}
+                        style={{ background: isSelected ? 'var(--miniapp-highlight, #e8f4e8)' : undefined }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {isSelected ? <span style={{ color: 'var(--miniapp-sage, #4a8)', fontWeight: 700, fontSize: 16 }}>✓</span> : null}
                           <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
                           {member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Owner</span> : null}
                           {member.is_admin && !member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Admin</span> : null}
@@ -3021,13 +3109,17 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                           {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600 }}>✓ Sent</span> : null}
                         </div>
                         <div style={{ color: '#655d52', marginTop: 4 }}>
-                          {member.username ? `@${member.username} · ` : ''}{member.user_id}
+                          {member.username ? `@${member.username} · ` : ''}{member.user_id}{member.phone ? ` · ${member.phone}` : ''}
                           {(typeof member.message_count === 'number' && member.message_count > 0) ? (
                             <span style={{ marginLeft: 4 }}>· {member.message_count} msg{member.message_count !== 1 ? 's' : ''}</span>
                           ) : null}
+                          {(typeof member.group_count === 'number' && member.group_count > 0) ? (
+                            <span style={{ marginLeft: 4 }}>· {member.group_count} group{member.group_count !== 1 ? 's' : ''}</span>
+                          ) : null}
                         </div>
                       </LinkRow>
-                    ))
+                    )
+                  })
                   })()}
                   </div>
                   {bulkMemberTotal > 20 ? (
@@ -3043,63 +3135,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                   ) : null}
                 </div>
               ) : null}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                {bulkSelectedMembers.length ? (
-                  <button
-                    type="button"
-                    onClick={() => setBulkSelectedMembers([])}
-                    style={{
-                      background: 'var(--miniapp-bg)',
-                      color: 'var(--miniapp-text-primary)',
-                      border: '1px solid var(--miniapp-border-soft)',
-                      borderRadius: 12,
-                      padding: '8px 10px',
-                      fontSize: 16,
-                      lineHeight: '18px',
-                      cursor: 'pointer',
-                    }}
-                    title={`Clear selected (${bulkSelectedMembers.length})`}
-                  >
-                    ✕ {bulkSelectedMembers.length}
-                  </button>
-                ) : null}
-                {bulkSelectedMembers.length ? bulkSelectedMembers.map((member) => (
-                  <span
-                    key={member.user_id}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 10px',
-                      borderRadius: 999,
-                      border: '1px solid var(--miniapp-border-soft)',
-                      background: 'var(--miniapp-bg)',
-                      fontSize: 12.5,
-                    }}
-                  >
-                    {member.full_name || member.username || `User ${member.user_id}`}
-                    {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
-                    {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
-                    {member.is_bot ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 9, fontWeight: 700 }}>Bot</span> : null}
-                    {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
-                    <button
-                      type="button"
-                      onClick={() => setBulkSelectedMembers((current) => current.filter((entry) => entry.user_id !== member.user_id))}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: 'var(--miniapp-clay)',
-                        cursor: 'pointer',
-                        fontSize: 16,
-                        lineHeight: 1,
-                        padding: 0,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </span>
-                )) : null}
-              </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
                 <div style={{ flex: 1 }}>
                   <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />

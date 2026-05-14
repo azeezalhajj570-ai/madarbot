@@ -91,7 +91,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
             if normalized_query and not word_conditions:
                 return []
 
-            filters = [ScrapedGroup.last_agent_id == agent_id]
+            filters = [ScrapedGroup.last_agent_id == agent_id, ScrapedGroup.group_type != "channel"]
             filters.extend(word_conditions)
             stmt = (
                 select(ScrapedGroup)
@@ -353,6 +353,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         query: str | None = None,
         page: int = 1,
         page_size: int = 10,
+        exclude_admins: bool = False,
         exclude_bots: bool = True,
         only_admins: bool = False,
         only_bots: bool = False,
@@ -386,6 +387,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         ]
         if exclude_bots:
             filters.append(ScrapedMember.is_bot.is_(False))
+        if exclude_admins:
+            filters.append(ScrapedMember.role.notin_(["admin", "creator"]))
         if only_admins:
             filters.append(ScrapedMember.role.in_(["admin", "creator"]))
         if only_bots:
@@ -408,6 +411,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 if scraped_group is not None
                 and not normalized_query
                 and not exclude_bots
+                and not exclude_admins
+                and not only_admins
+                and not only_bots
                 and scraped_group.member_count is not None
                 else int(
                     (
@@ -425,6 +431,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 ScrapedMember.full_name,
                 ScrapedMember.role,
                 ScrapedMember.is_bot,
+                ScrapedMember.phone,
             )
 
             if order_by == "message_count":
@@ -539,6 +546,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "user_id": int(member.tg_user_id),
                 "username": member.username,
                 "full_name": member.full_name,
+                "phone": member.phone,
                 "role": role,
                 "is_admin": role in {"admin", "creator"},
                 "is_creator": role == "creator",

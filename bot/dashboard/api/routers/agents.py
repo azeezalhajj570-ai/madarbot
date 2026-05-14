@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from telethon.errors import ChatAdminRequiredError
 
 from bot.agents.account_group_membership_service import AccountGroupMembershipService
 from bot.agents.agent_notification_service import AgentNotificationService
@@ -282,6 +283,7 @@ async def webapp_agent_member_search(
     limit: int = Query(default=25, ge=1, le=50),
     page: int = Query(default=1, ge=1),
     order_by: str = Query(default="message_count"),
+    exclude_admins: bool = Query(default=False),
     exclude_bots: bool = Query(default=False),
     only_admins: bool = Query(default=False),
     only_bots: bool = Query(default=False),
@@ -298,6 +300,7 @@ async def webapp_agent_member_search(
             page=page,
             page_size=limit,
             order_by=order_by,
+            exclude_admins=exclude_admins,
             exclude_bots=exclude_bots,
             only_admins=only_admins,
             only_bots=only_bots,
@@ -415,6 +418,11 @@ async def webapp_sync_admins_bots(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    except ChatAdminRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This account must be a group admin to sync admins and bots.",
+        ) from exc
 
 
 @router.get(
@@ -482,6 +490,11 @@ async def webapp_agent_group_scrape_members(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except ChatAdminRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This account must be a group admin to scrape members.",
         ) from exc
 
 
