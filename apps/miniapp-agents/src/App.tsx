@@ -19,13 +19,12 @@ import type {
   Agent,
   AgentAnalytics,
   AgentGroupMember,
-  AgentGroupMemberMessage,
+  AgentGroupMemberMessagesPage,
+  AgentGroupMembersPage,
   AgentLead,
   AgentLeadPage,
-  AgentLeadStats,
-  AgentManagedGroup,
-  AgentNotification,
   AutomationTask,
+  BulkPreflightResult,
   TaskCatalogItem,
 } from '@miniapp/shared'
 
@@ -2329,8 +2328,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
-  const [excludeAdmins, setExcludeAdmins] = useState(false)
-  const [excludeBots, setExcludeBots] = useState(false)
   const [showAdminsOnly, setShowAdminsOnly] = useState(false)
   const [showBotsOnly, setShowBotsOnly] = useState(false)
   const [showSentOnly, setShowSentOnly] = useState(false)
@@ -2339,6 +2336,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
   const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
   const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
+  const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
+  const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -2599,25 +2598,45 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
         return
       }
 
-      setIsSaving(true)
+      if (bulkSummary) {
+        setIsSaving(true)
+        try {
+          await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, {
+            source_group_id: bulkSourceGroup.tg_group_id,
+            source_group_title: bulkSourceGroup.title,
+            message: bulkMessage.trim(),
+            threshold,
+            interval_seconds: intervalSeconds,
+            selected_user_ids: bulkSummary.filtered_user_ids,
+          })
+          setBulkSummary(null)
+          closeForm()
+          setStatus(null)
+          onSaved('Bulk message job queued')
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message job')
+        } finally {
+          setIsSaving(false)
+        }
+        return
+      }
+
+      setLoadingBulkSummary(true)
+      setStatus(null)
       try {
-        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, {
+        const result = await agentsApi.preflightBulkMessage(account.id, {
           source_group_id: bulkSourceGroup.tg_group_id,
           source_group_title: bulkSourceGroup.title,
           message: bulkMessage.trim(),
+          selected_user_ids: bulkSelectedMembers.map((member) => member.user_id),
           threshold,
           interval_seconds: intervalSeconds,
-          selected_user_ids: bulkSelectedMembers
-                .filter((member) => !(excludeAdmins && (member.is_admin || member.is_creator)) && !(excludeBots && member.is_bot))
-                .map((member) => member.user_id),
         })
-        closeForm()
-        setStatus(null)
-        onSaved('Bulk message job queued')
+        setBulkSummary(result)
       } catch (error) {
-        setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message job')
+        setStatus(error instanceof Error ? error.message : 'Failed to prepare bulk message')
       } finally {
-        setIsSaving(false)
+        setLoadingBulkSummary(false)
       }
       return
     }
@@ -2865,7 +2884,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     <Button
                       tone="secondary"
                       onClick={() => {
-                        const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
+                        const candidates = bulkMemberResults.filter((m) => !(showSentOnly && !m.sent_by_agent))
                         setBulkSelectedMembers((current) => {
                           const next = [...current]
                           candidates.forEach((member) => {
@@ -2927,7 +2946,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                     }}
                   >
                     {(() => {
-                      const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(showSentOnly && !m.sent_by_agent))
+                      const filtered = bulkMemberResults.filter((m) => !(showSentOnly && !m.sent_by_agent))
                       if (!filtered.length) {
                         return <Note>No matching members — try adjusting filters</Note>
                       }
@@ -3015,24 +3034,6 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 <div style={{ flex: 1 }}>
                   <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '0 0 10px', whiteSpace: 'nowrap' }}>
-                  <input
-                    type="checkbox"
-                    checked={excludeAdmins}
-                    onChange={(event) => setExcludeAdmins(event.target.checked)}
-                    style={{ accentColor: 'var(--miniapp-accent)' }}
-                  />
-                  Exclude admins
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-clay)', cursor: 'pointer', padding: '0 0 10px', whiteSpace: 'nowrap' }}>
-                  <input
-                    type="checkbox"
-                    checked={excludeBots}
-                    onChange={(event) => setExcludeBots(event.target.checked)}
-                    style={{ accentColor: 'var(--miniapp-accent)' }}
-                  />
-                  Exclude bots
-                </label>
               </div>
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
             </>
@@ -3176,8 +3177,37 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
               ) : null}
             </>
           )}
+          {bulkSummary ? (
+            <div
+              style={{
+                display: 'grid',
+                gap: 8,
+                padding: 12,
+                border: '1px solid var(--miniapp-border-soft)',
+                borderRadius: 12,
+                background: 'var(--miniapp-bg)',
+                fontSize: 13,
+              }}
+            >
+              <strong style={{ fontSize: 14 }}>Send summary</strong>
+              <div>Total matched: {bulkSummary.total}</div>
+              {bulkSummary.admins_excluded > 0 ? <div>Admins excluded: {bulkSummary.admins_excluded}</div> : null}
+              {bulkSummary.bots_excluded > 0 ? <div>Bots excluded: {bulkSummary.bots_excluded}</div> : null}
+              {bulkSummary.already_sent_excluded > 0 ? <div>Already sent excluded: {bulkSummary.already_sent_excluded}</div> : null}
+              <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>
+                Final recipients: {bulkSummary.final_count}
+              </div>
+              {bulkSummary.final_count === 0 ? (
+                <div style={{ color: 'var(--miniapp-coral)', fontSize: 13 }}>
+                  No recipients left after excluding admins, bots, and already-sent users.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
           <FormActions
-            submitLabel={isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
+            submitLabel={bulkSummary ? 'Confirm & Send' : loadingBulkSummary ? 'Preparing...' : isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
+            submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0}
             onSubmit={() => void saveTask()}
             onCancel={closeForm}
           />

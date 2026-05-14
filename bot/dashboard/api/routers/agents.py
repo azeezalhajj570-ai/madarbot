@@ -28,6 +28,7 @@ from ._shared import (
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
+    BulkPreflightRequest,
     AgentSafetyUpdateRequest,
     AgentUpdateRequest,
     LeadUpdateRequest,
@@ -514,6 +515,33 @@ async def webapp_update_agent(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     return {"status": "ok", "agent": serialize_agent(updated)}
+
+
+@router.post(
+    "/api/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/bulk-preflight", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_bulk_preflight(
+    agent_id: int,
+    payload: BulkPreflightRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        exclusions = await AgentJobService(session).compute_bulk_exclusions(
+            agent=agent,
+            source_group_id=payload.source_group_id,
+            message=payload.message,
+            selected_user_ids=payload.selected_user_ids,
+        )
+        return exclusions
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.post("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])

@@ -13,6 +13,7 @@ import type {
   AgentJobRecord,
   AgentManagedGroup,
   AutomationTask,
+  BulkPreflightResult,
   TaskCatalogItem,
 } from '../types'
 
@@ -84,6 +85,17 @@ export async function syncAgentWorkspace(agentId: number) {
 
 export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
+}
+
+export async function preflightBulkMessage(agentId: number, payload: {
+  source_group_id: number
+  source_group_title?: string
+  message: string
+  selected_user_ids: number[]
+  threshold?: number
+  interval_seconds?: number
+}) {
+  return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
 }
 
 export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', onlyAdmins = false, onlyBots = false) {
