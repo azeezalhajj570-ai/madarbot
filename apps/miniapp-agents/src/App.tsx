@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { MultiGroupSelect } from './components/MultiGroupSelect'
+import { TableModal } from './components/TableModal'
+import type { ColumnDef } from './components/DataTable'
 
 import {
   agentsApi,
@@ -3727,76 +3729,13 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
   )
 }
 
-function SendLogsModal({ account, jobId, jobName, onClose }: { account: Agent; jobId: number; jobName: string; onClose: () => void }) {
-  const [logs, setLogs] = useState<SendLogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState<string | null>(null)
-
-  useEffect(() => {
-    setLoading(true)
-    void agentsApi.fetchAgentSendLogs(account.id, 100, undefined, jobId)
-      .then((data) => setLogs(data.logs))
-      .catch((err) => setStatus(err instanceof Error ? err.message : 'Failed to load logs'))
-      .finally(() => setLoading(false))
-  }, [account.id, jobId])
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(32,25,16,0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 1100 }}
-      onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        width: 'min(520px, 100%)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-        background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
-        borderRadius: 20, boxShadow: '0 22px 60px rgba(32,25,16,0.22)',
-      }}>
-        <div style={{ padding: '20px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h3 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 18 }}>Send Logs</h3>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Job #{jobId} · {jobName}</div>
-          </div>
-          <button type="button" onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-clay)', fontSize: 22, lineHeight: 1, padding: 0 }}>
-            ×
-          </button>
-        </div>
-        <div style={{ overflow: 'auto', padding: 20, display: 'grid', gap: 4 }}>
-          {loading ? <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>Loading...</div> : null}
-          {status ? <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>{status}</div> : null}
-          {!loading && !status && logs.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>No send logs for this job. Messages may still be in progress.</div>
-          ) : null}
-          {!loading && logs.map((log) => (
-            <div key={log.id} style={{
-              padding: '6px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
-              background: 'var(--miniapp-bg)', fontSize: 12, display: 'grid', gap: 2,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 600 }}>
-                  {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
-                  {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)' }}> · {log.phone_number}</span> : null}
-                </span>
-                <span style={{
-                  padding: '0 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                  background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
-                  color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
-                }}>{log.status}</span>
-              </div>
-              <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {log.message_preview}
-              </div>
-              {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 9 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function TaskActivity({ account }: { account: Agent }) {
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [logsJobId, setLogsJobId] = useState<number | null>(null)
+  const [logs, setLogs] = useState<SendLogEntry[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -3829,6 +3768,57 @@ function TaskActivity({ account }: { account: Agent }) {
       setJobs(jobsData)
     } catch { /* silent auto-refresh */ }
   }
+
+  useEffect(() => {
+    if (logsJobId === null) return
+    setLogsLoading(true)
+    void agentsApi.fetchAgentSendLogs(account.id, 500, undefined, logsJobId)
+      .then((data) => setLogs(data.logs))
+      .catch(() => setLogs([]))
+      .finally(() => setLogsLoading(false))
+  }, [account.id, logsJobId])
+
+  const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
+    {
+      key: 'recipient', label: 'Recipient', sortable: true, width: '1.5fr',
+      render: (log) => (
+        <span style={{ fontWeight: 600 }}>
+          {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
+          {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)', marginLeft: 6 }}>{log.phone_number}</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: 'type', label: 'Type', width: '60px',
+      render: (log) => log.username || log.tg_user_id ? '👤' : '👥',
+    },
+    {
+      key: 'status', label: 'Status', sortable: true, width: '80px',
+      render: (log) => (
+        <span style={{
+          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+          background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
+          color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
+        }}>
+          {log.status}
+        </span>
+      ),
+    },
+    {
+      key: 'message', label: 'Message', width: '2fr',
+      render: (log) => (
+        <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+          {(log.message_preview || '').slice(0, 120)}
+        </span>
+      ),
+    },
+    {
+      key: 'time', label: 'Time', sortable: true, align: 'right' as const, width: '120px',
+      render: (log) => log.sent_at ? (
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{new Date(log.sent_at).toLocaleString()}</span>
+      ) : '—',
+    },
+  ], [])
 
   const filteredJobs = useMemo(() => {
     let result = [...jobs]
@@ -3990,14 +3980,24 @@ function TaskActivity({ account }: { account: Agent }) {
         </div>
       ) : null}
 
-      {logsJobId ? (
-        <SendLogsModal
-          account={account}
-          jobId={logsJobId}
-          jobName={jobs.find((j) => j.id === logsJobId)?.message_preview || `Task #${logsJobId}`}
-          onClose={() => setLogsJobId(null)}
-        />
-      ) : null}
+      <TableModal<SendLogEntry>
+        open={logsJobId !== null}
+        onClose={() => setLogsJobId(null)}
+        title="Send Logs"
+        subtitle={`Job #${logsJobId} · ${jobs.find((j) => j.id === logsJobId)?.message_preview || `Task #${logsJobId}`}`}
+        data={logs}
+        columns={sendLogColumns}
+        keyField="id"
+        searchAccessor={(log) => `${log.username || ''} ${log.phone_number || ''} ${log.tg_user_id || ''} ${log.tg_group_id || ''} ${log.message_preview || ''}`}
+        pageSize={25}
+        loading={logsLoading}
+        emptyMessage="No send logs for this job."
+        renderExpanded={(log) => (
+          <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
+            {log.message_full || log.message_preview}
+          </div>
+        )}
+      />
     </Card>
   )
 }
