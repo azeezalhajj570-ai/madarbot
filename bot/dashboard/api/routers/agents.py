@@ -176,12 +176,14 @@ async def webapp_complete_agent_auth_password(
 @router.get("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
 async def webapp_agent_jobs(
     agent_id: int,
+    job_type: str | None = None,
+    limit: int = 50,
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     rows = await AgentJobService(session).list_agent_jobs(
-        actor_user_id=identity.user_id, agent_id=agent.id
+        actor_user_id=identity.user_id, agent_id=agent.id, limit=limit, job_type=job_type,
     )
     return [
         {
@@ -190,9 +192,56 @@ async def webapp_agent_jobs(
             "job_type": job.job_type,
             "job_payload": job.job_payload,
             "status": job.status,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+            "progress": (job.job_payload or {}).get("progress"),
         }
         for job in rows
     ]
+
+
+@router.get(
+    "/api/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)]
+)
+@router.get(
+    "/webapp/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_agent_send_logs(
+    agent_id: int,
+    limit: int = 100,
+    offset_id: int | None = None,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    from sqlalchemy import desc, select
+    from bot.db.models.agent import SentBroadcastMessage
+
+    stmt = (
+        select(SentBroadcastMessage)
+        .where(SentBroadcastMessage.agent_id == agent.id)
+    )
+    if offset_id:
+        stmt = stmt.where(SentBroadcastMessage.id < offset_id)
+    stmt = stmt.order_by(desc(SentBroadcastMessage.id)).limit(limit)
+
+    rows = (await session.execute(stmt)).scalars().all()
+
+    return {
+        "logs": [
+            {
+                "id": msg.id,
+                "job_id": msg.job_id,
+                "tg_user_id": msg.tg_user_id,
+                "tg_group_id": msg.tg_group_id,
+                "message_preview": (msg.message_text or "")[:120],
+                "status": msg.status,
+                "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
+            }
+            for msg in rows
+        ],
+        "has_more": len(rows) >= limit,
+    }
 
 
 @router.get("/api/agents/{agent_id}/notifications", dependencies=[Depends(require_agents_boundary)])

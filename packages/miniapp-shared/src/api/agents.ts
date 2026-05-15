@@ -14,6 +14,7 @@ import type {
   AgentManagedGroup,
   AutomationTask,
   BulkPreflightResult,
+  SendLogsResponse,
   TaskCatalogItem,
 } from '../types'
 
@@ -63,8 +64,12 @@ export async function deleteAgent(agentId: number) {
   return apiClient.delete(`${AGENTS_API_PREFIX}/${agentId}`)
 }
 
-export async function fetchAgentJobs(agentId: number) {
-  return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`)
+export async function fetchAgentJobs(agentId: number, jobType?: string, limit?: number) {
+  return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, limit })
+}
+
+export async function fetchAgentSendLogs(agentId: number, limit = 100, offsetId?: number) {
+  return apiClient.get<SendLogsResponse>(`${AGENTS_API_PREFIX}/${agentId}/send-logs`, { limit, offset_id: offsetId })
 }
 
 export async function fetchAgentNotifications(agentId: number, limit = 50) {

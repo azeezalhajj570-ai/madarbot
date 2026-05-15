@@ -152,7 +152,7 @@ class AgentJobService(AgentServiceSupport):
         return list((await self.session.execute(stmt)).scalars())
 
     async def list_agent_jobs(
-        self, *, actor_user_id: int, agent_id: int, limit: int = 20
+        self, *, actor_user_id: int, agent_id: int, limit: int = 50, job_type: str | None = None
     ) -> list[AgentJob]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -161,9 +161,10 @@ class AgentJobService(AgentServiceSupport):
         stmt = (
             select(AgentJob)
             .where(AgentJob.agent_id == agent.id)
-            .order_by(desc(AgentJob.created_at), desc(AgentJob.id))
-            .limit(limit)
         )
+        if job_type:
+            stmt = stmt.where(AgentJob.job_type == job_type)
+        stmt = stmt.order_by(desc(AgentJob.created_at), desc(AgentJob.id)).limit(limit)
         return list((await self.session.execute(stmt)).scalars())
 
     async def queue_automation_task_job(

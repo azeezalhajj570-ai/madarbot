@@ -184,6 +184,30 @@ export interface AgentJobRecord {
   job_payload?: Record<string, unknown>
   status: string
   created_at?: string
+  updated_at?: string
+  progress?: {
+    total_count?: number
+    success_count?: number
+    failure_count?: number
+    skipped_count?: number
+    stopped_at?: number
+    stop_reason?: string
+  }
+}
+
+export interface SendLogEntry {
+  id: number
+  job_id?: number | null
+  tg_user_id?: number | null
+  tg_group_id: number
+  message_preview: string
+  status: string
+  sent_at?: string | null
+}
+
+export interface SendLogsResponse {
+  logs: SendLogEntry[]
+  has_more: boolean
 }
 
 export interface AgentManagedGroup {

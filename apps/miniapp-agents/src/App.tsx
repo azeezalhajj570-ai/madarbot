@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { GroupAnalysisPage } from './components/GroupAnalysisPage'
-
 import {
   agentsApi,
   AppShell,
@@ -1495,9 +1493,7 @@ export default function App() {
               {route.page === 'dashboard' ? (
                 <>
                   <AccountAnalyticsPage account={selectedAccount} />
-                  {subscription?.plan === 'business' ? (
-                    <GroupAnalysisPage account={selectedAccount} />
-                  ) : null}
+                  <SendingLogsPage account={selectedAccount} />
                 </>
               ) : null}
               {route.page === 'tasks' ? (
@@ -3692,6 +3688,121 @@ function AccountLeadsPage({ account }: { account: Agent }) {
             </div>
           </div>
         </div>
+      ) : null}
+    </Card>
+  )
+}
+
+function SendingLogsPage({ account }: { account: Agent }) {
+  const [jobs, setJobs] = useState<AgentJobRecord[]>([])
+  const [sendLogs, setSendLogs] = useState<SendLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'jobs' | 'logs'>('jobs')
+  const [status, setStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    void load()
+  }, [account.id])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const [jobsData, logsData] = await Promise.all([
+        agentsApi.fetchAgentJobs(account.id, 'group_member_broadcast', 20),
+        agentsApi.fetchAgentSendLogs(account.id, 50),
+      ])
+      setJobs(jobsData)
+      setSendLogs(logsData.logs)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load sending data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card title="Sending Logs" subtitle="Track bulk message jobs and individual send attempts.">
+      {status ? <Note>{status}</Note> : null}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <Button tone={tab === 'jobs' ? 'primary' : 'secondary'} onClick={() => setTab('jobs')}>Jobs</Button>
+        <Button tone={tab === 'logs' ? 'primary' : 'secondary'} onClick={() => setTab('logs')}>Send Logs</Button>
+        <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
+      </div>
+      {loading ? <Note>Loading...</Note> : null}
+      {!loading && tab === 'jobs' ? (
+        jobs.length === 0 ? <Note>No bulk message jobs yet.</Note> : (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {jobs.map((job) => {
+              const p = job.progress || {}
+              const total = p.total_count ?? 0
+              const done = (p.success_count ?? 0) + (p.failure_count ?? 0)
+              const pct = total > 0 ? Math.round((done / total) * 100) : 0
+              const isRunning = job.status === 'running'
+              const isCompleted = job.status === 'completed'
+              const isFailed = job.status === 'failed'
+              const jobPayload = job.job_payload || {}
+              const targetLabel = jobPayload.target_type === 'groups' ? 'groups' : 'members'
+              return (
+                <div key={job.id} style={{
+                  padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)',
+                  background: 'var(--miniapp-surface)', display: 'grid', gap: 8,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: 14 }}>{targetLabel} · {job.job_type.replace(/_/g, ' ')}</strong>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : 'var(--miniapp-bg-deep)',
+                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-text-muted)',
+                    }}>
+                      {job.status}
+                    </span>
+                  </div>
+                  {job.created_at ? <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{new Date(job.created_at).toLocaleString()}</div> : null}
+                  {total > 0 ? (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                        <span>{p.success_count ?? 0} sent · {p.failure_count ?? 0} failed{p.skipped_count ? ` · ${p.skipped_count} skipped` : ''}</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${pct}%`, borderRadius: 3,
+                          background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : 'var(--miniapp-sage)',
+                          transition: 'width 0.3s',
+                        }} />
+                      </div>
+                    </div>
+                  ) : <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{isRunning ? 'Processing...' : 'No progress data'}</div>}
+                  {p.stop_reason ? <div style={{ fontSize: 11, color: 'var(--miniapp-clay)' }}>Stopped: {p.stop_reason}</div> : null}
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : null}
+      {!loading && tab === 'logs' ? (
+        sendLogs.length === 0 ? <Note>No send logs yet. Run a bulk message job to see logs.</Note> : (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {sendLogs.map((log) => (
+              <div key={log.id} style={{
+                padding: '8px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+                background: 'var(--miniapp-bg)', fontSize: 12,
+                display: 'grid', gap: 2,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600 }}>{log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}</span>
+                  <span style={{
+                    padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                    background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
+                    color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
+                  }}>{log.status}</span>
+                </div>
+                <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.message_preview}</div>
+                {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 10 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
     </Card>
   )
