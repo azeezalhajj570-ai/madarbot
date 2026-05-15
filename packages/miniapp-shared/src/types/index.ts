@@ -183,6 +183,7 @@ export interface AgentJobRecord {
   job_type: string
   job_payload?: Record<string, unknown>
   status: string
+  scheduled_at?: string
   created_at?: string
   updated_at?: string
   progress?: {

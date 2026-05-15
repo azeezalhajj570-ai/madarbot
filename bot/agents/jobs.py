@@ -16,6 +16,7 @@ JOB_STATUS_RUNNING = "running"
 JOB_STATUS_COMPLETED = "completed"
 JOB_STATUS_FAILED = "failed"
 JOB_STATUS_ABORTED = "aborted"
+JOB_STATUS_SCHEDULED = "scheduled"
 JOB_STATUS_ENQUEUE_FAILED = "enqueue_failed"
 JOB_STATUS_DISPATCH_STALE = "dispatch_stale"
 

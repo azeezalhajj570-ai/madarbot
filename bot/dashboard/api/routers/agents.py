@@ -19,6 +19,7 @@ from bot.agents.jobs import (
     JOB_STATUS_PENDING,
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
+    JOB_STATUS_SCHEDULED,
 )
 from bot.db.models import AgentJob
 from bot.db.session import get_session
@@ -201,6 +202,7 @@ async def webapp_agent_jobs(
             "job_type": job.job_type,
             "job_payload": job.job_payload,
             "status": job.status,
+            "scheduled_at": job.scheduled_at.isoformat() if job.scheduled_at else None,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             "progress": (job.job_payload or {}).get("progress"),
@@ -690,12 +692,14 @@ async def webapp_create_agent_job(
             agent_id=agent.id,
             job_type=payload.job_type,
             job_payload=payload.job_payload,
+            scheduled_at=payload.scheduled_at,
         )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    await dispatch_agent_job(job.id)
+    if not payload.scheduled_at:
+        await dispatch_agent_job(job.id)
     return {
         "status": "ok",
         "job": {
@@ -703,6 +707,7 @@ async def webapp_create_agent_job(
             "agent_id": job.agent_id,
             "job_type": job.job_type,
             "status": job.status,
+            "scheduled_at": job.scheduled_at.isoformat() if job.scheduled_at else None,
         },
     }
 
@@ -726,7 +731,7 @@ async def webapp_cancel_agent_job(
     if job is None or job.agent_id != agent.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
-    if job.status not in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_RUNNING}:
+    if job.status not in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_RUNNING, JOB_STATUS_SCHEDULED}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Cannot cancel job in status '{job.status}'",

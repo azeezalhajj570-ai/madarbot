@@ -88,8 +88,8 @@ export async function markAgentNotificationsSeen(agentId: number) {
   return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/notifications/mark-seen`)
 }
 
-export async function createAgentJob(agentId: number, jobType: string, jobPayload: Record<string, unknown>) {
-  return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, job_payload: jobPayload })
+export async function createAgentJob(agentId: number, jobType: string, jobPayload: Record<string, unknown>, scheduledAt?: string) {
+  return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, job_payload: jobPayload, scheduled_at: scheduledAt })
 }
 
 export async function syncAgentWorkspace(agentId: number) {

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.agents.contracts import AgentJobOwnership
 from bot.agents.jobs import (
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    JOB_STATUS_SCHEDULED,
     normalize_group_member_broadcast_payload,
 )
 from bot.core.event_bus import EventBus
@@ -64,6 +65,7 @@ class AgentJobService(AgentServiceSupport):
         agent_id: int,
         job_type: str,
         job_payload: dict[str, Any] | None = None,
+        scheduled_at: datetime | None = None,
     ) -> AgentJob:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -75,7 +77,9 @@ class AgentJobService(AgentServiceSupport):
         if not normalized_job_type:
             raise ValueError("Job type is required")
         normalized_payload = dict(job_payload or {})
-        if normalized_job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
+        is_broadcast = normalized_job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE
+
+        if is_broadcast:
             normalized_payload = normalize_group_member_broadcast_payload(normalized_payload)
             target_type = normalized_payload.get("target_type", "members")
 
@@ -101,20 +105,24 @@ class AgentJobService(AgentServiceSupport):
                     }
                     if exclusions["final_count"] == 0:
                         raise ValueError("All recipients were excluded (admins, bots, already-sent)")
-                await self._validate_broadcast_preflight(agent, normalized_payload)
+                if not scheduled_at:
+                    await self._validate_broadcast_preflight(agent, normalized_payload)
             else:
                 target_ids = normalized_payload.get("target_group_ids", [])
                 if len(target_ids) > normalized_payload.get("threshold", 25):
                     raise ValueError(
                         f"Target groups ({len(target_ids)}) exceeds threshold ({normalized_payload.get('threshold')})"
                     )
-                await self._validate_broadcast_rate_limits(agent, normalized_payload)
+                if not scheduled_at:
+                    await self._validate_broadcast_rate_limits(agent, normalized_payload)
 
+        status = JOB_STATUS_SCHEDULED if scheduled_at else "pending"
         job = AgentJob(
             agent_id=agent.id,
             job_type=normalized_job_type,
             job_payload=normalized_payload,
-            status="pending",
+            status=status,
+            scheduled_at=scheduled_at,
         )
         self.session.add(job)
         await self.session.commit()

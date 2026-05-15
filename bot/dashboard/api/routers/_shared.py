@@ -96,6 +96,7 @@ class AgentUpdateRequest(BaseModel):
 class AgentJobCreateRequest(BaseModel):
     job_type: str = Field(min_length=1, max_length=100)
     job_payload: dict[str, Any] = Field(default_factory=dict)
+    scheduled_at: datetime | None = None
 
 
 class BulkPreflightRequest(BaseModel):
