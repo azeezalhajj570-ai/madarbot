@@ -21,17 +21,29 @@ def _job_queued_notification(
     job_type: str, payload: dict[str, Any]
 ) -> tuple[str, str, dict[str, Any]]:
     if job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
-        group_title = str(payload.get("source_group_title") or "").strip()
-        selected_count = len(list(payload.get("selected_user_ids") or []))
-        summary = (
-            f"Queued for {group_title}." if group_title else "Queued for the selected source group."
-        )
-        notification_payload = {
-            "job_type": job_type,
-            "source_group_title": group_title,
-            "selected_count": selected_count,
-            "job_payload": dict(payload),
-        }
+        target_type = payload.get("target_type", "members")
+        if target_type == "groups":
+            target_count = len(list(payload.get("target_group_ids") or []))
+            summary = f"Queued for {target_count} group(s)."
+            notification_payload = {
+                "job_type": job_type,
+                "target_type": "groups",
+                "target_count": target_count,
+                "job_payload": dict(payload),
+            }
+        else:
+            group_title = str(payload.get("source_group_title") or "").strip()
+            selected_count = len(list(payload.get("selected_user_ids") or []))
+            summary = (
+                f"Queued for {group_title}." if group_title else "Queued for the selected source group."
+            )
+            notification_payload = {
+                "job_type": job_type,
+                "target_type": "members",
+                "source_group_title": group_title,
+                "selected_count": selected_count,
+                "job_payload": dict(payload),
+            }
         return "Bulk message queued", summary, notification_payload
 
     return (
@@ -65,28 +77,38 @@ class AgentJobService(AgentServiceSupport):
         normalized_payload = dict(job_payload or {})
         if normalized_job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
             normalized_payload = normalize_group_member_broadcast_payload(normalized_payload)
-            selected_ids = normalized_payload["selected_user_ids"]
-            if selected_ids:
-                exclusions = await self.compute_bulk_exclusions(
-                    agent=agent,
-                    source_group_id=normalized_payload["source_group_id"],
-                    message=normalized_payload["message"],
-                    selected_user_ids=selected_ids,
-                )
-                normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
-                normalized_payload["exclusion_counts"] = {
-                    k: exclusions[k]
-                    for k in (
-                        "total",
-                        "admins_excluded",
-                        "bots_excluded",
-                        "already_sent_excluded",
-                        "final_count",
+            target_type = normalized_payload.get("target_type", "members")
+
+            if target_type == "members":
+                selected_ids = normalized_payload.get("selected_user_ids", [])
+                if selected_ids:
+                    exclusions = await self.compute_bulk_exclusions(
+                        agent=agent,
+                        source_group_id=normalized_payload.get("source_group_id", 0),
+                        message=normalized_payload["message"],
+                        selected_user_ids=selected_ids,
                     )
-                }
-                if exclusions["final_count"] == 0:
-                    raise ValueError("All recipients were excluded (admins, bots, already-sent)")
-            await self._validate_broadcast_preflight(agent, normalized_payload)
+                    normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
+                    normalized_payload["exclusion_counts"] = {
+                        k: exclusions[k]
+                        for k in (
+                            "total",
+                            "admins_excluded",
+                            "bots_excluded",
+                            "already_sent_excluded",
+                            "final_count",
+                        )
+                    }
+                    if exclusions["final_count"] == 0:
+                        raise ValueError("All recipients were excluded (admins, bots, already-sent)")
+                await self._validate_broadcast_preflight(agent, normalized_payload)
+            else:
+                target_ids = normalized_payload.get("target_group_ids", [])
+                if len(target_ids) > normalized_payload.get("threshold", 25):
+                    raise ValueError(
+                        f"Target groups ({len(target_ids)}) exceeds threshold ({normalized_payload.get('threshold')})"
+                    )
+                await self._validate_broadcast_rate_limits(agent, normalized_payload)
 
         job = AgentJob(
             agent_id=agent.id,
@@ -380,5 +402,49 @@ class AgentJobService(AgentServiceSupport):
                     f"Selected members ({len(selected)}) exceeds threshold ({threshold})"
                 )
 
+        finally:
+            await redis_client.aclose()
+
+    async def _validate_broadcast_rate_limits(self, agent: Agent, payload: dict[str, Any]) -> None:
+        from bot.config import get_settings
+        from bot.utils.rate_limiter import AgentRateLimiter
+        from redis.asyncio import Redis
+
+        redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
+        try:
+            limiter = AgentRateLimiter(redis_client)
+
+            cooldown_mins = getattr(agent, "cooldown_minutes", None)
+            if cooldown_mins is not None and cooldown_mins > 0:
+                in_cooldown, remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
+                if in_cooldown:
+                    raise ValueError(f"Agent is in cooldown for {int(remaining)} more seconds")
+
+            safety_enabled = getattr(agent, "safety_mode_enabled", True)
+            safety_until = getattr(agent, "safety_mode_until", None)
+            if await limiter.check_safety_mode(agent.id, safety_enabled, safety_until):
+                raise ValueError("Agent is in safety mode and cannot send bulk messages")
+
+            max_per_hour = getattr(agent, "max_actions_per_hour", None)
+            if max_per_hour is not None and max_per_hour > 0:
+                allowed, count = await limiter.check_and_increment(agent.id, max_per_hour)
+                if not allowed:
+                    raise ValueError(
+                        f"Hourly rate limit reached ({count}/{max_per_hour}). Try again later."
+                    )
+
+            max_per_day = getattr(agent, "max_messages_per_day", None) or 500
+            if max_per_day > 0:
+                allowed, count = await limiter.check_daily_limit(agent.id, max_per_day)
+                if not allowed:
+                    raise ValueError(
+                        f"Daily message limit reached ({count}/{max_per_day}). Try again tomorrow."
+                    )
+
+            threshold = int(payload.get("threshold") or 0)
+            if threshold > max_per_day:
+                raise ValueError(f"Threshold ({threshold}) exceeds daily limit ({max_per_day})")
+            if threshold > 500:
+                raise ValueError(f"Maximum batch size is 500. Requested: {threshold}")
         finally:
             await redis_client.aclose()

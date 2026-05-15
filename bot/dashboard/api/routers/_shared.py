@@ -99,10 +99,12 @@ class AgentJobCreateRequest(BaseModel):
 
 
 class BulkPreflightRequest(BaseModel):
-    source_group_id: int
+    target_type: str = Field(default="members", pattern="^(members|groups)$")
+    source_group_id: int = Field(default=0, ge=0)
     source_group_title: str = ""
     message: str = Field(min_length=1)
-    selected_user_ids: list[int] = Field(min_length=0)
+    selected_user_ids: list[int] = Field(default_factory=list)
+    target_group_ids: list[int] = Field(default_factory=list)
     threshold: int = Field(default=25, ge=1, le=500)
     interval_seconds: float = Field(default=15, ge=0)
 

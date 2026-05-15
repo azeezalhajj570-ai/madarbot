@@ -286,10 +286,11 @@ class GroupMemberBroadcastRuntime:
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         limiter = AgentRateLimiter(redis_client)
         try:
+            target_type = normalized["target_type"]
             message = normalized["message"]
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
-            selected_user_ids = {int(uid) for uid in normalized.get("selected_user_ids", [])}
+            source_group_title = normalized.get("source_group_title", "")
 
             progress = dict(payload.get("progress") or {})
             already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
@@ -298,7 +299,20 @@ class GroupMemberBroadcastRuntime:
             failure_count = progress.get("failure_count", 0)
             failures: list[dict[str, Any]] = list(progress.get("failures", []))
 
+            if target_type == "groups":
+                result = await self._execute_groups_mode(
+                    client=client, agent=agent, normalized=normalized,
+                    message=message, threshold=threshold, base_interval=base_interval,
+                    progress=progress, payload=payload, limiter=limiter,
+                    already_sent=already_sent, skipped_count=skipped_count,
+                    success_count=success_count, failure_count=failure_count,
+                    failures=failures, session=session,
+                )
+                return result
+
             source_group_id = int(normalized["source_group_id"])
+            selected_user_ids = {int(uid) for uid in normalized.get("selected_user_ids", [])}
+
             group_entity = await AddContactRuntime().resolve_group_entity(client, source_group_id)
             recipients: list[int] = []
             recipient_identities: dict[int, dict[str, str | None]] = {}
@@ -458,9 +472,113 @@ class GroupMemberBroadcastRuntime:
                 "dedup_skipped": dedup_skip_count,
                 "failures": failures,
                 "_progress": dict(payload.get("progress") or {}),
+                "target_type": "members",
             }
         finally:
             await redis_client.aclose()
+
+    async def _execute_groups_mode(
+        self, *, client, agent, normalized, message, threshold, base_interval,
+        progress, payload, limiter, already_sent, skipped_count,
+        success_count, failure_count, failures, session,
+    ) -> dict[str, Any]:
+        import random
+        import hashlib
+        from datetime import datetime, timezone
+
+        target_group_ids = list(normalized.get("target_group_ids", []))
+        total_count = len(target_group_ids)
+
+        remaining = target_group_ids[:threshold] if threshold > 0 else target_group_ids
+        payload["progress"] = {
+            "total_count": total_count,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "skipped_count": skipped_count,
+            "sent_users": list(already_sent),
+            "failures": failures,
+        }
+
+        for index, group_id in enumerate(remaining):
+            cooldown_mins = getattr(agent, "cooldown_minutes", None)
+            if cooldown_mins is not None and cooldown_mins > 0:
+                in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
+                if in_cooldown:
+                    payload["progress"]["stopped_at"] = index
+                    payload["progress"]["stop_reason"] = "cooldown"
+                    payload["progress"]["retry_after"] = int(cd_remaining)
+                    raise Exception(f"Agent cooldown: {cd_remaining}s")
+
+            max_per_hour = getattr(agent, "max_actions_per_hour", None)
+            if max_per_hour is not None and max_per_hour > 0:
+                allowed, hour_count = await limiter.check_and_increment(agent.id, max_per_hour)
+                if not allowed:
+                    payload["progress"]["stopped_at"] = index
+                    payload["progress"]["stop_reason"] = "hourly_limit"
+                    raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
+
+            max_per_day = getattr(agent, "max_messages_per_day", None) or 500
+            if max_per_day > 0:
+                allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day)
+                if not allowed:
+                    payload["progress"]["stopped_at"] = index
+                    payload["progress"]["stop_reason"] = "daily_limit"
+                    raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
+
+            min_delay = getattr(agent, "min_delay_seconds", None)
+            if min_delay is not None and min_delay > 0:
+                wait = await limiter.enforce_delay(agent.id, float(min_delay))
+                if wait > 0:
+                    await self.sleep(wait)
+
+            try:
+                await client.send_message(group_id, message)
+                success_count += 1
+                already_sent.add(group_id)
+                if session is not None:
+                    message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+                    session.add(
+                        SentBroadcastMessage(
+                            agent_id=agent.id,
+                            job_id=payload.get("job_id"),
+                            tg_user_id=None,
+                            tg_group_id=group_id,
+                            message_text=message,
+                            message_hash=message_hash,
+                            status="sent",
+                            sent_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
+                    await session.commit()
+                await limiter.record_send(agent.id)
+            except Exception as exc:
+                failure_count += 1
+                translated = _translate_client_exception(exc)
+                if translated is not None:
+                    payload["progress"]["stopped_at"] = index
+                    payload["progress"]["stop_reason"] = type(translated).__name__
+                    payload["progress"]["sent_users"] = list(already_sent)
+                    payload["progress"]["success_count"] = success_count
+                    payload["progress"]["failure_count"] = failure_count
+                    raise translated from exc
+                failures.append({"group_id": str(group_id), "error": str(exc)[:200]})
+
+            effective_interval = base_interval
+            if base_interval > 0:
+                jitter = random.uniform(-0.3, 0.3) * base_interval
+                effective_interval = max(0.3, base_interval + jitter)
+            if index < len(remaining) - 1 and effective_interval > 0:
+                await self.sleep(effective_interval)
+
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "total_count": total_count,
+            "failures": failures,
+            "_progress": dict(payload.get("progress") or {}),
+            "target_type": "groups",
+        }
 
 
 class ScraperRuntime:

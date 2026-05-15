@@ -214,6 +214,7 @@ export interface AgentGroupMembersPage {
 }
 
 export interface BulkPreflightResult {
+  target_type?: string
   total: number
   admins_excluded: number
   bots_excluded: number
