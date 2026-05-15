@@ -275,6 +275,10 @@ export async function deleteAgentLead(agentId: number, leadId: number) {
   return apiClient.delete(`${AGENTS_API_PREFIX}/${agentId}/leads/${leadId}`)
 }
 
+export async function reconcileStaleJobs(maxHours = 1, markFailed = false) {
+  return apiClient.post(`${AGENTS_API_PREFIX}/jobs/reconcile-stale`, { max_hours: maxHours, mark_failed: markFailed })
+}
+
 export async function syncAgentGroupAdminsBots(agentId: number, tgGroupId: number) {
   return apiClient.post<{ status: string; message: string }>(
     `/webapp/agents/${agentId}/groups/${tgGroupId}/sync-admins-bots`,
