@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: alembic upgrade 20260507_0072
+    command: alembic upgrade 20260515_add_scheduled_at
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot

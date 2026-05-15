@@ -3269,21 +3269,29 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 </button>
               </div>
               {bulkScheduleMode === 'schedule' ? (
-                <input
-                  type="datetime-local"
-                  value={bulkScheduledAt}
-                  onChange={(e) => setBulkScheduledAt(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--miniapp-border)',
-                    background: 'var(--miniapp-surface)',
-                    color: 'var(--miniapp-text-primary)',
-                    fontSize: 14,
-                    fontFamily: 'inherit',
-                  }}
-                />
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
+                    Schedule date & time
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={bulkScheduledAt}
+                    onChange={(e) => setBulkScheduledAt(e.target.value)}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: 'var(--miniapp-bg)',
+                      border: '1px solid var(--miniapp-border-soft)',
+                      borderRadius: 'var(--miniapp-radius-sm)',
+                      padding: '11px 12px',
+                      fontFamily: 'var(--miniapp-sans)',
+                      fontSize: 13,
+                      color: 'var(--miniapp-text-primary)',
+                      outline: 'none',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                </div>
               ) : null}
             </>
           ) : isLeadCaptureTask ? (

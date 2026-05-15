@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: alembic upgrade head
+    command: alembic upgrade 20260515_add_scheduled_at
     env_file: .env.deploy
     networks:
       - combot_default

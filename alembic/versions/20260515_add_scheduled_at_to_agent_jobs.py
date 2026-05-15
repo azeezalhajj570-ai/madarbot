@@ -1,7 +1,7 @@
-"""add scheduled_at to agent_jobs, merge heads
+"""add scheduled_at to agent_jobs
 
-Revision ID: 20260515_merge_add_scheduled_at
-Revises: 3c86c37f7933, 7a76aa564096
+Revision ID: 20260515_add_scheduled_at
+Revises: 7a76aa564096
 Create Date: 2026-05-15
 """
 from typing import Sequence, Union
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "20260515_merge_add_scheduled_at"
-down_revision: Union[str, tuple[str, ...]] = ("3c86c37f7933", "7a76aa564096")
+revision: str = "20260515_add_scheduled_at"
+down_revision: Union[str, tuple[str, ...]] = "7a76aa564096"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
