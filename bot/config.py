@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     semantic_search_path: str = Field(default="/search", alias="SEMANTIC_SEARCH_PATH")
     semantic_search_timeout: float = Field(default=5.0, alias="SEMANTIC_SEARCH_TIMEOUT")
     sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
+    scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")
+    scheduler_poll_interval: int = Field(default=30, alias="SCHEDULER_POLL_INTERVAL")
     default_language: str = Field(default="ar", alias="DEFAULT_LANGUAGE")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     aiogram_log_level: str = Field(default="WARNING", alias="AIROGRAM_LOG_LEVEL")

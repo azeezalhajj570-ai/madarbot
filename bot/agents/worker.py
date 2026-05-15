@@ -85,9 +85,15 @@ def _build_job_notification(
         group_title = str(
             result_payload.get("source_group_title") or payload.get("source_group_title") or ""
         ).strip()
-        sent_count = int(result_payload.get("success_count") or result_payload.get("sent_count") or 0)
-        attempted_count = int(result_payload.get("total_count") or result_payload.get("attempted_count") or 0)
-        failed_count = int(result_payload.get("failure_count") or result_payload.get("failed_count") or 0)
+        sent_count = int(
+            result_payload.get("success_count") or result_payload.get("sent_count") or 0
+        )
+        attempted_count = int(
+            result_payload.get("total_count") or result_payload.get("attempted_count") or 0
+        )
+        failed_count = int(
+            result_payload.get("failure_count") or result_payload.get("failed_count") or 0
+        )
         selected_count = len(list(payload.get("selected_user_ids") or []))
         notification_payload = {
             "job_type": job.job_type,
@@ -457,7 +463,8 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             "failures": progress.get("failures", []),
                             "stopped_at": progress.get("stopped_at"),
                             "stop_reason": progress.get("stop_reason"),
-                            "target_type": progress.get("target_type") or result.get("target_type", "members"),
+                            "target_type": progress.get("target_type")
+                            or result.get("target_type", "members"),
                         }
                         if progress.get("stopped_at") is not None:
                             delay_sec = max(int(progress.get("retry_after", 60)), 5)
@@ -483,7 +490,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         await session.commit()
                     else:
                         await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
-                    await _create_job_notification(session, job, status=JOB_STATUS_COMPLETED, result=result)
+                    await _create_job_notification(
+                        session, job, status=JOB_STATUS_COMPLETED, result=result
+                    )
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(

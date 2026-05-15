@@ -2343,6 +2343,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
+  const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
+  const [bulkScheduledAt, setBulkScheduledAt] = useState('')
   const [excludeAdmins, setExcludeAdmins] = useState(true)
   const [excludeBots, setExcludeBots] = useState(true)
   const [excludeSent, setExcludeSent] = useState(true)
@@ -2461,6 +2463,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
     setBulkMemberResults([])
     setBulkSelectedMembers([])
     setBulkMemberStatus(null)
+    setBulkScheduleMode('now')
+    setBulkScheduledAt('')
     setExcludeAdmins(false)
     setExcludeBots(false)
     setScrapeGroupQuery('')
@@ -2644,11 +2648,12 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           } else {
             jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
           }
-          await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload)
+          const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
+          await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
           setBulkSummary(null)
           closeForm()
           setStatus(null)
-          onSaved('Bulk message job queued')
+          onSaved(scheduledAt ? 'Bulk message scheduled' : 'Bulk message job queued')
         } catch (error) {
           setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message job')
         } finally {
@@ -3235,6 +3240,51 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 </div>
               </div>
               <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+              <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkScheduleMode('now')}
+                  style={{
+                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                    background: bulkScheduleMode === 'now' ? 'var(--miniapp-surface)' : 'transparent',
+                    color: bulkScheduleMode === 'now' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                    fontWeight: bulkScheduleMode === 'now' ? 600 : 400, fontSize: 13,
+                    fontFamily: 'var(--miniapp-sans)',
+                  }}
+                >
+                  Send now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkScheduleMode('schedule')}
+                  style={{
+                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                    background: bulkScheduleMode === 'schedule' ? 'var(--miniapp-surface)' : 'transparent',
+                    color: bulkScheduleMode === 'schedule' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                    fontWeight: bulkScheduleMode === 'schedule' ? 600 : 400, fontSize: 13,
+                    fontFamily: 'var(--miniapp-sans)',
+                  }}
+                >
+                  Schedule for later
+                </button>
+              </div>
+              {bulkScheduleMode === 'schedule' ? (
+                <input
+                  type="datetime-local"
+                  value={bulkScheduledAt}
+                  onChange={(e) => setBulkScheduledAt(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--miniapp-border)',
+                    background: 'var(--miniapp-surface)',
+                    color: 'var(--miniapp-text-primary)',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
+                />
+              ) : null}
             </>
           ) : isLeadCaptureTask ? (
             <>
@@ -3409,7 +3459,7 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
           ) : null}
           {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
           <FormActions
-            submitLabel={bulkSummary ? 'Confirm & Send' : loadingBulkSummary ? 'Preparing...' : isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
+            submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
             submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0}
             onSubmit={() => void saveTask()}
             onCancel={closeForm}
@@ -3913,6 +3963,7 @@ function TaskActivity({ account }: { account: Agent }) {
           { label: 'All status', value: 'all' }, { label: 'Running', value: 'running' },
           { label: 'Completed', value: 'completed' }, { label: 'Failed', value: 'failed' },
           { label: 'Pending', value: 'pending' }, { label: 'Queued', value: 'queued' },
+          { label: 'Scheduled', value: 'scheduled' },
         ]} />
         <FilterSelect value={filterDate} onChange={setFilterDate} options={[
           { label: 'All time', value: 'all' }, { label: 'Today', value: 'today' },
@@ -3945,6 +3996,7 @@ function TaskActivity({ account }: { account: Agent }) {
             const isQueued = job.status === 'queued'
             const isCompleted = job.status === 'completed'
             const isFailed = job.status === 'failed'
+            const isScheduled = job.status === 'scheduled'
             const isStopped = p.stop_reason != null
             const taskName = job.message_preview
               ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
@@ -3965,14 +4017,18 @@ function TaskActivity({ account }: { account: Agent }) {
                   </div>
                   <span style={{
                     flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                    background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : 'var(--miniapp-bg-deep)',
-                    color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : 'var(--miniapp-text-muted)',
+                    background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
+                    color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
                   }}>
                     {isStopped ? 'Stopped' : job.status}
                   </span>
                 </div>
 
-                {total > 0 ? (
+                {isScheduled && job.scheduled_at ? (
+                  <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                    Scheduled for {new Date(job.scheduled_at).toLocaleString()}
+                  </div>
+                ) : total > 0 ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
                     <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
@@ -3988,6 +4044,17 @@ function TaskActivity({ account }: { account: Agent }) {
                   {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
                   {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {isScheduled ? (
+                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
+                          color: 'var(--miniapp-clay)', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                          opacity: actingJobId === job.id ? 0.5 : 1,
+                        }}>
+                        {actingJobId === job.id ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    ) : null}
                     {(isRunning || isQueued) && job.status !== 'aborted' ? (
                       <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
                         style={{

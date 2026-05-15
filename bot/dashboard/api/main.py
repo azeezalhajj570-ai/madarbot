@@ -83,7 +83,22 @@ async def lifespan(app: FastAPI):
     if settings.run_schema_bootstrap:
         await ensure_schema(engine)
     await _backfill_lead_group_titles()
+
+    scheduler_task = None
+    if settings.scheduler_enabled:
+        from bot.services.scheduler import scheduler_loop
+
+        scheduler_task = asyncio.create_task(scheduler_loop())
+        logger.info("scheduler_loop_task_created")
+
     yield
+
+    if scheduler_task:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            pass
     await shutdown_client_pool()
     await engine.dispose()
     redis = getattr(app.state, "redis", None)
