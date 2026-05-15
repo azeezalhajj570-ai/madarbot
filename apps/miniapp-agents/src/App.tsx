@@ -2609,8 +2609,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       }
 
       const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 5) {
-        setStatus('Interval seconds must be at least 5')
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) {
+        setStatus('Interval seconds must be 0 or more')
         return
       }
 
