@@ -544,13 +544,26 @@ async def webapp_bulk_preflight(
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     try:
+        target_type = payload.target_type or "members"
+        if target_type == "groups":
+            from bot.agents.jobs import normalize_group_member_broadcast_payload
+            normalized = normalize_group_member_broadcast_payload(payload.model_dump())
+            return {
+                "target_type": "groups",
+                "total": len(normalized.get("target_group_ids", [])),
+                "final_count": len(normalized.get("target_group_ids", [])),
+                "admins_excluded": 0,
+                "bots_excluded": 0,
+                "already_sent_excluded": 0,
+                "filtered_user_ids": [],
+            }
         exclusions = await AgentJobService(session).compute_bulk_exclusions(
             agent=agent,
             source_group_id=payload.source_group_id,
             message=payload.message,
             selected_user_ids=payload.selected_user_ids,
         )
-        return exclusions
+        return {**exclusions, "target_type": "members"}
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)

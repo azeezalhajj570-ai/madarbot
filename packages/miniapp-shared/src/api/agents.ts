@@ -88,10 +88,12 @@ export async function fetchAgentGroups(agentId: number, query?: string) {
 }
 
 export async function preflightBulkMessage(agentId: number, payload: {
-  source_group_id: number
+  target_type?: string
+  source_group_id?: number
   source_group_title?: string
   message: string
-  selected_user_ids: number[]
+  selected_user_ids?: number[]
+  target_group_ids?: number[]
   threshold?: number
   interval_seconds?: number
 }) {
