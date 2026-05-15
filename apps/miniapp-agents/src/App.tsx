@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { MultiGroupSelect } from './components/MultiGroupSelect'
+
 import {
   agentsApi,
   AppShell,
@@ -3203,22 +3205,18 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 </>
               ) : (
                 <>
-                  <GroupAutocompleteField
-                    label="Select target groups"
+                  <MultiGroupSelect
                     query={bulkTargetGroupQuery}
                     onQueryChange={setBulkTargetGroupQuery}
                     groups={groups}
-                    selectedGroups={bulkSelectedTargetGroups}
-                    onAdd={(group) => {
+                    selected={bulkSelectedTargetGroups}
+                    onToggle={(group) => {
                       setBulkSelectedTargetGroups((current) =>
-                        current.some((g) => g.tg_group_id === group.tg_group_id) ? current : [...current, group]
+                        current.some((g) => g.tg_group_id === group.tg_group_id)
+                          ? current.filter((g) => g.tg_group_id !== group.tg_group_id)
+                          : [...current, group]
                       )
-                      setBulkTargetGroupQuery('')
                     }}
-                    onRemove={(tgGroupId) =>
-                      setBulkSelectedTargetGroups((current) => current.filter((g) => g.tg_group_id !== tgGroupId))
-                    }
-                    placeholder="Search groups to send to"
                   />
                   <TextAreaField
                     label="Message"
