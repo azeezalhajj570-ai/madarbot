@@ -3729,14 +3729,76 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
   )
 }
 
+function SendLogsModal({ account, jobId, jobName, onClose }: { account: Agent; jobId: number; jobName: string; onClose: () => void }) {
+  const [logs, setLogs] = useState<SendLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    void agentsApi.fetchAgentSendLogs(account.id, 100, undefined, jobId)
+      .then((data) => setLogs(data.logs))
+      .catch((err) => setStatus(err instanceof Error ? err.message : 'Failed to load logs'))
+      .finally(() => setLoading(false))
+  }, [account.id, jobId])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(32,25,16,0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 1100 }}
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 'min(520px, 100%)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
+        borderRadius: 20, boxShadow: '0 22px 60px rgba(32,25,16,0.22)',
+      }}>
+        <div style={{ padding: '20px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 18 }}>Send Logs</h3>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Job #{jobId} · {jobName}</div>
+          </div>
+          <button type="button" onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-clay)', fontSize: 22, lineHeight: 1, padding: 0 }}>
+            ×
+          </button>
+        </div>
+        <div style={{ overflow: 'auto', padding: 20, display: 'grid', gap: 4 }}>
+          {loading ? <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>Loading...</div> : null}
+          {status ? <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>{status}</div> : null}
+          {!loading && !status && logs.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>No send logs for this job. Messages may still be in progress.</div>
+          ) : null}
+          {!loading && logs.map((log) => (
+            <div key={log.id} style={{
+              padding: '6px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+              background: 'var(--miniapp-bg)', fontSize: 12, display: 'grid', gap: 2,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 600 }}>
+                  {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
+                  {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)' }}> · {log.phone_number}</span> : null}
+                </span>
+                <span style={{
+                  padding: '0 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
+                  background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
+                  color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
+                }}>{log.status}</span>
+              </div>
+              <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {log.message_preview}
+              </div>
+              {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 9 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TaskActivity({ account }: { account: Agent }) {
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
-  const [sendLogs, setSendLogs] = useState<SendLogEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'jobs' | 'logs'>('jobs')
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
-  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsJobId, setLogsJobId] = useState<number | null>(null)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -3754,12 +3816,8 @@ function TaskActivity({ account }: { account: Agent }) {
     setStatusMsg(null)
     try {
       await agentsApi.reconcileStaleJobs(1)
-      const [jobsData, logsData] = await Promise.all([
-        agentsApi.fetchAgentJobs(account.id, undefined, 100),
-        agentsApi.fetchAgentSendLogs(account.id, 50),
-      ])
+      const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
-      setSendLogs(logsData.logs)
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : 'Failed to load task activity')
     } finally {
@@ -3772,19 +3830,6 @@ function TaskActivity({ account }: { account: Agent }) {
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
     } catch { /* silent auto-refresh */ }
-  }
-
-  async function loadLogsForJob(jobId: number | null) {
-    setLogsLoading(true)
-    setSelectedJobId(jobId)
-    try {
-      const data = await agentsApi.fetchAgentSendLogs(account.id, 50, undefined, jobId ?? undefined)
-      setSendLogs(data.logs)
-    } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : 'Failed to load logs')
-    } finally {
-      setLogsLoading(false)
-    }
   }
 
   const filteredJobs = useMemo(() => {
@@ -3834,173 +3879,126 @@ function TaskActivity({ account }: { account: Agent }) {
   return (
     <Card title="Task Activity" subtitle="Monitor bulk messaging tasks and send logs.">
       {statusMsg ? <Note>{statusMsg}</Note> : null}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <Button tone={tab === 'jobs' ? 'primary' : 'secondary'} onClick={() => setTab('jobs')}>Tasks</Button>
-        <Button tone={tab === 'logs' ? 'primary' : 'secondary'} onClick={() => setTab('logs')}>Send Logs</Button>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
       </div>
 
-      {tab === 'jobs' ? (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search task..."
-            style={{
-              flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
-              border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
-              color: 'var(--miniapp-text-primary)', fontSize: 12, fontFamily: 'var(--miniapp-sans)',
-              outline: 'none',
-            }}
-          />
-          <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
-            { label: 'All status', value: 'all' },
-            { label: 'Running', value: 'running' },
-            { label: 'Completed', value: 'completed' },
-            { label: 'Failed', value: 'failed' },
-            { label: 'Pending', value: 'pending' },
-            { label: 'Queued', value: 'queued' },
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search task..."
+          style={{
+            flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
+            border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
+            color: 'var(--miniapp-text-primary)', fontSize: 12, fontFamily: 'var(--miniapp-sans)', outline: 'none',
+          }}
+        />
+        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
+          { label: 'All status', value: 'all' }, { label: 'Running', value: 'running' },
+          { label: 'Completed', value: 'completed' }, { label: 'Failed', value: 'failed' },
+          { label: 'Pending', value: 'pending' }, { label: 'Queued', value: 'queued' },
+        ]} />
+        <FilterSelect value={filterDate} onChange={setFilterDate} options={[
+          { label: 'All time', value: 'all' }, { label: 'Today', value: 'today' },
+          { label: 'Last 24h', value: '24h' }, { label: 'Last 7 days', value: '7d' },
+          { label: 'Last 30 days', value: '30d' },
+        ]} />
+        {taskTypes.length > 1 ? (
+          <FilterSelect value={filterType} onChange={setFilterType} options={[
+            { label: 'All types', value: 'all' },
+            ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
           ]} />
-          <FilterSelect value={filterDate} onChange={setFilterDate} options={[
-            { label: 'All time', value: 'all' },
-            { label: 'Today', value: 'today' },
-            { label: 'Last 24h', value: '24h' },
-            { label: 'Last 7 days', value: '7d' },
-            { label: 'Last 30 days', value: '30d' },
-          ]} />
-          {taskTypes.length > 1 ? (
-            <FilterSelect value={filterType} onChange={setFilterType} options={[
-              { label: 'All types', value: 'all' },
-              ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
-            ]} />
-          ) : null}
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {loading ? <Note>Loading...</Note> : null}
 
-      {!loading && tab === 'jobs' ? (
-        filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : (
-          <div style={{ display: 'grid', gap: 6 }}>
-            {filteredJobs.map((job) => {
-              const p = job.progress || {}
-              const total = p.total_count ?? 0
-              const sent = p.success_count ?? 0
-              const failed = p.failure_count ?? 0
-              const done = sent + failed
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0
-              const successRate = done > 0 ? Math.round((sent / done) * 100) : 0
-              const isRunning = job.status === 'running'
-              const isQueued = job.status === 'queued'
-              const isCompleted = job.status === 'completed'
-              const isFailed = job.status === 'failed'
-              const isStopped = p.stop_reason != null
-              const taskName = job.message_preview
-                ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
-                : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
-              return (
-                <div key={job.id} style={{
-                  padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)',
-                  background: 'var(--miniapp-surface)', display: 'grid', gap: 5,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
-                      {job.created_at ? (
-                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
-                          {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span style={{
-                      flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : 'var(--miniapp-bg-deep)',
-                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : 'var(--miniapp-text-muted)',
-                    }}>
-                      {isStopped ? 'Stopped' : job.status}
-                    </span>
-                  </div>
+      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : null}
 
-                  {total > 0 ? (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
-                        <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                          {job.target_type === 'groups' ? 'groups' : 'members'}
-                        </span>
-                      </div>
-                      <div style={{ height: 4, background: 'var(--miniapp-bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', width: `${pct}%`, borderRadius: 2,
-                          background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
-                          transition: 'width 0.3s',
-                        }} />
-                      </div>
-                    </>
-                  ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
-
-                  <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span>Sent: <strong>{sent}</strong></span>
-                    {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
-                    {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
-                    {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
-                    {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
-                    <span style={{ marginLeft: 'auto' }}>
-                      <button type="button" onClick={() => { setTab('logs'); void loadLogsForJob(job.id) }}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer', color: '#475977',
-                          fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
-                          textDecoration: 'underline', padding: 0,
-                        }}>
-                        View Logs
-                      </button>
-                    </span>
+      {!loading && filteredJobs.length > 0 ? (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {filteredJobs.map((job) => {
+            const p = job.progress || {}
+            const total = p.total_count ?? 0
+            const sent = p.success_count ?? 0
+            const failed = p.failure_count ?? 0
+            const done = sent + failed
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0
+            const successRate = done > 0 ? Math.round((sent / done) * 100) : 0
+            const isRunning = job.status === 'running'
+            const isQueued = job.status === 'queued'
+            const isCompleted = job.status === 'completed'
+            const isFailed = job.status === 'failed'
+            const isStopped = p.stop_reason != null
+            const taskName = job.message_preview
+              ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
+              : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
+            return (
+              <div key={job.id} style={{
+                padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)',
+                background: 'var(--miniapp-surface)', display: 'grid', gap: 5,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
+                    {job.created_at ? (
+                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
+                        {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    ) : null}
                   </div>
+                  <span style={{
+                    flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                    background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : 'var(--miniapp-bg-deep)',
+                    color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : 'var(--miniapp-text-muted)',
+                  }}>
+                    {isStopped ? 'Stopped' : job.status}
+                  </span>
                 </div>
-              )
-            })}
-          </div>
-        )
+
+                {total > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                      <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                        {job.target_type === 'groups' ? 'groups' : 'members'}
+                      </span>
+                    </div>
+                    <div style={{ height: 4, background: 'var(--miniapp-bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`, borderRadius: 2,
+                        background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </>
+                ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
+
+                <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span>Sent: <strong>{sent}</strong></span>
+                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
+                  {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
+                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
+                  {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
+                  <span style={{ marginLeft: 'auto' }}>
+                    <button type="button" onClick={() => setLogsJobId(job.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475977', fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0 }}>
+                      View Logs
+                    </button>
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       ) : null}
 
-      {!loading && tab === 'logs' ? (
-        <>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-            {selectedJobId ? (
-              <span style={{ fontSize: 11, padding: '3px 8px', background: 'var(--miniapp-bg-deep)', borderRadius: 6, color: 'var(--miniapp-text-muted)' }}>
-                Job #{selectedJobId}
-                <button type="button" onClick={() => void loadLogsForJob(null)}
-                  style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-clay)', fontSize: 14, padding: 0 }}>×</button>
-              </span>
-            ) : null}
-            {logsLoading ? <Note>Loading...</Note> : null}
-          </div>
-          {!logsLoading && sendLogs.length === 0 ? <Note>No send logs found.</Note> : null}
-          {!logsLoading && sendLogs.length ? (
-            <div style={{ display: 'grid', gap: 3 }}>
-              {sendLogs.map((log) => (
-                <div key={log.id} style={{
-                  padding: '5px 8px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)',
-                  background: 'var(--miniapp-bg)', fontSize: 11, display: 'grid', gap: 1,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 600 }}>
-                      {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
-                      {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)' }}> · {log.phone_number}</span> : null}
-                    </span>
-                    <span style={{
-                      padding: '0 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                      background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
-                      color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
-                    }}>{log.status}</span>
-                  </div>
-                  <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {log.message_preview}
-                  </div>
-                  {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 9 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </>
+      {logsJobId ? (
+        <SendLogsModal
+          account={account}
+          jobId={logsJobId}
+          jobName={jobs.find((j) => j.id === logsJobId)?.message_preview || `Task #${logsJobId}`}
+          onClose={() => setLogsJobId(null)}
+        />
       ) : null}
     </Card>
   )
