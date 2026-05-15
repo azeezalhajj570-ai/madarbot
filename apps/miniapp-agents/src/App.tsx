@@ -3699,6 +3699,9 @@ function SendingLogsPage({ account }: { account: Agent }) {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'jobs' | 'logs'>('jobs')
   const [status, setStatus] = useState<string | null>(null)
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [logsLoading, setLogsLoading] = useState(false)
 
   useEffect(() => {
     void load()
@@ -3717,6 +3720,19 @@ function SendingLogsPage({ account }: { account: Agent }) {
       setStatus(error instanceof Error ? error.message : 'Failed to load sending data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadLogsForJob(jobId: number | null) {
+    setLogsLoading(true)
+    setSelectedJobId(jobId)
+    try {
+      const data = await agentsApi.fetchAgentSendLogs(account.id, 50, undefined, jobId ?? undefined)
+      setSendLogs(data.logs)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load logs')
+    } finally {
+      setLogsLoading(false)
     }
   }
 
@@ -3740,40 +3756,124 @@ function SendingLogsPage({ account }: { account: Agent }) {
               const isRunning = job.status === 'running'
               const isCompleted = job.status === 'completed'
               const isFailed = job.status === 'failed'
-              const jobPayload = job.job_payload || {}
-              const targetLabel = jobPayload.target_type === 'groups' ? 'groups' : 'members'
+              const isExpanded = expandedJobId === job.id
+              const excl = job.exclusion_counts
               return (
                 <div key={job.id} style={{
                   padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)',
                   background: 'var(--miniapp-surface)', display: 'grid', gap: 8,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ fontSize: 14 }}>{targetLabel} · {job.job_type.replace(/_/g, ' ')}</strong>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : 'var(--miniapp-bg-deep)',
-                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-text-muted)',
-                    }}>
-                      {job.status}
-                    </span>
-                  </div>
-                  {job.created_at ? <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{new Date(job.created_at).toLocaleString()}</div> : null}
-                  {total > 0 ? (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                        <span>{p.success_count ?? 0} sent · {p.failure_count ?? 0} failed{p.skipped_count ? ` · ${p.skipped_count} skipped` : ''}</span>
-                        <span>{pct}%</span>
+                  <div
+                    onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
+                    style={{ cursor: 'pointer', display: 'grid', gap: 6 }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: 14 }}>
+                        {job.target_type === 'groups' ? 'Send to Groups' : 'Send to Members'} · #{job.id}
+                      </strong>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : 'var(--miniapp-bg-deep)',
+                        color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-text-muted)',
+                      }}>
+                        {job.status}
+                      </span>
+                    </div>
+                    {job.created_at ? (
+                      <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
+                        {new Date(job.created_at).toLocaleString()}
+                        {job.updated_at !== job.created_at ? ` · updated ${new Date(job.updated_at!).toLocaleString()}` : ''}
                       </div>
-                      <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', width: `${pct}%`, borderRadius: 3,
-                          background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : 'var(--miniapp-sage)',
-                          transition: 'width 0.3s',
-                        }} />
+                    ) : null}
+                    {job.source_group_title ? (
+                      <div style={{ fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
+                        {job.target_type === 'members' ? <>Source: <strong>{job.source_group_title}</strong></> : null}
+                        {job.target_type === 'groups' && job.target_group_ids?.length ? <>Target: <strong>{job.target_group_ids.length} group(s)</strong></> : null}
+                      </div>
+                    ) : null}
+                    {job.message_preview ? (
+                      <div style={{
+                        fontSize: 12, color: 'var(--miniapp-text-muted)', padding: 8,
+                        background: 'var(--miniapp-bg)', borderRadius: 8,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {job.message_preview}
+                      </div>
+                    ) : null}
+                    {total > 0 ? (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                          <span>
+                            <span style={{ color: 'var(--miniapp-sage)', fontWeight: 600 }}>{p.success_count ?? 0} sent</span>
+                            {p.failure_count ? <span style={{ color: 'var(--miniapp-clay)', marginLeft: 8 }}>{p.failure_count} failed</span> : null}
+                            {p.skipped_count ? <span style={{ color: '#9b9186', marginLeft: 8 }}>{p.skipped_count} skipped</span> : null}
+                          </span>
+                          <span style={{ fontWeight: 600 }}>{pct}%</span>
+                        </div>
+                        <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', width: `${pct}%`, borderRadius: 3,
+                            background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : 'var(--miniapp-sage)',
+                            transition: 'width 0.3s',
+                          }} />
+                        </div>
+                      </div>
+                    ) : <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{isRunning ? 'Processing...' : 'No progress data'}</div>}
+                  </div>
+                  {p.stop_reason ? (
+                    <div style={{ fontSize: 11, color: 'var(--miniapp-clay)', background: 'rgba(161,87,62,0.08)', padding: '6px 8px', borderRadius: 6 }}>
+                      Stopped: {p.stop_reason}
+                    </div>
+                  ) : null}
+                  {isExpanded ? (
+                    <div style={{ display: 'grid', gap: 6, padding: 8, background: 'var(--miniapp-bg)', borderRadius: 8, fontSize: 12 }}>
+                      <div><strong>Job ID:</strong> {job.id}</div>
+                      <div><strong>Type:</strong> {job.target_type === 'groups' ? 'Send to Groups' : 'Send to Members'}</div>
+                      {job.source_group_title ? <div><strong>{job.target_type === 'members' ? 'Source' : 'Target'} Group:</strong> {job.source_group_title}</div> : null}
+                      {job.selected_count ? <div><strong>Selected members:</strong> {job.selected_count}</div> : null}
+                      {job.target_group_ids?.length ? <div><strong>Target group IDs:</strong> {job.target_group_ids.join(', ')}</div> : null}
+                      {excl ? (
+                        <>
+                          <div><strong>Exclusions:</strong></div>
+                          <div style={{ paddingLeft: 12, display: 'grid', gap: 2, color: 'var(--miniapp-text-muted)' }}>
+                            <div>Total candidates: {excl.total}</div>
+                            {excl.admins_excluded ? <div>Admins excluded: {excl.admins_excluded}</div> : null}
+                            {excl.bots_excluded ? <div>Bots excluded: {excl.bots_excluded}</div> : null}
+                            {excl.already_sent_excluded ? <div>Already sent excluded: {excl.already_sent_excluded}</div> : null}
+                            <div style={{ fontWeight: 600, color: 'var(--miniapp-coral)' }}>Final recipients: {excl.final_count}</div>
+                          </div>
+                        </>
+                      ) : null}
+                      {p.failures?.length ? (
+                        <div>
+                          <div><strong>Failures:</strong></div>
+                          {(p.failures as Array<{user_id?: string; group_id?: string; error?: string}>).slice(0, 5).map((f, i) => (
+                            <div key={i} style={{ padding: '4px 8px', marginTop: 2, background: 'rgba(161,87,62,0.08)', borderRadius: 4, fontSize: 11, color: 'var(--miniapp-clay)' }}>
+                              {f.user_id || f.group_id}: {f.error}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div style={{ marginTop: 4 }}>
+                        <Button
+                          tone="secondary"
+                          onClick={() => { setTab('logs'); void loadLogsForJob(job.id) }}
+                        >
+                          View send logs for this job
+                        </Button>
                       </div>
                     </div>
-                  ) : <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{isRunning ? 'Processing...' : 'No progress data'}</div>}
-                  {p.stop_reason ? <div style={{ fontSize: 11, color: 'var(--miniapp-clay)' }}>Stopped: {p.stop_reason}</div> : null}
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedJobId(job.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-text-muted)', fontSize: 11, fontFamily: 'var(--miniapp-sans)' }}
+                      >
+                        Show details ▾
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -3781,28 +3881,63 @@ function SendingLogsPage({ account }: { account: Agent }) {
         )
       ) : null}
       {!loading && tab === 'logs' ? (
-        sendLogs.length === 0 ? <Note>No send logs yet. Run a bulk message job to see logs.</Note> : (
-          <div style={{ display: 'grid', gap: 6 }}>
-            {sendLogs.map((log) => (
-              <div key={log.id} style={{
-                padding: '8px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
-                background: 'var(--miniapp-bg)', fontSize: 12,
-                display: 'grid', gap: 2,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>{log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}</span>
-                  <span style={{
-                    padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                    background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
-                    color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
-                  }}>{log.status}</span>
-                </div>
-                <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.message_preview}</div>
-                {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 10 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
-              </div>
-            ))}
+        <>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            {selectedJobId ? (
+              <span style={{ fontSize: 12, padding: '4px 8px', background: 'var(--miniapp-bg-deep)', borderRadius: 6, color: 'var(--miniapp-text-muted)' }}>
+                Filtered by job #{selectedJobId}
+                <button
+                  type="button"
+                  onClick={() => void loadLogsForJob(null)}
+                  style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-clay)', fontSize: 14, padding: 0 }}
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
+            {logsLoading ? <Note>Loading logs...</Note> : null}
           </div>
-        )
+          {!logsLoading && sendLogs.length === 0 ? <Note>No send logs found.</Note> : null}
+          {!logsLoading && sendLogs.length ? (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {sendLogs.map((log) => {
+                const isUser = log.tg_group_id === log.tg_user_id || !!log.username
+                return (
+                  <div key={log.id} style={{
+                    padding: '8px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+                    background: 'var(--miniapp-bg)', fontSize: 12,
+                    display: 'grid', gap: 3,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {isUser ? (
+                          <>{log.username ? `@${log.username}` : `User ${log.tg_user_id}`}{log.phone_number ? ` · ${log.phone_number}` : ''}</>
+                        ) : (
+                          <>Group {log.tg_group_id}</>
+                        )}
+                      </span>
+                      <span style={{
+                        padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                        background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
+                        color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
+                      }}>{log.status}</span>
+                    </div>
+                    <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>
+                      {log.tg_user_id ? `tg:${log.tg_user_id}` : ''}{log.tg_group_id ? ` group:${log.tg_group_id}` : ''}{log.job_id ? ` · job #${log.job_id}` : ''}
+                    </div>
+                    <div style={{
+                      color: 'var(--miniapp-text-muted)', maxHeight: 40, overflow: 'hidden',
+                      textOverflow: 'ellipsis', lineHeight: 1.4,
+                    }}>
+                      {log.message_preview}
+                    </div>
+                    {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 10 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </Card>
   )

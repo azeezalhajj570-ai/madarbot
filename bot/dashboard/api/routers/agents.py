@@ -195,6 +195,12 @@ async def webapp_agent_jobs(
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             "progress": (job.job_payload or {}).get("progress"),
+            "message_preview": ((job.job_payload or {}).get("message") or "")[:200],
+            "target_type": (job.job_payload or {}).get("target_type", "members"),
+            "source_group_title": (job.job_payload or {}).get("source_group_title") or "",
+            "target_group_ids": (job.job_payload or {}).get("target_group_ids") or [],
+            "selected_count": len((job.job_payload or {}).get("selected_user_ids") or []),
+            "exclusion_counts": (job.job_payload or {}).get("exclusion_counts"),
         }
         for job in rows
     ]
@@ -210,6 +216,7 @@ async def webapp_agent_send_logs(
     agent_id: int,
     limit: int = 100,
     offset_id: int | None = None,
+    job_id: int | None = None,
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
@@ -221,6 +228,8 @@ async def webapp_agent_send_logs(
         select(SentBroadcastMessage)
         .where(SentBroadcastMessage.agent_id == agent.id)
     )
+    if job_id:
+        stmt = stmt.where(SentBroadcastMessage.job_id == job_id)
     if offset_id:
         stmt = stmt.where(SentBroadcastMessage.id < offset_id)
     stmt = stmt.order_by(desc(SentBroadcastMessage.id)).limit(limit)
@@ -234,7 +243,10 @@ async def webapp_agent_send_logs(
                 "job_id": msg.job_id,
                 "tg_user_id": msg.tg_user_id,
                 "tg_group_id": msg.tg_group_id,
-                "message_preview": (msg.message_text or "")[:120],
+                "username": msg.username or None,
+                "phone_number": msg.phone_number or None,
+                "message_preview": (msg.message_text or "")[:200],
+                "message_full": msg.message_text,
                 "status": msg.status,
                 "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
             }

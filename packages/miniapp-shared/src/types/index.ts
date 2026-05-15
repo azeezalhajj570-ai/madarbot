@@ -192,6 +192,19 @@ export interface AgentJobRecord {
     skipped_count?: number
     stopped_at?: number
     stop_reason?: string
+    failures?: Array<{ user_id?: string; group_id?: string; error?: string }>
+  }
+  message_preview?: string
+  target_type?: string
+  source_group_title?: string
+  target_group_ids?: number[]
+  selected_count?: number
+  exclusion_counts?: {
+    total: number
+    admins_excluded: number
+    bots_excluded: number
+    already_sent_excluded: number
+    final_count: number
   }
 }
 
@@ -200,7 +213,10 @@ export interface SendLogEntry {
   job_id?: number | null
   tg_user_id?: number | null
   tg_group_id: number
+  username?: string | null
+  phone_number?: string | null
   message_preview: string
+  message_full?: string
   status: string
   sent_at?: string | null
 }

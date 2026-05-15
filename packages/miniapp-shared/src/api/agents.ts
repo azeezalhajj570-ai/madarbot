@@ -68,8 +68,8 @@ export async function fetchAgentJobs(agentId: number, jobType?: string, limit?: 
   return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, limit })
 }
 
-export async function fetchAgentSendLogs(agentId: number, limit = 100, offsetId?: number) {
-  return apiClient.get<SendLogsResponse>(`${AGENTS_API_PREFIX}/${agentId}/send-logs`, { limit, offset_id: offsetId })
+export async function fetchAgentSendLogs(agentId: number, limit = 100, offsetId?: number, jobId?: number) {
+  return apiClient.get<SendLogsResponse>(`${AGENTS_API_PREFIX}/${agentId}/send-logs`, { limit, offset_id: offsetId, job_id: jobId })
 }
 
 export async function fetchAgentNotifications(agentId: number, limit = 50) {
