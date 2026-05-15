@@ -3736,6 +3736,7 @@ function TaskActivity({ account }: { account: Agent }) {
   const [logsJobId, setLogsJobId] = useState<number | null>(null)
   const [logs, setLogs] = useState<SendLogEntry[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [actingJobId, setActingJobId] = useState<number | null>(null)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -3767,6 +3768,30 @@ function TaskActivity({ account }: { account: Agent }) {
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
     } catch { /* silent auto-refresh */ }
+  }
+
+  async function handleCancel(jobId: number) {
+    setActingJobId(jobId)
+    try {
+      await agentsApi.cancelAgentJob(account.id, jobId)
+      await refreshJobs()
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to cancel job')
+    } finally {
+      setActingJobId(null)
+    }
+  }
+
+  async function handleRetry(jobId: number) {
+    setActingJobId(jobId)
+    try {
+      await agentsApi.retryAgentJob(account.id, jobId)
+      await refreshJobs()
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to retry job')
+    } finally {
+      setActingJobId(null)
+    }
   }
 
   useEffect(() => {
@@ -3967,7 +3992,29 @@ function TaskActivity({ account }: { account: Agent }) {
                   {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
                   {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
                   {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
-                  <span style={{ marginLeft: 'auto' }}>
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {(isRunning || isQueued) && job.status !== 'aborted' ? (
+                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
+                          color: 'var(--miniapp-clay)', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                          opacity: actingJobId === job.id ? 0.5 : 1,
+                        }}>
+                        {actingJobId === job.id ? 'Stopping...' : 'Stop'}
+                      </button>
+                    ) : null}
+                    {(isFailed || job.status === 'aborted') ? (
+                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleRetry(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
+                          color: '#475977', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                          opacity: actingJobId === job.id ? 0.5 : 1,
+                        }}>
+                        {actingJobId === job.id ? 'Retrying...' : 'Retry'}
+                      </button>
+                    ) : null}
                     <button type="button" onClick={() => setLogsJobId(job.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475977', fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0 }}>
                       View Logs
