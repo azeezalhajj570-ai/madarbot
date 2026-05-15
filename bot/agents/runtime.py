@@ -535,6 +535,7 @@ class GroupMemberBroadcastRuntime:
                 await client.send_message(group_id, message)
                 success_count += 1
                 already_sent.add(group_id)
+                payload["progress"]["success_count"] = success_count
                 if session is not None:
                     message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
                     session.add(
@@ -554,11 +555,12 @@ class GroupMemberBroadcastRuntime:
                 await limiter.record_send(agent.id)
             except Exception as exc:
                 failure_count += 1
+                payload["progress"]["failure_count"] = failure_count
+                payload["progress"]["sent_users"] = list(already_sent)
                 translated = _translate_client_exception(exc)
                 if translated is not None:
                     payload["progress"]["stopped_at"] = index
                     payload["progress"]["stop_reason"] = type(translated).__name__
-                    payload["progress"]["sent_users"] = list(already_sent)
                     payload["progress"]["success_count"] = success_count
                     payload["progress"]["failure_count"] = failure_count
                     raise translated from exc

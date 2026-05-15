@@ -106,7 +106,7 @@ def _build_job_notification(
             failures = result_payload.get("failures", [])
             if isinstance(failures, list) and len(failures) > 5:
                 body += f" {len(failures)} total failures."
-            return "Bulk message completed", body, notification_payload
+            return "bulk_message_completed", "Bulk message completed", body, notification_payload
         if status == JOB_STATUS_FAILED:
             prefix = f"{group_title}: " if group_title else ""
             return (
