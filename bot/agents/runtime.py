@@ -558,6 +558,22 @@ class GroupMemberBroadcastRuntime:
                 failure_count += 1
                 payload["progress"]["failure_count"] = failure_count
                 payload["progress"]["sent_users"] = list(already_sent)
+                if session is not None:
+                    message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+                    session.add(
+                        SentBroadcastMessage(
+                            agent_id=agent.id,
+                            job_id=payload.get("job_id"),
+                            tg_user_id=None,
+                            tg_group_id=group_id,
+                            message_text=message,
+                            message_hash=message_hash,
+                            status="failed",
+                            sent_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
+                    await session.commit()
                 translated = _translate_client_exception(exc)
                 if translated is not None:
                     payload["progress"]["stopped_at"] = index

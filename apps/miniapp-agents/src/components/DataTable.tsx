@@ -156,8 +156,11 @@ export function DataTable<T extends Record<string, unknown>>({
         <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)', padding: 16, textAlign: 'center' }}>{emptyMessage}</div>
       ) : (
         <div style={{
+          overflowX: 'auto', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+        }}>
+        <div style={{
           display: 'grid', gridTemplateColumns: columns.map((c) => c.width || '1fr').join(' '),
-          borderRadius: 8, border: '1px solid var(--miniapp-border-soft)', overflow: 'hidden',
+          minWidth: columns.reduce((s, c) => s + (parseInt(c.width || '100') || 100), 0),
         }}>
           <div style={{
             display: 'contents', fontWeight: 600, fontSize: 11, textTransform: 'uppercase',
@@ -195,6 +198,7 @@ export function DataTable<T extends Record<string, unknown>>({
               />
             )
           })}
+        </div>
         </div>
       )}
 
