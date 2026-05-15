@@ -90,6 +90,16 @@ const SCRAPE_TASK_META: TaskCatalogItem = {
   description: 'Queue a background sync job that scrapes members and messages from a database-indexed group.',
   executor_types: ['agent'],
 }
+const JOB_TYPE_LABELS: Record<string, string> = {
+  group_member_broadcast: 'Bulk message',
+  scraper_full_group: 'Database Scraper',
+  scraper_members: 'Scrape Members',
+  scraper_messages: 'Scrape Messages',
+  scraper_group_info: 'Scrape Group Info',
+  add_contact: 'Add Contact',
+  send_lead_message: 'Send Lead Message',
+  automation_task: 'Automation Task',
+}
 
 function _parseKeywords(raw: string | string[] | undefined | null): string[] {
   if (Array.isArray(raw)) return raw.filter(Boolean)
@@ -3859,7 +3869,7 @@ function TaskActivity({ account }: { account: Agent }) {
           {taskTypes.length > 1 ? (
             <FilterSelect value={filterType} onChange={setFilterType} options={[
               { label: 'All types', value: 'all' },
-              ...taskTypes.map((t) => ({ label: t.replace(/_/g, ' '), value: t })),
+              ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
             ]} />
           ) : null}
         </div>
@@ -3925,7 +3935,7 @@ function TaskActivity({ account }: { account: Agent }) {
                         }} />
                       </div>
                     </>
-                  ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{isQueued ? 'Queued...' : isRunning ? 'Starting...' : 'Waiting...'}</div>}
+                  ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
 
                   <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span>Sent: <strong>{sent}</strong></span>
