@@ -1492,8 +1492,8 @@ export default function App() {
             <>
               {route.page === 'dashboard' ? (
                 <>
+                  <TaskActivity account={selectedAccount} />
                   <AccountAnalyticsPage account={selectedAccount} />
-                  <SendingLogsPage account={selectedAccount} />
                 </>
               ) : null}
               {route.page === 'tasks' ? (
@@ -3705,38 +3705,63 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleString()
 }
 
-function SendingLogsPage({ account }: { account: Agent }) {
+function FilterSelect({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+      padding: '6px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+      background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)',
+      fontSize: 12, fontFamily: 'var(--miniapp-sans)', cursor: 'pointer', outline: 'none',
+    }}>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  )
+}
+
+function TaskActivity({ account }: { account: Agent }) {
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [sendLogs, setSendLogs] = useState<SendLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'jobs' | 'logs'>('jobs')
-  const [status, setStatus] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [logsLoading, setLogsLoading] = useState(false)
-  const [now, setNow] = useState(Date.now())
+
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterDate, setFilterDate] = useState('all')
+  const [filterType, setFilterType] = useState('all')
 
   useEffect(() => {
     void load()
-    const interval = setInterval(() => setNow(Date.now()), 10000)
+    const interval = setInterval(() => void refreshJobs(), 15000)
     return () => clearInterval(interval)
   }, [account.id])
 
   async function load() {
     setLoading(true)
-    setStatus(null)
+    setStatusMsg(null)
     try {
       await agentsApi.reconcileStaleJobs(1)
       const [jobsData, logsData] = await Promise.all([
-        agentsApi.fetchAgentJobs(account.id, 'group_member_broadcast', 20),
+        agentsApi.fetchAgentJobs(account.id, undefined, 100),
         agentsApi.fetchAgentSendLogs(account.id, 50),
       ])
       setJobs(jobsData)
       setSendLogs(logsData.logs)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load sending data')
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to load task activity')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function refreshJobs() {
+    try {
+      const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
+      setJobs(jobsData)
+    } catch { /* silent auto-refresh */ }
   }
 
   async function loadLogsForJob(jobId: number | null) {
@@ -3746,25 +3771,106 @@ function SendingLogsPage({ account }: { account: Agent }) {
       const data = await agentsApi.fetchAgentSendLogs(account.id, 50, undefined, jobId ?? undefined)
       setSendLogs(data.logs)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load logs')
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to load logs')
     } finally {
       setLogsLoading(false)
     }
   }
 
+  const filteredJobs = useMemo(() => {
+    let result = [...jobs]
+
+    if (filterStatus !== 'all') {
+      result = result.filter((j) => j.status === filterStatus)
+    }
+
+    if (filterDate !== 'all') {
+      const now = Date.now()
+      const cutoffs: Record<string, number> = {
+        'today': now - 86400000,
+        '24h': now - 86400000,
+        '7d': now - 7 * 86400000,
+        '30d': now - 30 * 86400000,
+      }
+      const cutoff = cutoffs[filterDate]
+      if (cutoff) {
+        result = result.filter((j) => j.created_at && new Date(j.created_at).getTime() > cutoff)
+      }
+    }
+
+    if (filterType !== 'all') {
+      result = result.filter((j) => j.job_type === filterType)
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      result = result.filter((j) => {
+        const idMatch = String(j.id).includes(q)
+        const nameMatch = (j.message_preview || '').toLowerCase().includes(q)
+        const groupMatch = (j.source_group_title || '').toLowerCase().includes(q)
+        const typeMatch = (j.target_type || '').toLowerCase().includes(q)
+        return idMatch || nameMatch || groupMatch || typeMatch
+      })
+    }
+
+    return result
+  }, [jobs, filterStatus, filterDate, filterType, search])
+
+  const taskTypes = useMemo(() => {
+    const types = new Set(jobs.map((j) => j.job_type))
+    return Array.from(types)
+  }, [jobs])
+
   return (
-    <Card title="Sending Logs" subtitle="Track bulk message jobs and individual send attempts.">
-      {status ? <Note>{status}</Note> : null}
+    <Card title="Task Activity" subtitle="Monitor bulk messaging tasks and send logs.">
+      {statusMsg ? <Note>{statusMsg}</Note> : null}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <Button tone={tab === 'jobs' ? 'primary' : 'secondary'} onClick={() => setTab('jobs')}>Jobs</Button>
+        <Button tone={tab === 'jobs' ? 'primary' : 'secondary'} onClick={() => setTab('jobs')}>Tasks</Button>
         <Button tone={tab === 'logs' ? 'primary' : 'secondary'} onClick={() => setTab('logs')}>Send Logs</Button>
         <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
       </div>
+
+      {tab === 'jobs' ? (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search task..."
+            style={{
+              flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
+              border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
+              color: 'var(--miniapp-text-primary)', fontSize: 12, fontFamily: 'var(--miniapp-sans)',
+              outline: 'none',
+            }}
+          />
+          <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
+            { label: 'All status', value: 'all' },
+            { label: 'Running', value: 'running' },
+            { label: 'Completed', value: 'completed' },
+            { label: 'Failed', value: 'failed' },
+            { label: 'Pending', value: 'pending' },
+            { label: 'Queued', value: 'queued' },
+          ]} />
+          <FilterSelect value={filterDate} onChange={setFilterDate} options={[
+            { label: 'All time', value: 'all' },
+            { label: 'Today', value: 'today' },
+            { label: 'Last 24h', value: '24h' },
+            { label: 'Last 7 days', value: '7d' },
+            { label: 'Last 30 days', value: '30d' },
+          ]} />
+          {taskTypes.length > 1 ? (
+            <FilterSelect value={filterType} onChange={setFilterType} options={[
+              { label: 'All types', value: 'all' },
+              ...taskTypes.map((t) => ({ label: t.replace(/_/g, ' '), value: t })),
+            ]} />
+          ) : null}
+        </div>
+      ) : null}
+
       {loading ? <Note>Loading...</Note> : null}
+
       {!loading && tab === 'jobs' ? (
-        jobs.length === 0 ? <Note>No bulk message jobs yet.</Note> : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {jobs.map((job) => {
+        filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {filteredJobs.map((job) => {
               const p = job.progress || {}
               const total = p.total_count ?? 0
               const sent = p.success_count ?? 0
@@ -3776,59 +3882,67 @@ function SendingLogsPage({ account }: { account: Agent }) {
               const isQueued = job.status === 'queued'
               const isCompleted = job.status === 'completed'
               const isFailed = job.status === 'failed'
+              const isStopped = p.stop_reason != null
               const taskName = job.message_preview
                 ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
-                : job.target_type === 'groups' ? 'Send to Groups' : 'Send to Members'
+                : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
               return (
                 <div key={job.id} style={{
-                  padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)',
-                  background: 'var(--miniapp-surface)', display: 'grid', gap: 6,
+                  padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)',
+                  background: 'var(--miniapp-surface)', display: 'grid', gap: 5,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <strong style={{ fontSize: 14, lineHeight: 1.3 }}>{taskName}</strong>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
+                      {job.created_at ? (
+                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
+                          {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      ) : null}
+                    </div>
                     <span style={{
-                      flexShrink: 0, marginLeft: 8, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : 'var(--miniapp-bg-deep)',
-                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-text-muted)',
+                      flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : 'var(--miniapp-bg-deep)',
+                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : 'var(--miniapp-text-muted)',
                     }}>
-                      {job.status}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{sent} / {total}</span>
-                    <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
-                      {job.target_type === 'groups' ? 'groups' : 'members'} completed
+                      {isStopped ? 'Stopped' : job.status}
                     </span>
                   </div>
 
                   {total > 0 ? (
-                    <div style={{ height: 5, background: 'var(--miniapp-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', width: `${pct}%`, borderRadius: 3,
-                        background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
-                        transition: 'width 0.3s',
-                      }} />
-                    </div>
-                  ) : <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{isQueued ? 'Waiting in queue...' : isRunning ? 'Starting...' : 'No data'}</div>}
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                        <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                          {job.target_type === 'groups' ? 'groups' : 'members'}
+                        </span>
+                      </div>
+                      <div style={{ height: 4, background: 'var(--miniapp-bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${pct}%`, borderRadius: 2,
+                          background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
+                          transition: 'width 0.3s',
+                        }} />
+                      </div>
+                    </>
+                  ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{isQueued ? 'Queued...' : isRunning ? 'Starting...' : 'Waiting...'}</div>}
 
-                  <div style={{ display: 'flex', gap: 12, fontSize: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
                     <span>Sent: <strong>{sent}</strong></span>
                     {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
                     {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
-                    {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>Updated: {timeAgo(job.updated_at)}</span> : null}
-                  </div>
-
-                  {p.stop_reason ? (
-                    <div style={{ fontSize: 11, color: 'var(--miniapp-clay)', padding: '4px 8px', background: 'rgba(161,87,62,0.08)', borderRadius: 6 }}>
-                      Stopped: {p.stop_reason}
-                    </div>
-                  ) : null}
-
-                  <div>
-                    <Button tone="secondary" onClick={() => { setTab('logs'); void loadLogsForJob(job.id) }}>
-                      View Logs
-                    </Button>
+                    {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
+                    {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
+                    <span style={{ marginLeft: 'auto' }}>
+                      <button type="button" onClick={() => { setTab('logs'); void loadLogsForJob(job.id) }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', color: '#475977',
+                          fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                          textDecoration: 'underline', padding: 0,
+                        }}>
+                        View Logs
+                      </button>
+                    </span>
                   </div>
                 </div>
               )
@@ -3836,25 +3950,26 @@ function SendingLogsPage({ account }: { account: Agent }) {
           </div>
         )
       ) : null}
+
       {!loading && tab === 'logs' ? (
         <>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
             {selectedJobId ? (
-              <span style={{ fontSize: 12, padding: '4px 8px', background: 'var(--miniapp-bg-deep)', borderRadius: 6, color: 'var(--miniapp-text-muted)' }}>
+              <span style={{ fontSize: 11, padding: '3px 8px', background: 'var(--miniapp-bg-deep)', borderRadius: 6, color: 'var(--miniapp-text-muted)' }}>
                 Job #{selectedJobId}
                 <button type="button" onClick={() => void loadLogsForJob(null)}
                   style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-clay)', fontSize: 14, padding: 0 }}>×</button>
               </span>
             ) : null}
-            {logsLoading ? <Note>Loading logs...</Note> : null}
+            {logsLoading ? <Note>Loading...</Note> : null}
           </div>
           {!logsLoading && sendLogs.length === 0 ? <Note>No send logs found.</Note> : null}
           {!logsLoading && sendLogs.length ? (
-            <div style={{ display: 'grid', gap: 4 }}>
+            <div style={{ display: 'grid', gap: 3 }}>
               {sendLogs.map((log) => (
                 <div key={log.id} style={{
-                  padding: '6px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
-                  background: 'var(--miniapp-bg)', fontSize: 12, display: 'grid', gap: 2,
+                  padding: '5px 8px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)',
+                  background: 'var(--miniapp-bg)', fontSize: 11, display: 'grid', gap: 1,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: 600 }}>
@@ -3862,7 +3977,7 @@ function SendingLogsPage({ account }: { account: Agent }) {
                       {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)' }}> · {log.phone_number}</span> : null}
                     </span>
                     <span style={{
-                      padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                      padding: '0 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
                       background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
                       color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
                     }}>{log.status}</span>
@@ -3870,7 +3985,7 @@ function SendingLogsPage({ account }: { account: Agent }) {
                   <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {log.message_preview}
                   </div>
-                  {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 10 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
+                  {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 9 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
                 </div>
               ))}
             </div>
