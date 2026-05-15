@@ -485,6 +485,7 @@ class GroupMemberBroadcastRuntime:
         import random
         import hashlib
         from datetime import datetime, timezone
+        from bot.db.models.agent import SentBroadcastMessage
 
         target_group_ids = list(normalized.get("target_group_ids", []))
         total_count = len(target_group_ids)

@@ -4027,24 +4027,42 @@ function TaskActivity({ account }: { account: Agent }) {
         </div>
       ) : null}
 
-      <TableModal<SendLogEntry>
-        open={logsJobId !== null}
-        onClose={() => setLogsJobId(null)}
-        title="Send Logs"
-        subtitle={`Job #${logsJobId} · ${jobs.find((j) => j.id === logsJobId)?.message_preview || `Task #${logsJobId}`}`}
-        data={logs}
-        columns={sendLogColumns}
-        keyField="id"
-        searchAccessor={(log) => `${log.username || ''} ${log.phone_number || ''} ${log.tg_user_id || ''} ${log.tg_group_id || ''} ${log.message_preview || ''}`}
-        pageSize={25}
-        loading={logsLoading}
-        emptyMessage="No send logs for this job."
-        renderExpanded={(log) => (
-          <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
-            {log.message_full || log.message_preview}
-          </div>
-        )}
-      />
+      {(function logsModal() {
+        const logJob = jobs.find((j) => j.id === logsJobId)
+        const logProgress = logJob?.progress || {}
+        const logTotal = logProgress.total_count ?? 0
+        const logSent = logProgress.success_count ?? 0
+        const logFailed = logProgress.failure_count ?? 0
+        const logSummary = logTotal > 0 ? `${logSent} sent, ${logFailed} failed of ${logTotal}` : ''
+        return (
+          <TableModal<SendLogEntry>
+            open={logsJobId !== null}
+            onClose={() => setLogsJobId(null)}
+            title="Send Logs"
+            subtitle={
+              `Job #${logsJobId}` +
+              (logJob?.message_preview ? ` · ${logJob.message_preview}` : '') +
+              (logSummary ? ` · ${logSummary}` : '')
+            }
+            data={logs}
+            columns={sendLogColumns}
+            keyField="id"
+            searchAccessor={(log) => `${log.username || ''} ${log.phone_number || ''} ${log.tg_user_id || ''} ${log.tg_group_id || ''} ${log.message_preview || ''}`}
+            pageSize={25}
+            loading={logsLoading}
+            emptyMessage={
+              logTotal > 0
+                ? `No individual send records found. Job progress: ${logSent} sent, ${logFailed} failed of ${logTotal}.${logFailed > 0 && !logFailed ? ' All sends failed — the account may not have permission to post in the target groups.' : ''}`
+                : 'No send logs for this job. Messages may still be in progress.'
+            }
+            renderExpanded={(log) => (
+              <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
+                {log.message_full || log.message_preview}
+              </div>
+            )}
+          />
+        )
+      })()}
     </Card>
   )
 }
