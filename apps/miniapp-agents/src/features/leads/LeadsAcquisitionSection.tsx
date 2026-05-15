@@ -9,6 +9,7 @@ import {
   InputField,
   LinkRow,
   Note,
+  SelectField,
   TextAreaField,
 } from '@miniapp/shared'
 import type {
@@ -34,7 +35,14 @@ function _formatKeywords(keywords: string[]): string {
   return keywords.join(',')
 }
 
+type LeadsTaskType = 'scrape' | 'lead_capture'
+
 export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [taskType, setTaskType] = useState<LeadsTaskType>('scrape')
+  const [status, setStatus] = useState<string | null>(null)
+
+  // Scrape state
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
   const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
   const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
@@ -43,10 +51,8 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [scrapeMessageLimit, setScrapeMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
   const [scrapeMaxAgeDays, setScrapeMaxAgeDays] = useState('30')
   const [isSaving, setIsSaving] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
 
-  const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
-  const [tasks, setTasks] = useState<AutomationTask[]>([])
+  // Lead capture state
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [taskKeywords, setTaskKeywords] = useState<string[]>([])
   const [pendingKeyword, setPendingKeyword] = useState('')
@@ -55,9 +61,9 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [leadAskContact, setLeadAskContact] = useState(false)
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
-  const [isSavingCapture, setIsSavingCapture] = useState(false)
 
   useEffect(() => {
+    if (taskType !== 'scrape') { setScrapeGroups([]); return }
     const normalized = scrapeGroupQuery.trim()
     if (!normalized) { setScrapeGroups([]); setLoadingScrapeGroups(false); return }
     const timer = setTimeout(() => {
@@ -67,14 +73,16 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         .finally(() => setLoadingScrapeGroups(false))
     }, 400)
     return () => clearTimeout(timer)
-  }, [account.id, scrapeGroupQuery])
+  }, [account.id, scrapeGroupQuery, taskType])
 
+  const groupQuery = taskGroupsQuery
   useEffect(() => {
-    void Promise.all([
-      agentsApi.fetchGroupTasks(account.group_id || 196),
-      agentsApi.fetchTaskCatalog(),
-    ]).then(([t, c]) => { setTasks(t); setCatalog(c) }).catch(() => {})
-  }, [account.id])
+    if (taskType !== 'lead_capture' || !groupQuery.trim()) { setGroups([]); return }
+    const timer = setTimeout(() => {
+      void agentsApi.fetchAgentGroups(account.id, groupQuery).then(setGroups).catch(() => setGroups([]))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [account.id, groupQuery, taskType])
 
   async function handleScrape() {
     if (!scrapeSelectedGroup?.tg_group_id) { setStatus('Choose a group first'); return }
@@ -99,7 +107,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
 
   async function handleSaveLeadCapture() {
     if (!taskKeywords.length) { setStatus('At least one keyword is required'); return }
-    setIsSavingCapture(true)
+    setIsSaving(true)
     try {
       const config: Record<string, unknown> = {}
       if (leadAckTemplate.trim()) config.ack_template = leadAckTemplate.trim()
@@ -120,73 +128,115 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to save lead capture')
     } finally {
-      setIsSavingCapture(false)
+      setIsSaving(false)
     }
   }
 
-  const groupQuery = taskGroupsQuery
-  useEffect(() => {
-    if (!groupQuery.trim()) { setGroups([]); return }
-    const timer = setTimeout(() => {
-      void agentsApi.fetchAgentGroups(account.id, groupQuery).then(setGroups).catch(() => setGroups([]))
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [account.id, groupQuery])
+  async function handleSubmit() {
+    if (taskType === 'scrape') {
+      await handleScrape()
+    } else {
+      await handleSaveLeadCapture()
+    }
+    setIsFormOpen(false)
+  }
+
+  const isScrape = taskType === 'scrape'
+
+  function resetForm() {
+    setTaskType('scrape')
+    setScrapeGroupQuery('')
+    setScrapeSelectedGroup(null)
+    setScrapeGroups([])
+    setScrapeMemberLimit(String(SCRAPE_LIMIT_MAX))
+    setScrapeMessageLimit(String(SCRAPE_LIMIT_MAX))
+    setScrapeMaxAgeDays('30')
+    setTaskKeywords([])
+    setPendingKeyword('')
+    setLeadAckTemplate('')
+    setLeadLabel('')
+    setLeadAskContact(false)
+    setTaskGroupsQuery('')
+    setTaskGroups([])
+    setStatus(null)
+  }
 
   return (
-    <>
-      <Card title="Scrape Group" subtitle="Queue a background sync job to collect members and messages.">
-        {status ? <Note>{status}</Note> : null}
-        <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
-        {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
-        {!loadingScrapeGroups && scrapeGroups.length ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {scrapeGroups.map((group, index) => (
-              <LinkRow key={`${group.tg_group_id ?? index}-${group.title ?? index}`} active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
-                onClick={() => { setScrapeSelectedGroup(group); setScrapeGroupQuery(group.title || '') }}>
-                <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
-                <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}</div>
-              </LinkRow>
-            ))}
-          </div>
-        ) : null}
-        {scrapeSelectedGroup ? (
-          <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
-            <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
-            <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
-            <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
-            <Button onClick={() => void handleScrape()} disabled={isSaving}>{isSaving ? 'Queuing...' : 'Queue scrape job'}</Button>
-          </div>
-        ) : null}
-      </Card>
-      <Card title="Lead Capture" subtitle="Configure automatic lead capture from group messages.">
-        <div style={{ display: 'grid', gap: 12 }}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {taskKeywords.map((kw, i) => (
-                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
-                  {kw}
-                  <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
-                </span>
-              ))}
-            </div>
-            <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)} onKeyDown={(e) => {
-              if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') }
-            }} placeholder="support" style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
-          </div>
-          <TextAreaField label="Acknowledgment template (optional)" value={leadAckTemplate} onChange={setLeadAckTemplate} rows={4} placeholder="We will get back to you shortly." />
-          <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={leadAskContact} onChange={(e) => setLeadAskContact(e.target.checked)} style={{ accentColor: 'var(--miniapp-accent)' }} />
-            Ask for contact details
-          </label>
-          <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
-            selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
-            onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
-          <Button onClick={() => void handleSaveLeadCapture()} disabled={isSavingCapture}>{isSavingCapture ? 'Saving...' : 'Save lead capture'}</Button>
-        </div>
-      </Card>
-    </>
+    <Card title="Lead Acquisition" subtitle="Collect member data and configure lead capture rules.">
+      {status ? <Note>{status}</Note> : null}
+      {!isFormOpen ? <Button onClick={() => setIsFormOpen(true)}>New Acquisition</Button> : null}
+      {isFormOpen ? renderForm() : null}
+    </Card>
   )
+
+  function renderForm() {
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        <SelectField label="Task type" value={taskType} onChange={(v) => { setTaskType(v as LeadsTaskType); setStatus(null) }}>
+          <option value="scrape">Scrape Group</option>
+          <option value="lead_capture">Lead Capture</option>
+        </SelectField>
+        {isScrape ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
+            {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
+            {!loadingScrapeGroups && scrapeGroups.length ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {scrapeGroups.map((group, index) => (
+                  <LinkRow key={`${group.tg_group_id ?? index}-${group.title ?? index}`} active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
+                    onClick={() => { setScrapeSelectedGroup(group); setScrapeGroupQuery(group.title || '') }}>
+                    <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
+                    <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}</div>
+                  </LinkRow>
+                ))}
+              </div>
+            ) : null}
+            {scrapeSelectedGroup ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
+                <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
+                <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
+              </div>
+            ) : null}
+            <Button onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}>
+              {isSaving ? 'Queuing...' : 'Queue scrape job'}
+            </Button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {taskKeywords.map((kw, i) => (
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
+                    {kw}
+                    <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
+                  </span>
+                ))}
+              </div>
+              <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                placeholder="support" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+            </div>
+            <TextAreaField label="Acknowledgment template (optional)" value={leadAckTemplate} onChange={setLeadAckTemplate} rows={4} placeholder="We will get back to you shortly." />
+            <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={leadAskContact} onChange={(e) => setLeadAskContact(e.target.checked)} style={{ accentColor: 'var(--miniapp-accent)' }} />
+              Ask for contact details
+            </label>
+            <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+              selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
+              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button onClick={() => void handleSubmit()} disabled={isSaving || !taskKeywords.length}>
+                {isSaving ? 'Working...' : 'Save lead capture'}
+              </Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 }

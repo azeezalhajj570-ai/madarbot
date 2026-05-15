@@ -1285,10 +1285,10 @@ export default function App() {
               {route.page === 'dashboard' ? (
                 <AccountAnalyticsPage account={selectedAccount} />
               ) : null}
-              {route.page === 'leads' ? (
+               {route.page === 'leads' ? (
                 <>
-                  <AccountLeadsPage account={selectedAccount} />
                   <LeadsAcquisitionSection account={selectedAccount} onSaved={setStatus} />
+                  <AccountLeadsPage account={selectedAccount} />
                 </>
               ) : null}
               {route.page === 'campaigns' ? (
@@ -1296,8 +1296,8 @@ export default function App() {
               ) : null}
               {route.page === 'tasks' ? (
                 <>
-                  <TaskActivity account={selectedAccount} />
                   <AutomationTasksSection account={selectedAccount} onSaved={setStatus} />
+                  <TaskActivity account={selectedAccount} />
                 </>
               ) : null}
             </>
