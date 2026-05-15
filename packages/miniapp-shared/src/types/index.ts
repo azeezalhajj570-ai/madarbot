@@ -215,6 +215,7 @@ export interface SendLogEntry {
   tg_group_id: number
   username?: string | null
   phone_number?: string | null
+  group_title?: string | null
   message_preview: string
   message_full?: string
   status: string

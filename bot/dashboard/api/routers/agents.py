@@ -245,6 +245,23 @@ async def webapp_agent_send_logs(
 
     rows = (await session.execute(stmt)).scalars().all()
 
+    group_ids = {int(msg.tg_group_id) for msg in rows if msg.tg_user_id is None}
+    if group_ids:
+        from bot.db.models.scraper import ScrapedGroup
+        from sqlalchemy import select as sql_select
+
+        group_rows = (
+            await session.execute(
+                sql_select(ScrapedGroup.tg_group_id, ScrapedGroup.title).where(
+                    ScrapedGroup.tg_group_id.in_(group_ids),
+                    ScrapedGroup.last_agent_id == agent.id,
+                )
+            )
+        ).all()
+        group_titles = {int(r.tg_group_id): r.title or str(r.tg_group_id) for r in group_rows}
+    else:
+        group_titles = {}
+
     return {
         "logs": [
             {
@@ -254,6 +271,7 @@ async def webapp_agent_send_logs(
                 "tg_group_id": msg.tg_group_id,
                 "username": msg.username or None,
                 "phone_number": msg.phone_number or None,
+                "group_title": group_titles.get(int(msg.tg_group_id)) if msg.tg_user_id is None else None,
                 "message_preview": (msg.message_text or "")[:200],
                 "message_full": msg.message_text,
                 "status": msg.status,

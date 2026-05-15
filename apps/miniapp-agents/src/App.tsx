@@ -3805,12 +3805,16 @@ function TaskActivity({ account }: { account: Agent }) {
 
   const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
     {
-      key: 'recipient', label: 'Recipient', sortable: true, width: '1.5fr',
+      key: 'recipient', label: 'Recipient', sortable: true, width: '2fr',
       render: (log) => (
-        <span style={{ fontWeight: 600 }}>
-          {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
-          {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)', marginLeft: 6 }}>{log.phone_number}</span> : null}
-        </span>
+        <div style={{ display: 'grid', gap: 1 }}>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>
+            {log.username ? `@${log.username}` : log.group_title || (log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`)}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', fontFamily: 'var(--miniapp-mono, monospace)' }}>
+            {log.tg_user_id ? log.tg_user_id : log.tg_group_id}{log.phone_number ? ` · ${log.phone_number}` : ''}
+          </span>
+        </div>
       ),
     },
     {
@@ -3969,21 +3973,12 @@ function TaskActivity({ account }: { account: Agent }) {
                 </div>
 
                 {total > 0 ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
-                      <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                        {job.target_type === 'groups' ? 'groups' : 'members'}
-                      </span>
-                    </div>
-                    <div style={{ height: 4, background: 'var(--miniapp-bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%', width: `${pct}%`, borderRadius: 2,
-                        background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
-                        transition: 'width 0.3s',
-                      }} />
-                    </div>
-                  </>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                    <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                      {job.target_type === 'groups' ? 'groups' : 'members'}
+                    </span>
+                  </div>
                 ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
 
                 <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>

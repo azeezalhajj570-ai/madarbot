@@ -21,9 +21,11 @@ export function MultiGroupSelect({ query, onQueryChange, groups, selected, onTog
   const normalizedQuery = query.trim().toLowerCase()
 
   const filtered = useMemo(() => {
+    const seen = new Set<number>()
     return groups.filter((group) => {
       const tgGroupId = Number(group.tg_group_id || 0)
-      if (!tgGroupId) return false
+      if (!tgGroupId || seen.has(tgGroupId)) return false
+      seen.add(tgGroupId)
       if (!normalizedQuery) return true
       return [group.title || '', String(tgGroupId)].some((v) => v.toLowerCase().includes(normalizedQuery))
     })
