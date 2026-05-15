@@ -193,7 +193,10 @@ async def webapp_agent_jobs(
 ) -> list[dict[str, Any]]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     rows = await AgentJobService(session).list_agent_jobs(
-        actor_user_id=identity.user_id, agent_id=agent.id, limit=limit, job_type=job_type,
+        actor_user_id=identity.user_id,
+        agent_id=agent.id,
+        limit=limit,
+        job_type=job_type,
     )
     return [
         {
@@ -217,12 +220,8 @@ async def webapp_agent_jobs(
     ]
 
 
-@router.get(
-    "/api/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)]
-)
-@router.get(
-    "/webapp/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)]
-)
+@router.get("/api/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)])
+@router.get("/webapp/agents/{agent_id}/send-logs", dependencies=[Depends(require_agents_boundary)])
 async def webapp_agent_send_logs(
     agent_id: int,
     limit: int = 100,
@@ -235,10 +234,7 @@ async def webapp_agent_send_logs(
     from sqlalchemy import desc, select
     from bot.db.models.agent import SentBroadcastMessage
 
-    stmt = (
-        select(SentBroadcastMessage)
-        .where(SentBroadcastMessage.agent_id == agent.id)
-    )
+    stmt = select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
     if job_id:
         stmt = stmt.where(SentBroadcastMessage.job_id == job_id)
     if offset_id:
@@ -273,7 +269,9 @@ async def webapp_agent_send_logs(
                 "tg_group_id": msg.tg_group_id,
                 "username": msg.username or None,
                 "phone_number": msg.phone_number or None,
-                "group_title": group_titles.get(int(msg.tg_group_id)) if msg.tg_user_id is None else None,
+                "group_title": group_titles.get(int(msg.tg_group_id))
+                if msg.tg_user_id is None
+                else None,
                 "message_preview": (msg.message_text or "")[:200],
                 "message_full": msg.message_text,
                 "status": msg.status,
@@ -637,6 +635,7 @@ async def webapp_bulk_preflight(
         target_type = payload.target_type or "members"
         if target_type == "groups":
             from bot.agents.jobs import normalize_group_member_broadcast_payload
+
             normalized = normalize_group_member_broadcast_payload(payload.model_dump())
             return {
                 "target_type": "groups",
@@ -716,7 +715,8 @@ async def webapp_create_agent_job(
     "/api/agents/{agent_id}/jobs/{job_id}/cancel", dependencies=[Depends(require_agents_boundary)]
 )
 @router.post(
-    "/webapp/agents/{agent_id}/jobs/{job_id}/cancel", dependencies=[Depends(require_agents_boundary)]
+    "/webapp/agents/{agent_id}/jobs/{job_id}/cancel",
+    dependencies=[Depends(require_agents_boundary)],
 )
 async def webapp_cancel_agent_job(
     agent_id: int,
@@ -727,11 +727,18 @@ async def webapp_cancel_agent_job(
     agent = await ensure_agent_admin(agent_id, session, identity)
     from sqlalchemy import select
 
-    job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+    job = (
+        await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+    ).scalar_one_or_none()
     if job is None or job.agent_id != agent.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
-    if job.status not in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_RUNNING, JOB_STATUS_SCHEDULED}:
+    if job.status not in {
+        JOB_STATUS_PENDING,
+        JOB_STATUS_QUEUED,
+        JOB_STATUS_RUNNING,
+        JOB_STATUS_SCHEDULED,
+    }:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Cannot cancel job in status '{job.status}'",
@@ -757,7 +764,9 @@ async def webapp_retry_agent_job(
     agent = await ensure_agent_admin(agent_id, session, identity)
     from sqlalchemy import select
 
-    job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+    job = (
+        await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+    ).scalar_one_or_none()
     if job is None or job.agent_id != agent.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
@@ -928,7 +937,6 @@ async def webapp_agent_analytics(
     lead_stats = await AgentLeadService(session).lead_stats(agent_id=agent.id)
 
     from bot.agents.jobs import (
-        JOB_STATUS_COMPLETED,
         JOB_STATUS_FAILED,
         JOB_STATUS_QUEUED,
         JOB_STATUS_RUNNING,

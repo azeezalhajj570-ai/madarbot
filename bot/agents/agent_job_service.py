@@ -36,7 +36,9 @@ def _job_queued_notification(
             group_title = str(payload.get("source_group_title") or "").strip()
             selected_count = len(list(payload.get("selected_user_ids") or []))
             summary = (
-                f"Queued for {group_title}." if group_title else "Queued for the selected source group."
+                f"Queued for {group_title}."
+                if group_title
+                else "Queued for the selected source group."
             )
             notification_payload = {
                 "job_type": job_type,
@@ -104,7 +106,9 @@ class AgentJobService(AgentServiceSupport):
                         )
                     }
                     if exclusions["final_count"] == 0:
-                        raise ValueError("All recipients were excluded (admins, bots, already-sent)")
+                        raise ValueError(
+                            "All recipients were excluded (admins, bots, already-sent)"
+                        )
                 if not scheduled_at:
                     await self._validate_broadcast_preflight(agent, normalized_payload)
             else:
@@ -166,10 +170,7 @@ class AgentJobService(AgentServiceSupport):
         if agent is None:
             return []
         await self.ensure_agent_owner(agent, actor_user_id)
-        stmt = (
-            select(AgentJob)
-            .where(AgentJob.agent_id == agent.id)
-        )
+        stmt = select(AgentJob).where(AgentJob.agent_id == agent.id)
         if job_type:
             stmt = stmt.where(AgentJob.job_type == job_type)
         stmt = stmt.order_by(desc(AgentJob.created_at), desc(AgentJob.id)).limit(limit)

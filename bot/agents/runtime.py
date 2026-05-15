@@ -290,7 +290,6 @@ class GroupMemberBroadcastRuntime:
             message = normalized["message"]
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
-            source_group_title = normalized.get("source_group_title", "")
 
             progress = dict(payload.get("progress") or {})
             already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
@@ -301,12 +300,21 @@ class GroupMemberBroadcastRuntime:
 
             if target_type == "groups":
                 result = await self._execute_groups_mode(
-                    client=client, agent=agent, normalized=normalized,
-                    message=message, threshold=threshold, base_interval=base_interval,
-                    progress=progress, payload=payload, limiter=limiter,
-                    already_sent=already_sent, skipped_count=skipped_count,
-                    success_count=success_count, failure_count=failure_count,
-                    failures=failures, session=session,
+                    client=client,
+                    agent=agent,
+                    normalized=normalized,
+                    message=message,
+                    threshold=threshold,
+                    base_interval=base_interval,
+                    progress=progress,
+                    payload=payload,
+                    limiter=limiter,
+                    already_sent=already_sent,
+                    skipped_count=skipped_count,
+                    success_count=success_count,
+                    failure_count=failure_count,
+                    failures=failures,
+                    session=session,
                 )
                 return result
 
@@ -478,9 +486,23 @@ class GroupMemberBroadcastRuntime:
             await redis_client.aclose()
 
     async def _execute_groups_mode(
-        self, *, client, agent, normalized, message, threshold, base_interval,
-        progress, payload, limiter, already_sent, skipped_count,
-        success_count, failure_count, failures, session,
+        self,
+        *,
+        client,
+        agent,
+        normalized,
+        message,
+        threshold,
+        base_interval,
+        progress,
+        payload,
+        limiter,
+        already_sent,
+        skipped_count,
+        success_count,
+        failure_count,
+        failures,
+        session,
     ) -> dict[str, Any]:
         import random
         import hashlib

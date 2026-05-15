@@ -65,6 +65,4 @@ async def _tick() -> None:
             await dispatch_agent_job(job_id)
             logger.bind(job_id=job_id, agent_id=agent_id).info("scheduled_job_dispatched")
         except Exception:
-            logger.bind(job_id=job_id, agent_id=agent_id).exception(
-                "scheduled_job_dispatch_failed"
-            )
+            logger.bind(job_id=job_id, agent_id=agent_id).exception("scheduled_job_dispatch_failed")

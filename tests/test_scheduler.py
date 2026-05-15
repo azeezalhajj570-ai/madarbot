@@ -24,11 +24,15 @@ async def _create_user_group_agent(
     group_tg_id=-1008105,
     linked_by_user_id=None,
 ) -> tuple[User, Group, Agent]:
-    user = User(tg_user_id=user_tg_id, username="owner_sched", full_name="Sched Owner", language_code="en")
+    user = User(
+        tg_user_id=user_tg_id, username="owner_sched", full_name="Sched Owner", language_code="en"
+    )
     db_session.add(user)
     await db_session.flush()
 
-    group = Group(tg_group_id=group_tg_id, title="Sched Group", owner_user_id=user.id, is_active=True)
+    group = Group(
+        tg_group_id=group_tg_id, title="Sched Group", owner_user_id=user.id, is_active=True
+    )
     db_session.add(group)
     await db_session.flush()
     db_session.add(GroupAdminRole(group_id=group.id, user_id=user.tg_user_id, role="owner"))
@@ -87,7 +91,11 @@ async def test_agent_job_model_supports_scheduled_at(db_session) -> None:
     stored = (await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
     assert stored.status == JOB_STATUS_SCHEDULED
     assert stored.scheduled_at is not None
-    diff = (stored.scheduled_at.replace(tzinfo=timezone.utc) - future).total_seconds() if stored.scheduled_at.tzinfo is None else (stored.scheduled_at - future).total_seconds()
+    diff = (
+        (stored.scheduled_at.replace(tzinfo=timezone.utc) - future).total_seconds()
+        if stored.scheduled_at.tzinfo is None
+        else (stored.scheduled_at - future).total_seconds()
+    )
     assert abs(diff) < 1
 
 
@@ -119,7 +127,11 @@ async def test_create_job_with_scheduled_at_sets_status_scheduled(db_session) ->
 
     assert job.status == JOB_STATUS_SCHEDULED
     assert job.scheduled_at is not None
-    diff = (job.scheduled_at.replace(tzinfo=timezone.utc) - future).total_seconds() if job.scheduled_at.tzinfo is None else (job.scheduled_at - future).total_seconds()
+    diff = (
+        (job.scheduled_at.replace(tzinfo=timezone.utc) - future).total_seconds()
+        if job.scheduled_at.tzinfo is None
+        else (job.scheduled_at - future).total_seconds()
+    )
     assert abs(diff) < 1
 
     stored = (await db_session.execute(select(AgentJob).where(AgentJob.id == job.id))).scalar_one()
@@ -260,11 +272,13 @@ async def test_scheduler_dispatches_due_scheduled_jobs(
     user, group, agent = await _create_user_group_agent(db_session)
 
     due_job = await _create_job(
-        db_session, agent,
+        db_session,
+        agent,
         scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
     )
     future_job = await _create_job(
-        db_session, agent,
+        db_session,
+        agent,
         scheduled_at=datetime.now(timezone.utc) + timedelta(hours=5),
     )
 
@@ -272,10 +286,14 @@ async def test_scheduler_dispatches_due_scheduled_jobs(
 
     dispatch_mock.assert_called_once_with(due_job.id)
 
-    due_stored = (await db_session.execute(select(AgentJob).where(AgentJob.id == due_job.id))).scalar_one()
+    due_stored = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == due_job.id))
+    ).scalar_one()
     assert due_stored.status == "pending"
 
-    future_stored = (await db_session.execute(select(AgentJob).where(AgentJob.id == future_job.id))).scalar_one()
+    future_stored = (
+        await db_session.execute(select(AgentJob).where(AgentJob.id == future_job.id))
+    ).scalar_one()
     assert future_stored.status == JOB_STATUS_SCHEDULED
 
 
@@ -296,7 +314,8 @@ async def test_scheduler_only_dispatches_once_per_job(
     user, group, agent = await _create_user_group_agent(db_session)
 
     job = await _create_job(
-        db_session, agent,
+        db_session,
+        agent,
         scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
     )
 
@@ -322,7 +341,8 @@ async def test_scheduler_does_not_dispatch_future_jobs(
     user, group, agent = await _create_user_group_agent(db_session)
 
     await _create_job(
-        db_session, agent,
+        db_session,
+        agent,
         scheduled_at=datetime.now(timezone.utc) + timedelta(hours=24),
     )
 
@@ -403,8 +423,8 @@ async def test_scheduler_handles_dispatch_failure_gracefully(
     user, group, agent = await _create_user_group_agent(db_session)
 
     past = datetime.now(timezone.utc) - timedelta(hours=1)
-    job1 = await _create_job(db_session, agent, scheduled_at=past)
-    job2 = await _create_job(db_session, agent, scheduled_at=past)
+    await _create_job(db_session, agent, scheduled_at=past)
+    await _create_job(db_session, agent, scheduled_at=past)
 
     await scheduler_tick()
 
@@ -426,7 +446,8 @@ async def test_scheduler_does_nothing_when_disabled(
 
     user, group, agent = await _create_user_group_agent(db_session)
     await _create_job(
-        db_session, agent,
+        db_session,
+        agent,
         scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
     )
 

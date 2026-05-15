@@ -87,6 +87,7 @@ async def lifespan(app: FastAPI):
     scheduler_task = None
     if settings.scheduler_enabled:
         from bot.services.scheduler import scheduler_loop
+
         scheduler_task = asyncio.create_task(scheduler_loop())
         logger.info("scheduler_loop_task_created")
 
