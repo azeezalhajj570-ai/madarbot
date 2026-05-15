@@ -68,8 +68,16 @@ export async function fetchAgentJobs(agentId: number, jobType?: string, limit?: 
   return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, limit })
 }
 
-export async function fetchAgentSendLogs(agentId: number, limit = 100, offsetId?: number) {
-  return apiClient.get<SendLogsResponse>(`${AGENTS_API_PREFIX}/${agentId}/send-logs`, { limit, offset_id: offsetId })
+export async function cancelAgentJob(agentId: number, jobId: number) {
+  return apiClient.post<{ status: string; job_id: number; new_status: string }>(`${AGENTS_API_PREFIX}/${agentId}/jobs/${jobId}/cancel`)
+}
+
+export async function retryAgentJob(agentId: number, jobId: number) {
+  return apiClient.post<{ status: string; job_id: number; new_status: string }>(`${AGENTS_API_PREFIX}/${agentId}/jobs/${jobId}/retry`)
+}
+
+export async function fetchAgentSendLogs(agentId: number, limit = 100, offsetId?: number, jobId?: number) {
+  return apiClient.get<SendLogsResponse>(`${AGENTS_API_PREFIX}/${agentId}/send-logs`, { limit, offset_id: offsetId, job_id: jobId })
 }
 
 export async function fetchAgentNotifications(agentId: number, limit = 50) {
@@ -273,6 +281,10 @@ export async function updateAgentLead(agentId: number, leadId: number, payload: 
 
 export async function deleteAgentLead(agentId: number, leadId: number) {
   return apiClient.delete(`${AGENTS_API_PREFIX}/${agentId}/leads/${leadId}`)
+}
+
+export async function reconcileStaleJobs(maxHours = 1, markFailed = false) {
+  return apiClient.post(`${AGENTS_API_PREFIX}/jobs/reconcile-stale`, { max_hours: maxHours, mark_failed: markFailed })
 }
 
 export async function syncAgentGroupAdminsBots(agentId: number, tgGroupId: number) {

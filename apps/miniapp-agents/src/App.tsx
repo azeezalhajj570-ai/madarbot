@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { MultiGroupSelect } from './components/MultiGroupSelect'
+import { TableModal } from './components/TableModal'
+import type { ColumnDef } from './components/DataTable'
+
 import {
   agentsApi,
   AppShell,
@@ -89,6 +93,16 @@ const SCRAPE_TASK_META: TaskCatalogItem = {
   title: 'Database Scraper',
   description: 'Queue a background sync job that scrapes members and messages from a database-indexed group.',
   executor_types: ['agent'],
+}
+const JOB_TYPE_LABELS: Record<string, string> = {
+  group_member_broadcast: 'Bulk message',
+  scraper_full_group: 'Database Scraper',
+  scraper_members: 'Scrape Members',
+  scraper_messages: 'Scrape Messages',
+  scraper_group_info: 'Scrape Group Info',
+  add_contact: 'Add Contact',
+  send_lead_message: 'Send Lead Message',
+  automation_task: 'Automation Task',
 }
 
 function _parseKeywords(raw: string | string[] | undefined | null): string[] {
@@ -1492,8 +1506,8 @@ export default function App() {
             <>
               {route.page === 'dashboard' ? (
                 <>
+                  <TaskActivity account={selectedAccount} />
                   <AccountAnalyticsPage account={selectedAccount} />
-                  <SendingLogsPage account={selectedAccount} />
                 </>
               ) : null}
               {route.page === 'tasks' ? (
@@ -2609,8 +2623,8 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
       }
 
       const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 5) {
-        setStatus('Interval seconds must be at least 5')
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) {
+        setStatus('Interval seconds must be 0 or more')
         return
       }
 
@@ -3193,22 +3207,18 @@ function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (mess
                 </>
               ) : (
                 <>
-                  <GroupAutocompleteField
-                    label="Select target groups"
+                  <MultiGroupSelect
                     query={bulkTargetGroupQuery}
                     onQueryChange={setBulkTargetGroupQuery}
                     groups={groups}
-                    selectedGroups={bulkSelectedTargetGroups}
-                    onAdd={(group) => {
+                    selected={bulkSelectedTargetGroups}
+                    onToggle={(group) => {
                       setBulkSelectedTargetGroups((current) =>
-                        current.some((g) => g.tg_group_id === group.tg_group_id) ? current : [...current, group]
+                        current.some((g) => g.tg_group_id === group.tg_group_id)
+                          ? current.filter((g) => g.tg_group_id !== group.tg_group_id)
+                          : [...current, group]
                       )
-                      setBulkTargetGroupQuery('')
                     }}
-                    onRemove={(tgGroupId) =>
-                      setBulkSelectedTargetGroups((current) => current.filter((g) => g.tg_group_id !== tgGroupId))
-                    }
-                    placeholder="Search groups to send to"
                   />
                   <TextAreaField
                     label="Message"
@@ -3693,117 +3703,366 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   )
 }
 
-function SendingLogsPage({ account }: { account: Agent }) {
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const sec = Math.floor(diff / 1000)
+  if (sec < 5) return 'just now'
+  if (sec < 60) return `${sec}s ago`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hours = Math.floor(min / 60)
+  if (hours < 24) return `${hours}h ago`
+  return new Date(dateStr).toLocaleString()
+}
+
+function FilterSelect({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+      padding: '6px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
+      background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)',
+      fontSize: 12, fontFamily: 'var(--miniapp-sans)', cursor: 'pointer', outline: 'none',
+    }}>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  )
+}
+
+function TaskActivity({ account }: { account: Agent }) {
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
-  const [sendLogs, setSendLogs] = useState<SendLogEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'jobs' | 'logs'>('jobs')
-  const [status, setStatus] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [logsJobId, setLogsJobId] = useState<number | null>(null)
+  const [logs, setLogs] = useState<SendLogEntry[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [actingJobId, setActingJobId] = useState<number | null>(null)
+
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterDate, setFilterDate] = useState('all')
+  const [filterType, setFilterType] = useState('all')
 
   useEffect(() => {
     void load()
+    const interval = setInterval(() => void refreshJobs(), 15000)
+    return () => clearInterval(interval)
   }, [account.id])
 
   async function load() {
     setLoading(true)
+    setStatusMsg(null)
     try {
-      const [jobsData, logsData] = await Promise.all([
-        agentsApi.fetchAgentJobs(account.id, 'group_member_broadcast', 20),
-        agentsApi.fetchAgentSendLogs(account.id, 50),
-      ])
+      await agentsApi.reconcileStaleJobs(1)
+      const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
-      setSendLogs(logsData.logs)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load sending data')
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to load task activity')
     } finally {
       setLoading(false)
     }
   }
 
+  async function refreshJobs() {
+    try {
+      const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
+      setJobs(jobsData)
+    } catch { /* silent auto-refresh */ }
+  }
+
+  async function handleCancel(jobId: number) {
+    setActingJobId(jobId)
+    try {
+      await agentsApi.cancelAgentJob(account.id, jobId)
+      await refreshJobs()
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to cancel job')
+    } finally {
+      setActingJobId(null)
+    }
+  }
+
+  async function handleRetry(jobId: number) {
+    setActingJobId(jobId)
+    try {
+      await agentsApi.retryAgentJob(account.id, jobId)
+      await refreshJobs()
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to retry job')
+    } finally {
+      setActingJobId(null)
+    }
+  }
+
+  useEffect(() => {
+    if (logsJobId === null) return
+    setLogsLoading(true)
+    void agentsApi.fetchAgentSendLogs(account.id, 500, undefined, logsJobId)
+      .then((data) => setLogs(data.logs))
+      .catch(() => setLogs([]))
+      .finally(() => setLogsLoading(false))
+  }, [account.id, logsJobId])
+
+  const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
+    {
+      key: 'recipient', label: 'Recipient', sortable: true, width: '1.5fr',
+      render: (log) => (
+        <span style={{ fontWeight: 600 }}>
+          {log.username ? `@${log.username}` : log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}
+          {log.phone_number ? <span style={{ fontWeight: 400, color: 'var(--miniapp-text-muted)', marginLeft: 6 }}>{log.phone_number}</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: 'type', label: 'Type', width: '60px',
+      render: (log) => log.username || log.tg_user_id ? '👤' : '👥',
+    },
+    {
+      key: 'status', label: 'Status', sortable: true, width: '80px',
+      render: (log) => (
+        <span style={{
+          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+          background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
+          color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
+        }}>
+          {log.status}
+        </span>
+      ),
+    },
+    {
+      key: 'message', label: 'Message', width: '2fr',
+      render: (log) => (
+        <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+          {(log.message_preview || '').slice(0, 120)}
+        </span>
+      ),
+    },
+    {
+      key: 'time', label: 'Time', sortable: true, align: 'right' as const, width: '120px',
+      render: (log) => log.sent_at ? (
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{new Date(log.sent_at).toLocaleString()}</span>
+      ) : '—',
+    },
+  ], [])
+
+  const filteredJobs = useMemo(() => {
+    let result = [...jobs]
+
+    if (filterStatus !== 'all') {
+      result = result.filter((j) => j.status === filterStatus)
+    }
+
+    if (filterDate !== 'all') {
+      const now = Date.now()
+      const cutoffs: Record<string, number> = {
+        'today': now - 86400000,
+        '24h': now - 86400000,
+        '7d': now - 7 * 86400000,
+        '30d': now - 30 * 86400000,
+      }
+      const cutoff = cutoffs[filterDate]
+      if (cutoff) {
+        result = result.filter((j) => j.created_at && new Date(j.created_at).getTime() > cutoff)
+      }
+    }
+
+    if (filterType !== 'all') {
+      result = result.filter((j) => j.job_type === filterType)
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      result = result.filter((j) => {
+        const idMatch = String(j.id).includes(q)
+        const nameMatch = (j.message_preview || '').toLowerCase().includes(q)
+        const groupMatch = (j.source_group_title || '').toLowerCase().includes(q)
+        const typeMatch = (j.target_type || '').toLowerCase().includes(q)
+        return idMatch || nameMatch || groupMatch || typeMatch
+      })
+    }
+
+    return result
+  }, [jobs, filterStatus, filterDate, filterType, search])
+
+  const taskTypes = useMemo(() => {
+    const types = new Set(jobs.map((j) => j.job_type))
+    return Array.from(types)
+  }, [jobs])
+
   return (
-    <Card title="Sending Logs" subtitle="Track bulk message jobs and individual send attempts.">
-      {status ? <Note>{status}</Note> : null}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <Button tone={tab === 'jobs' ? 'primary' : 'secondary'} onClick={() => setTab('jobs')}>Jobs</Button>
-        <Button tone={tab === 'logs' ? 'primary' : 'secondary'} onClick={() => setTab('logs')}>Send Logs</Button>
+    <Card title="Task Activity" subtitle="Monitor bulk messaging tasks and send logs.">
+      {statusMsg ? <Note>{statusMsg}</Note> : null}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
       </div>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search task..."
+          style={{
+            flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
+            border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
+            color: 'var(--miniapp-text-primary)', fontSize: 12, fontFamily: 'var(--miniapp-sans)', outline: 'none',
+          }}
+        />
+        <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
+          { label: 'All status', value: 'all' }, { label: 'Running', value: 'running' },
+          { label: 'Completed', value: 'completed' }, { label: 'Failed', value: 'failed' },
+          { label: 'Pending', value: 'pending' }, { label: 'Queued', value: 'queued' },
+        ]} />
+        <FilterSelect value={filterDate} onChange={setFilterDate} options={[
+          { label: 'All time', value: 'all' }, { label: 'Today', value: 'today' },
+          { label: 'Last 24h', value: '24h' }, { label: 'Last 7 days', value: '7d' },
+          { label: 'Last 30 days', value: '30d' },
+        ]} />
+        {taskTypes.length > 1 ? (
+          <FilterSelect value={filterType} onChange={setFilterType} options={[
+            { label: 'All types', value: 'all' },
+            ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
+          ]} />
+        ) : null}
+      </div>
+
       {loading ? <Note>Loading...</Note> : null}
-      {!loading && tab === 'jobs' ? (
-        jobs.length === 0 ? <Note>No bulk message jobs yet.</Note> : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {jobs.map((job) => {
-              const p = job.progress || {}
-              const total = p.total_count ?? 0
-              const done = (p.success_count ?? 0) + (p.failure_count ?? 0)
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0
-              const isRunning = job.status === 'running'
-              const isCompleted = job.status === 'completed'
-              const isFailed = job.status === 'failed'
-              const jobPayload = job.job_payload || {}
-              const targetLabel = jobPayload.target_type === 'groups' ? 'groups' : 'members'
-              return (
-                <div key={job.id} style={{
-                  padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)',
-                  background: 'var(--miniapp-surface)', display: 'grid', gap: 8,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ fontSize: 14 }}>{targetLabel} · {job.job_type.replace(/_/g, ' ')}</strong>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : 'var(--miniapp-bg-deep)',
-                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-text-muted)',
-                    }}>
-                      {job.status}
-                    </span>
-                  </div>
-                  {job.created_at ? <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{new Date(job.created_at).toLocaleString()}</div> : null}
-                  {total > 0 ? (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                        <span>{p.success_count ?? 0} sent · {p.failure_count ?? 0} failed{p.skipped_count ? ` · ${p.skipped_count} skipped` : ''}</span>
-                        <span>{pct}%</span>
-                      </div>
-                      <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', width: `${pct}%`, borderRadius: 3,
-                          background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : 'var(--miniapp-sage)',
-                          transition: 'width 0.3s',
-                        }} />
-                      </div>
-                    </div>
-                  ) : <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{isRunning ? 'Processing...' : 'No progress data'}</div>}
-                  {p.stop_reason ? <div style={{ fontSize: 11, color: 'var(--miniapp-clay)' }}>Stopped: {p.stop_reason}</div> : null}
-                </div>
-              )
-            })}
-          </div>
-        )
-      ) : null}
-      {!loading && tab === 'logs' ? (
-        sendLogs.length === 0 ? <Note>No send logs yet. Run a bulk message job to see logs.</Note> : (
-          <div style={{ display: 'grid', gap: 6 }}>
-            {sendLogs.map((log) => (
-              <div key={log.id} style={{
-                padding: '8px 10px', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
-                background: 'var(--miniapp-bg)', fontSize: 12,
-                display: 'grid', gap: 2,
+
+      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : null}
+
+      {!loading && filteredJobs.length > 0 ? (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {filteredJobs.map((job) => {
+            const p = job.progress || {}
+            const total = p.total_count ?? 0
+            const sent = p.success_count ?? 0
+            const failed = p.failure_count ?? 0
+            const done = sent + failed
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0
+            const successRate = done > 0 ? Math.round((sent / done) * 100) : 0
+            const isRunning = job.status === 'running'
+            const isQueued = job.status === 'queued'
+            const isCompleted = job.status === 'completed'
+            const isFailed = job.status === 'failed'
+            const isStopped = p.stop_reason != null
+            const taskName = job.message_preview
+              ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
+              : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
+            return (
+              <div key={job.id} style={{
+                padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)',
+                background: 'var(--miniapp-surface)', display: 'grid', gap: 5,
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600 }}>{log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
+                    {job.created_at ? (
+                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
+                        {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    ) : null}
+                  </div>
                   <span style={{
-                    padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-                    background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
-                    color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
-                  }}>{log.status}</span>
+                    flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                    background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : 'var(--miniapp-bg-deep)',
+                    color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : 'var(--miniapp-text-muted)',
+                  }}>
+                    {isStopped ? 'Stopped' : job.status}
+                  </span>
                 </div>
-                <div style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.message_preview}</div>
-                {log.sent_at ? <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 10 }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
+
+                {total > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                      <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                        {job.target_type === 'groups' ? 'groups' : 'members'}
+                      </span>
+                    </div>
+                    <div style={{ height: 4, background: 'var(--miniapp-bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`, borderRadius: 2,
+                        background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : isRunning ? '#475977' : 'var(--miniapp-sage)',
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </>
+                ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
+
+                <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span>Sent: <strong>{sent}</strong></span>
+                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
+                  {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
+                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
+                  {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {(isRunning || isQueued) && job.status !== 'aborted' ? (
+                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
+                          color: 'var(--miniapp-clay)', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                          opacity: actingJobId === job.id ? 0.5 : 1,
+                        }}>
+                        {actingJobId === job.id ? 'Stopping...' : 'Stop'}
+                      </button>
+                    ) : null}
+                    {(isFailed || job.status === 'aborted') ? (
+                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleRetry(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
+                          color: '#475977', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                          opacity: actingJobId === job.id ? 0.5 : 1,
+                        }}>
+                        {actingJobId === job.id ? 'Retrying...' : 'Retry'}
+                      </button>
+                    ) : null}
+                    <button type="button" onClick={() => setLogsJobId(job.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475977', fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0 }}>
+                      View Logs
+                    </button>
+                  </span>
+                </div>
               </div>
-            ))}
-          </div>
-        )
+            )
+          })}
+        </div>
       ) : null}
+
+      {(function logsModal() {
+        const logJob = jobs.find((j) => j.id === logsJobId)
+        const logProgress = logJob?.progress || {}
+        const logTotal = logProgress.total_count ?? 0
+        const logSent = logProgress.success_count ?? 0
+        const logFailed = logProgress.failure_count ?? 0
+        const logSummary = logTotal > 0 ? `${logSent} sent, ${logFailed} failed of ${logTotal}` : ''
+        return (
+          <TableModal<SendLogEntry>
+            open={logsJobId !== null}
+            onClose={() => setLogsJobId(null)}
+            title="Send Logs"
+            subtitle={
+              `Job #${logsJobId}` +
+              (logJob?.message_preview ? ` · ${logJob.message_preview}` : '') +
+              (logSummary ? ` · ${logSummary}` : '')
+            }
+            data={logs}
+            columns={sendLogColumns}
+            keyField="id"
+            searchAccessor={(log) => `${log.username || ''} ${log.phone_number || ''} ${log.tg_user_id || ''} ${log.tg_group_id || ''} ${log.message_preview || ''}`}
+            pageSize={25}
+            loading={logsLoading}
+            emptyMessage={
+              logTotal > 0
+                ? `No individual send records found. Job progress: ${logSent} sent, ${logFailed} failed of ${logTotal}.${logFailed > 0 && !logFailed ? ' All sends failed — the account may not have permission to post in the target groups.' : ''}`
+                : 'No send logs for this job. Messages may still be in progress.'
+            }
+            renderExpanded={(log) => (
+              <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
+                {log.message_full || log.message_preview}
+              </div>
+            )}
+          />
+        )
+      })()}
     </Card>
   )
 }

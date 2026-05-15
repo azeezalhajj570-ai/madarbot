@@ -12,6 +12,15 @@ from bot.agents.account_session_service import AccountSessionService
 from bot.agents.agent_job_service import AgentJobService
 from bot.agents.linked_account_service import LinkedAccountService
 from bot.agents.dispatch import dispatch_agent_job
+from bot.agents.jobs import (
+    JOB_STATUS_ABORTED,
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_FAILED,
+    JOB_STATUS_PENDING,
+    JOB_STATUS_QUEUED,
+    JOB_STATUS_RUNNING,
+)
+from bot.db.models import AgentJob
 from bot.db.session import get_session
 from bot.services.scraper_service import ScraperService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
@@ -195,6 +204,12 @@ async def webapp_agent_jobs(
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "updated_at": job.updated_at.isoformat() if job.updated_at else None,
             "progress": (job.job_payload or {}).get("progress"),
+            "message_preview": ((job.job_payload or {}).get("message") or "")[:200],
+            "target_type": (job.job_payload or {}).get("target_type", "members"),
+            "source_group_title": (job.job_payload or {}).get("source_group_title") or "",
+            "target_group_ids": (job.job_payload or {}).get("target_group_ids") or [],
+            "selected_count": len((job.job_payload or {}).get("selected_user_ids") or []),
+            "exclusion_counts": (job.job_payload or {}).get("exclusion_counts"),
         }
         for job in rows
     ]
@@ -210,6 +225,7 @@ async def webapp_agent_send_logs(
     agent_id: int,
     limit: int = 100,
     offset_id: int | None = None,
+    job_id: int | None = None,
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
@@ -221,6 +237,8 @@ async def webapp_agent_send_logs(
         select(SentBroadcastMessage)
         .where(SentBroadcastMessage.agent_id == agent.id)
     )
+    if job_id:
+        stmt = stmt.where(SentBroadcastMessage.job_id == job_id)
     if offset_id:
         stmt = stmt.where(SentBroadcastMessage.id < offset_id)
     stmt = stmt.order_by(desc(SentBroadcastMessage.id)).limit(limit)
@@ -234,7 +252,10 @@ async def webapp_agent_send_logs(
                 "job_id": msg.job_id,
                 "tg_user_id": msg.tg_user_id,
                 "tg_group_id": msg.tg_group_id,
-                "message_preview": (msg.message_text or "")[:120],
+                "username": msg.username or None,
+                "phone_number": msg.phone_number or None,
+                "message_preview": (msg.message_text or "")[:200],
+                "message_full": msg.message_text,
                 "status": msg.status,
                 "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
             }
@@ -666,6 +687,73 @@ async def webapp_create_agent_job(
             "status": job.status,
         },
     }
+
+
+@router.post(
+    "/api/agents/{agent_id}/jobs/{job_id}/cancel", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/{job_id}/cancel", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_cancel_agent_job(
+    agent_id: int,
+    job_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    from sqlalchemy import select
+
+    job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+    if job is None or job.agent_id != agent.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    if job.status not in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_RUNNING}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot cancel job in status '{job.status}'",
+        )
+
+    job.status = JOB_STATUS_ABORTED
+    await session.commit()
+    return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_ABORTED}
+
+
+@router.post(
+    "/api/agents/{agent_id}/jobs/{job_id}/retry", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/{job_id}/retry", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_retry_agent_job(
+    agent_id: int,
+    job_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    from sqlalchemy import select
+
+    job = (await session.execute(select(AgentJob).where(AgentJob.id == job_id))).scalar_one_or_none()
+    if job is None or job.agent_id != agent.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    if job.status not in {JOB_STATUS_FAILED, JOB_STATUS_ABORTED}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot retry job in status '{job.status}'",
+        )
+
+    payload = dict(job.job_payload or {})
+    payload.pop("progress", None)
+    payload.pop("result", None)
+    payload.pop("last_error", None)
+    job.job_payload = payload
+    job.status = JOB_STATUS_PENDING
+    await session.commit()
+
+    await dispatch_agent_job(job.id)
+    return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_QUEUED}
 
 
 @router.delete("/api/agents/{agent_id}", dependencies=[Depends(require_agents_boundary)])

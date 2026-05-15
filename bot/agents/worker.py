@@ -79,15 +79,19 @@ def _build_job_notification(
     result_payload = dict(result or payload.get("result") or {})
 
     if job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
+        target_type = str(
+            result_payload.get("target_type") or payload.get("target_type") or "members"
+        )
         group_title = str(
             result_payload.get("source_group_title") or payload.get("source_group_title") or ""
         ).strip()
-        sent_count = int(result_payload.get("sent_count") or 0)
-        attempted_count = int(result_payload.get("attempted_count") or 0)
-        failed_count = int(result_payload.get("failed_count") or 0)
+        sent_count = int(result_payload.get("success_count") or result_payload.get("sent_count") or 0)
+        attempted_count = int(result_payload.get("total_count") or result_payload.get("attempted_count") or 0)
+        failed_count = int(result_payload.get("failure_count") or result_payload.get("failed_count") or 0)
         selected_count = len(list(payload.get("selected_user_ids") or []))
         notification_payload = {
             "job_type": job.job_type,
+            "target_type": target_type,
             "source_group_title": group_title,
             "sent_count": sent_count,
             "attempted_count": attempted_count,
@@ -95,13 +99,14 @@ def _build_job_notification(
             "selected_count": selected_count,
         }
         if status == JOB_STATUS_COMPLETED:
-            body = f"Sent to {sent_count} members."
+            label = "groups" if target_type == "groups" else "members"
+            body = f"Sent to {sent_count} {label}."
             if failed_count:
-                body = f"Sent to {sent_count} members, {failed_count} failed."
+                body = f"Sent to {sent_count} {label}, {failed_count} failed."
             failures = result_payload.get("failures", [])
             if isinstance(failures, list) and len(failures) > 5:
                 body += f" {len(failures)} total failures."
-            return "Bulk message completed", body, notification_payload
+            return "bulk_message_completed", "Bulk message completed", body, notification_payload
         if status == JOB_STATUS_FAILED:
             prefix = f"{group_title}: " if group_title else ""
             return (
@@ -442,7 +447,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         client=client, agent=agent, payload=broadcast_payload, session=session
                     )
                     progress = result.pop("_progress", None) if isinstance(result, dict) else None
-                    if progress and progress.get("stopped_at") is not None:
+                    if progress:
                         broadcast_payload["progress"] = {
                             "total_count": progress.get("total_count", 0),
                             "success_count": progress.get("success_count", 0),
@@ -450,26 +455,35 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             "skipped_count": progress.get("skipped_count", 0),
                             "sent_users": progress.get("sent_users", []),
                             "failures": progress.get("failures", []),
-                            "stopped_at": progress["stopped_at"],
-                            "stop_reason": progress.get("stop_reason", "unknown"),
-                            "retry_after": progress.get("retry_after", 60),
+                            "stopped_at": progress.get("stopped_at"),
+                            "stop_reason": progress.get("stop_reason"),
+                            "target_type": progress.get("target_type") or result.get("target_type", "members"),
                         }
+                        if progress.get("stopped_at") is not None:
+                            delay_sec = max(int(progress.get("retry_after", 60)), 5)
+                            broadcast_payload["progress"]["retry_after"] = delay_sec
+                            job.job_payload = broadcast_payload
+                            await session.commit()
+                            execute_agent_job.send_with_options(
+                                args=(agent_id, job_id), delay=delay_sec * 1000
+                            )
+                            bound_logger.info(
+                                "agent_broadcast_partial_rescheduled",
+                                agent_id=agent_id,
+                                job_id=job_id,
+                                sent=progress.get("success_count", 0),
+                                reason=progress.get("stop_reason"),
+                            )
+                            handled = True
+                            return
+                    if progress:
+                        broadcast_payload["result"] = result
                         job.job_payload = broadcast_payload
+                        job.status = JOB_STATUS_COMPLETED
                         await session.commit()
-                        delay_sec = max(5, int(progress.get("retry_after", 60)))
-                        execute_agent_job.send_with_options(
-                            args=(agent_id, job_id), delay=delay_sec * 1000
-                        )
-                        bound_logger.info(
-                            "agent_broadcast_partial_rescheduled",
-                            agent_id=agent_id,
-                            job_id=job_id,
-                            sent=progress.get("success_count", 0),
-                            reason=progress.get("stop_reason"),
-                        )
-                        handled = True
-                        return
-                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    else:
+                        await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    await _create_job_notification(session, job, status=JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(

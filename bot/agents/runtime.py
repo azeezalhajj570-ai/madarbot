@@ -485,6 +485,7 @@ class GroupMemberBroadcastRuntime:
         import random
         import hashlib
         from datetime import datetime, timezone
+        from bot.db.models.agent import SentBroadcastMessage
 
         target_group_ids = list(normalized.get("target_group_ids", []))
         total_count = len(target_group_ids)
@@ -535,6 +536,7 @@ class GroupMemberBroadcastRuntime:
                 await client.send_message(group_id, message)
                 success_count += 1
                 already_sent.add(group_id)
+                payload["progress"]["success_count"] = success_count
                 if session is not None:
                     message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
                     session.add(
@@ -554,11 +556,28 @@ class GroupMemberBroadcastRuntime:
                 await limiter.record_send(agent.id)
             except Exception as exc:
                 failure_count += 1
+                payload["progress"]["failure_count"] = failure_count
+                payload["progress"]["sent_users"] = list(already_sent)
+                if session is not None:
+                    message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+                    session.add(
+                        SentBroadcastMessage(
+                            agent_id=agent.id,
+                            job_id=payload.get("job_id"),
+                            tg_user_id=None,
+                            tg_group_id=group_id,
+                            message_text=message,
+                            message_hash=message_hash,
+                            status="failed",
+                            sent_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc),
+                        )
+                    )
+                    await session.commit()
                 translated = _translate_client_exception(exc)
                 if translated is not None:
                     payload["progress"]["stopped_at"] = index
                     payload["progress"]["stop_reason"] = type(translated).__name__
-                    payload["progress"]["sent_users"] = list(already_sent)
                     payload["progress"]["success_count"] = success_count
                     payload["progress"]["failure_count"] = failure_count
                     raise translated from exc
