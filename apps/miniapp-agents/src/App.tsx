@@ -30,7 +30,7 @@ import type {
   TaskCatalogItem,
 } from '@miniapp/shared'
 
-type AgentsPage = 'dashboard' | 'tasks' | 'groups' | 'settings'
+type AgentsPage = 'dashboard' | 'leads' | 'campaigns' | 'tasks' | 'settings'
 type WizardStep = 'code' | 'password' | 'finish'
 type TaskDestinationMode = 'group' | 'text'
 type SelectedGroupChip = {
@@ -542,15 +542,16 @@ function parseAgentsRoute(pathname: string, basePath: string) {
     analytics: 'dashboard',
     analysis: 'dashboard',
     notifications: 'dashboard',
-    scraping: 'tasks',
+    scraping: 'leads',
     tasks: 'tasks',
-    leads: 'groups',
-    groups: 'groups',
+    leads: 'leads',
+    groups: 'leads',
+    campaigns: 'campaigns',
     settings: 'settings',
     dashboard: 'dashboard',
   }
 
-  const page = pageMap[rawPage] || 'groups'
+  const page = pageMap[rawPage] || 'leads'
 
   return {
     accountId: Number.isFinite(accountId) ? accountId : null,
@@ -1062,17 +1063,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
       ),
     },
     {
-      id: 'tasks',
-      label: 'Tasks',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      ),
-    },
-    {
-      id: 'groups',
+      id: 'leads',
       label: 'Leads',
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -1080,6 +1071,26 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
           <circle cx="17" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.7" />
           <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           <path d="M16 14.5a3 3 0 013 3v2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'campaigns',
+      label: 'Campaigns',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'tasks',
+      label: 'Tasks',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -1465,7 +1476,7 @@ export default function App() {
                       <LinkedAccountCard
                         key={account.id}
                         account={account}
-                        onOpen={() => navigate(accountPath(account.id, 'groups'))}
+                        onOpen={() => navigate(accountPath(account.id, 'leads'))}
                         onStatus={setStatus}
                         onDelete={() => setDeleteTarget(account)}
                         onResume={() => {
@@ -1505,16 +1516,22 @@ export default function App() {
           selectedAccount && selectedAccount.auth_state === 'active' && selectedAccount.status === 'active' ? (
             <>
               {route.page === 'dashboard' ? (
+                <AccountAnalyticsPage account={selectedAccount} />
+              ) : null}
+              {route.page === 'leads' ? (
                 <>
-                  <TaskActivity account={selectedAccount} />
-                  <AccountAnalyticsPage account={selectedAccount} />
+                  <AccountLeadsPage account={selectedAccount} />
+                  <LeadsAcquisitionSection account={selectedAccount} onSaved={setStatus} />
                 </>
               ) : null}
-              {route.page === 'tasks' ? (
-                <AccountTasksPage account={selectedAccount} onSaved={setStatus} />
+              {route.page === 'campaigns' ? (
+                <CampaignsPage account={selectedAccount} onSaved={setStatus} />
               ) : null}
-              {route.page === 'groups' ? (
-                <AccountLeadsPage account={selectedAccount} />
+              {route.page === 'tasks' ? (
+                <>
+                  <TaskActivity account={selectedAccount} />
+                  <AutomationTasksSection account={selectedAccount} onSaved={setStatus} />
+                </>
               ) : null}
             </>
           ) : (
@@ -2304,1220 +2321,6 @@ function AccountNotificationsPage({
   )
 }
 
-function AccountTasksPage({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
-  const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
-  const [tasks, setTasks] = useState<AutomationTask[]>([])
-  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
-  const [status, setStatus] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadingGroups, setLoadingGroups] = useState(false)
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<AutomationTask | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<AutomationTask | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [taskKey, setTaskKey] = useState('reply_message')
-  const [taskKeyword, setTaskKeyword] = useState('')
-  const [taskKeywords, setTaskKeywords] = useState<string[]>([])
-  const [pendingKeyword, setPendingKeyword] = useState('')
-  const [taskTemplate, setTaskTemplate] = useState('')
-  const [taskReplyMode, setTaskReplyMode] = useState('public')
-  const [taskDeliveryMode, setTaskDeliveryMode] = useState('text')
-  const [taskDestinationMode, setTaskDestinationMode] = useState<TaskDestinationMode>('group')
-  const [taskDestinationText, setTaskDestinationText] = useState('')
-  const [taskDestinationGroupQuery, setTaskDestinationGroupQuery] = useState('')
-  const [taskDestinationGroup, setTaskDestinationGroup] = useState<SelectedGroupChip | null>(null)
-  const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
-  const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
-  const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
-  const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
-  const [bulkTargetType, setBulkTargetType] = useState<'members' | 'groups'>('members')
-  const [bulkMessage, setBulkMessage] = useState('')
-  const [bulkThreshold, setBulkThreshold] = useState('25')
-  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
-  const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
-  const [bulkTargetGroups, setBulkTargetGroups] = useState<AgentManagedGroup[]>([])
-  const [loadingBulkTargetGroups, setLoadingBulkTargetGroups] = useState(false)
-  const [bulkSelectedTargetGroups, setBulkSelectedTargetGroups] = useState<SelectedGroupChip[]>([])
-  const [bulkMemberQuery, setBulkMemberQuery] = useState('')
-  const [bulkMemberResults, setBulkMemberResults] = useState<AgentGroupMember[]>([])
-  const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
-  const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
-  const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
-  const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
-  const [bulkScheduledAt, setBulkScheduledAt] = useState('')
-  const [excludeAdmins, setExcludeAdmins] = useState(true)
-  const [excludeBots, setExcludeBots] = useState(true)
-  const [excludeSent, setExcludeSent] = useState(true)
-  const [showFiltersOpen, setShowFiltersOpen] = useState(false)
-  const [orderByMsgCount, setOrderByMsgCount] = useState<'desc' | 'asc'>('desc')
-  const [bulkMemberPage, setBulkMemberPage] = useState(1)
-  const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
-  const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
-  const [scrapingGroup, setScrapingGroup] = useState(false)
-  const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
-  const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
-  const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
-  const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
-  const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
-  const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
-  const [scrapeMemberLimit, setScrapeMemberLimit] = useState(String(SCRAPE_LIMIT_MAX))
-  const [scrapeMessageLimit, setScrapeMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
-  const [scrapeMaxAgeDays, setScrapeMaxAgeDays] = useState('30')
-  const [loadingScrapeGroups, setLoadingScrapeGroups] = useState(false)
-  const [leadAckTemplate, setLeadAckTemplate] = useState('')
-  const [leadLabel, setLeadLabel] = useState('')
-  const [leadAskContact, setLeadAskContact] = useState(false)
-
-  async function refresh() {
-    setLoading(true)
-    try {
-      const [nextTasks, nextCatalog] = await Promise.all([
-        agentsApi.fetchGroupTasks(account.group_id || 196),
-        agentsApi.fetchTaskCatalog(),
-      ])
-      setTasks(nextTasks)
-      setCatalog(nextCatalog)
-      setStatus(null)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load tasks')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void refresh()
-  }, [account.group_id, account.id])
-
-  // Handle group search for autocomplete fields
-  const groupQuery = (bulkSourceGroupQuery || bulkTargetGroupQuery || taskDestinationGroupQuery || taskGroupsQuery).trim()
-  useEffect(() => {
-    if (!groupQuery) {
-      setGroups([])
-      setLoadingGroups(false)
-      return
-    }
-
-    const timer = setTimeout(() => {
-      setLoadingGroups(true)
-      void agentsApi.fetchAgentGroups(account.id, groupQuery)
-        .then(setGroups)
-        .catch(() => setGroups([]))
-        .finally(() => setLoadingGroups(false))
-    }, 350)
-
-    return () => clearTimeout(timer)
-  }, [account.id, groupQuery])
-
-  useEffect(() => {
-    const normalized = scrapeGroupQuery.trim()
-    if (!normalized || taskKey !== SCRAPE_TASK_KEY) {
-      setScrapeGroups([])
-      setLoadingScrapeGroups(false)
-      return
-    }
-    const timer = setTimeout(() => {
-      setLoadingScrapeGroups(true)
-      void agentsApi.fetchAgentGroups(account.id, normalized)
-        .then((payload) => setScrapeGroups(payload))
-        .catch(() => setScrapeGroups([]))
-        .finally(() => setLoadingScrapeGroups(false))
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [account.id, scrapeGroupQuery, taskKey])
-
-  useEffect(() => {
-    if (!catalog.length) {
-      return
-    }
-    if (![...catalog, BULK_MESSAGE_TASK_META, SCRAPE_TASK_META].some((item) => item.key === taskKey)) {
-      setTaskKey(catalog[0].key)
-    }
-  }, [catalog, taskKey])
-
-  function resetForm() {
-    setEditingTask(null)
-    setTaskKey(catalog[0]?.key || 'reply_message')
-    setTaskKeyword('')
-    setTaskKeywords([])
-    setPendingKeyword('')
-    setTaskTemplate('')
-    setTaskReplyMode('public')
-    setTaskDeliveryMode('text')
-    setTaskDestinationMode('group')
-    setTaskDestinationText('')
-    setTaskDestinationGroupQuery('')
-    setTaskDestinationGroup(null)
-    setTaskGroupsQuery('')
-    setTaskGroups([])
-    setBulkTargetType('members')
-    setBulkSourceGroupQuery('')
-    setBulkSourceGroup(null)
-    setBulkMessage('')
-    setBulkThreshold('25')
-    setBulkIntervalSeconds('1')
-    setBulkTargetGroupQuery('')
-    setBulkTargetGroups([])
-    setBulkSelectedTargetGroups([])
-    setBulkMemberQuery('')
-    setBulkMemberResults([])
-    setBulkSelectedMembers([])
-    setBulkMemberStatus(null)
-    setBulkScheduleMode('now')
-    setBulkScheduledAt('')
-    setExcludeAdmins(false)
-    setExcludeBots(false)
-    setScrapeGroupQuery('')
-    setScrapeSelectedGroup(null)
-    setScrapeGroups([])
-    setScrapeMemberLimit(String(SCRAPE_LIMIT_MAX))
-    setScrapeMessageLimit(String(SCRAPE_LIMIT_MAX))
-    setScrapeMaxAgeDays('30')
-    setLeadAckTemplate('')
-    setLeadLabel('')
-    setLeadAskContact(false)
-  }
-
-  function openCreateForm() {
-    resetForm()
-    setIsFormOpen(true)
-  }
-
-  function openEditForm(task: AutomationTask) {
-    const configuredDestination = String(task.config.destination || '')
-    const matchingDestinationGroup = groups.find((group) => String(group.tg_group_id || '') === configuredDestination)
-    setEditingTask(task)
-    setTaskKey(task.task_key)
-    setTaskKeyword(String(task.conditions.text_contains || ''))
-    setTaskKeywords(task.task_key === 'lead_capture' ? _parseKeywords(task.conditions.text_contains) : [])
-    setPendingKeyword('')
-    setTaskTemplate(String(task.config.message_template || ''))
-    setTaskReplyMode(String(task.config.reply_mode || 'public'))
-    setTaskDeliveryMode(String(task.config.delivery_mode || 'text'))
-    setTaskDestinationMode(matchingDestinationGroup ? 'group' : 'text')
-    setTaskDestinationText(matchingDestinationGroup ? '' : configuredDestination)
-    setTaskDestinationGroupQuery(matchingDestinationGroup ? String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || '') : '')
-    setTaskDestinationGroup(
-      matchingDestinationGroup
-        ? {
-            tg_group_id: Number(matchingDestinationGroup.tg_group_id),
-            title: String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || 'Group'),
-          }
-        : null,
-    )
-    setTaskGroupsQuery('')
-    setTaskGroups(mapTaskGroups(task))
-    setBulkTargetType('members')
-    setBulkSourceGroupQuery('')
-    setBulkSourceGroup(null)
-    setBulkMessage('')
-    setBulkThreshold('25')
-    setBulkIntervalSeconds('1')
-    setBulkTargetGroupQuery('')
-    setBulkTargetGroups([])
-    setBulkSelectedTargetGroups([])
-    setBulkMemberQuery('')
-    setBulkMemberResults([])
-    setBulkSelectedMembers([])
-    setBulkMemberStatus(null)
-    setExcludeAdmins(false)
-    setExcludeBots(false)
-    setLeadAckTemplate(task.task_key === 'lead_capture' ? String(task.config.ack_template || '') : '')
-    setLeadLabel(task.task_key === 'lead_capture' ? String(task.config.lead_label || '') : '')
-    setLeadAskContact(task.task_key === 'lead_capture' ? Boolean(task.config.ask_contact) : false)
-    setIsFormOpen(true)
-  }
-
-  function closeForm() {
-    setIsFormOpen(false)
-    resetForm()
-  }
-
-  useEffect(() => {
-    if (taskKey !== BULK_MESSAGE_TASK_KEY || !bulkSourceGroup?.tg_group_id) {
-      setBulkMemberResults([])
-      setBulkMemberTotal(0)
-      setBulkMemberStatus(null)
-      setLoadingBulkMembers(false)
-      return
-    }
-
-    const query = bulkMemberQuery.trim()
-
-    let cancelled = false
-    setLoadingBulkMembers(true)
-    setBulkMemberStatus(null)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, excludeBots, bulkMemberPage, orderByMsgCount === 'asc' ? 'message_count_asc' : 'message_count', excludeAdmins, false)
-      .then((page) => {
-        if (cancelled) {
-          return
-        }
-        const members = Array.isArray(page?.members) ? page.members : []
-        const selectedIds = new Set(bulkSelectedMembers.map((member) => member.user_id))
-        const filteredMembers = members.filter((member) => !selectedIds.has(member.user_id))
-        setBulkMemberResults(filteredMembers)
-        setBulkMemberTotal(page.total)
-        setBulkMemberStatus(filteredMembers.length ? null : 'No matching members found.')
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return
-        }
-        setBulkMemberResults([])
-        setBulkMemberTotal(0)
-        setBulkMemberStatus(error instanceof Error ? error.message : 'Failed to search group members')
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingBulkMembers(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, taskKey, bulkMemberPage, orderByMsgCount])
-
-  async function saveTask() {
-    if (taskKey === SCRAPE_TASK_KEY) {
-      if (!scrapeSelectedGroup?.tg_group_id) {
-        setStatus('Choose a group first')
-        return
-      }
-      const targetGroupId = Number(scrapeSelectedGroup.tg_group_id)
-      setIsSaving(true)
-      try {
-        await agentsApi.createAgentJob(account.id, SCRAPE_TASK_KEY, {
-          tg_group_id: targetGroupId,
-          scrape_members: true,
-          scrape_messages: true,
-          member_limit: clampScrapeLimit(scrapeMemberLimit),
-          message_limit: clampScrapeLimit(scrapeMessageLimit),
-          max_age_days: Math.max(1, Number(scrapeMaxAgeDays) || 30),
-        })
-        closeForm()
-        setStatus(null)
-        onSaved(`Scraping job queued for ${scrapeSelectedGroup.title || targetGroupId}.`)
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : 'Failed to queue scrape job')
-      } finally {
-        setIsSaving(false)
-      }
-      return
-    }
-
-    if (taskKey === BULK_MESSAGE_TASK_KEY) {
-      if (!bulkMessage.trim()) {
-        setStatus('Bulk message text is required')
-        return
-      }
-      if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) {
-        setStatus('Source group is required for bulk message to members')
-        return
-      }
-      if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) {
-        setStatus('At least one target group is required')
-        return
-      }
-
-      const threshold = Number.parseInt(bulkThreshold, 10)
-      if (!Number.isFinite(threshold) || threshold <= 0) {
-        setStatus('Threshold must be a positive integer')
-        return
-      }
-
-      const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) {
-        setStatus('Interval seconds must be 0 or more')
-        return
-      }
-
-      if (bulkSummary) {
-        setIsSaving(true)
-        try {
-          const jobPayload: Record<string, unknown> = {
-            target_type: bulkTargetType,
-            message: bulkMessage.trim(),
-            threshold,
-            interval_seconds: intervalSeconds,
-          }
-          if (bulkTargetType === 'members') {
-            jobPayload.source_group_id = bulkSourceGroup!.tg_group_id
-            jobPayload.source_group_title = bulkSourceGroup!.title
-            jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
-          } else {
-            jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
-          }
-          const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
-          await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
-          setBulkSummary(null)
-          closeForm()
-          setStatus(null)
-          onSaved(scheduledAt ? 'Bulk message scheduled' : 'Bulk message job queued')
-        } catch (error) {
-          setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message job')
-        } finally {
-          setIsSaving(false)
-        }
-        return
-      }
-
-      setLoadingBulkSummary(true)
-      setStatus(null)
-      try {
-        const preflightPayload: Record<string, unknown> = {
-          target_type: bulkTargetType,
-          message: bulkMessage.trim(),
-          threshold,
-          interval_seconds: intervalSeconds,
-        }
-        if (bulkTargetType === 'members') {
-          preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id
-          preflightPayload.source_group_title = bulkSourceGroup!.title
-          preflightPayload.selected_user_ids = bulkSelectedMembers.map((member) => member.user_id)
-        } else {
-          preflightPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
-        }
-        const result = await agentsApi.preflightBulkMessage(account.id, preflightPayload)
-        setBulkSummary(result)
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : 'Failed to prepare bulk message')
-      } finally {
-        setLoadingBulkSummary(false)
-      }
-      return
-    }
-
-    if (taskKey === 'lead_capture') {
-      if (!taskKeywords.length) {
-        setStatus('At least one keyword is required for lead capture')
-        return
-      }
-      const config: Record<string, unknown> = {}
-      if (leadAckTemplate.trim()) {
-        config.ack_template = leadAckTemplate.trim()
-      }
-      if (leadLabel.trim()) {
-        config.lead_label = leadLabel.trim()
-      }
-      if (leadAskContact) {
-        config.ask_contact = true
-      }
-      const payload = {
-        task_key: taskKey,
-        executor_type: 'agent',
-        enabled: true,
-        conditions: { text_contains: _formatKeywords(taskKeywords) },
-        config,
-        agent_id: account.id,
-        group_tg_ids: taskGroups.map((group) => group.tg_group_id),
-        group_titles: taskGroups.map((group) => group.title),
-      }
-      setIsSaving(true)
-      try {
-        if (editingTask) {
-          await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
-          onSaved('Task updated')
-        } else {
-          await agentsApi.createGroupTask(account.group_id || 196, payload)
-          onSaved('Task created')
-        }
-        closeForm()
-        await refresh()
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : 'Failed to save task')
-      } finally {
-        setIsSaving(false)
-      }
-      return
-    }
-
-    if (!taskKeyword.trim()) {
-      setStatus('Task keyword is required')
-      return
-    }
-
-    const config: Record<string, unknown> = {}
-    if (taskTemplate.trim()) {
-      config.message_template = taskTemplate.trim()
-    }
-    if (taskKey === 'reply_message') {
-      config.reply_mode = taskReplyMode
-    }
-    if (taskKey === 'notify_destination') {
-      const destination = taskDestinationMode === 'group'
-        ? String(taskDestinationGroup?.tg_group_id || '')
-        : taskDestinationText.trim()
-      if (!destination) {
-        setStatus('Destination is required for notify destination')
-        return
-      }
-      config.destination = destination
-      config.delivery_mode = taskDeliveryMode
-    }
-
-    const payload = {
-      task_key: taskKey,
-      executor_type: 'agent',
-      enabled: true,
-      conditions: { text_contains: taskKeyword.trim() },
-      config,
-      agent_id: account.id,
-      group_tg_ids: taskGroups.map((group) => group.tg_group_id),
-      group_titles: taskGroups.map((group) => group.title),
-    }
-
-    setIsSaving(true)
-    try {
-      if (editingTask) {
-        await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
-        onSaved('Task updated')
-      } else {
-        await agentsApi.createGroupTask(account.group_id || 196, payload)
-        onSaved('Task created')
-      }
-      closeForm()
-      await refresh()
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save task')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function deleteTask() {
-    if (!deleteTarget) {
-      return
-    }
-    setIsSaving(true)
-    try {
-      await agentsApi.deleteGroupTask(account.group_id, deleteTarget.assignment_id)
-      onSaved('Task deleted')
-      setDeleteTarget(null)
-      await refresh()
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to delete task')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const extendedCatalog = useMemo(() => (catalog.length ? [...catalog, BULK_MESSAGE_TASK_META, SCRAPE_TASK_META] : []), [catalog])
-  const selectedTaskMeta = extendedCatalog.find((item) => item.key === taskKey) ?? null
-  const isBulkMessageTask = taskKey === BULK_MESSAGE_TASK_KEY
-  const isScrapeTask = taskKey === SCRAPE_TASK_KEY
-  const isLeadCaptureTask = taskKey === 'lead_capture'
-
-  return (
-    <Card title="Tasks" subtitle="Select a task type and save it against this account group.">
-      {status ? <Note>{status}</Note> : null}
-      {!isFormOpen ? <Button onClick={openCreateForm}>New task</Button> : null}
-      {isFormOpen ? (
-        <div style={{ display: 'grid', gap: 12 }}>
-          <SelectField label="Task type" value={taskKey} onChange={setTaskKey}>
-            {extendedCatalog.map((item) => (
-              <option key={item.key} value={item.key}>{item.title}</option>
-            ))}
-          </SelectField>
-          {isScrapeTask ? (
-            <>
-              <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
-              {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
-              {!loadingScrapeGroups && scrapeGroups.length ? (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {scrapeGroups.map((group, index) => (
-                    <LinkRow
-                      key={`${group.tg_group_id ?? index}-${group.title ?? index}`}
-                      active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
-                      onClick={() => {
-                        setScrapeSelectedGroup(group)
-                        setScrapeGroupQuery(group.title || '')
-                      }}
-                    >
-                      <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
-                      <div style={{ color: '#655d52', marginTop: 4 }}>
-                        {group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}
-                      </div>
-                    </LinkRow>
-                  ))}
-                </div>
-              ) : null}
-              {scrapeSelectedGroup ? (
-                <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
-                  <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
-                  <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
-                  <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
-                </div>
-              ) : null}
-            </>
-          ) : isBulkMessageTask ? (
-            <>
-              <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-                <button
-                  type="button"
-                  onClick={() => { setBulkTargetType('members'); setBulkSummary(null) }}
-                  style={{
-                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-                    background: bulkTargetType === 'members' ? 'var(--miniapp-surface)' : 'transparent',
-                    color: bulkTargetType === 'members' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-                    fontWeight: bulkTargetType === 'members' ? 600 : 400, fontSize: 13,
-                    fontFamily: 'var(--miniapp-sans)',
-                  }}
-                >
-                  Send to Members
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setBulkTargetType('groups'); setBulkSummary(null) }}
-                  style={{
-                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-                    background: bulkTargetType === 'groups' ? 'var(--miniapp-surface)' : 'transparent',
-                    color: bulkTargetType === 'groups' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-                    fontWeight: bulkTargetType === 'groups' ? 600 : 400, fontSize: 13,
-                    fontFamily: 'var(--miniapp-sans)',
-                  }}
-                >
-                  Send to Groups
-                </button>
-              </div>
-              {bulkTargetType === 'members' ? (
-                <>
-                  <GroupDestinationField
-                    label="Source group"
-                    query={bulkSourceGroupQuery}
-                    onQueryChange={setBulkSourceGroupQuery}
-                    groups={groups}
-                    selectedGroup={bulkSourceGroup}
-                    onSelect={(group) => {
-                      setBulkSourceGroup(group)
-                      setBulkSourceGroupQuery(group.title)
-                      setBulkMemberQuery('')
-                      setBulkMemberResults([])
-                      setBulkMemberTotal(0)
-                      setBulkSelectedMembers([])
-                      setBulkMemberStatus(null)
-                    }}
-                    onClear={() => {
-                      setBulkSourceGroup(null)
-                      setBulkSourceGroupQuery('')
-                      setBulkMemberQuery('')
-                      setBulkMemberResults([])
-                      setBulkMemberTotal(0)
-                      setBulkSelectedMembers([])
-                      setBulkMemberStatus(null)
-                    }}
-                    syncButton={
-                      <button
-                        type="button"
-                        disabled={syncingAdminsBots}
-                        onClick={async () => {
-                          if (!account || !bulkSourceGroup) return
-                          setSyncingAdminsBots(true)
-                          setSyncAdminsBotsStatus(null)
-                          try {
-                            const result = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id)
-                            setSyncAdminsBotsStatus(result.message || 'Sync completed')
-                          } catch (error) {
-                            setSyncAdminsBotsStatus(error instanceof Error ? error.message : 'Sync failed')
-                          } finally {
-                            setSyncingAdminsBots(false)
-                          }
-                        }}
-                        style={{
-                          background: 'var(--miniapp-bg)',
-                          color: 'var(--miniapp-text-primary)',
-                          border: '1px solid var(--miniapp-border-soft)',
-                          borderRadius: 12,
-                          padding: '10px 12px',
-                          fontSize: 18,
-                          lineHeight: '18px',
-                          cursor: syncingAdminsBots ? 'default' : 'pointer',
-                          opacity: syncingAdminsBots ? 0.6 : 1,
-                        }}
-                      >
-                        {syncingAdminsBots ? '…' : '↻'}
-                      </button>
-                    }
-                  />
-                  {syncAdminsBotsStatus ? (
-                    <Note>{syncAdminsBotsStatus}</Note>
-                  ) : null}
-                  <TextAreaField
-                    label="Message"
-                    value={bulkMessage}
-                    onChange={setBulkMessage}
-                    rows={5}
-                    placeholder="Hello, this is our latest update."
-                  />
-                  <InputField
-                    label="Select members"
-                    value={bulkMemberQuery}
-                    onChange={setBulkMemberQuery}
-                    placeholder={bulkSourceGroup ? 'Search by name, username, or user id' : 'Choose a source group first'}
-                  />
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {bulkSelectedMembers.length ? (
-                      <button
-                        type="button"
-                        onClick={() => setBulkSelectedMembers([])}
-                        style={{
-                          background: 'var(--miniapp-bg)',
-                          color: 'var(--miniapp-text-primary)',
-                          border: '1px solid var(--miniapp-border-soft)',
-                          borderRadius: 12,
-                          padding: '8px 10px',
-                          fontSize: 16,
-                          lineHeight: '18px',
-                          cursor: 'pointer',
-                        }}
-                        title={`Clear selected (${bulkSelectedMembers.length})`}
-                      >
-                        ✕ {bulkSelectedMembers.length}
-                      </button>
-                    ) : null}
-                    {bulkSelectedMembers.length ? bulkSelectedMembers.map((member) => (
-                      <span
-                        key={member.user_id}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '8px 10px',
-                          borderRadius: 999,
-                          border: '1px solid var(--miniapp-border-soft)',
-                          background: 'var(--miniapp-bg)',
-                          fontSize: 12.5,
-                        }}
-                      >
-                        {member.full_name || member.username || `User ${member.user_id}`}
-                        {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
-                        {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
-                        {member.is_bot ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 9, fontWeight: 700 }}>Bot</span> : null}
-                        {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
-                        <button
-                          type="button"
-                          onClick={() => setBulkSelectedMembers((current) => current.filter((entry) => entry.user_id !== member.user_id))}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: 'var(--miniapp-clay)',
-                            cursor: 'pointer',
-                            fontSize: 16,
-                            lineHeight: 1,
-                            padding: 0,
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    )) : null}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
-                    <span>Sort by messages:</span>
-                    <button
-                      type="button"
-                      onClick={() => setOrderByMsgCount(orderByMsgCount === 'asc' ? 'desc' : 'asc')}
-                      style={{
-                        background: 'none',
-                        border: '1px solid var(--miniapp-border-soft)',
-                        borderRadius: 8,
-                        padding: '4px 10px',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        color: 'var(--miniapp-text-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      {orderByMsgCount === 'desc' ? '↓ Most' : '↑ Least'}
-                    </button>
-                  </div>
-                  {bulkSourceGroup && !loadingBulkMembers && bulkMemberTotal === 0 && !bulkMemberQuery.trim() ? (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>No scraped members yet.</div>
-                      <Button
-                        tone="secondary"
-                        disabled={scrapingGroup}
-                        onClick={async () => {
-                          setScrapingGroup(true)
-                          try {
-                            await agentsApi.scrapeAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id)
-                            setBulkMemberQuery(' ')
-                          } catch (error) {
-                            setBulkMemberStatus(error instanceof Error ? error.message : 'Scrape failed')
-                          } finally {
-                            setScrapingGroup(false)
-                          }
-                        }}
-                      >
-                        {scrapingGroup ? 'Scraping...' : 'Scrape group'}
-                      </Button>
-                      <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>
-                        This may take a few minutes.
-                      </div>
-                    </div>
-                  ) : null}
-                  {loadingBulkMembers ? <Note>Searching members...</Note> : null}
-                  {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
-                  {!loadingBulkMembers && bulkMemberResults.length ? (
-                    <div style={{ display: 'grid', gap: 12 }}>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <Button
-                          tone="secondary"
-                          onClick={() => {
-                            const candidates = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(excludeSent && m.sent_by_agent))
-                            setBulkSelectedMembers((current) => {
-                              const next = [...current]
-                              candidates.forEach((member) => {
-                                if (!next.some((entry) => entry.user_id === member.user_id)) {
-                                  next.push(member)
-                                }
-                              })
-                              return next
-                            })
-                            setBulkMemberQuery('')
-                            setBulkMemberResults([])
-                            setBulkMemberStatus(null)
-                          }}
-                        >
-                          Select all results ({bulkMemberResults.length})
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => setShowFiltersOpen(!showFiltersOpen)}
-                          style={{
-                            background: showFiltersOpen || !excludeAdmins || !excludeBots || !excludeSent ? 'var(--miniapp-coral)' : 'var(--miniapp-bg)',
-                            color: showFiltersOpen || !excludeAdmins || !excludeBots || !excludeSent ? '#fff' : 'var(--miniapp-text-primary)',
-                            border: '1px solid var(--miniapp-border-soft)',
-                            borderRadius: 12,
-                            padding: '10px 12px',
-                            fontSize: 16,
-                            lineHeight: '18px',
-                            cursor: 'pointer',
-                          }}
-                          title="Filters"
-                        >
-                          ☰
-                        </button>
-                        {showFiltersOpen ? (
-                          <div style={{ display: 'grid', gap: 4, width: '100%', padding: '4px 0' }}>
-                            {[
-                              { label: 'Exclude admins', checked: excludeAdmins, toggle: () => setExcludeAdmins(!excludeAdmins) },
-                              { label: 'Exclude bots', checked: excludeBots, toggle: () => setExcludeBots(!excludeBots) },
-                              { label: 'Exclude sent', checked: excludeSent, toggle: () => setExcludeSent(!excludeSent) },
-                            ].map((item) => (
-                              <div
-                                key={item.label}
-                                onClick={item.toggle}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  padding: '6px 4px',
-                                  cursor: 'pointer',
-                                  fontSize: 13,
-                                  lineHeight: '18px',
-                                  color: 'var(--miniapp-text-primary)',
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    width: 18,
-                                    height: 18,
-                                    borderRadius: 4,
-                                    border: '2px solid',
-                                    borderColor: item.checked ? 'var(--miniapp-coral)' : 'var(--miniapp-border-soft)',
-                                    background: item.checked ? 'var(--miniapp-coral)' : 'transparent',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#fff',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  {item.checked ? '✓' : ''}
-                                </span>
-                                {item.label}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gap: 6,
-                          padding: 8,
-                          border: '1px solid var(--miniapp-border-soft)',
-                          borderRadius: 12,
-                          background: 'var(--miniapp-bg)',
-                        }}
-                      >
-                        {(() => {
-                          const filtered = bulkMemberResults.filter((m) => !(excludeAdmins && (m.is_admin || m.is_creator)) && !(excludeBots && m.is_bot) && !(excludeSent && m.sent_by_agent))
-                          if (!filtered.length) {
-                            return <Note>No matching members — try adjusting filters</Note>
-                          }
-                          const selectedIds = new Set(bulkSelectedMembers.map((m) => m.user_id))
-                          return filtered.map((member) => {
-                          const isSelected = selectedIds.has(member.user_id)
-                          return (
-                          <LinkRow
-                            key={member.user_id}
-                            onClick={() => {
-                              setBulkSelectedMembers((current) =>
-                                current.some((entry) => entry.user_id === member.user_id) ? current.filter((entry) => entry.user_id !== member.user_id) : [...current, member]
-                              )
-                            }}
-                            style={{ background: isSelected ? 'var(--miniapp-highlight, #e8f4e8)' : undefined }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {isSelected ? <span style={{ color: 'var(--miniapp-sage, #4a8)', fontWeight: 700, fontSize: 16 }}>✓</span> : null}
-                              <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
-                              {member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Owner</span> : null}
-                              {member.is_admin && !member.is_creator ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Admin</span> : null}
-                              {member.is_bot ? <span style={{ padding: '1px 6px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: '18px' }}>Bot</span> : null}
-                              {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600 }}>✓ Sent</span> : null}
-                            </div>
-                            <div style={{ color: '#655d52', marginTop: 4 }}>
-                              {member.username ? `@${member.username} · ` : ''}{member.user_id}{member.phone ? ` · ${member.phone}` : ''}
-                              {(typeof member.message_count === 'number' && member.message_count > 0) ? (
-                                <span style={{ marginLeft: 4 }}>· {member.message_count} msg{member.message_count !== 1 ? 's' : ''}</span>
-                              ) : null}
-                              {(typeof member.group_count === 'number' && member.group_count > 0) ? (
-                                <span style={{ marginLeft: 4 }}>· {member.group_count} group{member.group_count !== 1 ? 's' : ''}</span>
-                              ) : null}
-                            </div>
-                          </LinkRow>
-                        )
-                      })
-                      })()}
-                      </div>
-                      {bulkMemberTotal > 20 ? (
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
-                          <Button tone="secondary" disabled={bulkMemberPage <= 1} onClick={() => setBulkMemberPage((p) => Math.max(1, p - 1))}>
-                            Previous
-                          </Button>
-                          <span>{bulkMemberPage} / {Math.ceil(bulkMemberTotal / 20)}</span>
-                          <Button tone="secondary" disabled={bulkMemberPage >= Math.ceil(bulkMemberTotal / 20)} onClick={() => setBulkMemberPage((p) => p + 1)}>
-                            Next
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <MultiGroupSelect
-                    query={bulkTargetGroupQuery}
-                    onQueryChange={setBulkTargetGroupQuery}
-                    groups={groups}
-                    selected={bulkSelectedTargetGroups}
-                    onToggle={(group) => {
-                      setBulkSelectedTargetGroups((current) =>
-                        current.some((g) => g.tg_group_id === group.tg_group_id)
-                          ? current.filter((g) => g.tg_group_id !== group.tg_group_id)
-                          : [...current, group]
-                      )
-                    }}
-                  />
-                  <TextAreaField
-                    label="Message"
-                    value={bulkMessage}
-                    onChange={setBulkMessage}
-                    rows={5}
-                    placeholder="Hello, this is our latest update."
-                  />
-                </>
-              )}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-                <div style={{ flex: 1 }}>
-                  <InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" />
-                </div>
-              </div>
-              <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
-              <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-                <button
-                  type="button"
-                  onClick={() => setBulkScheduleMode('now')}
-                  style={{
-                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-                    background: bulkScheduleMode === 'now' ? 'var(--miniapp-surface)' : 'transparent',
-                    color: bulkScheduleMode === 'now' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-                    fontWeight: bulkScheduleMode === 'now' ? 600 : 400, fontSize: 13,
-                    fontFamily: 'var(--miniapp-sans)',
-                  }}
-                >
-                  Send now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBulkScheduleMode('schedule')}
-                  style={{
-                    flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-                    background: bulkScheduleMode === 'schedule' ? 'var(--miniapp-surface)' : 'transparent',
-                    color: bulkScheduleMode === 'schedule' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-                    fontWeight: bulkScheduleMode === 'schedule' ? 600 : 400, fontSize: 13,
-                    fontFamily: 'var(--miniapp-sans)',
-                  }}
-                >
-                  Schedule for later
-                </button>
-              </div>
-              {bulkScheduleMode === 'schedule' ? (
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
-                    Schedule date & time
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={bulkScheduledAt}
-                    onChange={(e) => setBulkScheduledAt(e.target.value)}
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      background: 'var(--miniapp-bg)',
-                      border: '1px solid var(--miniapp-border-soft)',
-                      borderRadius: 'var(--miniapp-radius-sm)',
-                      padding: '11px 12px',
-                      fontFamily: 'var(--miniapp-sans)',
-                      fontSize: 13,
-                      color: 'var(--miniapp-text-primary)',
-                      outline: 'none',
-                      colorScheme: 'dark',
-                    }}
-                  />
-                </div>
-              ) : null}
-            </>
-          ) : isLeadCaptureTask ? (
-            <>
-              <TextAreaField
-                label="Acknowledgment template (optional)"
-                value={leadAckTemplate}
-                onChange={setLeadAckTemplate}
-                rows={4}
-                placeholder="تم استلام طلبك، وسيتواصل معك الفريق قريباً."
-              />
-              <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={leadAskContact}
-                  onChange={(event) => setLeadAskContact(event.target.checked)}
-                  style={{ accentColor: 'var(--miniapp-accent)' }}
-                />
-                Ask for contact details
-              </label>
-              <div style={{ display: 'grid', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>
-                  Keyword condition
-                </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {taskKeywords.map((kw, i) => (
-                    <span key={i} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '4px 10px', borderRadius: 999,
-                      background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)',
-                      fontSize: 13, fontWeight: 500,
-                    }}>
-                      {kw}
-                      <button type="button" onClick={() => setTaskKeywords((prev) => prev.filter((_, j) => j !== i))} style={{
-                        border: 'none', background: 'none', cursor: 'pointer',
-                        color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0,
-                      }}>&times;</button>
-                    </span>
-                  ))}
-                </div>
-                <input
-                  type="text"
-                  value={pendingKeyword}
-                  onChange={(e) => setPendingKeyword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && pendingKeyword.trim()) {
-                      e.preventDefault()
-                      setTaskKeywords((prev) => prev.includes(pendingKeyword.trim()) ? prev : [...prev, pendingKeyword.trim()])
-                      setPendingKeyword('')
-                    }
-                  }}
-                  placeholder="support"
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--miniapp-border)',
-                    background: 'var(--miniapp-surface)',
-                    color: 'var(--miniapp-text-primary)',
-                    fontSize: 14,
-                    fontFamily: 'inherit',
-                  }}
-                />
-              </div>
-              <GroupAutocompleteField
-                label="Select groups"
-                query={taskGroupsQuery}
-                onQueryChange={setTaskGroupsQuery}
-                groups={groups}
-                selectedGroups={taskGroups}
-                onAdd={(group) => {
-                  setTaskGroups((current) => current.some((entry) => entry.tg_group_id === group.tg_group_id) ? current : [...current, group])
-                  setTaskGroupsQuery('')
-                }}
-                onRemove={(tgGroupId) => setTaskGroups((current) => current.filter((group) => group.tg_group_id !== tgGroupId))}
-              />
-            </>
-          ) : (
-            <>
-              <InputField label="Keyword condition" value={taskKeyword} onChange={setTaskKeyword} placeholder="support" />
-              <TextAreaField
-                label="Message template"
-                value={taskTemplate}
-                onChange={setTaskTemplate}
-                rows={5}
-                placeholder={taskKey === 'notify_destination' ? 'Notify: {text}' : 'We will reply shortly.'}
-              />
-              {taskKey === 'reply_message' ? (
-                <SelectField label="Reply mode" value={taskReplyMode} onChange={setTaskReplyMode}>
-                  <option value="public">Public (group)</option>
-                  <option value="private">Private (direct message)</option>
-                </SelectField>
-              ) : null}
-              <GroupAutocompleteField
-                label="Select groups"
-                query={taskGroupsQuery}
-                onQueryChange={setTaskGroupsQuery}
-                groups={groups}
-                selectedGroups={taskGroups}
-                onAdd={(group) => {
-                  setTaskGroups((current) => current.some((entry) => entry.tg_group_id === group.tg_group_id) ? current : [...current, group])
-                  setTaskGroupsQuery('')
-                }}
-                onRemove={(tgGroupId) => setTaskGroups((current) => current.filter((group) => group.tg_group_id !== tgGroupId))}
-              />
-              {taskKey === 'notify_destination' ? (
-                <>
-                  <SelectField label="Destination type" value={taskDestinationMode} onChange={(value) => setTaskDestinationMode(value as TaskDestinationMode)}>
-                    <option value="group">Select visible group</option>
-                    <option value="text">Manual ID / username</option>
-                  </SelectField>
-                  {taskDestinationMode === 'group' ? (
-                    <GroupDestinationField
-                      label="Destination group"
-                      query={taskDestinationGroupQuery}
-                      onQueryChange={setTaskDestinationGroupQuery}
-                      groups={groups}
-                      selectedGroup={taskDestinationGroup}
-                      onSelect={(group) => {
-                        setTaskDestinationGroup(group)
-                        setTaskDestinationGroupQuery(group.title)
-                      }}
-                      onClear={() => {
-                        setTaskDestinationGroup(null)
-                        setTaskDestinationGroupQuery('')
-                      }}
-                    />
-                  ) : (
-                    <InputField label="Destination" value={taskDestinationText} onChange={setTaskDestinationText} placeholder="-1001234567890 or @channel" />
-                  )}
-                  <SelectField label="Delivery mode" value={taskDeliveryMode} onChange={setTaskDeliveryMode}>
-                    <option value="text">Text</option>
-                    <option value="forward">Forward</option>
-                    <option value="copy">Copy</option>
-                    <option value="text_and_forward">Text and forward</option>
-                    <option value="text_and_copy">Text and copy</option>
-                  </SelectField>
-                </>
-              ) : null}
-            </>
-          )}
-          {bulkSummary ? (
-            <div
-              style={{
-                display: 'grid',
-                gap: 8,
-                padding: 12,
-                border: '1px solid var(--miniapp-border-soft)',
-                borderRadius: 12,
-                background: 'var(--miniapp-bg)',
-                fontSize: 13,
-              }}
-            >
-              <strong style={{ fontSize: 14 }}>Send summary</strong>
-              <div>Total {bulkSummary.target_type === 'groups' ? 'groups' : 'matched'}: {bulkSummary.total}</div>
-              {bulkSummary.target_type !== 'groups' ? (
-                <>
-                  {bulkSummary.admins_excluded > 0 ? <div>Admins excluded: {bulkSummary.admins_excluded}</div> : null}
-                  {bulkSummary.bots_excluded > 0 ? <div>Bots excluded: {bulkSummary.bots_excluded}</div> : null}
-                  {bulkSummary.already_sent_excluded > 0 ? <div>Already sent excluded: {bulkSummary.already_sent_excluded}</div> : null}
-                </>
-              ) : null}
-              <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>
-                Final {bulkSummary.target_type === 'groups' ? 'groups' : 'recipients'}: {bulkSummary.final_count}
-              </div>
-              {bulkSummary.final_count === 0 ? (
-                <div style={{ color: 'var(--miniapp-coral)', fontSize: 13 }}>
-                  {bulkSummary.target_type === 'groups' ? 'No target groups selected.' : 'No recipients left after excluding admins, bots, and already-sent users.'}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
-          <FormActions
-            submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : isBulkMessageTask || isScrapeTask ? 'Queue job' : editingTask ? 'Save task' : 'Create task'}
-            submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0}
-            onSubmit={() => void saveTask()}
-            onCancel={closeForm}
-          />
-        </div>
-      ) : null}
-      <div style={{ display: 'grid', gap: 8 }}>
-        {!loading ? tasks.map((task) => (
-          <div
-            key={task.assignment_id}
-            style={{
-              display: 'grid',
-              gap: 10,
-              padding: 14,
-              border: '1px solid var(--miniapp-border-soft)',
-              borderRadius: 12,
-              background: 'var(--miniapp-surface)',
-            }}
-          >
-            <div>
-              <strong>{taskTitle(task, catalog)}</strong>
-              <div style={{ color: '#655d52', marginTop: 4 }}>{taskConditionLabel(task)}</div>
-              <div style={{ color: '#655d52', marginTop: 4 }}>{taskConfigLabel(task)}</div>
-              {Array.isArray(task.group_titles) && task.group_titles.length ? (
-                <div style={{ color: '#655d52', marginTop: 4 }}>
-                  Groups: {task.group_titles.join(', ')}
-                </div>
-              ) : null}
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Button tone="secondary" onClick={() => openEditForm(task)}>Edit</Button>
-              <Button tone="danger" onClick={() => setDeleteTarget(task)}>Delete</Button>
-            </div>
-          </div>
-        )) : null}
-      </div>
-      {deleteTarget ? (
-        <ConfirmModal
-          title="Delete task"
-          message={`Delete ${taskTitle(deleteTarget, catalog)} from this group?`}
-          confirmLabel="Delete"
-          isBusy={isSaving}
-          onConfirm={() => void deleteTask()}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      ) : null}
-    </Card>
-  )
-}
-
 function AccountLeadsPage({ account }: { account: Agent }) {
   const [leads, setLeads] = useState<AgentLead[]>([])
   const [leadPage, setLeadPage] = useState<AgentLeadPage | null>(null)
@@ -3758,6 +2561,749 @@ function AccountLeadsPage({ account }: { account: Agent }) {
         </div>
       ) : null}
     </Card>
+  )
+}
+
+function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
+  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
+  const [status, setStatus] = useState<string | null>(null)
+  const [loadingGroups, setLoadingGroups] = useState(false)
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
+  const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
+  const [bulkTargetType, setBulkTargetType] = useState<'members' | 'groups'>('members')
+  const [bulkMessage, setBulkMessage] = useState('')
+  const [bulkThreshold, setBulkThreshold] = useState('25')
+  const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
+  const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
+  const [bulkTargetGroups, setBulkTargetGroups] = useState<AgentManagedGroup[]>([])
+  const [loadingBulkTargetGroups, setLoadingBulkTargetGroups] = useState(false)
+  const [bulkSelectedTargetGroups, setBulkSelectedTargetGroups] = useState<SelectedGroupChip[]>([])
+  const [bulkMemberQuery, setBulkMemberQuery] = useState('')
+  const [bulkMemberResults, setBulkMemberResults] = useState<AgentGroupMember[]>([])
+  const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
+  const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
+  const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
+  const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
+  const [bulkScheduledAt, setBulkScheduledAt] = useState('')
+  const [excludeAdmins, setExcludeAdmins] = useState(true)
+  const [excludeBots, setExcludeBots] = useState(true)
+  const [excludeSent, setExcludeSent] = useState(true)
+  const [showFiltersOpen, setShowFiltersOpen] = useState(false)
+  const [orderByMsgCount, setOrderByMsgCount] = useState<'desc' | 'asc'>('desc')
+  const [bulkMemberPage, setBulkMemberPage] = useState(1)
+  const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
+  const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
+  const [scrapingGroup, setScrapingGroup] = useState(false)
+  const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
+  const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
+  const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
+  const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
+
+  const groupQuery = bulkSourceGroupQuery || bulkTargetGroupQuery
+  useEffect(() => {
+    if (!groupQuery.trim()) {
+      setGroups([])
+      setLoadingGroups(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      setLoadingGroups(true)
+      void agentsApi.fetchAgentGroups(account.id, groupQuery)
+        .then(setGroups)
+        .catch(() => setGroups([]))
+        .finally(() => setLoadingGroups(false))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [account.id, groupQuery])
+
+  useEffect(() => {
+    if (taskKey !== BULK_MESSAGE_TASK_KEY || !bulkSourceGroup?.tg_group_id) {
+      setBulkMemberResults([])
+      setBulkMemberTotal(0)
+      setBulkMemberStatus(null)
+      setLoadingBulkMembers(false)
+      return
+    }
+    const query = bulkMemberQuery.trim()
+    let cancelled = false
+    setLoadingBulkMembers(true)
+    setBulkMemberStatus(null)
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, query || undefined, 20, excludeBots, bulkMemberPage, orderByMsgCount === 'asc' ? 'message_count_asc' : 'message_count', excludeAdmins, false)
+      .then((page) => {
+        if (cancelled) return
+        const members = Array.isArray(page?.members) ? page.members : []
+        const selectedIds = new Set(bulkSelectedMembers.map((m) => m.user_id))
+        setBulkMemberResults(members.filter((m) => !selectedIds.has(m.user_id)))
+        setBulkMemberTotal(page.total)
+        setBulkMemberStatus(members.filter((m) => !selectedIds.has(m.user_id)).length ? null : 'No matching members found.')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setBulkMemberResults([])
+        setBulkMemberTotal(0)
+        setBulkMemberStatus(error instanceof Error ? error.message : 'Failed to search group members')
+      })
+      .finally(() => { if (!cancelled) setLoadingBulkMembers(false) })
+    return () => { cancelled = true }
+  }, [account.id, bulkMemberQuery, bulkSelectedMembers, bulkSourceGroup, bulkMemberPage, orderByMsgCount])
+
+  useEffect(() => {
+    void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50)
+      .then(setBroadcastJobs)
+      .catch(() => {})
+  }, [account.id])
+
+  function resetForm() {
+    setBulkTargetType('members')
+    setBulkSourceGroupQuery('')
+    setBulkSourceGroup(null)
+    setBulkMessage('')
+    setBulkThreshold('25')
+    setBulkIntervalSeconds('1')
+    setBulkTargetGroupQuery('')
+    setBulkTargetGroups([])
+    setBulkSelectedTargetGroups([])
+    setBulkMemberQuery('')
+    setBulkMemberResults([])
+    setBulkSelectedMembers([])
+    setBulkMemberStatus(null)
+    setBulkScheduleMode('now')
+    setBulkScheduledAt('')
+    setExcludeAdmins(false)
+    setExcludeBots(false)
+    setBulkSummary(null)
+  }
+
+  async function handleSave() {
+    if (!bulkMessage.trim()) { setStatus('Bulk message text is required'); return }
+    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) { setStatus('Source group is required'); return }
+    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) { setStatus('At least one target group is required'); return }
+
+    const threshold = Number.parseInt(bulkThreshold, 10)
+    if (!Number.isFinite(threshold) || threshold <= 0) { setStatus('Threshold must be a positive integer'); return }
+    const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) { setStatus('Interval seconds must be 0 or more'); return }
+
+    if (bulkSummary) {
+      setIsSaving(true)
+      try {
+        const jobPayload: Record<string, unknown> = {
+          target_type: bulkTargetType,
+          message: bulkMessage.trim(),
+          threshold,
+          interval_seconds: intervalSeconds,
+        }
+        if (bulkTargetType === 'members') {
+          jobPayload.source_group_id = bulkSourceGroup!.tg_group_id
+          jobPayload.source_group_title = bulkSourceGroup!.title
+          jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
+        } else {
+          jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
+        }
+        const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
+        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
+        setBulkSummary(null)
+        resetForm()
+        setStatus(null)
+        onSaved(scheduledAt ? 'Bulk message scheduled' : 'Bulk message job queued')
+        void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message')
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
+
+    setLoadingBulkSummary(true)
+    setStatus(null)
+    try {
+      const preflightPayload: Record<string, unknown> = {
+        target_type: bulkTargetType,
+        message: bulkMessage.trim(),
+        threshold,
+        interval_seconds: intervalSeconds,
+      }
+      if (bulkTargetType === 'members') {
+        preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id
+        preflightPayload.source_group_title = bulkSourceGroup!.title
+        preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
+      } else {
+        preflightPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
+      }
+      const result = await agentsApi.preflightBulkMessage(account.id, preflightPayload)
+      setBulkSummary(result)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to prepare bulk message')
+    } finally {
+      setLoadingBulkSummary(false)
+    }
+  }
+
+  const isBulkMessageTask = true
+  return (
+    <>
+      <Card title="Campaigns" subtitle="Send bulk messages to members or groups.">
+        {status ? <Note>{status}</Note> : null}
+        {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>New Campaign</Button> : null}
+        {isFormOpen ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
+              <button type="button" onClick={() => { setBulkTargetType('members'); setBulkSummary(null) }} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                background: bulkTargetType === 'members' ? 'var(--miniapp-surface)' : 'transparent',
+                color: bulkTargetType === 'members' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                fontWeight: bulkTargetType === 'members' ? 600 : 400, fontSize: 13, fontFamily: 'var(--miniapp-sans)',
+              }}>Send to Members</button>
+              <button type="button" onClick={() => { setBulkTargetType('groups'); setBulkSummary(null) }} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                background: bulkTargetType === 'groups' ? 'var(--miniapp-surface)' : 'transparent',
+                color: bulkTargetType === 'groups' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                fontWeight: bulkTargetType === 'groups' ? 600 : 400, fontSize: 13, fontFamily: 'var(--miniapp-sans)',
+              }}>Send to Groups</button>
+            </div>
+            {bulkTargetType === 'members' ? (
+              <>
+                <GroupDestinationField label="Source group" query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups}
+                  selectedGroup={bulkSourceGroup}
+                  onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkMemberQuery(''); setBulkMemberResults([]); setBulkMemberTotal(0); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
+                  onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery(''); setBulkMemberQuery(''); setBulkMemberResults([]); setBulkMemberTotal(0); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
+                  syncButton={<button type="button" disabled={syncingAdminsBots} onClick={async () => {
+                    if (!account || !bulkSourceGroup) return; setSyncingAdminsBots(true); setSyncAdminsBotsStatus(null)
+                    try { const r = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id); setSyncAdminsBotsStatus(r.message || 'Sync completed') }
+                    catch (e) { setSyncAdminsBotsStatus(e instanceof Error ? e.message : 'Sync failed') }
+                    finally { setSyncingAdminsBots(false) }
+                  }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
+                />
+                {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
+                <TextAreaField label="Message" value={bulkMessage} onChange={setBulkMessage} rows={5} placeholder="Hello, this is our latest update." />
+                <InputField label="Select members" value={bulkMemberQuery} onChange={setBulkMemberQuery} placeholder={bulkSourceGroup ? 'Search by name, username, or user id' : 'Choose a source group first'} />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {bulkSelectedMembers.length ? (
+                    <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '8px 10px', fontSize: 16, lineHeight: '18px', cursor: 'pointer' }} title={`Clear selected (${bulkSelectedMembers.length})`}>
+                      ✕ {bulkSelectedMembers.length}
+                    </button>
+                  ) : null}
+                  {bulkSelectedMembers.map((member) => (
+                    <span key={member.user_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 999, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', fontSize: 12.5 }}>
+                      {member.full_name || member.username || `User ${member.user_id}`}
+                      {member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: 'var(--miniapp-coral)', color: '#fff', fontSize: 9, fontWeight: 700 }}>Owner</span> : null}
+                      {member.is_admin && !member.is_creator ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#5b8def', color: '#fff', fontSize: 9, fontWeight: 700 }}>Admin</span> : null}
+                      {member.is_bot ? <span style={{ padding: '0px 5px', borderRadius: 999, background: '#8b8b8b', color: '#fff', fontSize: 9, fontWeight: 700 }}>Bot</span> : null}
+                      {member.sent_by_agent ? <span style={{ color: 'var(--miniapp-sage)', fontSize: 10, fontWeight: 700 }}>✓</span> : null}
+                      <button type="button" onClick={() => setBulkSelectedMembers((c) => c.filter((e) => e.user_id !== member.user_id))} style={{ border: 'none', background: 'transparent', color: 'var(--miniapp-clay)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
+                  <span>Sort by messages:</span>
+                  <button type="button" onClick={() => setOrderByMsgCount(orderByMsgCount === 'asc' ? 'desc' : 'asc')} style={{ background: 'none', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {orderByMsgCount === 'desc' ? '↓ Most' : '↑ Least'}
+                  </button>
+                </div>
+                {bulkSourceGroup && !loadingBulkMembers && bulkMemberTotal === 0 && !bulkMemberQuery.trim() ? (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>No scraped members yet.</div>
+                    <Button tone="secondary" disabled={scrapingGroup} onClick={async () => {
+                      setScrapingGroup(true)
+                      try { await agentsApi.scrapeAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id); setBulkMemberQuery(' ') }
+                      catch (e) { setBulkMemberStatus(e instanceof Error ? e.message : 'Scrape failed') }
+                      finally { setScrapingGroup(false) }
+                    }}>{scrapingGroup ? 'Scraping...' : 'Scrape group'}</Button>
+                    <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>This may take a few minutes.</div>
+                  </div>
+                ) : null}
+                {loadingBulkMembers ? <Note>Searching members...</Note> : null}
+                {bulkMemberStatus && !loadingBulkMembers ? <Note>{bulkMemberStatus}</Note> : null}
+                {!loadingBulkMembers && bulkMemberResults.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {bulkMemberResults.map((member) => (
+                      <button key={member.user_id} type="button" onClick={() => { setBulkSelectedMembers((c) => [...c, member]); setBulkMemberResults((r) => r.filter((m) => m.user_id !== member.user_id)) }}
+                        style={{ textAlign: 'left', padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', cursor: 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', display: 'grid', gap: 2 }}>
+                        <strong>{member.full_name || member.username || `User ${member.user_id}`}</strong>
+                        <div style={{ color: '#655d52' }}>@{member.username} · msgs: {member.message_count} · {member.role || 'member'}{member.is_bot ? ' · 🤖' : ''}{member.sent_by_agent ? ' · ✓' : ''}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {bulkMemberResults.length > 0 || bulkMemberTotal > 0 ? (
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+                    <Button tone="secondary" disabled={bulkMemberPage <= 1} onClick={() => setBulkMemberPage((p) => p - 1)}>Previous</Button>
+                    <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>Page {bulkMemberPage}</span>
+                    <Button tone="secondary" disabled={bulkMemberPage * 20 >= bulkMemberTotal} onClick={() => setBulkMemberPage((p) => p + 1)}>Next</Button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <MultiGroupSelect query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} selected={bulkSelectedTargetGroups}
+                  onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
+                <TextAreaField label="Message" value={bulkMessage} onChange={setBulkMessage} rows={5} placeholder="Hello, this is our latest update." />
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+              <div style={{ flex: 1 }}><InputField label="Threshold" value={bulkThreshold} onChange={setBulkThreshold} type="number" /></div>
+            </div>
+            <InputField label="Interval seconds" value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+            <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
+              <button type="button" onClick={() => setBulkScheduleMode('now')} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                background: bulkScheduleMode === 'now' ? 'var(--miniapp-surface)' : 'transparent',
+                color: bulkScheduleMode === 'now' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                fontWeight: bulkScheduleMode === 'now' ? 600 : 400, fontSize: 13, fontFamily: 'var(--miniapp-sans)',
+              }}>Send now</button>
+              <button type="button" onClick={() => setBulkScheduleMode('schedule')} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                background: bulkScheduleMode === 'schedule' ? 'var(--miniapp-surface)' : 'transparent',
+                color: bulkScheduleMode === 'schedule' ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                fontWeight: bulkScheduleMode === 'schedule' ? 600 : 400, fontSize: 13, fontFamily: 'var(--miniapp-sans)',
+              }}>Schedule for later</button>
+            </div>
+            {bulkScheduleMode === 'schedule' ? (
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>Schedule date & time</span>
+                <input type="datetime-local" value={bulkScheduledAt} onChange={(e) => setBulkScheduledAt(e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }} />
+              </div>
+            ) : null}
+            {bulkSummary ? (
+              <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
+                <strong style={{ fontSize: 14 }}>Send summary</strong>
+                <div>Total {bulkSummary.target_type === 'groups' ? 'groups' : 'matched'}: {bulkSummary.total}</div>
+                {bulkSummary.target_type !== 'groups' ? (
+                  <>
+                    {bulkSummary.admins_excluded > 0 ? <div>Admins excluded: {bulkSummary.admins_excluded}</div> : null}
+                    {bulkSummary.bots_excluded > 0 ? <div>Bots excluded: {bulkSummary.bots_excluded}</div> : null}
+                    {bulkSummary.already_sent_excluded > 0 ? <div>Already sent excluded: {bulkSummary.already_sent_excluded}</div> : null}
+                  </>
+                ) : null}
+                <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>Final {bulkSummary.target_type === 'groups' ? 'groups' : 'recipients'}: {bulkSummary.final_count}</div>
+                {bulkSummary.final_count === 0 ? <div style={{ color: 'var(--miniapp-coral)', fontSize: 13 }}>{bulkSummary.target_type === 'groups' ? 'No target groups selected.' : 'No recipients left after excluding admins, bots, and already-sent users.'}</div> : null}
+              </div>
+            ) : null}
+            {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
+            <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
+          </div>
+        ) : null}
+      </Card>
+      {broadcastJobs.length > 0 ? (
+        <Card title="Campaign History" subtitle="Recent broadcast and scheduled messages.">
+          <div style={{ display: 'grid', gap: 6 }}>
+            {broadcastJobs.map((job) => {
+              const p = job.progress || {}
+              const total = p.total_count ?? 0
+              const sent = p.success_count ?? 0
+              const failed = p.failure_count ?? 0
+              const isCompleted = job.status === 'completed'
+              const isFailed = job.status === 'failed'
+              const isScheduled = job.status === 'scheduled'
+              return (
+                <div key={job.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{(job.message_preview || '').slice(0, 48)}</strong>
+                      {job.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : null}
+                    </div>
+                    <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
+                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
+                    }}>{job.status}</span>
+                  </div>
+                  {isScheduled && job.scheduled_at ? (
+                    <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>Scheduled for {new Date(job.scheduled_at).toLocaleString()}</div>
+                  ) : total > 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                      <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.target_type === 'groups' ? 'groups' : 'members'}</span>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      ) : null}
+    </>
+  )
+}
+
+function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
+  const [scrapeGroups, setScrapeGroups] = useState<AgentManagedGroup[]>([])
+  const [scrapeSelectedGroup, setScrapeSelectedGroup] = useState<AgentManagedGroup | null>(null)
+  const [loadingScrapeGroups, setLoadingScrapeGroups] = useState(false)
+  const [scrapeMemberLimit, setScrapeMemberLimit] = useState(String(SCRAPE_LIMIT_MAX))
+  const [scrapeMessageLimit, setScrapeMessageLimit] = useState(String(SCRAPE_LIMIT_MAX))
+  const [scrapeMaxAgeDays, setScrapeMaxAgeDays] = useState('30')
+  const [isSaving, setIsSaving] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
+  const [tasks, setTasks] = useState<AutomationTask[]>([])
+  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
+  const [taskKeywords, setTaskKeywords] = useState<string[]>([])
+  const [pendingKeyword, setPendingKeyword] = useState('')
+  const [leadAckTemplate, setLeadAckTemplate] = useState('')
+  const [leadLabel, setLeadLabel] = useState('')
+  const [leadAskContact, setLeadAskContact] = useState(false)
+  const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
+  const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
+  const [isSavingCapture, setIsSavingCapture] = useState(false)
+
+  useEffect(() => {
+    const normalized = scrapeGroupQuery.trim()
+    if (!normalized) { setScrapeGroups([]); setLoadingScrapeGroups(false); return }
+    const timer = setTimeout(() => {
+      setLoadingScrapeGroups(true)
+      void agentsApi.fetchAgentGroups(account.id, normalized)
+        .then(setScrapeGroups).catch(() => setScrapeGroups([]))
+        .finally(() => setLoadingScrapeGroups(false))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [account.id, scrapeGroupQuery])
+
+  useEffect(() => {
+    void Promise.all([
+      agentsApi.fetchGroupTasks(account.group_id || 196),
+      agentsApi.fetchTaskCatalog(),
+    ]).then(([t, c]) => { setTasks(t); setCatalog(c) }).catch(() => {})
+  }, [account.id])
+
+  async function handleScrape() {
+    if (!scrapeSelectedGroup?.tg_group_id) { setStatus('Choose a group first'); return }
+    setIsSaving(true)
+    try {
+      await agentsApi.createAgentJob(account.id, SCRAPE_TASK_KEY, {
+        tg_group_id: Number(scrapeSelectedGroup.tg_group_id),
+        scrape_members: true,
+        scrape_messages: true,
+        member_limit: clampScrapeLimit(scrapeMemberLimit),
+        message_limit: clampScrapeLimit(scrapeMessageLimit),
+        max_age_days: Math.max(1, Number(scrapeMaxAgeDays) || 30),
+      })
+      setStatus(null)
+      onSaved(`Scraping job queued for ${scrapeSelectedGroup.title || scrapeSelectedGroup.tg_group_id}.`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to queue scrape job')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleSaveLeadCapture() {
+    if (!taskKeywords.length) { setStatus('At least one keyword is required'); return }
+    setIsSavingCapture(true)
+    try {
+      const config: Record<string, unknown> = {}
+      if (leadAckTemplate.trim()) config.ack_template = leadAckTemplate.trim()
+      if (leadLabel.trim()) config.lead_label = leadLabel.trim()
+      if (leadAskContact) config.ask_contact = true
+      await agentsApi.createGroupTask(account.group_id || 196, {
+        task_key: 'lead_capture',
+        executor_type: 'agent',
+        enabled: true,
+        conditions: { text_contains: _formatKeywords(taskKeywords) },
+        config,
+        agent_id: account.id,
+        group_tg_ids: taskGroups.map((g) => g.tg_group_id),
+        group_titles: taskGroups.map((g) => g.title),
+      })
+      setStatus(null)
+      onSaved('Lead capture task created')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to save lead capture')
+    } finally {
+      setIsSavingCapture(false)
+    }
+  }
+
+  const groupQuery = taskGroupsQuery
+  useEffect(() => {
+    if (!groupQuery.trim()) { setGroups([]); return }
+    const timer = setTimeout(() => {
+      void agentsApi.fetchAgentGroups(account.id, groupQuery).then(setGroups).catch(() => setGroups([]))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [account.id, groupQuery])
+
+  return (
+    <>
+      <Card title="Scrape Group" subtitle="Queue a background sync job to collect members and messages.">
+        {status ? <Note>{status}</Note> : null}
+        <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
+        {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
+        {!loadingScrapeGroups && scrapeGroups.length ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {scrapeGroups.map((group, index) => (
+              <LinkRow key={`${group.tg_group_id ?? index}-${group.title ?? index}`} active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
+                onClick={() => { setScrapeSelectedGroup(group); setScrapeGroupQuery(group.title || '') }}>
+                <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
+                <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}</div>
+              </LinkRow>
+            ))}
+          </div>
+        ) : null}
+        {scrapeSelectedGroup ? (
+          <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+            <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
+            <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
+            <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
+            <Button onClick={() => void handleScrape()} disabled={isSaving}>{isSaving ? 'Queuing...' : 'Queue scrape job'}</Button>
+          </div>
+        ) : null}
+      </Card>
+      <Card title="Lead Capture" subtitle="Configure automatic lead capture from group messages.">
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {taskKeywords.map((kw, i) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
+                  {kw}
+                  <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
+                </span>
+              ))}
+            </div>
+            <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)} onKeyDown={(e) => {
+              if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') }
+            }} placeholder="support" style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+          </div>
+          <TextAreaField label="Acknowledgment template (optional)" value={leadAckTemplate} onChange={setLeadAckTemplate} rows={4} placeholder="We will get back to you shortly." />
+          <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={leadAskContact} onChange={(e) => setLeadAskContact(e.target.checked)} style={{ accentColor: 'var(--miniapp-accent)' }} />
+            Ask for contact details
+          </label>
+          <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+            selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
+            onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
+          <Button onClick={() => void handleSaveLeadCapture()} disabled={isSavingCapture}>{isSavingCapture ? 'Saving...' : 'Save lead capture'}</Button>
+        </div>
+      </Card>
+    </>
+  )
+}
+
+function AutomationTasksSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
+  const [tasks, setTasks] = useState<AutomationTask[]>([])
+  const [groups, setGroups] = useState<AgentManagedGroup[]>([])
+  const [status, setStatus] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<AutomationTask | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AutomationTask | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [taskKey, setTaskKey] = useState('reply_message')
+  const [taskKeyword, setTaskKeyword] = useState('')
+  const [taskTemplate, setTaskTemplate] = useState('')
+  const [taskReplyMode, setTaskReplyMode] = useState('public')
+  const [taskDeliveryMode, setTaskDeliveryMode] = useState('text')
+  const [taskDestinationMode, setTaskDestinationMode] = useState<TaskDestinationMode>('group')
+  const [taskDestinationText, setTaskDestinationText] = useState('')
+  const [taskDestinationGroupQuery, setTaskDestinationGroupQuery] = useState('')
+  const [taskDestinationGroup, setTaskDestinationGroup] = useState<SelectedGroupChip | null>(null)
+  const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
+  const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
+
+  async function refresh() {
+    setLoading(true)
+    try {
+      const [nextTasks, nextCatalog] = await Promise.all([
+        agentsApi.fetchGroupTasks(account.group_id || 196),
+        agentsApi.fetchTaskCatalog(),
+      ])
+      setTasks(nextTasks)
+      setCatalog(nextCatalog)
+      setStatus(null)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to load tasks')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void refresh() }, [account.group_id, account.id])
+
+  const groupQuery = taskGroupsQuery || taskDestinationGroupQuery
+  useEffect(() => {
+    if (!groupQuery.trim()) { setGroups([]); return }
+    const timer = setTimeout(() => {
+      void agentsApi.fetchAgentGroups(account.id, groupQuery).then(setGroups).catch(() => setGroups([]))
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [account.id, groupQuery])
+
+  useEffect(() => {
+    if (!catalog.length) return
+    if (!catalog.some((item) => item.key === taskKey)) {
+      setTaskKey(catalog[0].key)
+    }
+  }, [catalog, taskKey])
+
+  function resetForm() {
+    setEditingTask(null)
+    setTaskKey(catalog[0]?.key || 'reply_message')
+    setTaskKeyword('')
+    setTaskTemplate('')
+    setTaskReplyMode('public')
+    setTaskDeliveryMode('text')
+    setTaskDestinationMode('group')
+    setTaskDestinationText('')
+    setTaskDestinationGroupQuery('')
+    setTaskDestinationGroup(null)
+    setTaskGroupsQuery('')
+    setTaskGroups([])
+  }
+
+  function openEditForm(task: AutomationTask) {
+    const configuredDestination = String(task.config.destination || '')
+    const matchingDestinationGroup = groups.find((g) => String(g.tg_group_id || '') === configuredDestination)
+    setEditingTask(task)
+    setTaskKey(task.task_key)
+    setTaskKeyword(String(task.conditions.text_contains || ''))
+    setTaskTemplate(String(task.config.message_template || ''))
+    setTaskReplyMode(String(task.config.reply_mode || 'public'))
+    setTaskDeliveryMode(String(task.config.delivery_mode || 'text'))
+    setTaskDestinationMode(matchingDestinationGroup ? 'group' : 'text')
+    setTaskDestinationText(matchingDestinationGroup ? '' : configuredDestination)
+    setTaskDestinationGroupQuery(matchingDestinationGroup ? String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || '') : '')
+    setTaskDestinationGroup(matchingDestinationGroup ? { tg_group_id: Number(matchingDestinationGroup.tg_group_id), title: String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || 'Group') } : null)
+    setTaskGroupsQuery('')
+    setTaskGroups(mapTaskGroups(task))
+    setIsFormOpen(true)
+  }
+
+  async function handleSave() {
+    if (!taskKeyword.trim()) { setStatus('Keyword is required'); return }
+    const config: Record<string, unknown> = {}
+    if (taskTemplate.trim()) config.message_template = taskTemplate.trim()
+    if (taskKey === 'reply_message') config.reply_mode = taskReplyMode
+    if (taskKey === 'notify_destination') {
+      const dest = taskDestinationMode === 'group' ? String(taskDestinationGroup?.tg_group_id || '') : taskDestinationText.trim()
+      if (!dest) { setStatus('Destination is required'); return }
+      config.destination = dest
+      config.delivery_mode = taskDeliveryMode
+    }
+    const payload = {
+      task_key: taskKey,
+      executor_type: 'agent',
+      enabled: true,
+      conditions: { text_contains: taskKeyword.trim() },
+      config,
+      agent_id: account.id,
+      group_tg_ids: taskGroups.map((g) => g.tg_group_id),
+      group_titles: taskGroups.map((g) => g.title),
+    }
+    setIsSaving(true)
+    try {
+      if (editingTask) {
+        await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
+        onSaved('Task updated')
+      } else {
+        await agentsApi.createGroupTask(account.group_id || 196, payload)
+        onSaved('Task created')
+      }
+      setIsFormOpen(false)
+      await refresh()
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to save task')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setIsSaving(true)
+    try {
+      await agentsApi.deleteGroupTask(account.group_id, deleteTarget.assignment_id)
+      onSaved('Task deleted')
+      setDeleteTarget(null)
+      await refresh()
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to delete task')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const extendedCatalog = catalog
+  return (
+    <>
+      <Card title="Automation Tasks" subtitle="Configure automated actions triggered by group events.">
+        {status ? <Note>{status}</Note> : null}
+        {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>New task</Button> : null}
+        {isFormOpen ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <SelectField label="Task type" value={taskKey} onChange={setTaskKey}>
+              {extendedCatalog.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
+            </SelectField>
+            <InputField label="Keyword condition" value={taskKeyword} onChange={setTaskKeyword} placeholder="support" />
+            <TextAreaField label="Message template" value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? 'Notify: {text}' : 'We will reply shortly.'} />
+            {taskKey === 'reply_message' ? (
+              <SelectField label="Reply mode" value={taskReplyMode} onChange={setTaskReplyMode}>
+                <option value="public">Public (group)</option>
+                <option value="private">Private (direct message)</option>
+              </SelectField>
+            ) : null}
+            <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+              selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
+              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
+            {taskKey === 'notify_destination' ? (
+              <>
+                <SelectField label="Destination type" value={taskDestinationMode} onChange={(v) => setTaskDestinationMode(v as TaskDestinationMode)}>
+                  <option value="group">Select visible group</option>
+                  <option value="text">Manual ID / username</option>
+                </SelectField>
+                {taskDestinationMode === 'group' ? (
+                  <GroupDestinationField label="Destination group" query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
+                    selectedGroup={taskDestinationGroup} onSelect={(g) => { setTaskDestinationGroup(g); setTaskDestinationGroupQuery(g.title) }}
+                    onClear={() => { setTaskDestinationGroup(null); setTaskDestinationGroupQuery('') }} />
+                ) : (
+                  <InputField label="Destination" value={taskDestinationText} onChange={setTaskDestinationText} placeholder="-1001234567890 or @channel" />
+                )}
+                <SelectField label="Delivery mode" value={taskDeliveryMode} onChange={setTaskDeliveryMode}>
+                  <option value="text">Text</option>
+                  <option value="forward">Forward</option>
+                  <option value="copy">Copy</option>
+                  <option value="text_and_forward">Text and forward</option>
+                  <option value="text_and_copy">Text and copy</option>
+                </SelectField>
+              </>
+            ) : null}
+            <FormActions submitLabel={editingTask ? 'Save task' : 'Create task'} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
+          </div>
+        ) : null}
+      </Card>
+      {!loading && tasks.length > 0 ? (
+        <Card title="Configured Tasks" subtitle="Existing automation rules for this group.">
+          <div style={{ display: 'grid', gap: 8 }}>
+            {tasks.map((task) => (
+              <div key={task.assignment_id} style={{ padding: 14, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-surface)' }}>
+                <div>
+                  <strong>{taskTitle(task, catalog)}</strong>
+                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConditionLabel(task)}</div>
+                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConfigLabel(task)}</div>
+                  {Array.isArray(task.group_titles) && task.group_titles.length ? <div style={{ color: '#655d52', marginTop: 4 }}>Groups: {task.group_titles.join(', ')}</div> : null}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                  <Button tone="secondary" onClick={() => openEditForm(task)}>Edit</Button>
+                  <Button tone="danger" onClick={() => setDeleteTarget(task)}>Delete</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+      {deleteTarget ? (
+        <ConfirmModal title="Delete task" message="Delete this automation task?" confirmLabel="Delete" isBusy={isSaving}
+          onConfirm={() => void handleDelete()} onCancel={() => setDeleteTarget(null)} />
+      ) : null}
+    </>
   )
 }
 
