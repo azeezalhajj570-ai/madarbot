@@ -18,6 +18,7 @@ from bot.dashboard.api.routers.admin import router as admin_router
 from bot.dashboard.api.routers.admin_automation import router as admin_automation_router
 from bot.dashboard.api.routers.admin_summaries import router as admin_summaries_router
 from bot.dashboard.api.routers.agents import router as agents_router
+from bot.dashboard.api.routers.campaigns import router as campaigns_router
 from bot.dashboard.api.routers.faq import router as faq_router
 from bot.dashboard.api.routers.messaging import router as messaging_router
 from bot.dashboard.api.routers.subscription import router as subscription_router
@@ -204,6 +205,7 @@ app.include_router(admin_automation_router)
 app.include_router(admin_summaries_router)
 app.include_router(faq_router)
 app.include_router(agents_router)
+app.include_router(campaigns_router)
 app.include_router(messaging_router)
 app.include_router(subscription_router)
 app.include_router(group_subscription_router)

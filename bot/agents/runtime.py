@@ -283,6 +283,8 @@ class GroupMemberBroadcastRuntime:
 
         normalized = normalize_group_member_broadcast_payload(payload)
 
+        campaign_id: int | None = payload.get("campaign_id")
+
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         limiter = AgentRateLimiter(redis_client)
         try:
@@ -439,6 +441,7 @@ class GroupMemberBroadcastRuntime:
                         session.add(
                             SentBroadcastMessage(
                                 agent_id=agent.id,
+                                campaign_id=campaign_id,
                                 job_id=payload.get("job_id"),
                                 tg_user_id=recipient_id,
                                 phone_number=identity.get("phone"),
@@ -564,6 +567,7 @@ class GroupMemberBroadcastRuntime:
                     session.add(
                         SentBroadcastMessage(
                             agent_id=agent.id,
+                            campaign_id=campaign_id,
                             job_id=payload.get("job_id"),
                             tg_user_id=None,
                             tg_group_id=group_id,
@@ -585,6 +589,7 @@ class GroupMemberBroadcastRuntime:
                     session.add(
                         SentBroadcastMessage(
                             agent_id=agent.id,
+                            campaign_id=campaign_id,
                             job_id=payload.get("job_id"),
                             tg_user_id=None,
                             tg_group_id=group_id,

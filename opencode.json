@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "jarvis-mcp": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@shantur/jarvis-mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

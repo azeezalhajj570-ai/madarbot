@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,8 +33,15 @@ class SentBroadcastMessage(Base):
 
     __tablename__ = "sent_broadcast_messages"
 
+    __table_args__ = (
+        Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    campaign_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     job_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("agent_jobs.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -85,6 +93,10 @@ class Agent(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+    campaigns: Mapped[list["Campaign"]] = relationship(
+        back_populates="agent",
+        cascade="all, delete-orphan",
+    )
     jobs: Mapped[list["AgentJob"]] = relationship(
         back_populates="agent",
         cascade="all, delete-orphan",
@@ -104,6 +116,9 @@ class AgentJob(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    campaign_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     job_type: Mapped[str] = mapped_column(String(100), index=True)
     job_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
@@ -117,6 +132,7 @@ class AgentJob(Base):
         onupdate=datetime.utcnow,
     )
     agent: Mapped[Agent] = relationship(back_populates="jobs")
+    campaign: Mapped[Optional["Campaign"]] = relationship(back_populates="jobs")
 
 
 class AgentNotification(Base):
