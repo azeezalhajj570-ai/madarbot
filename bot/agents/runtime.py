@@ -317,6 +317,7 @@ class GroupMemberBroadcastRuntime:
                     failure_count=failure_count,
                     failures=failures,
                     session=session,
+                    campaign_id=campaign_id,
                 )
                 return result
 
@@ -506,6 +507,7 @@ class GroupMemberBroadcastRuntime:
         failure_count,
         failures,
         session,
+        campaign_id,
     ) -> dict[str, Any]:
         import random
         import hashlib
