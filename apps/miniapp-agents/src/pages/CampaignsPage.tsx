@@ -334,22 +334,25 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       {showQuickCreate ? (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(32, 25, 16, 0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 1100 }} onClick={() => setShowQuickCreate(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(400px, 100%)', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 20, padding: 24, display: 'grid', gap: 16, boxShadow: '0 22px 60px rgba(32,25,16,0.22)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>New Campaign</h2>
-              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
-            </div>
+            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>New Campaign</h2>
             <input type="text" value={quickName} onChange={(e) => setQuickName(e.target.value)} placeholder="Campaign name" autoFocus
               style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', width: '100%' }} />
             <textarea value={quickMessage} onChange={(e) => setQuickMessage(e.target.value)} placeholder="Message template" rows={4}
               style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical', width: '100%' }} />
-            <Button disabled={quickSaving || !quickName.trim() || !quickMessage.trim()} onClick={async () => {
-              if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
-              try {
-                const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
-                setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved('Campaign created')
-              } catch (e) { setStatus(e instanceof Error ? e.message : 'Failed to create campaign') }
-              finally { setQuickSaving(false) }
-            }}>{quickSaving ? 'Saving...' : 'Save'}</Button>
+            <div style={{ display: 'flex', gap: 0, borderRadius: 'var(--miniapp-radius-sm)', border: '1px solid var(--miniapp-border-soft)', overflow: 'hidden' }}>
+              <button type="button" disabled={quickSaving || !quickName.trim() || !quickMessage.trim()} onClick={async () => {
+                if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
+                try {
+                  const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
+                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved('Campaign created')
+                } catch (e) { setStatus(e instanceof Error ? e.message : 'Failed to create campaign') }
+                finally { setQuickSaving(false) }
+              }} style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: (quickSaving || !quickName.trim() || !quickMessage.trim()) ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: (quickSaving || !quickName.trim() || !quickMessage.trim()) ? 'var(--miniapp-bg-deep)' : 'var(--miniapp-coral)', color: (quickSaving || !quickName.trim() || !quickMessage.trim()) ? 'var(--miniapp-text-muted)' : '#fff' }}>
+                {quickSaving ? 'Saving...' : 'Save'}
+              </button>
+              <div style={{ width: 1, background: 'var(--miniapp-border-soft)' }} />
+              <button type="button" onClick={() => setShowQuickCreate(false)} style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)' }}>Cancel</button>
+            </div>
           </div>
         </div>
       ) : null}
