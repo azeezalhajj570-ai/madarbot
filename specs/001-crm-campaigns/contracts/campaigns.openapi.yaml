@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: Campaigns API
+  version: 1.0.0
+  description: CRM-style campaign management for broadcast messaging
+
+paths:
+  /webapp/agents/{agent_id}/campaigns:
+    post:
+      summary: Create campaign
+      operationId: createCampaign
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignRequest'
+      responses:
+        '201':
+          description: Campaign created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+
+    get:
+      summary: List campaigns
+      operationId: listCampaigns
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated campaign list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignList'
+
+  /webapp/agents/{agent_id}/campaigns/{campaign_id}:
+    get:
+      summary: Get campaign detail
+      operationId: getCampaign
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Campaign with aggregate stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignDetail'
+
+    patch:
+      summary: Update draft campaign
+      operationId: updateCampaign
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCampaignRequest'
+      responses:
+        '200':
+          description: Campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+
+    delete:
+      summary: Delete draft campaign
+      operationId: deleteCampaign
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: confirm
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Campaign deleted
+
+  /webapp/agents/{agent_id}/campaigns/{campaign_id}/send:
+    post:
+      summary: Start campaign sending
+      operationId: startCampaignSend
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Campaign sending started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs_created:
+                    type: integer
+                  message:
+                    type: string
+
+  /webapp/agents/{agent_id}/campaigns/{campaign_id}/send-logs:
+    get:
+      summary: Get campaign send logs
+      operationId: getCampaignSendLogs
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: campaign_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [sent, failed, skipped]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Paginated send log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendLogList'
+
+components:
+  schemas:
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+        status:
+          type: string
+        message_template:
+          type: string
+          nullable: true
+        target_filters:
+          type: object
+        total_recipients:
+          type: integer
+        sent_count:
+          type: integer
+        failed_count:
+          type: integer
+        skipped_count:
+          type: integer
+        created_by:
+          type: integer
+          nullable: true
+        scheduled_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCampaignRequest:
+      type: object
+      required:
+        - name
+        - message_template
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          default: broadcast
+        message_template:
+          type: string
+        target_filters:
+          type: object
+          properties:
+            group_ids:
+              type: array
+              items:
+                type: integer
+        scheduled_at:
+          type: string
+          format: date-time
+
+    UpdateCampaignRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        message_template:
+          type: string
+        target_filters:
+          type: object
+        scheduled_at:
+          type: string
+          format: date-time
+
+    CampaignList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        pages:
+          type: integer
+
+    CampaignDetail:
+      allOf:
+        - $ref: '#/components/schemas/Campaign'
+        - type: object
+          properties:
+            recent_jobs:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tg_group_id:
+                    type: integer
+                  status:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+
+    SendLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        tg_user_id:
+          type: integer
+          nullable: true
+        tg_group_id:
+          type: integer
+        message_text:
+          type: string
+        status:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+
+    SendLogList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SendLogEntry'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer

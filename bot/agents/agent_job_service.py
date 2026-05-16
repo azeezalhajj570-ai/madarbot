@@ -68,6 +68,7 @@ class AgentJobService(AgentServiceSupport):
         job_type: str,
         job_payload: dict[str, Any] | None = None,
         scheduled_at: datetime | None = None,
+        campaign_id: int | None = None,
     ) -> AgentJob:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -93,6 +94,7 @@ class AgentJobService(AgentServiceSupport):
                         source_group_id=normalized_payload.get("source_group_id", 0),
                         message=normalized_payload["message"],
                         selected_user_ids=selected_ids,
+                        campaign_id=campaign_id,
                     )
                     normalized_payload["selected_user_ids"] = exclusions["filtered_user_ids"]
                     normalized_payload["exclusion_counts"] = {
@@ -127,6 +129,7 @@ class AgentJobService(AgentServiceSupport):
             job_payload=normalized_payload,
             status=status,
             scheduled_at=scheduled_at,
+            campaign_id=campaign_id,
         )
         self.session.add(job)
         await self.session.commit()
@@ -256,11 +259,14 @@ class AgentJobService(AgentServiceSupport):
         source_group_id: int,
         message: str,
         selected_user_ids: list[int],
+        campaign_id: int | None = None,
     ) -> dict[str, Any]:
         """Compute exclusion counts and return filtered user IDs.
 
         Shared between the preflight endpoint and job creation.
         Always excludes admins, bots, and already-sent recipients.
+        When campaign_id is present, also cross-group deduplicates
+        within the same campaign.
         """
         import hashlib
         from datetime import datetime, timedelta, timezone
@@ -332,11 +338,17 @@ class AgentJobService(AgentServiceSupport):
             identity_filters.append(SentBroadcastMessage.phone_number.in_(phones))
         if usernames:
             identity_filters.append(SentBroadcastMessage.username.in_(usernames))
+
+        group_filter = or_(
+            SentBroadcastMessage.tg_group_id == source_group_id,
+            SentBroadcastMessage.campaign_id == campaign_id if campaign_id else False,
+        ) if campaign_id else SentBroadcastMessage.tg_group_id == source_group_id
+
         sent_rows = (
             await self.session.execute(
                 select(SentBroadcastMessage.tg_user_id).where(
                     SentBroadcastMessage.agent_id == agent.id,
-                    SentBroadcastMessage.tg_group_id == source_group_id,
+                    group_filter,
                     SentBroadcastMessage.message_hash == message_hash,
                     SentBroadcastMessage.sent_at >= seven_days_ago,
                     SentBroadcastMessage.status == "sent",

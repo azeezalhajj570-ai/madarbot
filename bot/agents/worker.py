@@ -449,6 +449,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 elif job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE:
                     broadcast_payload = dict(job.job_payload or {})
                     broadcast_payload["job_id"] = job.id
+                    broadcast_payload["campaign_id"] = job.campaign_id
                     result = await broadcast_runtime.execute(
                         client=client, agent=agent, payload=broadcast_payload, session=session
                     )
