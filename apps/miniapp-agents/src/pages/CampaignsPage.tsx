@@ -32,6 +32,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [showSendForm, setShowSendForm] = useState(false)
 
   // Send form
   const [qsSelectedCampaignId, setQsSelectedCampaignId] = useState<number | ''>('')
@@ -160,6 +161,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   return (
     <>
+      {!showSendForm ? (
+        <Button onClick={() => setShowSendForm(true)}>Send Message</Button>
+      ) : null}
+      {showSendForm ? (
       <Card title="Send Message" subtitle="Send bulk messages to members or groups.">
         {status ? <Note>{status}</Note> : null}
 
@@ -296,8 +301,9 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
-        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={resetForm} />
+        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
       </Card>
+      ) : null}
 
       {broadcastJobs.length > 0 ? (
         <Card title="Recent Jobs" subtitle="Recent broadcast and scheduled messages.">
