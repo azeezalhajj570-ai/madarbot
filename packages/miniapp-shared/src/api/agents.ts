@@ -14,6 +14,9 @@ import type {
   AgentManagedGroup,
   AutomationTask,
   BulkPreflightResult,
+  Campaign,
+  CampaignList,
+  CampaignSendLogList,
   SendLogsResponse,
   TaskCatalogItem,
 } from '../types'
@@ -295,4 +298,51 @@ export async function syncAgentGroupAdminsBots(agentId: number, tgGroupId: numbe
 
 export async function fetchAgentAnalytics(agentId: number) {
   return apiClient.get<AgentAnalytics>(`${AGENTS_API_PREFIX}/${agentId}/analytics`)
+}
+
+export async function createCampaign(agentId: number, payload: {
+  name: string
+  description?: string
+  type?: string
+  message_template: string
+  target_filters?: Record<string, unknown>
+  scheduled_at?: string
+}) {
+  return apiClient.post<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns`, payload)
+}
+
+export async function listCampaigns(agentId: number, options?: { status?: string; page?: number; page_size?: number }) {
+  return apiClient.get<CampaignList>(`${AGENTS_API_PREFIX}/${agentId}/campaigns`, options)
+}
+
+export async function getCampaign(agentId: number, campaignId: number) {
+  return apiClient.get<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}`)
+}
+
+export async function updateCampaign(agentId: number, campaignId: number, payload: {
+  name?: string
+  description?: string
+  type?: string
+  message_template?: string
+  target_filters?: Record<string, unknown>
+  scheduled_at?: string
+}) {
+  return apiClient.patch<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}`, payload)
+}
+
+export async function deleteCampaign(agentId: number, campaignId: number) {
+  return apiClient.delete<{ status: string }>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}`)
+}
+
+export async function sendCampaign(agentId: number, campaignId: number, payload?: {
+  interval_seconds?: number
+  threshold?: number
+}) {
+  return apiClient.post<{ status: string; started_at: string; jobs_created: number; jobs_failed: number; jobs: Array<{ id: number | null; tg_group_id: number; status?: string; error?: string }> }>(
+    `${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/send`, payload || {}
+  )
+}
+
+export async function getCampaignSendLogs(agentId: number, campaignId: number, options?: { status?: string; page?: number; page_size?: number }) {
+  return apiClient.get<CampaignSendLogList>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/send-logs`, options)
 }

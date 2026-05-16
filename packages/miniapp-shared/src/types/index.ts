@@ -265,6 +265,53 @@ export interface BulkPreflightResult {
   filtered_user_ids: number[]
 }
 
+export interface Campaign {
+  id: number
+  agent_id: number
+  name: string
+  description?: string | null
+  type: string
+  status: string
+  message_template?: string | null
+  target_filters: Record<string, unknown>
+  total_recipients: number
+  sent_count: number
+  failed_count: number
+  skipped_count: number
+  created_by?: number | null
+  scheduled_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at: string
+  recent_jobs?: Array<{ id: number; tg_group_id?: number; status: string; created_at?: string | null }>
+}
+
+export interface CampaignList {
+  items: Campaign[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+export interface CampaignSendLogEntry {
+  id: number
+  tg_user_id?: number | null
+  tg_group_id: number
+  message_text: string
+  status: string
+  sent_at?: string | null
+}
+
+export interface CampaignSendLogList {
+  items: CampaignSendLogEntry[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
 export interface AgentGroupMemberMessage {
   message_id: number
   text?: string | null
