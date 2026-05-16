@@ -86,6 +86,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickName, setQuickName] = useState('')
+  const [quickMessage, setQuickMessage] = useState('')
+  const [quickSaving, setQuickSaving] = useState(false)
 
   // ── Effects ──
 
@@ -194,7 +198,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setExcludeAdmins(false); setExcludeBots(false); setBulkSummary(null)
-    setQsSelectedCampaignId(''); setStatus(null)
+    setQsSelectedCampaignId(''); setShowQuickCreate(false); setStatus(null)
   }
 
   async function handleQuickSend() {
@@ -370,11 +374,43 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             {status ? <Note>{status}</Note> : null}
             <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
               <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>Campaign (optional)</span>
-              <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }}>
-                <option value="">— No campaign —</option>
-                {qsCampaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-              </select>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
+                  style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }}>
+                  <option value="">— No campaign —</option>
+                  {qsCampaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+                <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setShowQuickCreate(true) }} style={{
+                  background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)',
+                  borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px',
+                  display: 'flex', alignItems: 'center',
+                }} title="Create new campaign">+</button>
+              </div>
+              {showQuickCreate ? (
+                <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)' }}>
+                  <strong style={{ fontSize: 13 }}>New Campaign</strong>
+                  <input type="text" value={quickName} onChange={(e) => setQuickName(e.target.value)} placeholder="Campaign name"
+                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', width: '100%' }} />
+                  <textarea value={quickMessage} onChange={(e) => setQuickMessage(e.target.value)} placeholder="Message template" rows={3}
+                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical', width: '100%' }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button disabled={quickSaving || !quickName.trim() || !quickMessage.trim()} onClick={async () => {
+                      if (!quickName.trim() || !quickMessage.trim()) return
+                      setQuickSaving(true)
+                      try {
+                        const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
+                        setQsCampaigns((prev) => [...prev, c])
+                        setQsSelectedCampaignId(c.id)
+                        setBulkMessage(quickMessage.trim())
+                        setShowQuickCreate(false)
+                        onSaved('Campaign created')
+                      } catch (e) { setStatus(e instanceof Error ? e.message : 'Failed to create campaign') }
+                      finally { setQuickSaving(false) }
+                    }}>{quickSaving ? 'Creating...' : 'Save'}</Button>
+                    <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
               {(['members', 'groups'] as const).map((t) => (
