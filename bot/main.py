@@ -38,6 +38,7 @@ async def _configure_bot_commands(bot: Bot, app_kind: AppKind = "admin") -> None
     if app_kind == "agents":
         private_commands = [
             BotCommand(command="start", description="Open the agents menu"),
+            BotCommand(command="app", description="Open the app"),
             BotCommand(command="help", description="Show help"),
             BotCommand(command="lang", description="Switch language"),
         ]
@@ -45,6 +46,7 @@ async def _configure_bot_commands(bot: Bot, app_kind: AppKind = "admin") -> None
     else:
         private_commands = [
             BotCommand(command="start", description="Open the main menu"),
+            BotCommand(command="app", description="Open the app"),
             BotCommand(command="help", description="Show help"),
             BotCommand(command="lang", description="Switch language"),
             BotCommand(command="subscribe", description="Request access"),

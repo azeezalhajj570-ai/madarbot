@@ -134,6 +134,36 @@ async def _open_private_settings(message: Message, state: FSMContext, *, lang: s
     )
 
 
+@router.message(Command("app"))
+async def app_handler(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    settings = get_settings()
+    lang = await _resolve_lang(message)
+    webapp_url = _webapp_url()
+    show_buttons = await _can_show_dashboard(message)
+    if message.chat.type == "private" and not show_buttons:
+        await message.answer(
+            t("subscription_mandate_prompt", lang),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    if not webapp_url:
+        await message.answer(
+            t("dashboard_not_configured", lang),
+            reply_markup=_group_member_hide_markup(message, show_buttons),
+        )
+        return
+
+    await message.answer(
+        t("app_intro", lang),
+        reply_markup=(
+            open_dashboard_inline_keyboard(f"🚀 {t('open_app', lang)}", webapp_url)
+            if show_buttons
+            else _group_member_hide_markup(message, show_buttons)
+        ),
+    )
+
+
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
