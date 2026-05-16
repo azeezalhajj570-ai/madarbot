@@ -168,16 +168,13 @@ class CampaignService:
         campaign_id: int,
         agent_id: int,
         actor_user_id: int,
+        *,
+        group_ids: list[int] | None = None,
+        target_type: str = "groups",
         interval_seconds: float = 3.0,
         threshold: int = 500,
     ) -> dict[str, Any]:
         campaign = await self.get_campaign(campaign_id, agent_id)
-
-        if campaign.status != "draft":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Cannot launch campaign with status '{campaign.status}'. Only draft campaigns can be launched.",
-            )
 
         if not campaign.message_template:
             raise HTTPException(
@@ -185,14 +182,12 @@ class CampaignService:
                 detail="Campaign must have a message template before launching.",
             )
 
-        target_filters = campaign.target_filters or {}
-        target_type = target_filters.get("target_type", "groups")
-        group_ids: list[int] = list(target_filters.get("group_ids") or [])
+        resolved_group_ids = group_ids or list((campaign.target_filters or {}).get("group_ids") or [])
 
-        if not group_ids:
+        if not resolved_group_ids:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Campaign must have at least one target group.",
+                detail="At least one target group is required.",
             )
 
         now = datetime.now(timezone.utc)
@@ -200,7 +195,7 @@ class CampaignService:
 
         created_jobs: list[dict[str, Any]] = []
 
-        for tg_group_id in group_ids:
+        for tg_group_id in resolved_group_ids:
             job_payload = normalize_group_member_broadcast_payload(
                 {
                     "target_type": target_type,
@@ -225,14 +220,15 @@ class CampaignService:
             except ValueError as exc:
                 created_jobs.append({"id": None, "tg_group_id": tg_group_id, "error": str(exc)})
 
-        campaign.status = "running"
-        campaign.started_at = now
+        if campaign.status == "draft":
+            campaign.status = "running"
+            campaign.started_at = now
         campaign.updated_at = now
         await self.session.commit()
 
         return {
-            "status": "running",
-            "started_at": now.isoformat(),
+            "status": campaign.status,
+            "started_at": campaign.started_at.isoformat() if campaign.started_at else None,
             "jobs_created": len([j for j in created_jobs if j["id"] is not None]),
             "jobs_failed": len([j for j in created_jobs if j["id"] is None]),
             "jobs": created_jobs,

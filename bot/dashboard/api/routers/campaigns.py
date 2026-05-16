@@ -137,6 +137,8 @@ async def send_campaign(
         campaign_id=campaign_id,
         agent_id=agent_id,
         actor_user_id=identity.user_id,
+        group_ids=body.get("group_ids"),
+        target_type=body.get("target_type", "groups"),
         interval_seconds=body.get("interval_seconds", 3.0),
         threshold=body.get("threshold", 500),
     )
