@@ -69,14 +69,14 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   // Effects
   useEffect(() => {
-    void agentsApi.listCampaigns(account.id).then(setCampaigns).catch(() => {})
+    void agentsApi.listCampaigns(account.id).then((r) => setCampaigns(r.items ?? [])).catch(() => {})
   }, [account.id])
 
   useEffect(() => {
     const gq = bulkSourceGroupQuery || bulkTargetGroupQuery
     if (!gq.trim()) { setGroups([]); return }
     const timer = setTimeout(() => {
-      void agentsApi.fetchAgentGroups(account.id, gq).then(setGroups).catch(() => setGroups([]))
+      void agentsApi.fetchAgentGroups(account.id, gq).then((r) => setGroups(Array.isArray(r) ? r : [])).catch(() => setGroups([]))
     }, 350)
     return () => clearTimeout(timer)
   }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
