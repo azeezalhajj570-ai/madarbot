@@ -161,13 +161,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   return (
     <>
-      {!showSendForm ? (
-        <Button onClick={() => setShowSendForm(true)}>Send Message</Button>
-      ) : null}
-      {showSendForm ? (
       <Card title="Send Message" subtitle="Send bulk messages to members or groups.">
         {status ? <Note>{status}</Note> : null}
-
+        {!showSendForm ? (
+          <Button onClick={() => setShowSendForm(true)}>New Message</Button>
+        ) : null}
+        {showSendForm ? (<>
         {/* Campaign selector */}
         <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>Campaign (optional)</span>
@@ -302,8 +301,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         ) : null}
         {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
         <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
+        </>) : null}
       </Card>
-      ) : null}
 
       {broadcastJobs.length > 0 ? (
         <Card title="Recent Jobs" subtitle="Recent broadcast and scheduled messages.">
