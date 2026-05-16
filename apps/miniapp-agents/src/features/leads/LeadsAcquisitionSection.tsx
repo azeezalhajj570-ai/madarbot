@@ -201,6 +201,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
             <Button onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}>
               {isSaving ? 'Queuing...' : 'Queue scrape job'}
             </Button>
+            <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
