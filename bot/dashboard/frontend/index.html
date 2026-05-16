@@ -603,7 +603,7 @@
 
     function persistActiveGroup(groupId) {
       state.activeGroupId = groupId;
-      localStorage.setItem("combot.activeGroupId", String(groupId));
+      localStorage.setItem("madarbot.activeGroupId", String(groupId));
       state.ui.groupPopoverOpen = false;
       renderSidebar();
       renderTopbar();
@@ -760,7 +760,7 @@
         state.subscriptionGate.active = Boolean(payload.subscription_required);
         state.subscriptionGate.request = payload.subscription_request || null;
         if (!state.activeGroupId) {
-          const savedId = parseInt(localStorage.getItem("combot.activeGroupId"), 10);
+          const savedId = parseInt(localStorage.getItem("madarbot.activeGroupId"), 10);
           if (savedId && state.groups.some((group) => group.id === savedId)) {
             state.activeGroupId = savedId;
           }
@@ -816,7 +816,7 @@
       if (state.subscriptionGate.active) {
         roots.sidebar.innerHTML = `
           <div class="brand">
-            <span class="brand-mark">CB</span>
+            <span class="brand-mark">MB</span>
             <div class="brand-title">${escapeHtml(t("appTitle"))}</div>
             <div class="brand-subtitle">Dashboard ${escapeHtml(APP_VERSION)}</div>
           </div>
@@ -828,7 +828,7 @@
       const items = navigationItems();
       roots.sidebar.innerHTML = `
         <div class="brand">
-          <span class="brand-mark">CB</span>
+          <span class="brand-mark">MB</span>
           <div class="brand-title">${escapeHtml(t("appTitle"))}</div>
           <div class="brand-subtitle">Dashboard ${escapeHtml(APP_VERSION)}</div>
         </div>
@@ -879,7 +879,7 @@
       if (state.subscriptionGate.active) {
         roots.topbar.innerHTML = `
           <div class="page-header">
-            <div class="eyebrow">Combot</div>
+            <div class="eyebrow">MadarBot</div>
             <div class="page-title">${escapeHtml(t("subscriptionGateTitle"))}</div>
             <div class="page-subtitle">${escapeHtml(t("subscriptionGateSubtitle"))}</div>
           </div>
@@ -905,7 +905,7 @@
       const meta = routeMeta();
       roots.topbar.innerHTML = `
         <div class="page-header">
-          <div class="eyebrow">Combot</div>
+          <div class="eyebrow">MadarBot</div>
           <div class="page-title">${escapeHtml(meta.title)}</div>
           <div class="page-subtitle">${escapeHtml(meta.subtitle)}</div>
         </div>

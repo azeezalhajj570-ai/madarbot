@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
         await redis.aclose()
 
 
-app = FastAPI(title="Combot Dashboard API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="MadarBot Dashboard API", version="1.1.0", lifespan=lifespan)
 
 settings = get_settings()
 app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
@@ -259,7 +259,7 @@ if settings.mcp_enabled:
 @app.get("/")
 async def root() -> dict[str, str]:
     return {
-        "service": "combot-dashboard-api",
+        "service": "madarbot-dashboard-api",
         "status": "ok",
         "health": "/health",
         "webapp_admin": "/webapp/admin",
@@ -285,7 +285,7 @@ async def stripe_publishable_key() -> dict[str, str | None]:
     return {"publishable_key": settings.stripe_publishable_key}
 
 
-@app.get("/combot-dashboard-api")
+@app.get("/madarbot-dashboard-api")
 async def service_root() -> dict[str, str]:
     return await root()
 
