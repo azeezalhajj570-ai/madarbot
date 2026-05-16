@@ -2,7 +2,7 @@ from __future__ import annotations
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
-        "start_intro": "Welcome to Combot — your intelligent Telegram group management platform.\n\nI can help you:\n• Moderate groups with warnings, mutes, bans\n• Protect against spam, links, ads, and bots\n• Schedule announcements and bulk messages\n• Assign automated reply and notify tasks\n• Link agent accounts for delegated actions\n\nUse /help for commands or open the WebApp dashboard for full control.",
+        "start_intro": "Welcome to MadarBot — your intelligent Telegram group management platform.\n\nI can help you:\n• Moderate groups with warnings, mutes, bans\n• Protect against spam, links, ads, and bots\n• Schedule announcements and bulk messages\n• Assign automated reply and notify tasks\n• Link agent accounts for delegated actions\n\nUse /help for commands or open the WebApp dashboard for full control.",
         "main_menu": "Main Menu",
         "dashboard": "Dashboard",
         "moderation": "Moderation",
@@ -308,7 +308,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "joinreq_decline_failed": "Failed to decline join request on Telegram.",
     },
     "ar": {
-        "start_intro": "مرحباً بك في Combot — منصة إدارة مجموعات تيليجرام الذكية.\n\nيمكنني مساعدتك في:\n• إدارة المجموعات عبر التحذيرات والكتم والحظر\n• الحماية من السبام والروابط والإعلانات والبوتات\n• جدولة الإعلانات والرسائل الجماعية\n• تعيين مهام الرد التلقائي والإشعارات\n• ربط حسابات الوكلاء للإجراءات المفوضة\n\nاستخدم /help للأوامر أو افتح لوحة التحكم للإدارة الكاملة.",
+        "start_intro": "مرحباً بك في MadarBot — منصة إدارة مجموعات تيليجرام الذكية.\n\nيمكنني مساعدتك في:\n• إدارة المجموعات عبر التحذيرات والكتم والحظر\n• الحماية من السبام والروابط والإعلانات والبوتات\n• جدولة الإعلانات والرسائل الجماعية\n• تعيين مهام الرد التلقائي والإشعارات\n• ربط حسابات الوكلاء للإجراءات المفوضة\n\nاستخدم /help للأوامر أو افتح لوحة التحكم للإدارة الكاملة.",
         "main_menu": "القائمة الرئيسية",
         "dashboard": "لوحة التحكم",
         "moderation": "الإشراف",
