@@ -2,7 +2,7 @@ from __future__ import annotations
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
-        "start_intro": "Welcome to MadarBot — your Telegram account automation platform.\n\nI can help you:\n• Link real Telegram accounts as automated agents\n• Capture and manage leads with AI-powered detection\n• Send bulk messages to group members\n• Automate replies, welcome flows, and alerts\n• Moderate groups with AI-powered spam and scam protection\n• Get AI daily summaries and knowledge insights\n• Manage everything from the WebApp dashboard\n\nUse /help for commands or open the dashboard to get started.",
+        "start_intro": "Welcome to MadarBot — your Telegram account automation platform.\n\nI can help you:\n• Link real Telegram accounts as automated agents\n• Capture and manage leads with AI-powered detection\n• Send bulk messages to users and groups\n• Schedule messages for future delivery\n• Auto-reply on trigger with custom responses\n• Automate welcome flows, alerts, and notifications\n• Get AI daily summaries and knowledge insights\n\nOpen the app below to get started — everything is available from one place.",
         "main_menu": "Main Menu",
         "dashboard": "Dashboard",
         "moderation": "Moderation",
@@ -136,9 +136,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "scraper_open_prompt": "Open the scraper in the Telegram dashboard.",
         "settings_open_prompt": "Open settings in the Telegram dashboard.",
         "dashboard_not_configured": "Dashboard URL is not configured yet.",
-        "help_text": "Commands:\n/start - Open the main menu\n/dashboard - Open the WebApp dashboard\n/scraper - Open the scraper panel\n/settings - Open account settings\n/help - Show this help\n/lang - Switch language\n/subscribe - Request bot access\n\nAdmin in-group commands:\n/registergroup - Register this group\n/ban - Ban a replied user\n/unban - Unban a replied user\n/mute - Mute a replied user\n/unmute - Unmute a replied user\n/purge - Delete recent messages",
+        "help_text": "Commands:\n/start - Open the main menu\n/dashboard - Open the WebApp\n/scraper - Open the scraper panel\n/settings - Open account settings\n/help - Show this help\n/lang - Switch language\n/subscribe - Request bot access\n\nAdmin in-group commands:\n/registergroup - Register this group\n/ban - Ban a replied user\n/unban - Unban a replied user\n/mute - Mute a replied user\n/unmute - Unmute a replied user\n/purge - Delete recent messages",
         "agents_main_menu": "Agent Bot Menu",
-        "agents_help_text": "Commands:\n/start - Open the agents menu\n/help - Show help\n/lang - Switch language\n\nUse the menu button below to open the Agents Miniapp for managing linked accounts, scraping, and tasks.",
+        "agents_help_text": "Commands:\n/start - Open the agents menu\n/dashboard - Open the WebApp\n/help - Show help\n/lang - Switch language\n\nUse the menu button below to open the Agents Miniapp for managing linked accounts, scraping, and tasks.",
         "subscription_mandate_prompt": "To interact with this bot, send /subscribe so the owner can review your request.",
         "warnings_summary": "Warnings Summary",
         "group_settings_status": "Group settings",
@@ -308,7 +308,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "joinreq_decline_failed": "Failed to decline join request on Telegram.",
     },
     "ar": {
-        "start_intro": "مرحباً بك في MadarBot — منصة أتمتة حسابات تيليجرام.\n\nيمكنني مساعدتك في:\n• ربط حسابات تيليجرام حقيقية كوكلاء آليين\n• التقاط العملاء المحتملين وإدارتهم بالذكاء الاصطناعي\n• إرسال رسائل جماعية لأعضاء المجموعات\n• أتمتة الردود ورسائل الترحيب والتنبيهات\n• الإشراف على المجموعات بكشف السبام والاحتيال بالذكاء الاصطناعي\n• الحصول على ملخصات يومية ورؤى معرفية\n• إدارة كل شيء من لوحة التحكم\n\nاستخدم /help للأوامر أو افتح لوحة التحكم للبدء.",
+        "start_intro": "مرحباً بك في MadarBot — منصة أتمتة حسابات تيليجرام.\n\nيمكنني مساعدتك في:\n• ربط حسابات تيليجرام حقيقية كوكلاء آليين\n• التقاط العملاء المحتملين وإدارتهم بالذكاء الاصطناعي\n• إرسال رسائل جماعية للمستخدمين والمجموعات\n• جدولة الرسائل للإرسال في وقت لاحق\n• الرد التلقائي عند تفعيل الكلمات المفتاحية\n• أتمتة رسائل الترحيب والتنبيهات والإشعارات\n• الحصول على ملخصات يومية ورؤى معرفية\n\nافتح التطبيق من الأسفل للبدء — كل شيء متاح من مكان واحد.",
         "main_menu": "القائمة الرئيسية",
         "dashboard": "لوحة التحكم",
         "moderation": "الإشراف",
@@ -444,7 +444,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dashboard_not_configured": "رابط لوحة التحكم غير مضبوط بعد.",
         "help_text": "الأوامر:\n/start - فتح القائمة الرئيسية\n/dashboard - فتح لوحة التحكم\n/scraper - فتح لوحة السحب\n/settings - فتح إعدادات الحساب\n/help - عرض هذه المساعدة\n/lang - تبديل اللغة\n/subscribe - طلب الوصول إلى البوت\n\nأوامر المشرفين داخل المجموعة:\n/registergroup - تسجيل هذه المجموعة\n/ban - حظر مستخدم\n/unban - إلغاء حظر مستخدم\n/mute - كتم مستخدم\n/unmute - إلغاء كتم مستخدم\n/purge - حذف الرسائل الأخيرة",
         "agents_main_menu": "قائمة بوت الوكلاء",
-        "agents_help_text": "الأوامر:\n/start - فتح قائمة الوكلاء\n/help - عرض المساعدة\n/lang - تبديل اللغة\n\nاستخدم زر القائمة أدناه لفتح تطبيق الوكلاء لإدارة الحسابات المرتبطة وسحب البيانات والمهام.",
+        "agents_help_text": "الأوامر:\n/start - فتح قائمة الوكلاء\n/dashboard - فتح لوحة التحكم\n/help - عرض المساعدة\n/lang - تبديل اللغة\n\nاستخدم زر القائمة أدناه لفتح تطبيق الوكلاء لإدارة الحسابات المرتبطة وسحب البيانات والمهام.",
         "subscription_mandate_prompt": "للتفاعل مع هذا البوت، أرسل /subscribe حتى يراجع المالك طلبك.",
         "warnings_summary": "ملخص التحذيرات",
         "group_settings_status": "إعدادات المجموعة",
