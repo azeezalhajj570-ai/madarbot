@@ -67,20 +67,19 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
 
-  const groupQuery = bulkSourceGroupQuery || bulkTargetGroupQuery
-
   // Effects
   useEffect(() => {
     void agentsApi.listCampaigns(account.id).then(setCampaigns).catch(() => {})
   }, [account.id])
 
   useEffect(() => {
-    if (!groupQuery.trim()) { setGroups([]); return }
+    const gq = bulkSourceGroupQuery || bulkTargetGroupQuery
+    if (!gq.trim()) { setGroups([]); return }
     const timer = setTimeout(() => {
-      void agentsApi.fetchAgentGroups(account.id, groupQuery).then(setGroups).catch(() => setGroups([]))
+      void agentsApi.fetchAgentGroups(account.id, gq).then(setGroups).catch(() => setGroups([]))
     }, 350)
     return () => clearTimeout(timer)
-  }, [account.id, groupQuery])
+  }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
 
   useEffect(() => {
     void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
