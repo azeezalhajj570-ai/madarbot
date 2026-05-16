@@ -198,13 +198,11 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
                 <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
               </div>
             ) : null}
-            <div style={{ display: 'flex', gap: 0, borderRadius: 'var(--miniapp-radius-sm)', border: '1px solid var(--miniapp-border-soft)', overflow: 'hidden' }}>
-              <button type="button" onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}
-                style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: (isSaving || !scrapeSelectedGroup) ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: (isSaving || !scrapeSelectedGroup) ? 'var(--miniapp-bg-deep)' : 'var(--miniapp-coral)', color: (isSaving || !scrapeSelectedGroup) ? 'var(--miniapp-text-muted)' : '#fff' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}>
                 {isSaving ? 'Queuing...' : 'Queue scrape job'}
-              </button>
-              <div style={{ width: 1, background: 'var(--miniapp-border-soft)' }} />
-              <button type="button" onClick={() => { resetForm(); setIsFormOpen(false) }} style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)' }}>Cancel</button>
+              </Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         ) : (
@@ -233,13 +231,11 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
             <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
-            <div style={{ display: 'flex', gap: 0, borderRadius: 'var(--miniapp-radius-sm)', border: '1px solid var(--miniapp-border-soft)', overflow: 'hidden' }}>
-              <button type="button" onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !taskKeywords.length}
-                style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: (isSaving || !taskKeywords.length) ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: (isSaving || !taskKeywords.length) ? 'var(--miniapp-bg-deep)' : 'var(--miniapp-coral)', color: (isSaving || !taskKeywords.length) ? 'var(--miniapp-text-muted)' : '#fff' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !taskKeywords.length}>
                 {isSaving ? 'Working...' : 'Save'}
-              </button>
-              <div style={{ width: 1, background: 'var(--miniapp-border-soft)' }} />
-              <button type="button" onClick={() => { resetForm(); setIsFormOpen(false) }} style={{ flex: 1, padding: '11px 12px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)' }}>Cancel</button>
+              </Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         )}
