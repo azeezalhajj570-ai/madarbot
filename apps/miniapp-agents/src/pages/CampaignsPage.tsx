@@ -19,7 +19,6 @@ import type {
   AgentJobRecord,
   BulkPreflightResult,
   Campaign,
-  CampaignSendLogEntry,
 } from '@miniapp/shared'
 
 type SelectedGroupChip = {
@@ -32,13 +31,9 @@ const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
-
-  // Campaign list
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false)
 
-  // Quick Send form
-  const [qsCampaigns, setQsCampaigns] = useState<Campaign[]>([])
+  // Send form
   const [qsSelectedCampaignId, setQsSelectedCampaignId] = useState<number | ''>('')
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [quickName, setQuickName] = useState('')
@@ -72,39 +67,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
 
-  // Create campaign form
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [createDescription, setCreateDescription] = useState('')
-  const [createMessage, setCreateMessage] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-
-  // Campaign detail modal
-  const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null)
-  const [showSendPicker, setShowSendPicker] = useState(false)
-  const [sendGroupQuery, setSendGroupQuery] = useState('')
-  const [sendSelectedGroups, setSendSelectedGroups] = useState<SelectedGroupChip[]>([])
-  const [sendLoading, setSendLoading] = useState(false)
-  const [sendResult, setSendResult] = useState<string | null>(null)
-  const [sendLogs, setSendLogs] = useState<CampaignSendLogEntry[]>([])
-  const [sendLogsTotal, setSendLogsTotal] = useState(0)
-  const [sendLogsPage, setSendLogsPage] = useState(1)
-  const [loadingSendLogs, setLoadingSendLogs] = useState(false)
-
-  const groupQuery = bulkSourceGroupQuery || bulkTargetGroupQuery || sendGroupQuery
+  const groupQuery = bulkSourceGroupQuery || bulkTargetGroupQuery
 
   // Effects
-  useEffect(() => { loadCampaigns() }, [account.id])
-
-  async function loadCampaigns() {
-    setLoadingCampaigns(true)
-    try {
-      const result = await agentsApi.listCampaigns(account.id)
-      setCampaigns(result.items)
-      setQsCampaigns(result.items)
-    } catch { setStatus('Failed to load campaigns') }
-    finally { setLoadingCampaigns(false) }
-  }
+  useEffect(() => {
+    void agentsApi.listCampaigns(account.id).then(setCampaigns).catch(() => {})
+  }, [account.id])
 
   useEffect(() => {
     if (!groupQuery.trim()) { setGroups([]); return }
@@ -139,23 +107,22 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   useEffect(() => {
     if (qsSelectedCampaignId === '') return
-    const campaign = qsCampaigns.find((c) => c.id === qsSelectedCampaignId)
+    const campaign = campaigns.find((c) => c.id === qsSelectedCampaignId)
     if (campaign?.message_template) setBulkMessage(campaign.message_template)
   }, [qsSelectedCampaignId])
 
-  // Helpers
-  function resetBulkForm() {
+  function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessage('')
     setBulkThreshold('25'); setBulkIntervalSeconds('1')
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setExcludeAdmins(false); setExcludeBots(false); setBulkSummary(null)
-    setQsSelectedCampaignId(''); setShowQuickCreate(false); setStatus(null)
+    setQsSelectedCampaignId(''); setStatus(null)
   }
 
-  async function handleQuickSend() {
-    if (!bulkMessage.trim()) { setStatus('Bulk message text is required'); return }
+  async function handleSend() {
+    if (!bulkMessage.trim()) { setStatus('Message text is required'); return }
     if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) { setStatus('Source group is required'); return }
     if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) { setStatus('At least one target group is required'); return }
     const threshold = Number.parseInt(bulkThreshold, 10)
@@ -172,7 +139,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         } else { jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
         const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
         await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
-        setBulkSummary(null); resetBulkForm(); setStatus(null)
+        setBulkSummary(null); resetForm(); setStatus(null)
         onSaved(scheduledAt ? 'Bulk message scheduled' : 'Bulk message job queued')
         void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
       } catch (error) { setStatus(error instanceof Error ? error.message : 'Failed to queue bulk message') }
@@ -192,87 +159,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     finally { setLoadingBulkSummary(false) }
   }
 
-  async function loadSendLogs(campaignId: number, page = 1) {
-    setLoadingSendLogs(true); setSendLogsPage(page)
-    try { const result = await agentsApi.getCampaignSendLogs(account.id, campaignId, { page, page_size: 50 }); setSendLogs(result.items); setSendLogsTotal(result.total) }
-    catch { setStatus('Failed to load send logs') }
-    finally { setLoadingSendLogs(false) }
-  }
-
-  async function handleSend(campaign: Campaign) {
-    if (!sendSelectedGroups.length) { setSendResult('Select at least one group'); return }
-    setSendLoading(true); setSendResult(null)
-    try {
-      const result = await agentsApi.sendCampaign(account.id, campaign.id, { group_ids: sendSelectedGroups.map((g) => g.tg_group_id) })
-      setSendResult(`${result.jobs_created} job(s) created`); setSendSelectedGroups([]); setShowSendPicker(false)
-      onSaved(`Sent to ${result.jobs_created} group(s)`); await loadCampaigns(); await loadSendLogs(campaign.id)
-    } catch (error) { setSendResult(error instanceof Error ? error.message : 'Failed to send') }
-    finally { setSendLoading(false) }
-  }
-
-  // Campaign detail modal
-  if (detailCampaign) {
-    return (
-      <Card title={detailCampaign.name} subtitle={`Status: ${detailCampaign.status}`}>
-        {status ? <Note>{status}</Note> : null}
-        <div style={{ display: 'grid', gap: 8, marginBottom: 12, padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', fontSize: 13 }}>
-          {detailCampaign.description ? <div>{detailCampaign.description}</div> : null}
-          {detailCampaign.message_template ? <div style={{ color: 'var(--miniapp-text-muted)' }}>Template: {detailCampaign.message_template.slice(0, 120)}</div> : null}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <span>Sent: <strong>{detailCampaign.sent_count}</strong></span><span>Failed: <strong>{detailCampaign.failed_count}</strong></span><span>Skipped: <strong>{detailCampaign.skipped_count}</strong></span>
-          </div>
-          {detailCampaign.started_at ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>First send: {new Date(detailCampaign.started_at).toLocaleString()}</div> : null}
-        </div>
-        {!showSendPicker ? (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button onClick={() => { setShowSendPicker(true); setSendResult(null) }}>Send to Groups</Button>
-            <Button tone="secondary" onClick={() => { setDetailCampaign(null) }}>Back</Button>
-            {detailCampaign.status !== 'draft' ? <Button tone="secondary" onClick={() => loadSendLogs(detailCampaign.id, 1)}>Refresh Logs</Button> : null}
-          </div>
-        ) : null}
-        {showSendPicker ? (
-          <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-            <MultiGroupSelect query={sendGroupQuery} onQueryChange={setSendGroupQuery} groups={groups} selected={sendSelectedGroups}
-              onToggle={(g) => setSendSelectedGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
-            {sendResult ? <Note>{sendResult}</Note> : null}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => handleSend(detailCampaign)} disabled={sendLoading || !sendSelectedGroups.length}>{sendLoading ? 'Sending...' : `Send to ${sendSelectedGroups.length} group(s)`}</Button>
-              <Button tone="secondary" onClick={() => { setShowSendPicker(false); setSendSelectedGroups([]); setSendResult(null) }}>Cancel</Button>
-            </div>
-          </div>
-        ) : null}
-        {loadingSendLogs ? <Note>Loading send logs...</Note> : null}
-        {!loadingSendLogs && sendLogs.length > 0 ? (
-          <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
-            <strong style={{ fontSize: 13 }}>Send Logs ({sendLogsTotal})</strong>
-            {sendLogs.map((log) => (
-              <div key={log.id} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', fontSize: 12, display: 'grid', gap: 2 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 600 }}>User {log.tg_user_id ?? 'N/A'}</span>
-                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : log.status === 'failed' ? 'rgba(161,87,62,0.12)' : 'var(--miniapp-bg-deep)', color: log.status === 'sent' ? 'var(--miniapp-sage)' : log.status === 'failed' ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)' }}>{log.status}</span>
-                </div>
-                <div style={{ color: 'var(--miniapp-text-muted)' }}>{log.message_text.slice(0, 80)}</div>
-                {log.sent_at ? <div style={{ fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{new Date(log.sent_at).toLocaleString()}</div> : null}
-              </div>
-            ))}
-            {sendLogsTotal > 50 ? (
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-                <Button tone="secondary" disabled={sendLogsPage <= 1} onClick={() => loadSendLogs(detailCampaign.id, sendLogsPage - 1)}>Prev</Button>
-                <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', alignSelf: 'center' }}>{sendLogsPage}</span>
-                <Button tone="secondary" disabled={sendLogsPage * 50 >= sendLogsTotal} onClick={() => loadSendLogs(detailCampaign.id, sendLogsPage + 1)}>Next</Button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {!loadingSendLogs && detailCampaign.status !== 'draft' && sendLogs.length === 0 ? <Note>No send logs yet.</Note> : null}
-      </Card>
-    )
-  }
-
-  // Main view
   return (
     <>
-      {/* ── Quick Send Form (always visible) ── */}
       <Card title="Send Message" subtitle="Send bulk messages to members or groups.">
         {status ? <Note>{status}</Note> : null}
 
@@ -283,31 +171,11 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
               style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }}>
               <option value="">— No campaign —</option>
-              {qsCampaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+              {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
             <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setShowQuickCreate(true) }}
-              style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }}>+</button>
+              style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }} title="Create new campaign">+</button>
           </div>
-          {showQuickCreate ? (
-            <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)' }}>
-              <strong style={{ fontSize: 13 }}>New Campaign</strong>
-              <input type="text" value={quickName} onChange={(e) => setQuickName(e.target.value)} placeholder="Campaign name"
-                style={{ boxSizing: 'border-box', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', width: '100%' }} />
-              <textarea value={quickMessage} onChange={(e) => setQuickMessage(e.target.value)} placeholder="Message template" rows={3}
-                style={{ boxSizing: 'border-box', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical', width: '100%' }} />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button disabled={quickSaving || !quickName.trim() || !quickMessage.trim()} onClick={async () => {
-                  if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
-                  try {
-                    const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
-                    setQsCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved('Campaign created')
-                  } catch (e) { setStatus(e instanceof Error ? e.message : 'Failed to create campaign') }
-                  finally { setQuickSaving(false) }
-                }}>{quickSaving ? 'Creating...' : 'Save'}</Button>
-                <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
-              </div>
-            </div>
-          ) : null}
         </div>
 
         {/* Target type toggle */}
@@ -410,7 +278,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               background: bulkScheduleMode === m ? 'var(--miniapp-surface)' : 'transparent',
               color: bulkScheduleMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
               fontWeight: bulkScheduleMode === m ? 600 : 400, fontSize: 13,
-            }}>{m === 'now' ? 'Send now' : 'Schedule for later'}</button>
+            }}>{m === 'now' ? 'Send now' : 'Schedule'}</button>
           ))}
         </div>
         {bulkScheduleMode === 'schedule' ? (
@@ -429,10 +297,9 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>Preparing summary...</Note> : null}
-        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleQuickSend()} onCancel={resetBulkForm} />
+        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? 'Confirm & Schedule' : 'Confirm & Send') : loadingBulkSummary ? 'Preparing...' : 'Prepare'} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={resetForm} />
       </Card>
 
-      {/* ── Recent Jobs ── */}
       {broadcastJobs.length > 0 ? (
         <Card title="Recent Jobs" subtitle="Recent broadcast and scheduled messages.">
           <div style={{ display: 'grid', gap: 6 }}>
@@ -458,43 +325,29 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         </Card>
       ) : null}
 
-      {/* ── Campaign List ── */}
-      <Card title="Campaigns" subtitle="Tap a campaign to send or view logs.">
-        {loadingCampaigns ? <Note>Loading campaigns...</Note> : null}
-        {!showCreateForm ? <Button onClick={() => { setCreateName(''); setCreateDescription(''); setCreateMessage(''); setShowCreateForm(true) }}>New Campaign</Button> : null}
-        {showCreateForm ? (
-          <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-            <InputField label="Campaign Name" value={createName} onChange={setCreateName} placeholder="Summer promotion" />
-            <InputField label="Description (optional)" value={createDescription} onChange={setCreateDescription} placeholder="Campaign goal" />
-            <TextAreaField label="Message Template" value={createMessage} onChange={setCreateMessage} rows={4} placeholder="Hello, this is our latest update." />
-            <FormActions submitLabel={isSaving ? 'Saving...' : 'Save'} submitDisabled={isSaving} onSubmit={async () => {
-              if (!createName.trim() || !createMessage.trim()) { setStatus('Name and message are required'); return }
-              setIsSaving(true)
-              try { await agentsApi.createCampaign(account.id, { name: createName.trim(), description: createDescription.trim() || undefined, message_template: createMessage.trim() }); setShowCreateForm(false); onSaved('Campaign created'); await loadCampaigns() }
-              catch (error) { setStatus(error instanceof Error ? error.message : 'Failed to create campaign') }
-              finally { setIsSaving(false) }
-            }} onCancel={() => { setShowCreateForm(false); setStatus(null) }} />
+      {/* Campaign create modal */}
+      {showQuickCreate ? (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(32, 25, 16, 0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 1100 }} onClick={() => setShowQuickCreate(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(400px, 100%)', background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 20, padding: 24, display: 'grid', gap: 16, boxShadow: '0 22px 60px rgba(32,25,16,0.22)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>New Campaign</h2>
+              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
+            </div>
+            <input type="text" value={quickName} onChange={(e) => setQuickName(e.target.value)} placeholder="Campaign name" autoFocus
+              style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', width: '100%' }} />
+            <textarea value={quickMessage} onChange={(e) => setQuickMessage(e.target.value)} placeholder="Message template" rows={4}
+              style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical', width: '100%' }} />
+            <Button disabled={quickSaving || !quickName.trim() || !quickMessage.trim()} onClick={async () => {
+              if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
+              try {
+                const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
+                setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved('Campaign created')
+              } catch (e) { setStatus(e instanceof Error ? e.message : 'Failed to create campaign') }
+              finally { setQuickSaving(false) }
+            }}>{quickSaving ? 'Saving...' : 'Save'}</Button>
           </div>
-        ) : null}
-        {!loadingCampaigns && campaigns.length > 0 ? (
-          <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
-            {campaigns.map((c) => (
-              <div key={c.id} onClick={async () => {
-                try { const camp = await agentsApi.getCampaign(account.id, c.id); setDetailCampaign(camp); setSendLogs([]); setSendLogsTotal(0); setSendLogsPage(1); setShowSendPicker(false); setSendResult(null); if (camp.status !== 'draft') await loadSendLogs(camp.id) }
-                catch { setStatus('Failed to load campaign') }
-              }} style={{ cursor: 'pointer', padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 4 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong style={{ fontSize: 13 }}>{c.name}</strong>
-                  <span style={{ padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, background: c.status === 'completed' ? 'var(--miniapp-sage-dim)' : c.status === 'running' ? 'rgba(90,122,90,0.12)' : 'var(--miniapp-bg-deep)', color: c.status === 'completed' ? 'var(--miniapp-sage)' : 'var(--miniapp-text-muted)' }}>{c.status}</span>
-                </div>
-                {c.description ? <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>{c.description}</div> : null}
-                <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', display: 'flex', gap: 12 }}><span>Sent: {c.sent_count}</span><span>Failed: {c.failed_count}</span><span>Skipped: {c.skipped_count}</span></div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {!loadingCampaigns && campaigns.length === 0 ? <div style={{ marginTop: 8 }}><Note>No campaigns yet.</Note></div> : null}
-      </Card>
+        </div>
+      ) : null}
     </>
   )
 }
