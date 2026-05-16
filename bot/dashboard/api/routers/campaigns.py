@@ -39,7 +39,7 @@ async def create_campaign(
         message_template=body.get("message_template"),
         target_filters=body.get("target_filters"),
         scheduled_at=_parse_dt(body.get("scheduled_at")),
-        created_by=identity.tg_user_id,
+        created_by=identity.user_id,
     )
     return service._to_dict(campaign)
 
