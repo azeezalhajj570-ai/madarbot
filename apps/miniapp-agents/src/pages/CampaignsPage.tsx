@@ -249,7 +249,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             <InputField label="Campaign Name" value={createName} onChange={setCreateName} placeholder="Summer promotion" />
             <InputField label="Description (optional)" value={createDescription} onChange={setCreateDescription} placeholder="Describe the campaign goal" />
             <TextAreaField label="Message Template" value={createMessage} onChange={setCreateMessage} rows={5} placeholder="Hello, this is our latest update." />
-            <FormActions submitLabel={isSaving ? 'Creating...' : 'Create Campaign'} submitDisabled={isSaving} onSubmit={() => void handleCreate()} onCancel={() => { resetCreateForm(); setShowCreateForm(false) }} />
+            <FormActions submitLabel={isSaving ? 'Saving...' : 'Save'} submitDisabled={isSaving} onSubmit={() => void handleCreate()} onCancel={() => { resetCreateForm(); setShowCreateForm(false) }} />
           </div>
         ) : null}
       </Card>
