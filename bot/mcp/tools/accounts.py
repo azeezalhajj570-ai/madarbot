@@ -7,7 +7,6 @@ from bot.agents.service import AgentService
 from bot.db.session import SessionLocal
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     error_response,
     success_response,
     to_mcp_text,
@@ -32,37 +31,6 @@ def _serialize_agent(agent) -> dict:
         "created_at": agent.created_at.isoformat() if agent.created_at else None,
         "updated_at": agent.updated_at.isoformat() if agent.updated_at else None,
     }
-
-
-ACCOUNT_OUTPUT_SCHEMA = {
-    **OUTPUT_SCHEMA_BASE,
-    "properties": {
-        **OUTPUT_SCHEMA_BASE["properties"],
-        "structuredContent": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "accounts": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {"type": "integer"},
-                                    "telegram_user_id": {"type": "integer"},
-                                    "status": {"type": "string"},
-                                    "external_account_id": {"type": "string"},
-                                },
-                            },
-                        },
-                        "total": {"type": "integer"},
-                    },
-                },
-            },
-        },
-    },
-}
 
 
 def register_account_tools(server: FastMCP) -> None:

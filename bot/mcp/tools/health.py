@@ -5,13 +5,9 @@ from mcp.types import ToolAnnotations
 
 from bot.mcp.context import resolve_mcp_context
 from bot.mcp.structured_response import (
-    OUTPUT_SCHEMA_BASE,
     success_response,
     to_mcp_text,
 )
-
-# Output schema for health tool (used by mcp_router for tools/list)
-OUTPUT_SCHEMA = OUTPUT_SCHEMA_BASE
 
 
 def register_health_tools(server: FastMCP) -> None:
