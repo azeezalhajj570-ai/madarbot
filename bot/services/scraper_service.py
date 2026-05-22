@@ -594,8 +594,10 @@ class ScraperService:
             try:
                 from bot.agents.session import _client_pool
                 _client_pool.pop(agent_id, None)
-                managed_client = await SessionManager().get_client(agent_id)
+                sm = SessionManager()
+                managed_client = await sm.get_client(agent_id)
                 should_disconnect = True
+                logger.info("scraper_fresh_client_created", agent_id=agent_id)
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
                 return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False, "conversation_jobs": []}
@@ -635,6 +637,7 @@ class ScraperService:
             member_batch: list[dict[str, Any]] = []
 
             while limit <= 0 or success_count < limit:
+                logger.info("scraper_fetching", offset_id=offset_id, success_count=success_count)
                 try:
                     result = await managed_client(GetHistoryRequest(
                         peer=peer, limit=100, offset_id=offset_id,
