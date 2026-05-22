@@ -39,7 +39,8 @@ from bot.agents.runtime import (
 from bot.agents.session import SessionManager
 from bot.automation.registry import build_default_registry
 from bot.db import session as db_session
-from bot.db.models import Agent, AgentJob
+from bot.db.models import Agent, AgentJob, ScrapedMessage
+from bot.services.scrapers.conversation_builder import build_conversations_from_scrape
 from bot.workers.app import redis_broker  # noqa: F401
 
 
@@ -577,3 +578,48 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
 @dramatiq.actor(queue_name="agent", max_retries=3, min_backoff=5000)
 async def execute_agent_job(agent_id: int, job_id: int) -> None:
     await _execute_agent_job_impl(agent_id, job_id)
+
+
+@dramatiq.actor(queue_name="scraper", max_retries=3, min_backoff=5000)
+async def build_conversations_actor(
+    scraped_group_id: int,
+    tg_group_id: int,
+    first_id: int,
+    last_id: int,
+) -> None:
+    async with SessionLocal() as session:
+        try:
+            rows = (
+                await session.execute(
+                    select(
+                        ScrapedMessage.message_id,
+                        ScrapedMessage.sender_user_id,
+                        ScrapedMessage.sender_username,
+                        ScrapedMessage.sender_first_name,
+                        ScrapedMessage.sender_last_name,
+                        ScrapedMessage.message_text,
+                        ScrapedMessage.message_date,
+                        ScrapedMessage.message_type,
+                        ScrapedMessage.reply_to_message_id,
+                        ScrapedMessage.reply_to_top_id,
+                    ).where(
+                        ScrapedMessage.scraped_group_id == scraped_group_id,
+                        ScrapedMessage.message_id >= first_id,
+                        ScrapedMessage.message_id <= last_id,
+                    )
+                )
+            ).mappings().all()
+
+            message_rows = [dict(r) for r in rows]
+
+            await build_conversations_from_scrape(
+                session,
+                scraped_group_id=scraped_group_id,
+                tg_group_id=tg_group_id,
+                message_rows=message_rows,
+            )
+
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

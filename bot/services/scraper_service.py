@@ -11,20 +11,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from telethon.tl.types import ChannelParticipantsAdmins
 
+from dataclasses import dataclass, field
+
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.session import SessionManager
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
 from bot.db.models.scraper import ScrapedLead
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
-from bot.services.scrapers.conversation_builder import build_conversations_from_scrape
 
 logger = structlog.get_logger(__name__)
 
 
+@dataclass
+class ScrapeResult:
+    success_count: int = 0
+    error_count: int = 0
+    total_scraped: int = 0
+    member_success_count: int = 0
+    batches: int = 0
+    completed: bool = False
+    last_offset_id: int = 0
+    conversation_jobs: list[dict] = field(default_factory=list)
+
+
 class ScraperService:
-    _MEMBER_BATCH_SIZE = 500
-    _MESSAGE_BATCH_SIZE = 500
+    _MEMBER_BATCH_SIZE = 3000
+    _MESSAGE_BATCH_SIZE = 3000
+    _CHECKPOINT_EVERY = 10000
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -566,7 +580,7 @@ class ScraperService:
         tg_group_id: int,
         limit: int = 100,
         max_age_days: int | None = None,
-        checkpoint_batch_size: int = 200,
+        checkpoint_batch_size: int = 500,
         client: Any | None = None,
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
@@ -578,6 +592,7 @@ class ScraperService:
                 "member_success_count": 0,
                 "batches": 0,
                 "completed": False,
+                "conversation_jobs": [],
             }
 
         managed_client = client
@@ -595,6 +610,7 @@ class ScraperService:
                     "member_success_count": 0,
                     "batches": 0,
                     "completed": False,
+                    "conversation_jobs": [],
                 }
 
         try:
@@ -621,6 +637,8 @@ class ScraperService:
             member_success_count = 0
             reached_end = False
             existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
+            conversation_jobs: list[dict] = []
+            last_checkpoint = 0
 
             while limit <= 0 or (success_count < limit):
                 batch_success = 0
@@ -715,12 +733,15 @@ class ScraperService:
 
                 if message_batch:
                     await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
-                    await build_conversations_from_scrape(
-                        self.session,
-                        scraped_group_id=scraped_group.id,
-                        tg_group_id=tg_group_id,
-                        message_rows=message_batch,
-                    )
+                    message_ids = [m["message_id"] for m in message_batch]
+                    first_id = min(message_ids)
+                    last_id = max(message_ids)
+                    conversation_jobs.append({
+                        "scraped_group_id": scraped_group.id,
+                        "tg_group_id": tg_group_id,
+                        "first_id": first_id,
+                        "last_id": last_id,
+                    })
                 if member_batch:
                     await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
 
@@ -731,18 +752,19 @@ class ScraperService:
                 if lowest_id is not None:
                     last_offset_id = lowest_id
 
-                checkpoint_state: dict[str, Any] = scraped_group.scrape_state or {}
-                checkpoint_state["messages"] = {
-                    "last_scraped_message_id": last_offset_id,
-                    "total_success": total_success + success_count,
-                    "total_errors": total_errors + error_count,
-                    "batches_completed": batches_completed + batch_count,
-                    "last_batch_at": datetime.utcnow().isoformat(),
-                }
-                scraped_group.scrape_state = checkpoint_state
-
-                scraped_group.updated_at = datetime.utcnow()
-                await self.session.commit()
+                if success_count - last_checkpoint >= self._CHECKPOINT_EVERY or reached_end:
+                    checkpoint_state: dict[str, Any] = scraped_group.scrape_state or {}
+                    checkpoint_state["messages"] = {
+                        "last_scraped_message_id": last_offset_id,
+                        "total_success": total_success + success_count,
+                        "total_errors": total_errors + error_count,
+                        "batches_completed": batches_completed + batch_count,
+                        "last_batch_at": datetime.utcnow().isoformat(),
+                    }
+                    scraped_group.scrape_state = checkpoint_state
+                    scraped_group.updated_at = datetime.utcnow()
+                    await self.session.commit()
+                    last_checkpoint = success_count
 
                 if reached_end:
                     break
@@ -755,6 +777,7 @@ class ScraperService:
                 "batches": batch_count,
                 "completed": reached_end,
                 "last_offset_id": last_offset_id,
+                "conversation_jobs": conversation_jobs,
             }
         except Exception as exc:
             await self.session.rollback()
@@ -771,6 +794,7 @@ class ScraperService:
                 "member_success_count": 0,
                 "batches": 0,
                 "completed": False,
+                "conversation_jobs": [],
             }
         finally:
             if should_disconnect:
@@ -802,7 +826,7 @@ class ScraperService:
                 tg_group_id=tg_group_id,
                 limit=500,
                 max_age_days=recent_days,
-                checkpoint_batch_size=200,
+                checkpoint_batch_size=500,
                 client=managed_client,
             )
 

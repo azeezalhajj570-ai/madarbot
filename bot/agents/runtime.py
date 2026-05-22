@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from aiogram import Bot
+from dramatiq.message import Message
 import structlog
 from sqlalchemy import select
 
@@ -28,6 +29,7 @@ from bot.db.session import SessionLocal
 from bot.utils.rate_limiter import AgentRateLimiter
 from bot.services.notify_destination_approval_service import NotifyDestinationApprovalService
 from bot.services.task_activity_service import TaskActivityService
+from bot.workers.app import redis_broker
 
 __all__ = [
     "ADD_CONTACT_JOB_TYPE",
@@ -676,8 +678,31 @@ class ScraperRuntime:
                         tg_group_id=int(tg_group_id),
                         limit=int(payload.get("limit", payload.get("message_limit", 100))),
                         max_age_days=max_age_days,
+                        checkpoint_batch_size=int(payload.get("checkpoint_batch_size", 500)),
                         client=client,
                     )
+                    conv_jobs = result.pop("conversation_jobs", [])
+                    if conv_jobs:
+                        from redis.asyncio import Redis
+                        try:
+                            redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
+                            queue_depth = await redis_client.llen("dramatiq:scraper")
+                            await redis_client.aclose()
+                            if queue_depth > 1000:
+                                logger.warning("conversation_queue_overloaded", depth=queue_depth)
+                                await asyncio.sleep(30)
+                        except Exception:
+                            pass
+                        for job in conv_jobs:
+                            redis_broker.enqueue(
+                                Message(
+                                    queue_name="scraper",
+                                    actor_name="build_conversations_actor",
+                                    args=(job["scraped_group_id"], job["tg_group_id"], job["first_id"], job["last_id"]),
+                                    kwargs={},
+                                    options={},
+                                )
+                            )
                 elif scan_strategy == "two_period":
                     recent_days = int(payload.get("recent_days", 30))
                     archive_days = int(payload.get("archive_days", 365))
