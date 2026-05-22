@@ -592,6 +592,8 @@ class ScraperService:
         should_disconnect = False
         if managed_client is None:
             try:
+                from bot.agents.session import _client_pool
+                _client_pool.pop(agent_id, None)
                 managed_client = await SessionManager().get_client(agent_id)
                 should_disconnect = True
             except AgentSessionError:

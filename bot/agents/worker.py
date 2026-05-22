@@ -515,7 +515,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     SCRAPER_FULL_GROUP_JOB_TYPE,
                 }:
                     result = await scraper_runtime.execute(
-                        client=client,
+                        client=None,
                         agent=agent,
                         payload=dict(job.job_payload or {}),
                         job_type=job.job_type,
