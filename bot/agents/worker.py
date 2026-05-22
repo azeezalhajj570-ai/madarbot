@@ -575,12 +575,12 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     bound_logger.info("agent_job_succeeded")
 
 
-@dramatiq.actor(queue_name="agent", max_retries=3, min_backoff=5000)
+@dramatiq.actor(queue_name="agent", max_retries=3, min_backoff=5000, time_limit=86_400_000)
 async def execute_agent_job(agent_id: int, job_id: int) -> None:
     await _execute_agent_job_impl(agent_id, job_id)
 
 
-@dramatiq.actor(queue_name="scraper", max_retries=3, min_backoff=5000)
+@dramatiq.actor(queue_name="scraper", max_retries=3, min_backoff=5000, time_limit=86_400_000)
 async def build_conversations_actor(
     scraped_group_id: int,
     tg_group_id: int,
