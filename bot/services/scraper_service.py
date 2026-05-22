@@ -37,8 +37,8 @@ class ScrapeResult:
 
 
 class ScraperService:
-    _MEMBER_BATCH_SIZE = 3000
-    _MESSAGE_BATCH_SIZE = 3000
+    _MEMBER_BATCH_SIZE = 1800
+    _MESSAGE_BATCH_SIZE = 1800
     _CHECKPOINT_EVERY = 10000
 
     def __init__(self, session: AsyncSession) -> None:
