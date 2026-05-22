@@ -740,6 +740,7 @@ class ScraperService:
                         break
 
                     batch_lowest_id = min(m.id for m in result.messages)
+                    await asyncio.sleep(3)
 
                 if inner_count == 0:
                     reached_end = True
