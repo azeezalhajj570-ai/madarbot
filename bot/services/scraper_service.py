@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from datetime import datetime, timedelta
 from typing import Any
@@ -624,6 +625,12 @@ class ScraperService:
                 managed_client, int(tg_group_id), self.session
             )
 
+            from telethon.tl.functions.messages import GetHistoryRequest
+            from telethon.tl.types import InputPeerChannel
+            from telethon.errors import FloodWaitError
+
+            peer = InputPeerChannel(channel_id=abs(entity.id), access_hash=entity.access_hash)
+
             checkpoint = (scraped_group.scrape_state or {}).get("messages", {})
             last_offset_id = checkpoint.get("last_scraped_message_id", 0)
             total_success = checkpoint.get("total_success", 0)
@@ -639,120 +646,121 @@ class ScraperService:
             existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
             conversation_jobs: list[dict] = []
             last_checkpoint = 0
+            per_request_limit = 100
+            min_date = (
+                datetime.utcnow() - timedelta(days=max(1, int(max_age_days)))
+                if max_age_days is not None
+                else None
+            )
 
             while limit <= 0 or (success_count < limit):
-                batch_success = 0
-                batch_errors = 0
-                batch_scraped = 0
                 message_batch: list[dict[str, Any]] = []
                 member_batch: list[dict[str, Any]] = []
                 canonical_group_id = canonical_tg_group_id(int(tg_group_id))
-                min_date = (
-                    datetime.utcnow() - timedelta(days=max(1, int(max_age_days)))
-                    if max_age_days is not None
-                    else None
-                )
-                lowest_id = None
+                batch_lowest_id = last_offset_id or 0
+                inner_count = 0
 
-                iterator_args = {"entity": entity, "limit": checkpoint_batch_size}
-                if last_offset_id > 0:
-                    iterator_args["offset_id"] = last_offset_id
+                while limit <= 0 or (success_count + inner_count < limit):
+                    try:
+                        result = await managed_client(
+                            GetHistoryRequest(
+                                peer=peer,
+                                limit=per_request_limit,
+                                offset_id=batch_lowest_id,
+                                offset_date=None,
+                                add_offset=0,
+                                max_id=0,
+                                min_id=0,
+                                hash=0,
+                            )
+                        )
+                    except FloodWaitError as fwe:
+                        wait_sec = min(fwe.seconds, 60)
+                        logger.warning("get_history_flood_wait", seconds=wait_sec)
+                        await asyncio.sleep(wait_sec)
+                        continue
 
-                async for message in managed_client.iter_messages(**iterator_args):
-                    msg_date = getattr(message, "date", None)
-                    if (
-                        isinstance(msg_date, datetime)
-                        and min_date is not None
-                        and msg_date.replace(tzinfo=None) < min_date
-                    ):
+                    if not result.messages:
                         reached_end = True
                         break
-                    batch_scraped += 1
-                    msg_id = getattr(message, "id", None)
-                    if msg_id is not None:
-                        lowest_id = (
-                            min(lowest_id or msg_id, msg_id) if lowest_id is not None else msg_id
-                        )
-                    try:
+
+                    for msg in result.messages:
+                        msg_id = getattr(msg, "id", None)
                         if msg_id is None:
                             continue
 
-                        sender_data = await entity_resolver.extract_message_sender_data(message)
-                        (
-                            sender_user_id,
-                            sender_username,
-                            sender_first_name,
-                            sender_last_name,
-                            sender_raw_data,
-                        ) = sender_data
+                        msg_date = getattr(msg, "date", None)
+                        if isinstance(msg_date, datetime) and min_date is not None and msg_date.replace(tzinfo=None) < min_date:
+                            reached_end = True
+                            break
 
-                        msg_row = serializers.build_message_row_from_msg(
-                            message,
-                            scraped_group.id,
-                            canonical_group_id,
-                            int(msg_id),
-                            sender_user_id,
-                            sender_username,
-                            sender_first_name,
-                            sender_last_name,
-                        )
-                        message_batch.append(msg_row)
+                        try:
+                            sender_data = await entity_resolver.extract_message_sender_data(msg)
+                            (sender_user_id, sender_username, sender_first_name, sender_last_name, sender_raw_data) = sender_data
 
-                        if sender_user_id is not None and int(sender_user_id) > 0:
-                            uid = int(sender_user_id)
-                            sender_role = existing_admin_roles.get(uid)
-                            member_row = serializers.build_member_row_from_sender(
-                                scraped_group.id,
-                                canonical_group_id,
-                                uid,
-                                sender_username,
-                                sender_first_name,
-                                sender_last_name,
-                                sender_raw_data,
-                                role=sender_role,
+                            msg_row = serializers.build_message_row_from_msg(
+                                msg, scraped_group.id, canonical_group_id, int(msg_id),
+                                sender_user_id, sender_username, sender_first_name, sender_last_name,
                             )
-                            member_batch.append(member_row)
-                            if uid not in seen_senders:
-                                seen_senders.add(uid)
-                                member_success_count += 1
+                            message_batch.append(msg_row)
 
-                        batch_success += 1
-                    except Exception as exc:
-                        batch_errors += 1
-                        logger.warning(
-                            "checkpoint_message_failed",
-                            agent_id=agent_id,
-                            tg_group_id=tg_group_id,
-                            message_id=msg_id,
-                            error=str(exc),
-                        )
+                            if sender_user_id is not None and int(sender_user_id) > 0:
+                                uid = int(sender_user_id)
+                                sender_role = existing_admin_roles.get(uid)
+                                member_row = serializers.build_member_row_from_sender(
+                                    scraped_group.id, canonical_group_id, uid,
+                                    sender_username, sender_first_name, sender_last_name,
+                                    sender_raw_data, role=sender_role,
+                                )
+                                member_batch.append(member_row)
+                                if uid not in seen_senders:
+                                    seen_senders.add(uid)
+                                    member_success_count += 1
 
-                if not batch_scraped:
+                            inner_count += 1
+                        except Exception as exc:
+                            error_count += 1
+                            logger.warning("checkpoint_message_failed", agent_id=agent_id, tg_group_id=tg_group_id, message_id=msg_id, error=str(exc))
+
+                        if len(message_batch) >= self._MESSAGE_BATCH_SIZE:
+                            await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
+                            message_ids = [m["message_id"] for m in message_batch]
+                            conversation_jobs.append({
+                                "scraped_group_id": scraped_group.id,
+                                "tg_group_id": tg_group_id,
+                                "first_id": min(message_ids),
+                                "last_id": max(message_ids),
+                            })
+                            message_batch = []
+                        if len(member_batch) >= self._MEMBER_BATCH_SIZE:
+                            await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                            member_batch = []
+
+                    if reached_end:
+                        break
+
+                    batch_lowest_id = min(m.id for m in result.messages)
+
+                if inner_count == 0:
                     reached_end = True
-                    break
 
                 if message_batch:
                     await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
                     message_ids = [m["message_id"] for m in message_batch]
-                    first_id = min(message_ids)
-                    last_id = max(message_ids)
                     conversation_jobs.append({
                         "scraped_group_id": scraped_group.id,
                         "tg_group_id": tg_group_id,
-                        "first_id": first_id,
-                        "last_id": last_id,
+                        "first_id": min(message_ids),
+                        "last_id": max(message_ids),
                     })
                 if member_batch:
                     await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
 
-                success_count += batch_success
-                error_count += batch_errors
+                success_count += inner_count
                 batch_count += 1
+                last_offset_id = batch_lowest_id
 
-                if lowest_id is not None:
-                    last_offset_id = lowest_id
-
-                if success_count - last_checkpoint >= self._CHECKPOINT_EVERY or reached_end:
+                if success_count - last_checkpoint >= self._CHECKPOINT_EVERY or (reached_end and success_count > last_checkpoint):
                     checkpoint_state: dict[str, Any] = scraped_group.scrape_state or {}
                     checkpoint_state["messages"] = {
                         "last_scraped_message_id": last_offset_id,
