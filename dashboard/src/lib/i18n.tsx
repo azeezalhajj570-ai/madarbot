@@ -160,7 +160,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     'faq.noUnansweredDesc': 'All questions have been answered or converted to FAQ entries.',
   },
   ar: {
-    'app.name': 'بوت أدمن',
+    'app.name': 'مداربوت',
     'app.desc': 'إدارة مساحة العمل',
     'nav.workspace': 'لوحة التحكم',
     'nav.jobs': 'المهام',
