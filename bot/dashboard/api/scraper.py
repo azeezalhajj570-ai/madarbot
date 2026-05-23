@@ -53,7 +53,7 @@ class ScrapeMembersRequest(BaseModel):
 class ScrapeMessagesRequest(BaseModel):
     agent_id: int
     tg_group_id: int
-    message_limit: int = Field(default=100, ge=1, le=20000)
+    message_limit: int = Field(default=100, ge=1, le=1_000_000)
     max_age_days: int | None = Field(default=None, ge=1, le=3650)
     scan_strategy: str = Field(default="auto", description="auto, checkpoint, full")
 
@@ -63,8 +63,8 @@ class ScrapeFullGroupRequest(BaseModel):
     tg_group_id: int
     scrape_members: bool = True
     scrape_messages: bool = True
-    member_limit: int = Field(default=1000, ge=1, le=10000)
-    message_limit: int = Field(default=100, ge=1, le=20000)
+    member_limit: int = Field(default=1000, ge=1, le=1_000_000)
+    message_limit: int = Field(default=100, ge=1, le=1_000_000)
     max_age_days: int | None = Field(default=None, ge=1, le=3650)
     scan_strategy: str = Field(default="auto", description="auto, checkpoint, full")
 

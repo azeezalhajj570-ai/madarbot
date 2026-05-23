@@ -24,7 +24,7 @@ type SelectedGroupChip = {
   title: string
 }
 
-const SCRAPE_LIMIT_MAX = 50000
+const SCRAPE_LIMIT_MAX = 1_000_000
 const SCRAPE_TASK_KEY = 'scraper_full_group'
 
 function clampScrapeLimit(value: string) {
@@ -95,6 +95,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         member_limit: clampScrapeLimit(scrapeMemberLimit),
         message_limit: clampScrapeLimit(scrapeMessageLimit),
         max_age_days: Math.max(1, Number(scrapeMaxAgeDays) || 30),
+        scan_strategy: 'checkpoint',
       })
       setStatus(null)
       onSaved(`Scraping job queued for ${scrapeSelectedGroup.title || scrapeSelectedGroup.tg_group_id}.`)

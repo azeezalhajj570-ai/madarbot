@@ -686,8 +686,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
             scrape_members=True,
             scrape_messages=True,
             member_limit=limit,
-            message_limit=max(1, min(int(message_limit or limit), 50000)),
+            message_limit=max(1, min(int(message_limit or limit), 1_000_000)),
             max_age_days=max_age_days,
+            scan_strategy="checkpoint",
         )
         response = {
             **results["members"],

@@ -632,6 +632,38 @@ class GroupMemberBroadcastRuntime:
 
 
 class ScraperRuntime:
+    async def _enqueue_conversation_jobs(self, conversation_jobs: list[dict[str, Any]]) -> None:
+        if not conversation_jobs:
+            return
+
+        from redis.asyncio import Redis
+
+        try:
+            redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
+            queue_depth = await redis_client.llen("dramatiq:scraper")
+            await redis_client.aclose()
+            if queue_depth > 1000:
+                logger.warning("conversation_queue_overloaded", depth=queue_depth)
+                await asyncio.sleep(30)
+        except Exception:
+            pass
+
+        for conversation_job in conversation_jobs:
+            redis_broker.enqueue(
+                Message(
+                    queue_name="scraper",
+                    actor_name="build_conversations_actor",
+                    args=(
+                        conversation_job["scraped_group_id"],
+                        conversation_job["tg_group_id"],
+                        conversation_job["first_id"],
+                        conversation_job["last_id"],
+                    ),
+                    kwargs={},
+                    options={},
+                )
+            )
+
     async def execute(
         self, *, client, agent: Agent, payload: dict[str, Any], job_type: str | None = None
     ) -> dict[str, Any]:
@@ -668,41 +700,24 @@ class ScraperRuntime:
                 }
             elif active_job_type == SCRAPER_MESSAGES_JOB_TYPE:
                 scan_strategy = payload.get("scan_strategy", "auto")
+                message_limit = int(payload.get("limit", payload.get("message_limit", 100)))
                 max_age_days = (
                     int(payload.get("max_age_days", 30)) if payload.get("max_age_days") else None
                 )
+                if scan_strategy == "auto":
+                    scan_strategy = "checkpoint" if message_limit >= 5000 else "full"
 
                 if scan_strategy == "checkpoint":
                     result = await service.scrape_messages_checkpointed(
                         agent_id=agent.id,
                         tg_group_id=int(tg_group_id),
-                        limit=int(payload.get("limit", payload.get("message_limit", 100))),
+                        limit=message_limit,
                         max_age_days=max_age_days,
                         checkpoint_batch_size=int(payload.get("checkpoint_batch_size", 500)),
                         client=client,
                     )
                     conv_jobs = result.pop("conversation_jobs", [])
-                    if conv_jobs:
-                        from redis.asyncio import Redis
-                        try:
-                            redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
-                            queue_depth = await redis_client.llen("dramatiq:scraper")
-                            await redis_client.aclose()
-                            if queue_depth > 1000:
-                                logger.warning("conversation_queue_overloaded", depth=queue_depth)
-                                await asyncio.sleep(30)
-                        except Exception:
-                            pass
-                        for job in conv_jobs:
-                            redis_broker.enqueue(
-                                Message(
-                                    queue_name="scraper",
-                                    actor_name="build_conversations_actor",
-                                    args=(job["scraped_group_id"], job["tg_group_id"], job["first_id"], job["last_id"]),
-                                    kwargs={},
-                                    options={},
-                                )
-                            )
+                    await self._enqueue_conversation_jobs(conv_jobs)
                 elif scan_strategy == "two_period":
                     recent_days = int(payload.get("recent_days", 30))
                     archive_days = int(payload.get("archive_days", 365))
@@ -717,7 +732,7 @@ class ScraperRuntime:
                     result = await service.scrape_messages(
                         agent_id=agent.id,
                         tg_group_id=int(tg_group_id),
-                        limit=int(payload.get("limit", payload.get("message_limit", 100))),
+                        limit=message_limit,
                         max_age_days=max_age_days,
                         client=client,
                     )
@@ -744,6 +759,11 @@ class ScraperRuntime:
                     scan_strategy=scan_strategy,
                     client=client,
                 )
+                messages_result = result.get("messages")
+                conv_jobs = []
+                if isinstance(messages_result, dict):
+                    conv_jobs = messages_result.pop("conversation_jobs", [])
+                await self._enqueue_conversation_jobs(conv_jobs)
                 return {
                     "job_type": active_job_type,
                     "tg_group_id": int(tg_group_id),

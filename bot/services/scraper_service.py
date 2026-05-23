@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.session import SessionManager
+from bot.config import get_settings
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
 from bot.db.models.scraper import ScrapedLead
 from bot.services.group_service import canonical_tg_group_id
@@ -613,6 +614,17 @@ class ScraperService:
             from telethon.errors import FloodWaitError
 
             peer = InputPeerChannel(channel_id=abs(entity.id), access_hash=entity.access_hash)
+            settings = get_settings()
+            history_page_size = max(
+                1,
+                min(
+                    100,
+                    int(checkpoint_batch_size or settings.scraper_history_page_size or 100),
+                    int(settings.scraper_history_page_size or 100),
+                ),
+            )
+            history_pause_seconds = max(0.0, float(settings.scraper_history_pause_seconds))
+            flood_wait_cap_seconds = max(1, int(settings.scraper_flood_wait_cap_seconds))
 
             ck = (scraped_group.scrape_state or {}).get("messages", {})
             last_offset_id = ck.get("last_scraped_message_id", 0)
@@ -640,11 +652,18 @@ class ScraperService:
                 logger.info("scraper_fetching", offset_id=offset_id, success_count=success_count)
                 try:
                     result = await managed_client(GetHistoryRequest(
-                        peer=peer, limit=100, offset_id=offset_id,
+                        peer=peer, limit=history_page_size, offset_id=offset_id,
                         offset_date=None, add_offset=0, max_id=0, min_id=0, hash=0,
                     ))
                 except FloodWaitError as fwe:
-                    await asyncio.sleep(min(fwe.seconds, 60))
+                    wait_seconds = min(int(fwe.seconds), flood_wait_cap_seconds)
+                    logger.warning(
+                        "scraper_flood_wait",
+                        agent_id=agent_id,
+                        tg_group_id=tg_group_id,
+                        wait_seconds=wait_seconds,
+                    )
+                    await asyncio.sleep(wait_seconds)
                     continue
 
                 if not result.messages:
@@ -703,7 +722,8 @@ class ScraperService:
 
                 offset_id = min(m.id for m in result.messages)
                 batch_count += 1
-                await asyncio.sleep(3)
+                if history_pause_seconds > 0:
+                    await asyncio.sleep(history_pause_seconds)
 
                 if success_count - last_checkpoint >= self._CHECKPOINT_EVERY:
                     checkpoint_state = dict(scraped_group.scrape_state or {})
@@ -839,7 +859,11 @@ class ScraperService:
                     client=managed_client,
                 )
             if scrape_messages:
-                if scan_strategy == "checkpoint":
+                effective_scan_strategy = scan_strategy
+                if effective_scan_strategy == "auto":
+                    effective_scan_strategy = "checkpoint" if message_limit >= 5000 else "full"
+
+                if effective_scan_strategy == "checkpoint":
                     results["messages"] = await self.scrape_messages_checkpointed(
                         agent_id=agent_id,
                         tg_group_id=tg_group_id,
@@ -847,7 +871,7 @@ class ScraperService:
                         max_age_days=max_age_days,
                         client=managed_client,
                     )
-                elif scan_strategy == "two_period":
+                elif effective_scan_strategy == "two_period":
                     results["messages"] = await self.scrape_messages_two_period(
                         agent_id=agent_id,
                         tg_group_id=tg_group_id,

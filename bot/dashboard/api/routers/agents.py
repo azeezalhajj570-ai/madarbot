@@ -559,8 +559,8 @@ async def webapp_agent_group_member_messages(
 async def webapp_agent_group_scrape_members(
     agent_id: int,
     tg_group_id: int,
-    limit: int = Query(default=500, ge=1, le=50000),
-    message_limit: int | None = Query(default=None, ge=1, le=50000),
+    limit: int = Query(default=500, ge=1, le=1_000_000),
+    message_limit: int | None = Query(default=None, ge=1, le=1_000_000),
     max_age_days: int | None = Query(default=None, ge=1, le=3650),
     identity: TelegramWebAppIdentity = Depends(require_business_plan),
     session: AsyncSession = Depends(get_session),
