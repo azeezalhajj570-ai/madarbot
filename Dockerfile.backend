@@ -1,4 +1,4 @@
-# ---------- React build stage ----------
+# ---------- Miniapp React build stage ----------
 FROM node:20-alpine AS react-build
 
 ARG BUILD_TIME
@@ -17,6 +17,18 @@ COPY packages ./packages
 RUN cd apps/miniapp-agents && \
     npx vite build --outDir /built-agents && \
     test -f /built-agents/index.html
+
+# ---------- Dashboard React build stage ----------
+FROM node:20-alpine AS dashboard-build
+
+WORKDIR /app
+
+COPY dashboard/package*.json ./dashboard/
+RUN cd dashboard && npm ci
+
+COPY dashboard ./dashboard
+COPY shared ./shared
+RUN cd dashboard && npx vite build --outDir /built-dashboard
 
 # ---------- Backend stage ----------
 FROM python:3.11-slim
@@ -38,5 +50,6 @@ COPY alembic.ini pyproject.toml /app/
 
 COPY bot/dashboard/frontend /app/bot/dashboard/frontend
 COPY --from=react-build /built-agents /app/bot/dashboard/frontend/agents
+COPY --from=dashboard-build /built-dashboard /app/bot/dashboard/browser
 
 CMD ["uvicorn", "bot.dashboard.api.main:app", "--host", "0.0.0.0", "--port", "8080"]

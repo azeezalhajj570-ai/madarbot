@@ -742,6 +742,24 @@ export function getExportUrl(groupId: number, format: 'json' | 'csv', dataType: 
   return `${api.defaults.baseURL}/webapp/scraper/groups/${groupId}/export?format=${format}&data_type=${dataType}`
 }
 
+export async function exportData(groupId: number, format: 'json' | 'csv', dataType: 'messages' | 'members' | 'conversations'): Promise<void> {
+  const response = await api.get(`/webapp/scraper/groups/${groupId}/export`, {
+    params: { format, data_type: dataType },
+    responseType: 'blob',
+  })
+  const disposition = response.headers['content-disposition'] || ''
+  const match = disposition.match(/filename="?(.+?)"?$/)
+  const filename = match?.[1] || `${dataType}_${groupId}.${format}`
+  const url = URL.createObjectURL(response.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 // ─── Member Leaderboard ──────────────────────────────────────────────────
 
 export interface LeaderboardMember {

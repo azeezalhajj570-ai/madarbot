@@ -34,6 +34,7 @@ from bot.services.permission_service import PermissionService
 from bot.services.scraper_service import ScraperService
 from bot.dashboard.api.auth import extract_dashboard_identity
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
+from bot.db.models import GroupAdminRole, User
 from datetime import datetime
 
 router = APIRouter(prefix="/webapp/scraper", tags=["scraper"])
@@ -297,39 +298,71 @@ async def list_scraped_groups(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     """List all scraped groups/channels."""
-    member_total = (
-        select(func.count(ScrapedMember.id))
-        .where(ScrapedMember.scraped_group_id == ScrapedGroup.id)
-        .correlate(ScrapedGroup)
-        .scalar_subquery()
-    )
-    message_total = (
-        select(func.count(ScrapedMessage.id))
-        .where(ScrapedMessage.scraped_group_id == ScrapedGroup.id)
-        .correlate(ScrapedGroup)
-        .scalar_subquery()
-    )
-    stmt = select(
-        ScrapedGroup,
-        member_total.label("members_total"),
-        message_total.label("messages_total"),
-    )
+    stmt = select(ScrapedGroup)
     if tg_group_id is not None:
         stmt = stmt.where(ScrapedGroup.tg_group_id == canonical_tg_group_id(int(tg_group_id)))
     if agent_id is not None:
         stmt = stmt.where(ScrapedGroup.last_agent_id == int(agent_id))
     stmt = stmt.order_by(ScrapedGroup.updated_at.desc())
     result = await session.execute(stmt)
-    rows = result.all()
-    filtered_groups: list[tuple[ScrapedGroup, int, int]] = []
-    for group, members_total, messages_total in rows:
-        try:
-            await _ensure_scraped_group_access(
-                scraped_group=group, session=session, identity=identity
+    rows = result.scalars().all()
+
+    # ── Batch permission check (avoids N+1) ──────────────────────────────
+
+    all_candidates: set[int] = set()
+    for group in rows:
+        all_candidates.update(tg_group_id_candidates(int(group.tg_group_id)))
+
+    managed_groups: list[Group] = []
+    if all_candidates:
+        mg_result = await session.execute(
+            select(Group).where(Group.tg_group_id.in_(list(all_candidates)))
+        )
+        managed_groups = list(mg_result.scalars().all())
+
+    mg_tg_to_group: dict[int, Group] = {int(g.tg_group_id): g for g in managed_groups}
+
+    accessible_group_ids: set[int] = set()
+    if managed_groups:
+        mg_ids = [g.id for g in managed_groups]
+
+        role_rows = await session.execute(
+            select(GroupAdminRole.group_id).where(
+                GroupAdminRole.group_id.in_(mg_ids),
+                GroupAdminRole.user_id == identity.user_id,
             )
-        except HTTPException:
+        )
+        accessible_group_ids.update(row[0] for row in role_rows.all())
+
+        owner_rows = await session.execute(
+            select(Group.id)
+            .join(User, User.id == Group.owner_user_id)
+            .where(Group.id.in_(mg_ids), User.tg_user_id == identity.user_id)
+        )
+        accessible_group_ids.update(row[0] for row in owner_rows.all())
+
+    accessible_candidates: set[int] = set()
+    for tg_id, mg in mg_tg_to_group.items():
+        if mg.id in accessible_group_ids:
+            accessible_candidates.update(tg_group_id_candidates(tg_id))
+
+    active_agent_ids: set[int] = set()
+    try:
+        active_agents = await AgentService(session).list_all_active_agents(
+            actor_user_id=identity.user_id
+        )
+        active_agent_ids = {int(a.id) for a in active_agents}
+    except Exception:
+        pass
+
+    filtered_groups: list[ScrapedGroup] = []
+    for group in rows:
+        group_candidates = tg_group_id_candidates(int(group.tg_group_id))
+        if any(c in accessible_candidates for c in group_candidates):
+            filtered_groups.append(group)
             continue
-        filtered_groups.append((group, int(members_total or 0), int(messages_total or 0)))
+        if group.last_agent_id is not None and int(group.last_agent_id) in active_agent_ids:
+            filtered_groups.append(group)
 
     return [
         {
@@ -341,12 +374,10 @@ async def list_scraped_groups(
             "group_type": group.group_type,
             "member_count": group.member_count,
             "description": group.description,
-            "members_total": members_total,
-            "messages_total": messages_total,
             "created_at": group.created_at.isoformat() if group.created_at else None,
             "updated_at": group.updated_at.isoformat() if group.updated_at else None,
         }
-        for group, members_total, messages_total in filtered_groups
+        for group in filtered_groups
     ]
 
 
@@ -561,6 +592,7 @@ async def list_scraped_conversations(
     ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
+    await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
     offset = (page - 1) * page_size
     total = (
         await session.execute(
@@ -622,6 +654,11 @@ async def get_conversation_messages(
     ).scalar_one_or_none()
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    group = (
+        await session.execute(select(ScrapedGroup).where(ScrapedGroup.id == group_id))
+    ).scalar_one_or_none()
+    if group is not None:
+        await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
     root_id = conv.root_message_id
     messages = (
         (
@@ -747,6 +784,7 @@ async def list_daily_summaries(
     ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
+    await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
     stmt = (
         select(ScrapedDailySummary)
@@ -945,6 +983,7 @@ async def update_lead(
     ).scalar_one_or_none()
     if group is None:
         raise HTTPException(status_code=404, detail="Scraped group not found")
+    await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
     lead = (
         await session.execute(select(ScrapedLead).where(ScrapedLead.id == lead_id))

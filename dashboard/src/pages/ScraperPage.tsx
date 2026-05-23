@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { AutoComplete, Badge, Button, Card, EmptyState, Field, InlineMessage, Input, Select } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import {
+  exportData,
   extractLeads,
   fetchAgents,
   fetchConversationMessages,
@@ -15,7 +16,6 @@ import {
   searchMessages,
   triggerScrapeMessages,
   updateLead,
-  getExportUrl,
   type Agent,
   type ConversationMessage,
   type LeaderboardMember,
@@ -314,27 +314,37 @@ export default function ScraperPage() {
           title="No group selected"
           subtitle="Select a scraped group from the dropdown above to browse its conversations."
         />
-      ) : groupDetailLoading ? (
-        <EmptyState title="Loading group info" subtitle="Fetching group details and conversations." />
-      ) : groupDetail ? (
+      ) : (
         <>
-          <Card title="Group Info" subtitle="Details about the scraped Telegram group.">
-            <div style={{ display: 'grid', gap: 8 }}>
-              <div>
-                <strong>Title:</strong> {groupDetail.title ?? 'N/A'}
+          {groupDetailLoading ? (
+            <Card title="Group Info" subtitle="Loading group details...">
+              <EmptyState title="Loading group info" subtitle="Fetching group details." />
+            </Card>
+          ) : groupDetail ? (
+            <Card title="Group Info" subtitle="Details about the scraped Telegram group.">
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div>
+                  <strong>Title:</strong> {groupDetail.title ?? 'N/A'}
+                </div>
+                <div>
+                  <strong>Type:</strong> {groupDetail.group_type ?? 'N/A'}
+                </div>
+                <div>
+                  <strong>Member count:</strong> {groupDetail.member_count ?? 'N/A'}
+                </div>
+                <div>
+                  <strong>Scraped members:</strong> {groupDetail.members_total ?? 0}
+                </div>
+                <div>
+                  <strong>Scraped messages:</strong> {groupDetail.messages_total ?? 0}
+                </div>
+                <div>
+                  <strong>Last updated:</strong>{' '}
+                  {groupDetail.updated_at ? new Date(groupDetail.updated_at).toLocaleString() : 'N/A'}
+                </div>
               </div>
-              <div>
-                <strong>Type:</strong> {groupDetail.group_type ?? 'N/A'}
-              </div>
-              <div>
-                <strong>Member count:</strong> {groupDetail.member_count ?? 'N/A'}
-              </div>
-              <div>
-                <strong>Last updated:</strong>{' '}
-                {groupDetail.updated_at ? new Date(groupDetail.updated_at).toLocaleString() : 'N/A'}
-              </div>
-            </div>
-          </Card>
+            </Card>
+          ) : null}
 
           <Card title="Scrape Messages" subtitle="Trigger a new scrape of messages from this group.">
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -414,8 +424,8 @@ export default function ScraperPage() {
               <>
                 {selectedGroupId ? (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                    <Button variant="outline" size="sm" onClick={() => window.open(getExportUrl(selectedGroupId, 'csv', 'conversations'), '_blank')}>Export CSV</Button>
-                    <Button variant="outline" size="sm" onClick={() => window.open(getExportUrl(selectedGroupId, 'json', 'conversations'), '_blank')}>Export JSON</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'csv', 'conversations')}>Export CSV</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'json', 'conversations')}>Export JSON</Button>
                   </div>
                 ) : null}
                 <div style={{ display: 'grid' }}>
@@ -578,7 +588,7 @@ export default function ScraperPage() {
                 <Input type="number" min={1} max={365} value={leaderboardDays} onChange={(e) => setLeaderboardDays(e.target.value)} style={{ width: 80 }} />
               </Field>
               <Button onClick={() => handleLoadLeaderboard()} disabled={leaderboardLoading}>Load</Button>
-              <Button variant="outline" size="sm" as="a" href={getExportUrl(selectedGroupId!, 'csv', 'members')}>Export CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'members')}>Export CSV</Button>
             </div>
             {leaderboardLoading ? (
               <EmptyState title="Loading..." subtitle="Computing member rankings." />
@@ -710,8 +720,8 @@ export default function ScraperPage() {
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="outline" size="sm" as="a" href={getExportUrl(selectedGroupId!, 'csv', 'messages')}>Export Messages CSV</Button>
-                  <Button variant="outline" size="sm" as="a" href={getExportUrl(selectedGroupId!, 'json', 'messages')}>Export Messages JSON</Button>
+                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'messages')}>Export Messages CSV</Button>
+                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'json', 'messages')}>Export Messages JSON</Button>
                 </div>
               </div>
             ) : (
@@ -720,7 +730,7 @@ export default function ScraperPage() {
           </Card>
           ) : null}
         </>
-      ) : null}
+      )}
     </PageShell>
   )
 }
