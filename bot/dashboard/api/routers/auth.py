@@ -46,8 +46,16 @@ async def providers_payload() -> dict[str, Any]:
     }
 
 
-async def telegram_widget_config_payload() -> dict[str, str]:
-    return {"bot_username": await _bot_install_username()}
+async def telegram_widget_config_payload() -> dict[str, Any]:
+    settings = get_settings()
+    username = await _bot_install_username()
+    bot_id = None
+    if settings.bot_token and ":" in settings.bot_token:
+        try:
+            bot_id = settings.bot_token.split(":")[0]
+        except (ValueError, IndexError):
+            pass
+    return {"bot_username": username, "bot_id": str(bot_id) if bot_id else ""}
 
 
 async def telegram_login_payload(
