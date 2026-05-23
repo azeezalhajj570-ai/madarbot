@@ -277,15 +277,22 @@ async def extract_dashboard_identity(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     init_data: str | None = Query(default=None),
+    token: str | None = Query(default=None),
 ) -> TelegramWebAppIdentity:
     if authorization:
-        token = authorization.strip()
-        if token.lower().startswith("bearer "):
-            token = token[7:].strip()
-        if not token:
+        raw = authorization.strip()
+        if raw.lower().startswith("bearer "):
+            raw = raw[7:].strip()
+        if not raw:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token"
             )
+        try:
+            return decode_dashboard_jwt(raw)
+        except DashboardJWTError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    if token:
         try:
             return decode_dashboard_jwt(token)
         except DashboardJWTError as exc:
