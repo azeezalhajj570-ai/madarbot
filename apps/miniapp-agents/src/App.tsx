@@ -87,7 +87,7 @@ const COUNTRY_CODES = [
   { dial: '381', label: 'RS', name: 'Serbia' },
   { dial: '998', label: 'UZ', name: 'Uzbekistan' },
 ]
-const SCRAPE_LIMIT_MAX = 50000
+const SCRAPE_LIMIT_MAX = 1_000_000
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 const BULK_MESSAGE_TASK_META: TaskCatalogItem = {
   key: BULK_MESSAGE_TASK_KEY,

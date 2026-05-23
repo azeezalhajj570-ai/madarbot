@@ -128,7 +128,6 @@ async def build_conversations_from_scrape(
                 session, scraped_group_id, canonical_id, current_group
             )
 
-    await session.commit()
     return created
 
 

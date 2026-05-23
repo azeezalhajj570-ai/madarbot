@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from datetime import datetime, timedelta
 from typing import Any
@@ -11,20 +12,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from telethon.tl.types import ChannelParticipantsAdmins
 
+from dataclasses import dataclass, field
+
 from bot.agents.exceptions import AgentSessionError
 from bot.agents.session import SessionManager
+from bot.config import get_settings
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
 from bot.db.models.scraper import ScrapedLead
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
-from bot.services.scrapers.conversation_builder import build_conversations_from_scrape
 
 logger = structlog.get_logger(__name__)
 
 
+@dataclass
+class ScrapeResult:
+    success_count: int = 0
+    error_count: int = 0
+    total_scraped: int = 0
+    member_success_count: int = 0
+    batches: int = 0
+    completed: bool = False
+    last_offset_id: int = 0
+    conversation_jobs: list[dict] = field(default_factory=list)
+
+
 class ScraperService:
-    _MEMBER_BATCH_SIZE = 500
-    _MESSAGE_BATCH_SIZE = 500
+    _MEMBER_BATCH_SIZE = 1800
+    _MESSAGE_BATCH_SIZE = 1800
+    _CHECKPOINT_EVERY = 10000
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -566,53 +582,55 @@ class ScraperService:
         tg_group_id: int,
         limit: int = 100,
         max_age_days: int | None = None,
-        checkpoint_batch_size: int = 200,
+        checkpoint_batch_size: int = 500,
         client: Any | None = None,
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
-            return {
-                "success_count": 0,
-                "error_count": 0,
-                "total_scraped": 0,
-                "member_success_count": 0,
-                "batches": 0,
-                "completed": False,
-            }
+            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False, "conversation_jobs": []}
 
         managed_client = client
         should_disconnect = False
         if managed_client is None:
             try:
-                managed_client = await SessionManager().get_client(agent_id)
+                from bot.agents.session import _client_pool
+                _client_pool.pop(agent_id, None)
+                sm = SessionManager()
+                managed_client = await sm.get_client(agent_id)
                 should_disconnect = True
+                logger.info("scraper_fresh_client_created", agent_id=agent_id)
             except AgentSessionError:
                 logger.warning("scraper_session_failed", agent_id=agent_id)
-                return {
-                    "success_count": 0,
-                    "error_count": 0,
-                    "total_scraped": 0,
-                    "member_success_count": 0,
-                    "batches": 0,
-                    "completed": False,
-                }
+                return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False, "conversation_jobs": []}
 
         try:
             scraped_group = await entity_resolver.get_or_create_group_from_client(
-                client=managed_client,
-                agent_id=agent_id,
-                tg_group_id=tg_group_id,
-                session=self.session,
+                client=managed_client, agent_id=agent_id, tg_group_id=tg_group_id, session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(
-                managed_client, int(tg_group_id), self.session
-            )
+            entity = await entity_resolver.resolve_group_entity(managed_client, int(tg_group_id), self.session)
 
-            checkpoint = (scraped_group.scrape_state or {}).get("messages", {})
-            last_offset_id = checkpoint.get("last_scraped_message_id", 0)
-            total_success = checkpoint.get("total_success", 0)
-            total_errors = checkpoint.get("total_errors", 0)
-            batches_completed = checkpoint.get("batches_completed", 0)
+            from telethon.tl.functions.messages import GetHistoryRequest
+            from telethon.tl.types import InputPeerChannel
+            from telethon.errors import FloodWaitError
+
+            peer = InputPeerChannel(channel_id=abs(entity.id), access_hash=entity.access_hash)
+            settings = get_settings()
+            history_page_size = max(
+                1,
+                min(
+                    100,
+                    int(checkpoint_batch_size or settings.scraper_history_page_size or 100),
+                    int(settings.scraper_history_page_size or 100),
+                ),
+            )
+            history_pause_seconds = max(0.0, float(settings.scraper_history_pause_seconds))
+            flood_wait_cap_seconds = max(1, int(settings.scraper_flood_wait_cap_seconds))
+
+            ck = (scraped_group.scrape_state or {}).get("messages", {})
+            last_offset_id = ck.get("last_scraped_message_id", 0)
+            total_success = ck.get("total_success", 0)
+            total_errors = ck.get("total_errors", 0)
+            batches_completed = ck.get("batches_completed", 0)
 
             success_count = 0
             error_count = 0
@@ -621,62 +639,54 @@ class ScraperService:
             member_success_count = 0
             reached_end = False
             existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
+            conversation_jobs: list[dict] = []
+            last_checkpoint = 0
+            canonical_group_id = canonical_tg_group_id(int(tg_group_id))
+            min_date = (datetime.utcnow() - timedelta(days=max(1, int(max_age_days)))) if max_age_days is not None else None
 
-            while limit <= 0 or (success_count < limit):
-                batch_success = 0
-                batch_errors = 0
-                batch_scraped = 0
-                message_batch: list[dict[str, Any]] = []
-                member_batch: list[dict[str, Any]] = []
-                canonical_group_id = canonical_tg_group_id(int(tg_group_id))
-                min_date = (
-                    datetime.utcnow() - timedelta(days=max(1, int(max_age_days)))
-                    if max_age_days is not None
-                    else None
-                )
-                lowest_id = None
+            offset_id = last_offset_id or 0
+            message_batch: list[dict[str, Any]] = []
+            member_batch: list[dict[str, Any]] = []
 
-                iterator_args = {"entity": entity, "limit": checkpoint_batch_size}
-                if last_offset_id > 0:
-                    iterator_args["offset_id"] = last_offset_id
+            while limit <= 0 or success_count < limit:
+                logger.info("scraper_fetching", offset_id=offset_id, success_count=success_count)
+                try:
+                    result = await managed_client(GetHistoryRequest(
+                        peer=peer, limit=history_page_size, offset_id=offset_id,
+                        offset_date=None, add_offset=0, max_id=0, min_id=0, hash=0,
+                    ))
+                except FloodWaitError as fwe:
+                    wait_seconds = min(int(fwe.seconds), flood_wait_cap_seconds)
+                    logger.warning(
+                        "scraper_flood_wait",
+                        agent_id=agent_id,
+                        tg_group_id=tg_group_id,
+                        wait_seconds=wait_seconds,
+                    )
+                    await asyncio.sleep(wait_seconds)
+                    continue
 
-                async for message in managed_client.iter_messages(**iterator_args):
-                    msg_date = getattr(message, "date", None)
-                    if (
-                        isinstance(msg_date, datetime)
-                        and min_date is not None
-                        and msg_date.replace(tzinfo=None) < min_date
-                    ):
+                if not result.messages:
+                    reached_end = True
+                    break
+
+                for msg in result.messages:
+                    msg_id = getattr(msg, "id", None)
+                    if msg_id is None:
+                        continue
+
+                    msg_date = getattr(msg, "date", None)
+                    if isinstance(msg_date, datetime) and min_date is not None and msg_date.replace(tzinfo=None) < min_date:
                         reached_end = True
                         break
-                    batch_scraped += 1
-                    msg_id = getattr(message, "id", None)
-                    if msg_id is not None:
-                        lowest_id = (
-                            min(lowest_id or msg_id, msg_id) if lowest_id is not None else msg_id
-                        )
-                    try:
-                        if msg_id is None:
-                            continue
 
-                        sender_data = await entity_resolver.extract_message_sender_data(message)
-                        (
-                            sender_user_id,
-                            sender_username,
-                            sender_first_name,
-                            sender_last_name,
-                            sender_raw_data,
-                        ) = sender_data
+                    try:
+                        sender_data = await entity_resolver.extract_message_sender_data(msg)
+                        (sender_user_id, sender_username, sender_first_name, sender_last_name, sender_raw_data) = sender_data
 
                         msg_row = serializers.build_message_row_from_msg(
-                            message,
-                            scraped_group.id,
-                            canonical_group_id,
-                            int(msg_id),
-                            sender_user_id,
-                            sender_username,
-                            sender_first_name,
-                            sender_last_name,
+                            msg, scraped_group.id, canonical_group_id, int(msg_id),
+                            sender_user_id, sender_username, sender_first_name, sender_last_name,
                         )
                         message_batch.append(msg_row)
 
@@ -684,94 +694,63 @@ class ScraperService:
                             uid = int(sender_user_id)
                             sender_role = existing_admin_roles.get(uid)
                             member_row = serializers.build_member_row_from_sender(
-                                scraped_group.id,
-                                canonical_group_id,
-                                uid,
-                                sender_username,
-                                sender_first_name,
-                                sender_last_name,
-                                sender_raw_data,
-                                role=sender_role,
+                                scraped_group.id, canonical_group_id, uid,
+                                sender_username, sender_first_name, sender_last_name,
+                                sender_raw_data, role=sender_role,
                             )
                             member_batch.append(member_row)
                             if uid not in seen_senders:
                                 seen_senders.add(uid)
                                 member_success_count += 1
 
-                        batch_success += 1
+                        success_count += 1
                     except Exception as exc:
-                        batch_errors += 1
-                        logger.warning(
-                            "checkpoint_message_failed",
-                            agent_id=agent_id,
-                            tg_group_id=tg_group_id,
-                            message_id=msg_id,
-                            error=str(exc),
-                        )
+                        error_count += 1
+                        logger.warning("checkpoint_message_failed", agent_id=agent_id, tg_group_id=tg_group_id, message_id=msg_id, error=str(exc))
 
-                if not batch_scraped:
-                    reached_end = True
-                    break
-
-                if message_batch:
-                    await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
-                    await build_conversations_from_scrape(
-                        self.session,
-                        scraped_group_id=scraped_group.id,
-                        tg_group_id=tg_group_id,
-                        message_rows=message_batch,
-                    )
-                if member_batch:
-                    await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
-
-                success_count += batch_success
-                error_count += batch_errors
-                batch_count += 1
-
-                if lowest_id is not None:
-                    last_offset_id = lowest_id
-
-                checkpoint_state: dict[str, Any] = scraped_group.scrape_state or {}
-                checkpoint_state["messages"] = {
-                    "last_scraped_message_id": last_offset_id,
-                    "total_success": total_success + success_count,
-                    "total_errors": total_errors + error_count,
-                    "batches_completed": batches_completed + batch_count,
-                    "last_batch_at": datetime.utcnow().isoformat(),
-                }
-                scraped_group.scrape_state = checkpoint_state
-
-                scraped_group.updated_at = datetime.utcnow()
-                await self.session.commit()
+                    if len(message_batch) >= self._MESSAGE_BATCH_SIZE:
+                        await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
+                        message_ids = [m["message_id"] for m in message_batch]
+                        conversation_jobs.append({"scraped_group_id": scraped_group.id, "tg_group_id": tg_group_id, "first_id": min(message_ids), "last_id": max(message_ids)})
+                        message_batch = []
+                    if len(member_batch) >= self._MEMBER_BATCH_SIZE:
+                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        member_batch = []
 
                 if reached_end:
                     break
 
-            return {
-                "success_count": success_count,
-                "error_count": error_count,
-                "total_scraped": success_count + error_count,
-                "member_success_count": member_success_count,
-                "batches": batch_count,
-                "completed": reached_end,
-                "last_offset_id": last_offset_id,
-            }
+                offset_id = min(m.id for m in result.messages)
+                batch_count += 1
+                if history_pause_seconds > 0:
+                    await asyncio.sleep(history_pause_seconds)
+
+                if success_count - last_checkpoint >= self._CHECKPOINT_EVERY:
+                    checkpoint_state = dict(scraped_group.scrape_state or {})
+                    checkpoint_state["messages"] = {"last_scraped_message_id": offset_id, "total_success": total_success + success_count, "total_errors": total_errors + error_count, "batches_completed": batches_completed + batch_count, "last_batch_at": datetime.utcnow().isoformat()}
+                    scraped_group.scrape_state = checkpoint_state
+                    scraped_group.updated_at = datetime.utcnow()
+                    await self.session.commit()
+                    last_checkpoint = success_count
+
+            if message_batch:
+                await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
+                message_ids = [m["message_id"] for m in message_batch]
+                conversation_jobs.append({"scraped_group_id": scraped_group.id, "tg_group_id": tg_group_id, "first_id": min(message_ids), "last_id": max(message_ids)})
+            if member_batch:
+                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+
+            checkpoint_state = dict(scraped_group.scrape_state or {})
+            checkpoint_state["messages"] = {"last_scraped_message_id": offset_id, "total_success": total_success + success_count, "total_errors": total_errors + error_count, "batches_completed": batches_completed + batch_count, "last_batch_at": datetime.utcnow().isoformat()}
+            scraped_group.scrape_state = checkpoint_state
+            scraped_group.updated_at = datetime.utcnow()
+            await self.session.commit()
+
+            return {"success_count": success_count, "error_count": error_count, "total_scraped": success_count + error_count, "member_success_count": member_success_count, "batches": batch_count, "completed": reached_end, "last_offset_id": offset_id, "conversation_jobs": conversation_jobs}
         except Exception as exc:
             await self.session.rollback()
-            logger.exception(
-                "checkpoint_scrape_failed",
-                agent_id=agent_id,
-                tg_group_id=tg_group_id,
-                error=str(exc),
-            )
-            return {
-                "success_count": 0,
-                "error_count": 0,
-                "total_scraped": 0,
-                "member_success_count": 0,
-                "batches": 0,
-                "completed": False,
-            }
+            logger.exception("checkpoint_scrape_failed", agent_id=agent_id, tg_group_id=tg_group_id, error=str(exc))
+            return {"success_count": 0, "error_count": 0, "total_scraped": 0, "member_success_count": 0, "batches": 0, "completed": False, "conversation_jobs": []}
         finally:
             if should_disconnect:
                 with suppress(Exception):
@@ -802,7 +781,7 @@ class ScraperService:
                 tg_group_id=tg_group_id,
                 limit=500,
                 max_age_days=recent_days,
-                checkpoint_batch_size=200,
+                checkpoint_batch_size=500,
                 client=managed_client,
             )
 
@@ -880,7 +859,11 @@ class ScraperService:
                     client=managed_client,
                 )
             if scrape_messages:
-                if scan_strategy == "checkpoint":
+                effective_scan_strategy = scan_strategy
+                if effective_scan_strategy == "auto":
+                    effective_scan_strategy = "checkpoint" if message_limit >= 5000 else "full"
+
+                if effective_scan_strategy == "checkpoint":
                     results["messages"] = await self.scrape_messages_checkpointed(
                         agent_id=agent_id,
                         tg_group_id=tg_group_id,
@@ -888,7 +871,7 @@ class ScraperService:
                         max_age_days=max_age_days,
                         client=managed_client,
                     )
-                elif scan_strategy == "two_period":
+                elif effective_scan_strategy == "two_period":
                     results["messages"] = await self.scrape_messages_two_period(
                         agent_id=agent_id,
                         tg_group_id=tg_group_id,
