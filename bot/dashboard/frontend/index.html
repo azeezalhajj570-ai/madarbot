@@ -4160,7 +4160,7 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>${escapeHtml(t("groupName"))}</th><th>TG ID</th><th>${escapeHtml(t("scraperAgent"))}</th><th>${escapeHtml(t("scraperMembersStored"))}</th><th>${escapeHtml(t("scraperMessagesStored"))}</th><th>${escapeHtml(t("scraperUpdatedAt"))}</th></tr></thead>
+                <thead><tr><th>${escapeHtml(t("groupName"))}</th><th>TG ID</th><th>${escapeHtml(t("scraperAgent"))}</th><th>${escapeHtml(t("scraperMembersStored"))}</th><th>${escapeHtml(t("scraperMessagesStored"))}</th><th>${escapeHtml(t("scraperUpdatedAt"))}</th><th>${escapeHtml(t("export"))}</th></tr></thead>
                 <tbody>
                   ${scraperList.length ? scraperList.map((item) => `
                     <tr>
@@ -4170,8 +4170,9 @@
                       <td>${escapeHtml(formatNumber(item.members_total || 0))}</td>
                       <td>${escapeHtml(formatNumber(item.messages_total || 0))}</td>
                       <td>${escapeHtml(item.updated_at ? formatDateTime(item.updated_at) : "—")}</td>
+                      <td><button class="ghost-button" type="button" data-action="scraper-export" data-group-id="${escapeHtml(String(item.id || ""))}" data-tg-group-id="${escapeHtml(String(item.tg_group_id || ""))}" data-group-title="${escapeHtml(String(item.title || ""))}">${icon("download")}</button></td>
                     </tr>
-                  `).join("") : `<tr><td colspan="6">${emptyState(t("scraperListEmpty"))}</td></tr>`}
+                  `).join("") : `<tr><td colspan="7">${emptyState(t("scraperListEmpty"))}</td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -4189,6 +4190,43 @@
           </div>
         </div>
       `;
+    }
+
+    function renderScraperExportModal(groupId, tgGroupId, groupTitle) {
+      const draftId = `export-${groupId}`;
+      const draft = state.ui.scraperExportDrafts || (state.ui.scraperExportDrafts = {});
+      const d = draft[draftId] || (draft[draftId] = { format: "json", type: "messages", limit: 10000 });
+      openModal({
+        title: `${t("export")}: ${escapeHtml(groupTitle || `Group ${tgGroupId}`)}`,
+        subtitle: `TG ID: ${tgGroupId} · Internal ID: ${groupId}`,
+        body: `
+          <div class="stack">
+            <div class="field">
+              <label class="field-label">${escapeHtml(t("format"))}</label>
+              <select id="export-format" data-export-field="format">
+                <option value="json" ${d.format === "json" ? "selected" : ""}>JSON</option>
+                <option value="csv" ${d.format === "csv" ? "selected" : ""}>CSV</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">${escapeHtml(t("dataType"))}</label>
+              <select id="export-type" data-export-field="type">
+                <option value="messages" ${d.type === "messages" ? "selected" : ""}>${escapeHtml(t("messages"))}</option>
+                <option value="members" ${d.type === "members" ? "selected" : ""}>${escapeHtml(t("members"))}</option>
+                <option value="conversations" ${d.type === "conversations" ? "selected" : ""}>${escapeHtml(t("conversations"))}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">${escapeHtml(t("limit"))}</label>
+              <input id="export-limit" type="number" min="1" max="100000" value="${escapeHtml(String(d.limit))}" data-export-field="limit" />
+            </div>
+          </div>
+        `,
+        footer: modalFooterMarkup({
+          start: `<button class="ghost-button" type="button" data-action="close-modal">${escapeHtml(t("cancel"))}</button>`,
+          end: `<button class="button" type="button" data-action="do-scraper-export" data-group-id="${escapeHtml(String(groupId))}" data-tg-group-id="${escapeHtml(String(tgGroupId))}">${icon("download")} ${escapeHtml(t("export"))}</button>`,
+        }),
+      });
     }
 
     function renderAgentsView() {
@@ -5265,6 +5303,43 @@
         state.ui.bulkAddMembersDraft.loading = false;
         await ensureRouteData();
         renderSidebar();
+      } else if (action === "scraper-export") {
+        const groupId = String(target.dataset.groupId || "");
+        const tgGroupId = String(target.dataset.tgGroupId || "");
+        const groupTitle = String(target.dataset.groupTitle || "");
+        renderScraperExportModal(groupId, tgGroupId, groupTitle);
+      } else if (action === "do-scraper-export") {
+        const groupId = Number(target.dataset.groupId || 0);
+        const tgGroupId = String(target.dataset.tgGroupId || "");
+        const exportFormat = String(document.getElementById("export-format")?.value || "json");
+        const exportType = String(document.getElementById("export-type")?.value || "messages");
+        const exportLimit = Number(document.getElementById("export-limit")?.value || 10000);
+        if (!groupId || !tgGroupId) {
+          pushToast("Invalid group for export", "warning");
+          return;
+        }
+        const url = withInitData(`/webapp/scraper/groups/${groupId}/export?format=${encodeURIComponent(exportFormat)}&data_type=${encodeURIComponent(exportType)}&limit=${exportLimit}`);
+        try {
+          const resp = await fetch(url, {
+            headers: {
+              "X-Telegram-Init-Data": telegramInitData || "",
+            },
+          });
+          if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+          const blob = await resp.blob();
+          const filename = `${exportType}_${tgGroupId}.${exportFormat}`;
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          pushToast(`Exported ${exportType} as ${exportFormat.toUpperCase()}`, "success");
+        } catch (error) {
+          pushToast(error instanceof Error ? error.message : "Export failed", "danger");
+        }
+        closeModal();
       } else if (action === "refresh-scraper") {
         const draft = syncScraperDraftFromInputs();
         const targetTgGroupId = Number(draft.tg_group_id || 0);
