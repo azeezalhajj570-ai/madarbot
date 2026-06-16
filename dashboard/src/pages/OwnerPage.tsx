@@ -17,7 +17,7 @@ export default function OwnerPage() {
   const [page, setPage] = useState(1)
   const user = getStoredUser()
 
-  if (user?.role !== 'owner') {
+  if (user?.role !== 'owner' && user?.role !== 'admin') {
     return (
       <PageShell eyebrow="Owner" titleKey="page.owner" descriptionKey="page.owner.desc">
         <EmptyState title="Access denied" subtitle="This area is available to owner accounts only." />

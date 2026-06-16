@@ -407,6 +407,7 @@ function NotificationSheet({
   onUnseenCountChange: (count: number) => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [notifications, setNotifications] = useState<AgentNotification[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)

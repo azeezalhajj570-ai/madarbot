@@ -75,7 +75,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
         </div>
 
         <nav style={{ flex: 1, padding: `${spacing.sm}px`, overflowY: 'auto', display: 'grid', gap: 2 }}>
-          {NAV.filter(({ to }) => user?.role !== 'admin' || !OWNER_ONLY.has(to)).map(({ to, label, icon: Icon }) => (
+          {NAV.filter(({ to }) => !OWNER_ONLY.has(to) || user?.role === 'admin' || user?.role === 'owner').map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

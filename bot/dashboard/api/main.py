@@ -109,7 +109,13 @@ async def lifespan(app: FastAPI):
         await redis.aclose()
 
 
-app = FastAPI(title="MadarBot Dashboard API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="MadarBot Dashboard API",
+    version="1.1.0",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+)
 
 settings = get_settings()
 app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)

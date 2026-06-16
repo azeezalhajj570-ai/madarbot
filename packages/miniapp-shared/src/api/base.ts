@@ -176,12 +176,26 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+
+  let payload: unknown = null
+  if (text) {
+    if (typeof text !== 'string') {
+      throw new Error(`Unexpected response type: expected text but got ${typeof text}`)
+    }
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`)
+      }
+      throw new Error('Server returned an invalid response. Please try again.')
+    }
+  }
 
   if (!response.ok) {
     const detail =
-      payload && typeof payload === 'object' && 'detail' in payload && typeof payload.detail === 'string'
-        ? payload.detail
+      payload && typeof payload === 'object' && 'detail' in payload && typeof (payload as Record<string, unknown>).detail === 'string'
+        ? (payload as Record<string, string>).detail
         : `Request failed with status ${response.status}`
     throw new Error(detail)
   }

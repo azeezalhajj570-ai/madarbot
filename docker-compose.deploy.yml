@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: alembic upgrade 20260516_add_campaigns
+    command: alembic upgrade 20260616_cm01
     env_file: .env.deploy
     networks:
       - combot_default

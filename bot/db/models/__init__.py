@@ -6,6 +6,7 @@ from bot.db.base import Base
 from bot.db.models.access import GroupAccessRequirement, PrivateAccessRequirement
 from bot.db.models.agent import Agent, AgentJob, AgentLead, AgentNotification, SentBroadcastMessage
 from bot.db.models.campaign import Campaign
+from bot.db.models.contact_message import ContactMessage
 from bot.db.models.audit import MembershipAuditLog, OwnerAuditLog
 from bot.db.models.audit_log import AuditLog
 from bot.db.models.billing import (
@@ -139,6 +140,7 @@ __all__ = [
     "ChannelAccount",
     "CheckoutSession",
     "Contact",
+    "ContactMessage",
     "Conversation",
     "DailyGroupSummary",
     "Entitlement",

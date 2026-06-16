@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: alembic upgrade 20260516_add_campaigns
+    command: alembic upgrade 20260616_cm01
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
@@ -107,6 +107,9 @@ services:
     restart: unless-stopped
     ports:
       - "8009:8080"
+    networks:
+      - default
+      - global_network
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,3 +128,8 @@ services:
 volumes:
   pg_data:
   redis_data:
+
+networks:
+  default:
+  global_network:
+    external: true

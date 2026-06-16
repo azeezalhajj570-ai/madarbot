@@ -95,7 +95,7 @@ export default function SubscriptionsPage() {
     }
   })
 
-  if (user?.role !== 'owner') {
+  if (user?.role !== 'owner' && user?.role !== 'admin') {
     return (
       <PageShell eyebrow="Owner" titleKey="page.subscriptions" descriptionKey="page.subscriptions.desc">
         <EmptyState title="Access denied" subtitle="This area is available to owner accounts only." />
