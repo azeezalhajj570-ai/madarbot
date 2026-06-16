@@ -30,6 +30,7 @@ import type {
   TaskCatalogItem,
 } from '@miniapp/shared'
 
+import { useLanguage } from './i18n/useLanguage'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
@@ -920,6 +921,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
 }
 
 export default function App() {
+  useLanguage()
   const basePath = import.meta.env.BASE_URL
   const session = useMiniappSession()
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
