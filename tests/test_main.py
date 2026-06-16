@@ -51,9 +51,7 @@ async def test_configure_bot_commands_registers_expected_commands() -> None:
 
     assert [command.command for command in private_call.args[0]] == [
         "start",
-        "dashboard",
-        "scraper",
-        "settings",
+        "app",
         "help",
         "lang",
         "subscribe",
@@ -61,8 +59,6 @@ async def test_configure_bot_commands_registers_expected_commands() -> None:
     assert isinstance(private_call.kwargs["scope"], BotCommandScopeAllPrivateChats)
 
     assert [command.command for command in admin_call.args[0]] == [
-        "dashboard",
-        "settings",
         "help",
         "lang",
         "registergroup",
@@ -88,6 +84,7 @@ async def test_configure_bot_commands_registers_agents_commands() -> None:
 
     assert [command.command for command in private_call.args[0]] == [
         "start",
+        "app",
         "help",
         "lang",
     ]

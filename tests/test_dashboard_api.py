@@ -80,7 +80,10 @@ async def test_get_groups(api_client, db_session) -> None:
     db_session.add(Group(tg_group_id=-1002001, title="API Group", is_active=True))
     await db_session.commit()
 
-    response = await api_client.get("/groups")
+    response = await api_client.get(
+        "/groups",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
     assert response.status_code == 200
     payload = response.json()
     assert any(g["title"] == "API Group" for g in payload)
@@ -94,7 +97,10 @@ async def test_get_group_settings(api_client, db_session) -> None:
     db_session.add(GroupSetting(group_id=group.id, key="anti_links", value={"value": True}))
     await db_session.commit()
 
-    response = await api_client.get(f"/settings/{group.id}")
+    response = await api_client.get(
+        f"/settings/{group.id}",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
     assert response.status_code == 200
     payload = response.json()
     assert payload[0]["key"] == "anti_links"
@@ -111,10 +117,14 @@ async def test_post_plugins_enable_updates_database(api_client, db_session) -> N
     response = await api_client.post(
         "/plugins/enable",
         json={"group_id": group.id, "plugin_name": "anti_links", "enabled": True},
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
     )
     assert response.status_code == 200
 
-    plugins = await api_client.get(f"/groups/{group.id}/plugins")
+    plugins = await api_client.get(
+        f"/groups/{group.id}/plugins",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
     assert plugins.status_code == 200
     assert plugins.json() == [{"plugin_name": "anti_links", "enabled": True}]
 
@@ -127,7 +137,10 @@ async def test_group_warnings_endpoint(api_client, db_session) -> None:
     db_session.add(Warning(group_id=group.id, user_id=444, issued_by=111, reason="spam", count=2))
     await db_session.commit()
 
-    response = await api_client.get(f"/groups/{group.id}/warnings")
+    response = await api_client.get(
+        f"/groups/{group.id}/warnings",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
     assert response.status_code == 200
     data = response.json()
     assert data[0]["reason"] == "spam"
@@ -1503,7 +1516,10 @@ async def test_internal_runtime_audit_endpoint_returns_replay_shape(api_client, 
     db_session.add(log)
     await db_session.commit()
 
-    response = await api_client.get(f"/groups/{group.id}/runtime-audits")
+    response = await api_client.get(
+        f"/groups/{group.id}/runtime-audits",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
 
     assert response.status_code == 200
     payload = response.json()

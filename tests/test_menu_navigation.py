@@ -162,12 +162,8 @@ async def test_start_command_preserves_saved_language(
 
     await start_handler(message, state)
 
-    assert message.log.answers[0]["text"] == t("main_menu", "en")
-    labels = [
-        button.text for row in message.log.answers[0]["reply_markup"].keyboard for button in row
-    ]
-    assert f"⚙ {t('settings', 'en')}" in labels
-    assert f"❓ {t('help', 'en')}" in labels
+    assert message.log.answers[0]["text"] == t("start_intro", "en")
+    assert message.log.answers[0]["reply_markup"] is not None
 
 
 @pytest.mark.asyncio

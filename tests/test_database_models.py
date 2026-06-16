@@ -68,28 +68,23 @@ async def test_group_tg_id_is_unique_per_owner_scope(db_session) -> None:
                 owner_user_id=owner_one.id,
                 is_active=True,
             ),
-            Group(
-                tg_group_id=-100777001,
-                title="Owner Two Group",
-                owner_user_id=owner_two.id,
-                is_active=True,
-            ),
         ]
     )
     await db_session.commit()
 
-    rows = (
-        (
-            await db_session.execute(
-                select(Group)
-                .where(Group.tg_group_id == -100777001)
-                .order_by(Group.owner_user_id.asc())
-            )
-        )
-        .scalars()
-        .all()
+    # Same tg_group_id should fail with different owner (global unique constraint)
+    db_session.add(
+        Group(
+            tg_group_id=-100777001,
+            title="Owner Two Group",
+            owner_user_id=owner_two.id,
+            is_active=True,
+        ),
     )
-    assert [row.owner_user_id for row in rows] == [owner_one.id, owner_two.id]
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+    await db_session.rollback()
 
 
 @pytest.mark.asyncio

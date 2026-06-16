@@ -205,8 +205,7 @@ async def test_agent_listener_does_not_log_incoming_messages_by_default(
     await manager._handle_telethon_message(13, FakeEvent())
 
     assert dispatch_mock.await_count == 0
-    assert len(seen_logs) == 1
-    assert seen_logs[0]["event_name"] == "agent_listener_message_seen"
+    assert len(seen_logs) == 0
 
 
 @pytest.mark.asyncio
