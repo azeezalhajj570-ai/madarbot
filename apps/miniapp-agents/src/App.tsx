@@ -163,6 +163,7 @@ function SubscriptionForm({
   onRedeemed: (info: SubscriptionStatusInfo) => void
   onRedeemComplete?: () => void
 }) {
+  const { t } = useTranslation()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'business' | null>(null)
@@ -251,19 +252,19 @@ function SubscriptionForm({
     <div style={{ display: 'grid', gap: 20 }}>
       <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 600 }}>Current Plan</span>
+          <span style={{ fontWeight: 600 }}>{t('subscription.currentPlan')}</span>
           <Badge tone={isActive ? 'success' : 'neutral'}>
-            {isActive ? (isLifetime ? 'Lifetime' : 'Active') : 'No active subscription'}
+            {isActive ? (isLifetime ? t('subscription.lifetime') : t('subscription.active')) : t('subscription.noActive')}
           </Badge>
         </div>
         {isActive && expiryDate && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            Valid until {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
+            {t('subscription.validUntil')} {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
           </div>
         )}
         {!isActive && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            Redeem a promotion code to unlock agent features.
+            {t('subscription.redeemInfo')}
           </div>
         )}
         {isActive && (
@@ -279,7 +280,7 @@ function SubscriptionForm({
                 opacity: cancelling ? 0.5 : 1,
               }}
             >
-              {cancelling ? 'Cancelling...' : 'Cancel subscription'}
+              {cancelling ? t('subscription.cancelling') : t('subscription.cancel')}
             </button>
           </div>
         )}
@@ -287,15 +288,15 @@ function SubscriptionForm({
 
       <div style={{ display: 'grid', gap: 12 }}>
         <InputField
-          label="Redeem promotion code"
+          label={t('subscription.redeemLabel')}
           value={code}
           onChange={(val) => setCode(val.toUpperCase())}
-          placeholder="PROMO-CODE"
+          placeholder={t('subscription.redeemPlaceholder')}
         />
         {error && <Note tone="warning">{error}</Note>}
         {success && <Note>{success}</Note>}
         <Button onClick={() => void handleRedeem()} disabled={loading || !code.trim()}>
-          {loading ? 'Redeeming...' : 'Redeem code'}
+          {loading ? t('subscription.redeeming') : t('subscription.redeemButton')}
         </Button>
       </div>
 
@@ -304,12 +305,12 @@ function SubscriptionForm({
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.upgradeOrExtend')}</div>
         )}
         {!isActive && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Or pay with Stripe:</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.payWithStripe')}</div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { plan: 'pro', label: 'Pro', price: '$29', desc: '/month', days: 30 },
-            { plan: 'business', label: 'Business', price: '$79', desc: '/month', days: 30 },
+            { plan: 'pro', label: t('subscription.pro'), price: '$29', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'business', label: t('subscription.business'), price: '$79', desc: t('subscription.priceMonthly'), days: 30 },
           ].map((p) => (
             <button
               key={p.plan}
@@ -323,7 +324,7 @@ function SubscriptionForm({
             >
               <div style={{ fontSize: 15, fontWeight: 700 }}>{p.label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--miniapp-primary)', margin: '4px 0' }}>
-                {checkoutPlan === p.plan ? 'Opening...' : p.price}
+                {checkoutPlan === p.plan ? t('subscription.checkoutLoading') : p.price}
               </div>
               <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{p.desc}</div>
             </button>
@@ -333,12 +334,12 @@ function SubscriptionForm({
 
       {!isActive && (
         <div style={{ fontSize: 13, color: 'var(--miniapp-text-secondary)', display: 'grid', gap: 8 }}>
-          <strong>Subscribing gives you access to:</strong>
+          <strong>{t('subscription.subscribingGives')}</strong>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>
-            <li>Linking multiple Telegram accounts as agents</li>
-            <li>Running background member scraping jobs</li>
-            <li>Automated broadcasts and member messaging</li>
-            <li>Real-time agent notifications</li>
+            <li>{t('subscription.featureMultiAccounts')}</li>
+            <li>{t('subscription.featureScraping')}</li>
+            <li>{t('subscription.featureBroadcasts')}</li>
+            <li>{t('subscription.featureNotifications')}</li>
           </ul>
         </div>
       )}
@@ -357,37 +358,35 @@ function SubscriptionSheet({
   status: SubscriptionStatusInfo | null
   onRedeemed: (info: SubscriptionStatusInfo) => void
 }) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
     <div
       style={{
-        position: 'fixed',
-        inset: 0,
+        position: 'fixed', inset: 0,
         background: 'rgba(32, 25, 16, 0.55)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-        zIndex: 1100,
+        display: 'grid', placeItems: 'center',
+        padding: 16, zIndex: 1100,
       }}
+      onClick={onClose}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: 'min(480px, 100%)',
-          maxHeight: '85vh',
-          overflow: 'auto',
+          maxHeight: '85vh', overflow: 'auto',
           background: 'var(--miniapp-surface)',
           border: '1px solid var(--miniapp-border-soft)',
-          borderRadius: 20,
-          padding: 24,
+          borderRadius: 20, padding: 24,
           display: 'grid',
           gap: 20,
           boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 22 }}>Subscription</h2>
-          <Button tone="secondary" onClick={onClose}>Close</Button>
+          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 22 }}>{t('subscription.modalTitle')}</h2>
+          <Button tone="secondary" onClick={onClose}>{t('subscription.close')}</Button>
         </div>
 
         <SubscriptionForm status={status} onRedeemed={onRedeemed} onRedeemComplete={onClose} />
