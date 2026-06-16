@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { formatDateTime, formatTime } from '../i18n/format'
 
 import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
@@ -316,14 +317,14 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ minWidth: 0 }}>
                       <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{(job.message_preview || '').slice(0, 48)}</strong>
-                      {job.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : null}
+                      {job.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(job.created_at)}</span> : null}
                     </div>
                     <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
                       background: job.status === 'completed' ? 'var(--miniapp-sage-dim)' : job.status === 'failed' ? 'rgba(161,87,62,0.12)' : job.status === 'scheduled' ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
                       color: job.status === 'completed' ? 'var(--miniapp-sage)' : job.status === 'failed' ? 'var(--miniapp-clay)' : job.status === 'scheduled' ? '#b8960a' : 'var(--miniapp-text-muted)',
                     }}>{job.status}</span>
                   </div>
-                  {job.status === 'scheduled' && job.scheduled_at ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduledFor', { datetime: new Date(job.scheduled_at).toLocaleString() })}</div> : total > 0 ? <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span><span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.members')}</span></div> : null}
+                  {job.status === 'scheduled' && job.scheduled_at ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduledFor', { datetime: formatDateTime(job.scheduled_at) })}</div> : total > 0 ? <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span><span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.members')}</span></div> : null}
                 </div>
               )
             })}

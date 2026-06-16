@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
 import { MultiGroupSelect } from './components/MultiGroupSelect'
 import { TableModal } from './components/TableModal'
@@ -259,7 +260,7 @@ function SubscriptionForm({
         </div>
         {isActive && expiryDate && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            {t('subscription.validUntil')} {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
+            {t('subscription.validUntil')} {formatDate(expiryDate)} {formatTime(expiryDate)}
           </div>
         )}
         {!isActive && (
@@ -625,7 +626,7 @@ function notificationTimeLabel(t: (key: string) => string, createdAt?: string | 
     return t('notifications.unknownTime')
   }
   const date = new Date(createdAt)
-  return Number.isNaN(date.getTime()) ? createdAt : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? createdAt : formatDateTime(date)
 }
 
 function notificationTone(kind: string) {
@@ -1445,7 +1446,7 @@ function MCPTokensCard() {
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
                   <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginTop: 2 }}>
                     <code style={{ fontFamily: 'var(--miniapp-mono)', fontSize: 11 }}>{t.prefix}...</code>
-                    {' · '}created {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                    {' · '}created {t.created_at ? formatDate(t.created_at) : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2243,7 +2244,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#9b9186' }}>
                 {lead.source_group_title ? <span>{t('leads.groupLabel', { group: lead.source_group_title })}</span> : null}
                 {lead.lead_label ? <span>{t('leads.leadLabel', { label: lead.lead_label })}</span> : null}
-                {lead.captured_at ? <span>{new Date(lead.captured_at).toLocaleDateString()}</span> : null}
+                {lead.captured_at ? <span>{formatDate(lead.captured_at)}</span> : null}
               </div>
               {lead.status !== 'dismissed' ? (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -2356,7 +2357,7 @@ function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, 
   if (min < 60) return t('time.minutesAgo', { min })
   const hours = Math.floor(min / 60)
   if (hours < 24) return t('time.hoursAgo', { hours })
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void }) {
@@ -2489,7 +2490,7 @@ function TaskActivity({ account }: { account: Agent }) {
     {
       key: 'time', label: t('tasks.logTime'), sortable: true, align: 'right' as const, width: '120px',
       render: (log) => log.sent_at ? (
-        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{new Date(log.sent_at).toLocaleString()}</span>
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{formatDateTime(log.sent_at)}</span>
       ) : '—',
     },
   ], [t])
@@ -2606,7 +2607,7 @@ function TaskActivity({ account }: { account: Agent }) {
                     <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
                     {job.created_at ? (
                       <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
-                        {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatTime(job.created_at)}
                       </span>
                     ) : null}
                   </div>
@@ -2621,7 +2622,7 @@ function TaskActivity({ account }: { account: Agent }) {
 
                 {isScheduled && job.scheduled_at ? (
                   <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                    {t('tasks.scheduledFor', { date: new Date(job.scheduled_at).toLocaleString() })}
+                    {t('tasks.scheduledFor', { date: formatDateTime(job.scheduled_at) })}
                   </div>
                 ) : total > 0 ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
@@ -2896,7 +2897,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
             {a?.safety?.safety_mode_until ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
                 <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.safeUntil')}</span>
-                <span>{new Date(a.safety.safety_mode_until).toLocaleString()}</span>
+                <span>{formatDateTime(a.safety.safety_mode_until)}</span>
               </div>
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
