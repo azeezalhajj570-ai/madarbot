@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { GroupAutocompleteField } from '../../components/GroupAutocompleteField'
 
@@ -38,6 +39,7 @@ function _formatKeywords(keywords: string[]): string {
 type LeadsTaskType = 'scrape' | 'lead_capture'
 
 export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const { t } = useTranslation()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [taskType, setTaskType] = useState<LeadsTaskType>('scrape')
   const [status, setStatus] = useState<string | null>(null)
@@ -85,7 +87,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   }, [account.id, groupQuery, taskType])
 
   async function handleScrape() {
-    if (!scrapeSelectedGroup?.tg_group_id) { setStatus('Choose a group first'); return }
+    if (!scrapeSelectedGroup?.tg_group_id) { setStatus(t('leadsAcq.chooseGroupFirst')); return }
     setIsSaving(true)
     try {
       await agentsApi.createAgentJob(account.id, SCRAPE_TASK_KEY, {
@@ -98,16 +100,16 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         scan_strategy: 'checkpoint',
       })
       setStatus(null)
-      onSaved(`Scraping job queued for ${scrapeSelectedGroup.title || scrapeSelectedGroup.tg_group_id}.`)
+      onSaved(t('leadsAcq.scrapeQueued', { title: scrapeSelectedGroup.title || String(scrapeSelectedGroup.tg_group_id) }))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to queue scrape job')
+      setStatus(error instanceof Error ? error.message : t('leadsAcq.failedQueue'))
     } finally {
       setIsSaving(false)
     }
   }
 
   async function handleSaveLeadCapture() {
-    if (!taskKeywords.length) { setStatus('At least one keyword is required'); return }
+    if (!taskKeywords.length) { setStatus(t('leadsAcq.atLeastOneKeyword')); return }
     setIsSaving(true)
     try {
       const config: Record<string, unknown> = {}
@@ -125,9 +127,9 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         group_titles: taskGroups.map((g) => g.title),
       })
       setStatus(null)
-      onSaved('Lead capture task created')
+      onSaved(t('leadsAcq.leadCaptureCreated'))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save lead capture')
+      setStatus(error instanceof Error ? error.message : t('leadsAcq.failedSaveLead'))
     } finally {
       setIsSaving(false)
     }
@@ -163,9 +165,9 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   }
 
   return (
-    <Card title="Lead Acquisition" subtitle="Collect member data and configure lead capture rules.">
+    <Card title={t('leadsAcq.title')} subtitle={t('leadsAcq.subtitle')}>
       {status ? <Note>{status}</Note> : null}
-      {!isFormOpen ? <Button onClick={() => setIsFormOpen(true)}>New Acquisition</Button> : null}
+      {!isFormOpen ? <Button onClick={() => setIsFormOpen(true)}>{t('leadsAcq.newAcquisition')}</Button> : null}
       {isFormOpen ? renderForm() : null}
     </Card>
   )
@@ -173,43 +175,43 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   function renderForm() {
     return (
       <div style={{ display: 'grid', gap: 12 }}>
-        <SelectField label="Task type" value={taskType} onChange={(v) => { setTaskType(v as LeadsTaskType); setStatus(null) }}>
-          <option value="scrape">Scrape Group</option>
-          <option value="lead_capture">Lead Capture</option>
+        <SelectField label={t('leadsAcq.taskType')} value={taskType} onChange={(v) => { setTaskType(v as LeadsTaskType); setStatus(null) }}>
+          <option value="scrape">{t('leadsAcq.scrapeGroup')}</option>
+          <option value="lead_capture">{t('leadsAcq.leadCapture')}</option>
         </SelectField>
         {isScrape ? (
           <div style={{ display: 'grid', gap: 12 }}>
-            <InputField label="Find group to scrape" value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder="Type group title or ID" />
-            {loadingScrapeGroups ? <Note>Searching database...</Note> : null}
+            <InputField label={t('leadsAcq.findGroup')} value={scrapeGroupQuery} onChange={setScrapeGroupQuery} placeholder={t('leadsAcq.groupPlaceholder')} />
+            {loadingScrapeGroups ? <Note>{t('leadsAcq.searchingDb')}</Note> : null}
             {!loadingScrapeGroups && scrapeGroups.length ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 {scrapeGroups.map((group, index) => (
                   <LinkRow key={`${group.tg_group_id ?? index}-${group.title ?? index}`} active={scrapeSelectedGroup?.tg_group_id === group.tg_group_id}
                     onClick={() => { setScrapeSelectedGroup(group); setScrapeGroupQuery(group.title || '') }}>
-                    <strong>{group.title || `Group ${group.tg_group_id ?? index}`}</strong>
-                    <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id ?? 'no tg id'} · members {group.member_count ?? 0}</div>
+                    <strong>{group.title || t('leadsAcq.groupFallback', { tgGroupId: group.tg_group_id ?? index })}</strong>
+                    <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id ?? t('leadsAcq.noTgId')} · {t('leadsAcq.membersCount', { count: group.member_count ?? 0 })}</div>
                   </LinkRow>
                 ))}
               </div>
             ) : null}
             {scrapeSelectedGroup ? (
               <div style={{ display: 'grid', gap: 12 }}>
-                <InputField label="Max members to scrape" value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
-                <InputField label="Max messages to scrape" value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
-                <InputField label="Max message age in days" value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
+                <InputField label={t('leadsAcq.maxMembers')} value={scrapeMemberLimit} onChange={setScrapeMemberLimit} type="number" />
+                <InputField label={t('leadsAcq.maxMessages')} value={scrapeMessageLimit} onChange={setScrapeMessageLimit} type="number" />
+                <InputField label={t('leadsAcq.maxAgeDays')} value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
               </div>
             ) : null}
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}>
-                {isSaving ? 'Queuing...' : 'Queue scrape job'}
+                {isSaving ? t('leadsAcq.queuing') : t('leadsAcq.queueScrape')}
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('leadsAcq.cancel')}</Button>
             </div>
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.keywordCondition')}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {taskKeywords.map((kw, i) => (
                   <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
@@ -221,22 +223,22 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
               <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
                 onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
-                placeholder="support" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+                placeholder={t('leadsAcq.keywordPlaceholder')} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
             </div>
-            <TextAreaField label="Acknowledgment template (optional)" value={leadAckTemplate} onChange={setLeadAckTemplate} rows={4} placeholder="We will get back to you shortly." />
-            <InputField label="Lead label (optional)" value={leadLabel} onChange={setLeadLabel} placeholder="general" />
+            <TextAreaField label={t('leadsAcq.ackTemplate')} value={leadAckTemplate} onChange={setLeadAckTemplate} rows={4} placeholder={t('leadsAcq.ackPlaceholder')} />
+            <InputField label={t('leadsAcq.leadLabel')} value={leadLabel} onChange={setLeadLabel} placeholder={t('leadsAcq.leadLabelPlaceholder')} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-clay)', cursor: 'pointer' }}>
               <input type="checkbox" checked={leadAskContact} onChange={(e) => setLeadAskContact(e.target.checked)} style={{ accentColor: 'var(--miniapp-accent)' }} />
-              Ask for contact details
+              {t('leadsAcq.askContact')}
             </label>
-            <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+            <GroupAutocompleteField label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !taskKeywords.length}>
-                {isSaving ? 'Working...' : 'Save'}
+                {isSaving ? t('leadsAcq.working') : t('leadsAcq.save')}
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('leadsAcq.cancel')}</Button>
             </div>
           </div>
         )}

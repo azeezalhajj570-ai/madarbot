@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { ColumnDef } from './DataTable'
 import { DataTable } from './DataTable'
 
@@ -22,6 +23,7 @@ export function TableModal<T extends Record<string, unknown>>({
   searchAccessor, pageSize = 25,
   loading, emptyMessage, renderExpanded,
 }: TableModalProps<T>) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
@@ -73,7 +75,7 @@ export function TableModal<T extends Record<string, unknown>>({
             searchAccessor={searchAccessor}
             pageSize={pageSize}
             loading={loading}
-            emptyMessage={emptyMessage || 'No data.'}
+            emptyMessage={emptyMessage || t('common.noData')}
             renderExpanded={renderExpanded}
           />
         </div>

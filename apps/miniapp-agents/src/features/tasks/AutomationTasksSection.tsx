@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { FormActions } from '../../components/FormActions'
@@ -27,12 +28,20 @@ type SelectedGroupChip = {
 }
 type TaskDestinationMode = 'group' | 'text'
 
-function mapTaskGroups(task: AutomationTask) {
+const DELIVERY_LABELS: Record<string, string> = {
+  text: 'deliveryText',
+  forward: 'deliveryForward',
+  copy: 'deliveryCopy',
+  text_and_forward: 'deliveryTextForward',
+  text_and_copy: 'deliveryTextCopy',
+}
+
+function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask) {
   const tgGroupIds = Array.isArray(task.group_tg_ids) ? task.group_tg_ids : []
   const titles = Array.isArray(task.group_titles) ? task.group_titles : []
   return tgGroupIds.map((tgGroupId, index) => ({
     tg_group_id: Number(tgGroupId),
-    title: String(titles[index] || `Group ${tgGroupId}`),
+    title: String(titles[index] || t('automation.groupFallback', { tgGroupId })),
   }))
 }
 
@@ -40,30 +49,34 @@ function taskTitle(task: AutomationTask, catalog: TaskCatalogItem[]) {
   return catalog.find((item) => item.key === task.task_key)?.title || task.task_key.replace(/_/g, ' ')
 }
 
-function _parseKeywords(raw: string | string[] | undefined | null): string[] {
+function _parseKeywords(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.filter(Boolean)
   if (!raw) return []
   return String(raw).split(',').map((k) => k.trim()).filter(Boolean)
 }
 
-function taskConditionLabel(task: AutomationTask) {
+function taskConditionLabel(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask) {
   const keywords = _parseKeywords(task.conditions.text_contains)
-  return keywords.length ? `When message contains: ${keywords.join(', ')}` : 'No keyword condition'
+  return keywords.length
+    ? t('automation.conditionLabel', { keyword: keywords.join(', ') })
+    : t('automation.noKeyword')
 }
 
-function taskConfigLabel(task: AutomationTask) {
+function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask) {
   if (task.task_key === 'notify_destination') {
-    const destination = String(task.config.destination || '').trim() || 'No destination'
-    const delivery = String(task.config.delivery_mode || 'text')
+    const destination = String(task.config.destination || '').trim() || t('automation.noDest')
+    const mode = String(task.config.delivery_mode || 'text')
+    const delivery = t(`automation.${DELIVERY_LABELS[mode] || 'deliveryText'}`)
     return `${destination} · ${delivery}`
   }
   const template = String(task.config.message_template || '').trim()
-  const summary = template ? template : 'No message template'
-  const mode = task.config.reply_mode === 'private' ? ' · private' : ''
+  const summary = template ? template : t('automation.noTemplate')
+  const mode = task.config.reply_mode === 'private' ? t('automation.privateSuffix') : ''
   return `${summary}${mode}`
 }
 
 export function AutomationTasksSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+  const { t } = useTranslation()
   const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
   const [tasks, setTasks] = useState<AutomationTask[]>([])
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
@@ -97,7 +110,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       setCatalog(nextCatalog)
       setStatus(null)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to load tasks')
+      setStatus(error instanceof Error ? error.message : t('automation.failedLoad'))
     } finally {
       setLoading(false)
     }
@@ -150,20 +163,20 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setTaskDestinationMode(matchingDestinationGroup ? 'group' : 'text')
     setTaskDestinationText(matchingDestinationGroup ? '' : configuredDestination)
     setTaskDestinationGroupQuery(matchingDestinationGroup ? String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || '') : '')
-    setTaskDestinationGroup(matchingDestinationGroup ? { tg_group_id: Number(matchingDestinationGroup.tg_group_id), title: String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || 'Group') } : null)
+    setTaskDestinationGroup(matchingDestinationGroup ? { tg_group_id: Number(matchingDestinationGroup.tg_group_id), title: String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || t('automation.groupFallback', { tgGroupId: matchingDestinationGroup.tg_group_id })) } : null)
     setTaskGroupsQuery('')
-    setTaskGroups(mapTaskGroups(task))
+    setTaskGroups(mapTaskGroups(t, task))
     setIsFormOpen(true)
   }
 
   async function handleSave() {
-    if (!taskKeywords.length) { setStatus('At least one keyword is required'); return }
+    if (!taskKeywords.length) { setStatus(t('automation.atLeastOneKeyword')); return }
     const config: Record<string, unknown> = {}
     if (taskTemplate.trim()) config.message_template = taskTemplate.trim()
     if (taskKey === 'reply_message') config.reply_mode = taskReplyMode
     if (taskKey === 'notify_destination') {
       const dest = taskDestinationMode === 'group' ? String(taskDestinationGroup?.tg_group_id || '') : taskDestinationText.trim()
-      if (!dest) { setStatus('Destination is required'); return }
+      if (!dest) { setStatus(t('automation.destRequired')); return }
       config.destination = dest
       config.delivery_mode = taskDeliveryMode
     }
@@ -181,15 +194,15 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     try {
       if (editingTask) {
         await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
-        onSaved('Task updated')
+        onSaved(t('automation.updated'))
       } else {
         await agentsApi.createGroupTask(account.group_id || 196, payload)
-        onSaved('Task created')
+        onSaved(t('automation.created'))
       }
       setIsFormOpen(false)
       await refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save task')
+      setStatus(error instanceof Error ? error.message : t('automation.failedSave'))
     } finally {
       setIsSaving(false)
     }
@@ -200,11 +213,11 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setIsSaving(true)
     try {
       await agentsApi.deleteGroupTask(account.group_id, deleteTarget.assignment_id)
-      onSaved('Task deleted')
+      onSaved(t('automation.deleted'))
       setDeleteTarget(null)
       await refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to delete task')
+      setStatus(error instanceof Error ? error.message : t('automation.failedDelete'))
     } finally {
       setIsSaving(false)
     }
@@ -213,16 +226,16 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const extendedCatalog = catalog
   return (
     <>
-      <Card title="Automation Tasks" subtitle="Configure automated actions triggered by group events.">
+      <Card title={t('automation.title')} subtitle={t('automation.subtitle')}>
         {status ? <Note>{status}</Note> : null}
-        {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>New task</Button> : null}
+        {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>{t('automation.newTask')}</Button> : null}
         {isFormOpen ? (
           <div style={{ display: 'grid', gap: 12 }}>
-            <SelectField label="Task type" value={taskKey} onChange={setTaskKey}>
+            <SelectField label={t('automation.taskType')} value={taskKey} onChange={setTaskKey}>
               {extendedCatalog.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
             </SelectField>
             <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.keywordCondition')}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {taskKeywords.map((kw, i) => (
                   <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
@@ -234,58 +247,58 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
               <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
                 onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
-                placeholder="support" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+                placeholder={t('automation.keywordPlaceholder')} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
             </div>
-            <TextAreaField label="Message template" value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? 'Notify: {text}' : 'We will reply shortly.'} />
+            <TextAreaField label={t('automation.messageTemplate')} value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? t('automation.templateNotifyPlaceholder') : t('automation.templateReplyPlaceholder')} />
             {taskKey === 'reply_message' ? (
-              <SelectField label="Reply mode" value={taskReplyMode} onChange={setTaskReplyMode}>
-                <option value="public">Public (group)</option>
-                <option value="private">Private (direct message)</option>
+              <SelectField label={t('automation.replyMode')} value={taskReplyMode} onChange={setTaskReplyMode}>
+                <option value="public">{t('automation.replyPublic')}</option>
+                <option value="private">{t('automation.replyPrivate')}</option>
               </SelectField>
             ) : null}
-            <GroupAutocompleteField label="Select groups" query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+            <GroupAutocompleteField label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
             {taskKey === 'notify_destination' ? (
               <>
-                <SelectField label="Destination type" value={taskDestinationMode} onChange={(v) => setTaskDestinationMode(v as TaskDestinationMode)}>
-                  <option value="group">Select visible group</option>
-                  <option value="text">Manual ID / username</option>
+                <SelectField label={t('automation.destType')} value={taskDestinationMode} onChange={(v) => setTaskDestinationMode(v as TaskDestinationMode)}>
+                  <option value="group">{t('automation.destVisible')}</option>
+                  <option value="text">{t('automation.destManual')}</option>
                 </SelectField>
                 {taskDestinationMode === 'group' ? (
-                  <GroupDestinationField label="Destination group" query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
+                  <GroupDestinationField label={t('automation.destGroup')} query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
                     selectedGroup={taskDestinationGroup} onSelect={(g) => { setTaskDestinationGroup(g); setTaskDestinationGroupQuery(g.title) }}
                     onClear={() => { setTaskDestinationGroup(null); setTaskDestinationGroupQuery('') }} />
                 ) : (
-                  <InputField label="Destination" value={taskDestinationText} onChange={setTaskDestinationText} placeholder="-1001234567890 or @channel" />
+                  <InputField label={t('automation.destination')} value={taskDestinationText} onChange={setTaskDestinationText} placeholder={t('automation.destPlaceholder')} />
                 )}
-                <SelectField label="Delivery mode" value={taskDeliveryMode} onChange={setTaskDeliveryMode}>
-                  <option value="text">Text</option>
-                  <option value="forward">Forward</option>
-                  <option value="copy">Copy</option>
-                  <option value="text_and_forward">Text and forward</option>
-                  <option value="text_and_copy">Text and copy</option>
+                <SelectField label={t('automation.deliveryMode')} value={taskDeliveryMode} onChange={setTaskDeliveryMode}>
+                  <option value="text">{t('automation.deliveryText')}</option>
+                  <option value="forward">{t('automation.deliveryForward')}</option>
+                  <option value="copy">{t('automation.deliveryCopy')}</option>
+                  <option value="text_and_forward">{t('automation.deliveryTextForward')}</option>
+                  <option value="text_and_copy">{t('automation.deliveryTextCopy')}</option>
                 </SelectField>
               </>
             ) : null}
-            <FormActions submitLabel={editingTask ? 'Save task' : 'Create task'} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
+            <FormActions submitLabel={editingTask ? t('automation.saveTask') : t('automation.createTask')} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
           </div>
         ) : null}
       </Card>
       {!loading && tasks.length > 0 ? (
-        <Card title="Configured Tasks" subtitle="Existing automation rules for this group.">
+        <Card title={t('automation.configuredTitle')} subtitle={t('automation.configuredSubtitle')}>
           <div style={{ display: 'grid', gap: 8 }}>
             {tasks.map((task) => (
               <div key={task.assignment_id} style={{ padding: 14, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-surface)' }}>
                 <div>
                   <strong>{taskTitle(task, catalog)}</strong>
-                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConditionLabel(task)}</div>
-                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConfigLabel(task)}</div>
-                  {Array.isArray(task.group_titles) && task.group_titles.length ? <div style={{ color: '#655d52', marginTop: 4 }}>Groups: {task.group_titles.join(', ')}</div> : null}
+                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConditionLabel(t, task)}</div>
+                  <div style={{ color: '#655d52', marginTop: 4 }}>{taskConfigLabel(t, task)}</div>
+                  {Array.isArray(task.group_titles) && task.group_titles.length ? <div style={{ color: '#655d52', marginTop: 4 }}>{t('automation.groupsLabel', { titles: task.group_titles.join(', ') })}</div> : null}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                  <Button tone="secondary" onClick={() => openEditForm(task)}>Edit</Button>
-                  <Button tone="danger" onClick={() => setDeleteTarget(task)}>Delete</Button>
+                  <Button tone="secondary" onClick={() => openEditForm(task)}>{t('automation.edit')}</Button>
+                  <Button tone="danger" onClick={() => setDeleteTarget(task)}>{t('automation.delete')}</Button>
                 </div>
               </div>
             ))}
@@ -293,7 +306,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
         </Card>
       ) : null}
       {deleteTarget ? (
-        <ConfirmModal title="Delete task" message="Delete this automation task?" confirmLabel="Delete" isBusy={isSaving}
+        <ConfirmModal title={t('automation.deleteModalTitle')} message={t('automation.deleteModalMsg')} confirmLabel={t('automation.deleteConfirm')} isBusy={isSaving}
           onConfirm={() => void handleDelete()} onCancel={() => setDeleteTarget(null)} />
       ) : null}
     </>

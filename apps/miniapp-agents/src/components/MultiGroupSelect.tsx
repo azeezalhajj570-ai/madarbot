@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AgentManagedGroup } from '@miniapp/shared'
 
 interface SelectedGroupChip {
@@ -15,7 +16,8 @@ interface Props {
   placeholder?: string
 }
 
-export function MultiGroupSelect({ query, onQueryChange, groups, selected, onToggle, placeholder = 'Search groups...' }: Props) {
+export function MultiGroupSelect({ query, onQueryChange, groups, selected, onToggle, placeholder }: Props) {
+  const { t } = useTranslation()
   const [focused, setFocused] = useState(false)
   const selectedIds = useMemo(() => new Set(selected.map((g) => g.tg_group_id)), [selected])
   const normalizedQuery = query.trim().toLowerCase()
@@ -39,7 +41,7 @@ export function MultiGroupSelect({ query, onQueryChange, groups, selected, onTog
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
-        Target Groups {selected.length > 0 ? <span style={{ color: 'var(--miniapp-coral)', fontWeight: 700 }}>({selected.length})</span> : null}
+        {t('multiGroup.targetGroups')} {selected.length > 0 ? <span style={{ color: 'var(--miniapp-coral)', fontWeight: 700 }}>{t('multiGroup.selectedCount', { count: selected.length })}</span> : null}
       </label>
       <input
         type="text"
@@ -47,7 +49,7 @@ export function MultiGroupSelect({ query, onQueryChange, groups, selected, onTog
         onChange={(e) => onQueryChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setTimeout(() => setFocused(false), 200)}
-        placeholder={placeholder}
+        placeholder={placeholder || t('multiGroup.searchPlaceholder')}
         style={{
           width: '100%', boxSizing: 'border-box',
           padding: '10px 14px', borderRadius: 10,
@@ -66,7 +68,7 @@ export function MultiGroupSelect({ query, onQueryChange, groups, selected, onTog
         }}>
           {selectedItems.length > 0 ? (
             <div style={{ padding: '4px 8px', fontSize: 10, fontWeight: 600, color: 'var(--miniapp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              Selected ({selectedItems.length})
+              {t('multiGroup.selected', { count: selectedItems.length })}
             </div>
           ) : null}
           {selectedItems.map((group) => (
@@ -74,14 +76,14 @@ export function MultiGroupSelect({ query, onQueryChange, groups, selected, onTog
           ))}
           {selectedItems.length > 0 && unselected.length > 0 ? (
             <div style={{ padding: '4px 8px', fontSize: 10, fontWeight: 600, color: 'var(--miniapp-text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginTop: 4 }}>
-              Results
+              {t('multiGroup.results')}
             </div>
           ) : null}
           {unselected.length > 0 ? unselected.map((group) => (
             <Row key={`uns-${group.tg_group_id}`} group={group} selected={false} onToggle={onToggle} />
           )) : normalizedQuery && selectedItems.length === 0 ? (
             <div style={{ padding: '10px 8px', fontSize: 12, color: 'var(--miniapp-text-muted)', textAlign: 'center' }}>
-              No groups found
+              {t('multiGroup.noGroupsFound')}
             </div>
           ) : null}
         </div>
