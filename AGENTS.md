@@ -1,5 +1,9 @@
 # MadarBot — AI Agent Operating Guide
 
+<!-- SPECKIT START -->
+[scraping-flow-investigation]: specs/003-scraping-investigation/plan.md
+<!-- SPECKIT END -->
+
 ## Repository Structure
 
 ```
