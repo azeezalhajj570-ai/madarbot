@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { Agent } from '@miniapp/shared'
 import { agentsApi, Button, Card, Grid, InputField, LinkRow, Note } from '@miniapp/shared'
 import { apiClient } from '@miniapp/shared'
+import { formatDate, formatNumber } from '../i18n/format'
 
 interface GroupSummary {
   id: number
@@ -238,7 +239,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', marginBottom: 1 }}>Messages</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{msgs.toLocaleString()}</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{formatNumber(msgs)}</div>
               </div>
             </div>
             <div style={statCardStyle}>
@@ -247,7 +248,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', marginBottom: 1 }}>Members</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{members.toLocaleString()}</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{formatNumber(members)}</div>
               </div>
             </div>
             <div style={statCardStyle}>
@@ -256,7 +257,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', marginBottom: 1 }}>Spam</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{spam.toLocaleString()}</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{formatNumber(spam)}</div>
               </div>
             </div>
             <div style={statCardStyle}>
@@ -265,7 +266,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', marginBottom: 1 }}>Deleted</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{deleted.toLocaleString()}</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{formatNumber(deleted)}</div>
               </div>
             </div>
           </div>
@@ -288,7 +289,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
                       <span style={{ fontSize: 9, color: 'var(--miniapp-text-muted)' }}>{count}</span>
                       <div style={{ width: '100%', height: h, borderRadius: '2px 2px 0 0', background: 'var(--miniapp-slate)', minHeight: 2 }} />
                       <span style={{ fontSize: 8, color: 'var(--miniapp-text-muted)' }}>
-                        {new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {formatDate(day, { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                   )
@@ -322,7 +323,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
                   <div key={s.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--miniapp-border-soft)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-serif)', color: 'var(--miniapp-text-primary)' }}>
-                        {new Date(s.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {formatDate(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}
                       </span>
                       <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{s.message_count} msgs</span>
                     </div>
@@ -345,7 +346,7 @@ export const GroupAnalysisPage: React.FC<Props> = ({ account }) => {
                       {evt.username || 'Anonymous'}: {evt.text_preview?.slice(0, 40)}
                     </span>
                     <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', whiteSpace: 'nowrap' }}>
-                      {new Date(evt.created_at).toLocaleDateString()}
+                      {formatDate(evt.created_at)}
                     </span>
                   </div>
                 ))}

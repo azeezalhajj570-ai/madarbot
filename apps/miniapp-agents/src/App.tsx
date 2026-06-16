@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
 import { MultiGroupSelect } from './components/MultiGroupSelect'
 import { TableModal } from './components/TableModal'
@@ -30,6 +32,9 @@ import type {
   TaskCatalogItem,
 } from '@miniapp/shared'
 
+import { useLanguage } from './i18n/useLanguage'
+import './i18n/rtl.css'
+import { LanguageSwitcher } from './components/LanguageSwitcher'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
@@ -159,6 +164,7 @@ function SubscriptionForm({
   onRedeemed: (info: SubscriptionStatusInfo) => void
   onRedeemComplete?: () => void
 }) {
+  const { t } = useTranslation()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'business' | null>(null)
@@ -247,19 +253,19 @@ function SubscriptionForm({
     <div style={{ display: 'grid', gap: 20 }}>
       <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 600 }}>Current Plan</span>
+          <span style={{ fontWeight: 600 }}>{t('subscription.currentPlan')}</span>
           <Badge tone={isActive ? 'success' : 'neutral'}>
-            {isActive ? (isLifetime ? 'Lifetime' : 'Active') : 'No active subscription'}
+            {isActive ? (isLifetime ? t('subscription.lifetime') : t('subscription.active')) : t('subscription.noActive')}
           </Badge>
         </div>
         {isActive && expiryDate && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            Valid until {expiryDate.toLocaleDateString()} {expiryDate.toLocaleTimeString()}
+            {t('subscription.validUntil')} {formatDate(expiryDate)} {formatTime(expiryDate)}
           </div>
         )}
         {!isActive && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            Redeem a promotion code to unlock agent features.
+            {t('subscription.redeemInfo')}
           </div>
         )}
         {isActive && (
@@ -275,7 +281,7 @@ function SubscriptionForm({
                 opacity: cancelling ? 0.5 : 1,
               }}
             >
-              {cancelling ? 'Cancelling...' : 'Cancel subscription'}
+              {cancelling ? t('subscription.cancelling') : t('subscription.cancel')}
             </button>
           </div>
         )}
@@ -283,29 +289,29 @@ function SubscriptionForm({
 
       <div style={{ display: 'grid', gap: 12 }}>
         <InputField
-          label="Redeem promotion code"
+          label={t('subscription.redeemLabel')}
           value={code}
           onChange={(val) => setCode(val.toUpperCase())}
-          placeholder="PROMO-CODE"
+          placeholder={t('subscription.redeemPlaceholder')}
         />
         {error && <Note tone="warning">{error}</Note>}
         {success && <Note>{success}</Note>}
         <Button onClick={() => void handleRedeem()} disabled={loading || !code.trim()}>
-          {loading ? 'Redeeming...' : 'Redeem code'}
+          {loading ? t('subscription.redeeming') : t('subscription.redeemButton')}
         </Button>
       </div>
 
       <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
         {isActive && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Upgrade or extend your plan:</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.upgradeOrExtend')}</div>
         )}
         {!isActive && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Or pay with Stripe:</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.payWithStripe')}</div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { plan: 'pro', label: 'Pro', price: '$29', desc: '/month', days: 30 },
-            { plan: 'business', label: 'Business', price: '$79', desc: '/month', days: 30 },
+            { plan: 'pro', label: t('subscription.pro'), price: '$29', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'business', label: t('subscription.business'), price: '$79', desc: t('subscription.priceMonthly'), days: 30 },
           ].map((p) => (
             <button
               key={p.plan}
@@ -319,7 +325,7 @@ function SubscriptionForm({
             >
               <div style={{ fontSize: 15, fontWeight: 700 }}>{p.label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--miniapp-primary)', margin: '4px 0' }}>
-                {checkoutPlan === p.plan ? 'Opening...' : p.price}
+                {checkoutPlan === p.plan ? t('subscription.checkoutLoading') : p.price}
               </div>
               <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{p.desc}</div>
             </button>
@@ -329,12 +335,12 @@ function SubscriptionForm({
 
       {!isActive && (
         <div style={{ fontSize: 13, color: 'var(--miniapp-text-secondary)', display: 'grid', gap: 8 }}>
-          <strong>Subscribing gives you access to:</strong>
+          <strong>{t('subscription.subscribingGives')}</strong>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>
-            <li>Linking multiple Telegram accounts as agents</li>
-            <li>Running background member scraping jobs</li>
-            <li>Automated broadcasts and member messaging</li>
-            <li>Real-time agent notifications</li>
+            <li>{t('subscription.featureMultiAccounts')}</li>
+            <li>{t('subscription.featureScraping')}</li>
+            <li>{t('subscription.featureBroadcasts')}</li>
+            <li>{t('subscription.featureNotifications')}</li>
           </ul>
         </div>
       )}
@@ -353,37 +359,35 @@ function SubscriptionSheet({
   status: SubscriptionStatusInfo | null
   onRedeemed: (info: SubscriptionStatusInfo) => void
 }) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
     <div
       style={{
-        position: 'fixed',
-        inset: 0,
+        position: 'fixed', inset: 0,
         background: 'rgba(32, 25, 16, 0.55)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-        zIndex: 1100,
+        display: 'grid', placeItems: 'center',
+        padding: 16, zIndex: 1100,
       }}
+      onClick={onClose}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: 'min(480px, 100%)',
-          maxHeight: '85vh',
-          overflow: 'auto',
+          maxHeight: '85vh', overflow: 'auto',
           background: 'var(--miniapp-surface)',
           border: '1px solid var(--miniapp-border-soft)',
-          borderRadius: 20,
-          padding: 24,
+          borderRadius: 20, padding: 24,
           display: 'grid',
           gap: 20,
           boxShadow: '0 22px 60px rgba(32, 25, 16, 0.22)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 22 }}>Subscription</h2>
-          <Button tone="secondary" onClick={onClose}>Close</Button>
+          <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 22 }}>{t('subscription.modalTitle')}</h2>
+          <Button tone="secondary" onClick={onClose}>{t('subscription.close')}</Button>
         </div>
 
         <SubscriptionForm status={status} onRedeemed={onRedeemed} onRedeemComplete={onClose} />
@@ -467,23 +471,23 @@ function NotificationSheet({
       >
         <div style={{ padding: '24px 24px 0 24px', display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>Notifications</h2>
+            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>{t('notifications.title')}</h2>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark seen</Button>
-              <Button tone="secondary" onClick={onClose}>Close</Button>
+              <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>{t('notifications.markAllSeen')}</Button>
+              <Button tone="secondary" onClick={onClose}>{t('notifications.close')}</Button>
             </div>
           </div>
           {status ? <Note>{status}</Note> : null}
           <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
+            {loading ? t('common.loading') : t('common.refresh')}
           </Button>
-          {loading ? <Note>Loading notifications...</Note> : null}
-          {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
+          {loading ? <Note>{t('notifications.loading')}</Note> : null}
+          {!loading && visibleNotifications.length === 0 ? <Note>{t('notifications.noUnseen')}</Note> : null}
         </div>
         <div style={{ overflow: 'auto', padding: 24, display: 'grid', gap: 16 }}>
           {visibleNotifications.map((notification) => {
             const tone = notificationTone(notification.kind)
-            const chips = notificationChips(notification)
+            const chips = notificationChips(t, notification)
             return (
               <div
                 key={notification.id}
@@ -501,11 +505,11 @@ function NotificationSheet({
                       color: tone.accent, fontSize: 11, fontWeight: 700,
                       textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap',
                     }}>
-                      {notificationKindLabel(notification.kind)}
+                      {notificationKindLabel(t, notification.kind)}
                     </span>
                     <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
                   </div>
-                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(notification.created_at)}</div>
+                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(t, notification.created_at)}</div>
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <strong style={{ fontSize: 15 }}>{notification.title}</strong>
@@ -617,12 +621,12 @@ function taskConfigLabel(task: AutomationTask) {
   return `${summary}${mode}`
 }
 
-function notificationTimeLabel(createdAt?: string | null) {
+function notificationTimeLabel(t: (key: string) => string, createdAt?: string | null) {
   if (!createdAt) {
-    return 'Unknown time'
+    return t('notifications.unknownTime')
   }
   const date = new Date(createdAt)
-  return Number.isNaN(date.getTime()) ? createdAt : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? createdAt : formatDateTime(date)
 }
 
 function notificationTone(kind: string) {
@@ -650,16 +654,16 @@ function notificationTone(kind: string) {
   }
 }
 
-function notificationKindLabel(kind: string) {
-  if (kind.startsWith('bulk_message')) return 'Bulk message'
-  if (kind.startsWith('scrape')) return 'Scrape'
-  if (kind.startsWith('task')) return 'Task'
-  if (kind === 'job_queued') return 'Queued'
-  if (kind === 'job_failed') return 'Job failed'
+function notificationKindLabel(t: (key: string) => string, kind: string) {
+  if (kind.startsWith('bulk_message')) return t('notifications.kindBulkMessage')
+  if (kind.startsWith('scrape')) return t('notifications.kindScrape')
+  if (kind.startsWith('task')) return t('notifications.kindTask')
+  if (kind === 'job_queued') return t('notifications.kindQueued')
+  if (kind === 'job_failed') return t('notifications.kindJobFailed')
   return kind.replace(/_/g, ' ')
 }
 
-function notificationChips(notification: AgentNotification) {
+function notificationChips(t: (key: string, options?: Record<string, unknown>) => string, notification: AgentNotification) {
   const payload = notification.payload || {}
   const chips: string[] = []
   const groupTitle = typeof payload.group_title === 'string' ? payload.group_title.trim() : ''
@@ -677,24 +681,24 @@ function notificationChips(notification: AgentNotification) {
   if (taskLabel) chips.push(taskLabel)
   if (sourceGroupTitle) chips.push(sourceGroupTitle)
   else if (groupTitle) chips.push(groupTitle)
-  if (keyword) chips.push(`Keyword: ${keyword}`)
-  if (destination) chips.push(`To: ${destination}`)
-  if (selectedCount && notification.kind === 'job_queued') chips.push(`${selectedCount} selected`)
-  if (attemptedCount && notification.kind === 'bulk_message_completed') chips.push(`${attemptedCount} attempted`)
-  if (sentCount) chips.push(`${sentCount} sent`)
-  if (failedCount) chips.push(`${failedCount} failed`)
-  if (membersCount && notification.kind.startsWith('scrape')) chips.push(`${membersCount} members`)
-  if (messagesCount && notification.kind.startsWith('scrape')) chips.push(`${messagesCount} messages`)
+  if (keyword) chips.push(t('notifications.chipKeyword', { keyword }))
+  if (destination) chips.push(t('notifications.chipTo', { destination }))
+  if (selectedCount && notification.kind === 'job_queued') chips.push(t('notifications.chipSelected', { count: selectedCount }))
+  if (attemptedCount && notification.kind === 'bulk_message_completed') chips.push(t('notifications.chipAttempted', { count: attemptedCount }))
+  if (sentCount) chips.push(t('notifications.chipSent', { count: sentCount }))
+  if (failedCount) chips.push(t('notifications.chipFailed', { count: failedCount }))
+  if (membersCount && notification.kind.startsWith('scrape')) chips.push(t('notifications.chipMembers', { count: membersCount }))
+  if (messagesCount && notification.kind.startsWith('scrape')) chips.push(t('notifications.chipMessages', { count: messagesCount }))
 
   return chips.slice(0, 4)
 }
 
-function mapTaskGroups(task: AutomationTask) {
+function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask) {
   const tgGroupIds = Array.isArray(task.group_tg_ids) ? task.group_tg_ids : []
   const titles = Array.isArray(task.group_titles) ? task.group_titles : []
   return tgGroupIds.map((tgGroupId, index) => ({
     tg_group_id: Number(tgGroupId),
-    title: String(titles[index] || `Group ${tgGroupId}`),
+    title: String(titles[index] || t('automation.groupFallback', { tgGroupId })),
   }))
 }
 
@@ -740,13 +744,14 @@ function DismissibleStatus({
 }
 
 function NoAccountNotice({ onLink }: { onLink: () => void }) {
+  const { t } = useTranslation()
   return (
-    <Card title="Account required" subtitle="An active linked account is required to use this page.">
+    <Card title={t('noAccount.title')} subtitle={t('noAccount.subtitle')}>
       <Note tone="warning">
-        You haven't linked any Telegram accounts yet, or your selected account is not fully authenticated.
+        {t('noAccount.note')}
       </Note>
-      <div style={{ marginTop: 14 }}>
-        <Button onClick={onLink}>Go to Accounts</Button>
+      <div style={{ marginTop: 10 }}>
+        <Button onClick={onLink}>{t('noAccount.goToAccounts')}</Button>
       </div>
     </Card>
   )
@@ -765,17 +770,18 @@ function LinkedAccountCard({
   onDelete: () => void
   onStatus: (msg: string) => void
 }) {
+  const { t } = useTranslation()
   const [isSyncing, setIsSyncing] = useState(false)
   const isActive = account.auth_state === 'active' && account.status === 'active'
 
   async function syncWorkspace() {
     setIsSyncing(true)
-    onStatus(`Syncing ${accountLabel(account)} workspace from Telegram...`)
+    onStatus(t('settings.syncingStatus', { name: accountLabel(account) }))
     try {
       await agentsApi.syncAgentWorkspace(account.id)
-      onStatus(`Workspace sync finished for ${accountLabel(account)}.`)
+      onStatus(t('settings.syncFinished', { name: accountLabel(account) }))
     } catch (error) {
-      onStatus(error instanceof Error ? error.message : 'Failed to sync workspace')
+      onStatus(error instanceof Error ? error.message : t('settings.syncFailed'))
     } finally {
       setIsSyncing(false)
     }
@@ -795,31 +801,32 @@ function LinkedAccountCard({
       <div>
         <strong>{account.phone_number || accountLabel(account)}</strong>
         <div style={{ color: '#655d52', marginTop: 4 }}>
-          {accountLabel(account) ? `${accountLabel(account)} · ` : ''}status {account.status} · auth {account.auth_state}
+          {accountLabel(account) ? `${accountLabel(account)} · ` : ''}{t('settings.status')} {account.status} · {t('settings.auth')} {account.auth_state}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {isActive ? (
           <>
-            <Button onClick={onOpen}>Open workspace</Button>
+            <Button onClick={onOpen}>{t('settings.openWorkspace')}</Button>
             <Button tone="secondary" onClick={() => void syncWorkspace()} disabled={isSyncing}>
-              {isSyncing ? 'Syncing...' : 'Sync'}
+              {isSyncing ? t('settings.syncing') : t('settings.sync')}
             </Button>
           </>
         ) : (
-          <Button onClick={onResume}>Resume setup</Button>
+          <Button onClick={onResume}>{t('settings.resumeSetup')}</Button>
         )}
-        <Button tone="danger" onClick={onDelete}>Delete</Button>
+        <Button tone="danger" onClick={onDelete}>{t('settings.delete')}</Button>
       </div>
     </div>
   )
 }
 
 function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNavigate: (page: AgentsPage) => void }) {
+  const { t } = useTranslation()
   const tabs: { id: AgentsPage; label: string; icon: React.ReactNode }[] = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="1.7" />
@@ -831,7 +838,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'leads',
-      label: 'Leads',
+      label: t('nav.leads'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.7" />
@@ -843,7 +850,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'campaigns',
-      label: 'Campaigns',
+      label: t('nav.campaigns'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -853,7 +860,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'tasks',
-      label: 'Tasks',
+      label: t('nav.tasks'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -863,7 +870,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'settings',
-      label: 'Settings',
+      label: t('nav.settings'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
@@ -920,6 +927,8 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
 }
 
 export default function App() {
+  useLanguage()
+  const { t } = useTranslation()
   const basePath = import.meta.env.BASE_URL
   const session = useMiniappSession()
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
@@ -1135,17 +1144,17 @@ export default function App() {
                 cursor: 'pointer',
               }}
             >
-              Upgrade
+{t('app.upgrade')}
             </button>
           )}
         </div>
       )
     }
     return label
-  }, [selectedAccount, subscription])
+  }, [selectedAccount, subscription, t])
 
   return (
-    <AppShell title="MadarAppBot" subtitle={headerSubtitle} actions={
+    <AppShell title={t('app.title')} subtitle={headerSubtitle} actions={
       <button
         type="button"
         onClick={() => setShowNotifications(true)}
@@ -1181,13 +1190,13 @@ export default function App() {
         {status ? <DismissibleStatus message={status} onClose={() => setStatus(null)} /> : null}
         {session.error ? <Note tone="warning">{session.error}</Note> : null}
         {!appReady ? (
-          <Card title="Loading" subtitle="Preparing accounts, groups, and agent tools.">
-            <Note>Please wait while the miniapp loads your workspace.</Note>
+          <Card title={t('app.loading')} subtitle={t('app.preparing')}>
+            <Note>{t('app.waitingWorkspace')}</Note>
           </Card>
         ) : null}
         {appReady && !isAuthenticated ? (
-          <Card title="Authentication required" subtitle="Open this WebApp from Telegram to load your agent workspace.">
-            <Note tone="warning">{session.error || 'Telegram authentication is unavailable.'}</Note>
+          <Card title={t('app.authRequired')} subtitle={t('app.authRequiredDesc')}>
+            <Note tone="warning">{session.error || t('app.authUnavailable')}</Note>
           </Card>
         ) : null}
         {appReady && isAuthenticated && isWizardInProgress ? (
@@ -1207,9 +1216,12 @@ export default function App() {
         ) : null}
         {appReady && isAuthenticated && !isWizardInProgress && route.page === 'settings' ? (
           <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 0' }}>
+              <LanguageSwitcher />
+            </div>
             <Card
-              title="Subscription"
-              subtitle={`${subscription?.status === 'active' ? `${subscription?.plan === 'business' ? 'Business' : 'Pro'} · Active` : 'No active subscription'}`}
+              title={t('subscription.title')}
+              subtitle={subscription?.status === 'active' ? `${subscription?.plan === 'business' ? t('subscription.businessActive') : t('subscription.proActive')}` : t('subscription.noActive')}
             >
               <div style={{ display: 'grid', gap: 0 }}>
                 <button
@@ -1221,7 +1233,7 @@ export default function App() {
                     color: 'var(--miniapp-text-muted)', fontSize: 12, fontFamily: 'var(--miniapp-sans)', fontWeight: 600,
                   }}
                 >
-                  <span>{subscriptionExpanded ? 'Hide details' : 'Show details'}</span>
+                  <span>{subscriptionExpanded ? t('subscription.hideDetails') : t('subscription.showDetails')}</span>
                   <span style={{ transform: subscriptionExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', fontSize: 14 }}>▾</span>
                 </button>
                 {subscriptionExpanded && (
@@ -1237,7 +1249,7 @@ export default function App() {
             </Card>
             {subscription?.status === 'active' ? (
               <>
-                <Card title="Linked accounts" subtitle="Manage your linked Telegram agents and their authentication status.">
+                <Card title={t('settings.linkedAccounts')} subtitle={t('settings.linkedAccountsSubtitle')}>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {accounts.length ? accounts.map((account) => (
                       <LinkedAccountCard
@@ -1257,16 +1269,16 @@ export default function App() {
                           }
                         }}
                       />
-                    )) : <Note>No linked accounts yet. Link an account to start using agent tools.</Note>}
+                    )) : <Note>{t('settings.noLinkedAccounts')}</Note>}
                   </div>
                 </Card>
-                <Card title="Link new account">
+                <Card title={t('settings.linkNewAccount')}>
                   {subscription?.plan === 'pro' && accounts.length >= 1 ? (
                     <div style={{ display: 'grid', gap: 12 }}>
                       <Note tone="warning">
-                        Your Pro plan allows linking up to 1 account. Upgrade to Business to link more accounts.
+                        {t('settings.proAccountLimit')}
                       </Note>
-                      <Button onClick={() => setShowSubscription(true)}>Upgrade Plan</Button>
+                      <Button onClick={() => setShowSubscription(true)}>{t('settings.upgradePlan')}</Button>
                     </div>
                   ) : (
                     <CreateAccountPanel
@@ -1323,9 +1335,9 @@ export default function App() {
       />
       {deleteTarget ? (
         <ConfirmModal
-          title="Delete account"
-          message={`Delete ${accountLabel(deleteTarget)}? This removes the linked account from this workspace.`}
-          confirmLabel="Delete"
+          title={t('settings.deleteAccountTitle')}
+          message={t('settings.deleteAccountConfirm', { name: accountLabel(deleteTarget) })}
+          confirmLabel={t('settings.delete')}
           isBusy={isDeleting}
           onConfirm={() => void confirmDeleteAccount()}
           onCancel={() => setDeleteTarget(null)}
@@ -1342,7 +1354,8 @@ function CreateAccountPanel({
   onOpen: () => void
   disabled?: boolean
 }) {
-  return <Button onClick={onOpen} disabled={disabled}>Link new account</Button>
+  const { t } = useTranslation()
+  return <Button onClick={onOpen} disabled={disabled}>{t('settings.linkNewAccount')}</Button>
 }
 
 function MCPTokensCard() {
@@ -1403,19 +1416,21 @@ function MCPTokensCard() {
     }
   }
 
+  const { t } = useTranslation()
+
   const statusBadge = (s: string) => {
-    if (s === 'active') return <Badge tone="success">Active</Badge>
-    if (s === 'expired') return <Badge tone="warning">Expired</Badge>
-    return <Badge tone="neutral">Revoked</Badge>
+    if (s === 'active') return <Badge tone="success">{t('settings.tokenActive')}</Badge>
+    if (s === 'expired') return <Badge tone="warning">{t('settings.tokenExpired')}</Badge>
+    return <Badge tone="neutral">{t('settings.tokenRevoked')}</Badge>
   }
 
   return (
-    <Card title="MCP Tokens" subtitle="API tokens for external MCP access">
+    <Card title={t('settings.mcpTokens')} subtitle={t('settings.mcpTokensSubtitle')}>
       <div style={{ display: 'grid', gap: 12 }}>
         {loading ? (
-          <Note>Loading tokens...</Note>
+          <Note>{t('settings.mcpTokensLoading')}</Note>
         ) : tokens.length === 0 ? (
-          <Note>No tokens yet.</Note>
+          <Note>{t('settings.noTokens')}</Note>
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
             {tokens.map((t) => (
@@ -1431,7 +1446,7 @@ function MCPTokensCard() {
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
                   <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginTop: 2 }}>
                     <code style={{ fontFamily: 'var(--miniapp-mono)', fontSize: 11 }}>{t.prefix}...</code>
-                    {' · '}created {t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}
+                    {' · '}created {t.created_at ? formatDate(t.created_at) : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1446,7 +1461,7 @@ function MCPTokensCard() {
                         padding: '4px 8px', borderRadius: 6, fontFamily: 'var(--miniapp-sans)',
                       }}
                     >
-                      Revoke
+{t('settings.revoke')}
                     </button>
                   )}
                 </div>
@@ -1460,7 +1475,7 @@ function MCPTokensCard() {
             padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-sage-border)',
             background: 'var(--miniapp-sage-dim)', display: 'grid', gap: 8,
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-sage)' }}>Token created — copy it now (will not be shown again)</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-sage)' }}>{t('settings.tokenCopied')}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
               <input
                 readOnly
@@ -1480,7 +1495,7 @@ function MCPTokensCard() {
                   color: 'var(--miniapp-sage)', fontFamily: 'var(--miniapp-sans)', whiteSpace: 'nowrap',
                 }}
               >
-                Copy
+                {t('settings.copy')}
               </button>
             </div>
           </div>
@@ -1488,18 +1503,18 @@ function MCPTokensCard() {
 
         {showCreate ? (
           <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12 }}>
-            <InputField label="Token name" value={name} onChange={setName} placeholder="My API token" />
-            <InputField label="Expires in (days, optional)" value={expiryDays} onChange={(v) => setExpiryDays(v.replace(/\D/g, ''))} placeholder="Leave empty for no expiry" />
+            <InputField label={t('settings.tokenName')} value={name} onChange={setName} placeholder={t('settings.tokenNamePlaceholder')} />
+            <InputField label={t('settings.tokenExpiresLabel')} value={expiryDays} onChange={(v) => setExpiryDays(v.replace(/\D/g, ''))} placeholder={t('settings.tokenExpiresPlaceholder')} />
             {error && <Note tone="warning">{error}</Note>}
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={() => void handleCreate()} disabled={creating || !name.trim()}>
-                {creating ? 'Creating...' : 'Create token'}
+                {creating ? t('settings.creatingToken') : t('settings.createToken')}
               </Button>
-              <Button tone="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
+              <Button tone="secondary" onClick={() => { setShowCreate(false); setError(null) }}>{t('subscription.close')}</Button>
             </div>
           </div>
         ) : (
-          <Button onClick={() => { setShowCreate(true); setCreatedToken(null); setError(null) }}>Create token</Button>
+          <Button onClick={() => { setShowCreate(true); setCreatedToken(null); setError(null) }}>{t('settings.createToken')}</Button>
         )}
       </div>
     </Card>
@@ -1968,6 +1983,7 @@ function AccountNotificationsPage({
   account: Agent
   onUnseenCountChange: (count: number) => void
 }) {
+  const { t } = useTranslation()
   const [notifications, setNotifications] = useState<AgentNotification[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2004,19 +2020,19 @@ function AccountNotificationsPage({
   const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
 
   return (
-    <Card title="Notifications" subtitle="Scrape completion and account notifications for this agent.">
+    <Card title={t('notifications.title')} subtitle={t('notifications.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
-        <Button onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark all seen</Button>
+        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>{t('common.refresh')}</Button>
+        <Button onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>{t('notifications.markAllSeen')}</Button>
       </div>
-      {loading ? <Note>Loading notifications...</Note> : null}
-      {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
+      {loading ? <Note>{t('notifications.loading')}</Note> : null}
+      {!loading && visibleNotifications.length === 0 ? <Note>{t('notifications.noUnseen')}</Note> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {visibleNotifications.map((notification) => (
           (() => {
             const tone = notificationTone(notification.kind)
-            const chips = notificationChips(notification)
+            const chips = notificationChips(t, notification)
             return (
               <div
                 key={notification.id}
@@ -2048,11 +2064,11 @@ function AccountNotificationsPage({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {notificationKindLabel(notification.kind)}
+                      {notificationKindLabel(t, notification.kind)}
                     </span>
                     <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
                   </div>
-                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(notification.created_at)}</div>
+                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(t, notification.created_at)}</div>
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <strong style={{ fontSize: 15 }}>{notification.title}</strong>
@@ -2089,6 +2105,7 @@ function AccountNotificationsPage({
 }
 
 function AccountLeadsPage({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [leads, setLeads] = useState<AgentLead[]>([])
   const [leadPage, setLeadPage] = useState<AgentLeadPage | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -2180,12 +2197,12 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   const totalPages = leadPage?.total_pages ?? 1
 
   return (
-    <Card title="Leads" subtitle="Capture, contact, and manage your leads.">
+    <Card title={t('leads.title')} subtitle={t('leads.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
-        {loading ? 'Loading...' : 'Refresh'}
+        {loading ? t('common.loading') : t('common.refresh')}
       </Button>
-      {!loading && leads.length === 0 ? <Note>No leads found.</Note> : null}
+      {!loading && leads.length === 0 ? <Note>{t('leads.noLeads')}</Note> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {leads.map((lead) => {
           const tone = _statusTone(lead.status)
@@ -2225,14 +2242,14 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                 </div>
               ) : null}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#9b9186' }}>
-                {lead.source_group_title ? <span>Group: {lead.source_group_title}</span> : null}
-                {lead.lead_label ? <span>Label: {lead.lead_label}</span> : null}
-                {lead.captured_at ? <span>{new Date(lead.captured_at).toLocaleDateString()}</span> : null}
+                {lead.source_group_title ? <span>{t('leads.groupLabel', { group: lead.source_group_title })}</span> : null}
+                {lead.lead_label ? <span>{t('leads.leadLabel', { label: lead.lead_label })}</span> : null}
+                {lead.captured_at ? <span>{formatDate(lead.captured_at)}</span> : null}
               </div>
               {lead.status !== 'dismissed' ? (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <Button onClick={() => openContact(lead)}>Contact</Button>
-                  <Button tone="secondary" onClick={() => void dismissLead(lead)}>Dismiss</Button>
+                  <Button onClick={() => openContact(lead)}>{t('leads.contact')}</Button>
+                  <Button tone="secondary" onClick={() => void dismissLead(lead)}>{t('leads.dismiss')}</Button>
                 </div>
               ) : null}
             </div>
@@ -2242,11 +2259,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
       {totalPages > 1 ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
           <Button tone="secondary" onClick={() => setPage((c) => Math.max(1, c - 1))} disabled={page <= 1}>
-            Previous
+            {t('leads.previous')}
           </Button>
-          <Note>Page {page} of {totalPages} ({leadPage?.total ?? 0} total)</Note>
+          <Note>{t('leads.pageOf', { page, totalPages, total: leadPage?.total ?? 0 })}</Note>
           <Button tone="secondary" onClick={() => setPage((c) => Math.min(totalPages, c + 1))} disabled={page >= totalPages}>
-            Next
+            {t('leads.next')}
           </Button>
         </div>
       ) : null}
@@ -2273,11 +2290,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
             }}
           >
             <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>
-              Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
+              {t('leads.contactHeading', { name: contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}` })}
             </h2>
             {contactMode === 'forward' ? (
               <>
-                <Note>Forward the lead's original message to their private chat, then send your message below.</Note>
+                <Note>{t('leads.forwardNote')}</Note>
                 {contactingLead.message_text ? (
                   <div style={{
                     padding: 12, borderRadius: 10,
@@ -2293,11 +2310,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               </>
             ) : null}
             <TextAreaField
-              label="Message"
+              label={t('leads.messageLabel')}
               value={contactMessage}
               onChange={setContactMessage}
               rows={5}
-              placeholder="Type your message to this lead..."
+              placeholder={t('leads.messagePlaceholder')}
             />
             {contactingLead.message_text ? (
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
@@ -2307,22 +2324,22 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                       onChange={(e) => setIncludeOriginal(e.target.checked)}
                       style={{ accentColor: 'var(--miniapp-coral)' }}
                     />
-                    Include original message
+                    {t('leads.includeOriginal')}
                   </label>
                 ) : null}
-            <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
-              <option value="private">Private (direct message)</option>
-              <option value="public">Public (in group)</option>
-              <option value="forward">Forward original message</option>
+            <SelectField label={t('leads.sendMode')} value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
+              <option value="private">{t('leads.modePrivate')}</option>
+              <option value="public">{t('leads.modePublic')}</option>
+              <option value="forward">{t('leads.modeForward')}</option>
             </SelectField>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 onClick={() => void sendContact()}
                 disabled={isSending || (contactMode === 'forward' && !contactingLead.source_message_id)}
               >
-                {isSending ? 'Sending...' : contactMode === 'forward' ? 'Forward' : 'Send'}
+                {isSending ? t('leads.sending') : contactMode === 'forward' ? t('leads.forward') : t('leads.send')}
               </Button>
-              <Button tone="secondary" onClick={closeContact}>Cancel</Button>
+              <Button tone="secondary" onClick={closeContact}>{t('leads.cancel')}</Button>
             </div>
           </div>
         </div>
@@ -2331,16 +2348,16 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   )
 }
 
-function timeAgo(dateStr: string): string {
+function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const sec = Math.floor(diff / 1000)
-  if (sec < 5) return 'just now'
-  if (sec < 60) return `${sec}s ago`
+  if (sec < 5) return t('time.justNow')
+  if (sec < 60) return t('time.secondsAgo', { sec })
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
+  if (min < 60) return t('time.minutesAgo', { min })
   const hours = Math.floor(min / 60)
-  if (hours < 24) return `${hours}h ago`
-  return new Date(dateStr).toLocaleString()
+  if (hours < 24) return t('time.hoursAgo', { hours })
+  return formatDateTime(dateStr)
 }
 
 function FilterSelect({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void }) {
@@ -2358,6 +2375,7 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 }
 
 function TaskActivity({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -2433,7 +2451,7 @@ function TaskActivity({ account }: { account: Agent }) {
 
   const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
     {
-      key: 'recipient', label: 'Recipient', sortable: true, width: '2fr',
+      key: 'recipient', label: t('tasks.logRecipient'), sortable: true, width: '2fr',
       render: (log) => (
         <div style={{ display: 'grid', gap: 1 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>
@@ -2446,11 +2464,11 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'type', label: 'Type', width: '60px',
+      key: 'type', label: t('tasks.logType'), width: '60px',
       render: (log) => log.username || log.tg_user_id ? '👤' : '👥',
     },
     {
-      key: 'status', label: 'Status', sortable: true, width: '80px',
+      key: 'status', label: t('tasks.logStatus'), sortable: true, width: '80px',
       render: (log) => (
         <span style={{
           padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
@@ -2462,7 +2480,7 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'message', label: 'Message', width: '2fr',
+      key: 'message', label: t('tasks.logMessage'), width: '2fr',
       render: (log) => (
         <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
           {(log.message_preview || '').slice(0, 120)}
@@ -2470,12 +2488,12 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'time', label: 'Time', sortable: true, align: 'right' as const, width: '120px',
+      key: 'time', label: t('tasks.logTime'), sortable: true, align: 'right' as const, width: '120px',
       render: (log) => log.sent_at ? (
-        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{new Date(log.sent_at).toLocaleString()}</span>
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{formatDateTime(log.sent_at)}</span>
       ) : '—',
     },
-  ], [])
+  ], [t])
 
   const filteredJobs = useMemo(() => {
     let result = [...jobs]
@@ -2522,15 +2540,15 @@ function TaskActivity({ account }: { account: Agent }) {
   }, [jobs])
 
   return (
-    <Card title="Task Activity" subtitle="Monitor bulk messaging tasks and send logs.">
+    <Card title={t('tasks.activityTitle')} subtitle={t('tasks.activitySubtitle')}>
       {statusMsg ? <Note>{statusMsg}</Note> : null}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
+        <Button tone="secondary" onClick={() => void load()} disabled={loading}>{t('common.refresh')}</Button>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search task..."
+          placeholder={t('tasks.searchPlaceholder')}
           style={{
             flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
             border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
@@ -2538,27 +2556,27 @@ function TaskActivity({ account }: { account: Agent }) {
           }}
         />
         <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
-          { label: 'All status', value: 'all' }, { label: 'Running', value: 'running' },
-          { label: 'Completed', value: 'completed' }, { label: 'Failed', value: 'failed' },
-          { label: 'Pending', value: 'pending' }, { label: 'Queued', value: 'queued' },
-          { label: 'Scheduled', value: 'scheduled' },
+          { label: t('tasks.filterAll'), value: 'all' }, { label: t('tasks.filterRunning'), value: 'running' },
+          { label: t('tasks.filterCompleted'), value: 'completed' }, { label: t('tasks.filterFailed'), value: 'failed' },
+          { label: t('tasks.filterPending'), value: 'pending' }, { label: t('tasks.filterQueued'), value: 'queued' },
+          { label: t('tasks.filterScheduled'), value: 'scheduled' },
         ]} />
         <FilterSelect value={filterDate} onChange={setFilterDate} options={[
-          { label: 'All time', value: 'all' }, { label: 'Today', value: 'today' },
-          { label: 'Last 24h', value: '24h' }, { label: 'Last 7 days', value: '7d' },
-          { label: 'Last 30 days', value: '30d' },
+          { label: t('tasks.filterAllTime'), value: 'all' }, { label: t('tasks.filterToday'), value: 'today' },
+          { label: t('tasks.filterLast24h'), value: '24h' }, { label: t('tasks.filterLast7d'), value: '7d' },
+          { label: t('tasks.filterLast30d'), value: '30d' },
         ]} />
         {taskTypes.length > 1 ? (
           <FilterSelect value={filterType} onChange={setFilterType} options={[
-            { label: 'All types', value: 'all' },
-            ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
+            { label: t('tasks.filterAllTypes'), value: 'all' },
+            ...taskTypes.map((jtype) => ({ label: JOB_TYPE_LABELS[jtype] || jtype.replace(/_/g, ' '), value: jtype })),
           ]} />
         ) : null}
       </div>
 
-      {loading ? <Note>Loading...</Note> : null}
+      {loading ? <Note>{t('common.loading')}</Note> : null}
 
-      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : null}
+      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? t('tasks.noTasks') : t('tasks.noTasksFiltered')}</Note> : null}
 
       {!loading && filteredJobs.length > 0 ? (
         <div style={{ display: 'grid', gap: 6 }}>
@@ -2589,7 +2607,7 @@ function TaskActivity({ account }: { account: Agent }) {
                     <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
                     {job.created_at ? (
                       <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
-                        {new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatTime(job.created_at)}
                       </span>
                     ) : null}
                   </div>
@@ -2598,28 +2616,28 @@ function TaskActivity({ account }: { account: Agent }) {
                     background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
                     color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
                   }}>
-                    {isStopped ? 'Stopped' : job.status}
+                    {isStopped ? t('tasks.stopped') : job.status}
                   </span>
                 </div>
 
                 {isScheduled && job.scheduled_at ? (
                   <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                    Scheduled for {new Date(job.scheduled_at).toLocaleString()}
+                    {t('tasks.scheduledFor', { date: formatDateTime(job.scheduled_at) })}
                   </div>
                 ) : total > 0 ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
                     <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                      {job.target_type === 'groups' ? 'groups' : 'members'}
+                      {job.target_type === 'groups' ? t('tasks.groups') : t('tasks.members')}
                     </span>
                   </div>
                 ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
 
                 <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span>Sent: <strong>{sent}</strong></span>
-                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
-                  {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
-                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
+                  <span>{t('tasks.sent')}: <strong>{sent}</strong></span>
+                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>{t('tasks.failed')}: <strong>{failed}</strong></span> : null}
+                  {done > 0 ? <span>{t('tasks.success')}: <strong>{successRate}%</strong></span> : null}
+                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(t, job.updated_at)}</span> : null}
                   {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
                     {isScheduled ? (
@@ -2630,7 +2648,7 @@ function TaskActivity({ account }: { account: Agent }) {
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Cancelling...' : 'Cancel'}
+                        {actingJobId === job.id ? t('tasks.cancelling') : t('tasks.cancel')}
                       </button>
                     ) : null}
                     {(isRunning || isQueued) && job.status !== 'aborted' ? (
@@ -2641,24 +2659,30 @@ function TaskActivity({ account }: { account: Agent }) {
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Stopping...' : 'Stop'}
+                        {actingJobId === job.id ? t('tasks.stopping') : t('tasks.stop')}
                       </button>
                     ) : null}
                     {(isFailed || job.status === 'aborted') ? (
                       <button type="button" disabled={actingJobId === job.id} onClick={() => void handleRetry(job.id)}
                         style={{
                           background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
-                          color: '#475977', fontSize: 11, fontWeight: 600,
+                          color: 'var(--miniapp-sage)', fontSize: 11, fontWeight: 600,
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Retrying...' : 'Retry'}
+                        {actingJobId === job.id ? t('tasks.retrying') : t('tasks.retry')}
                       </button>
                     ) : null}
-                    <button type="button" onClick={() => setLogsJobId(job.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475977', fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0 }}>
-                      View Logs
-                    </button>
+                    {isCompleted && job.id ? (
+                      <button type="button" onClick={() => setLogsJobId(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--miniapp-text-muted)', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                        }}>
+                        {t('tasks.viewLogs')}
+                      </button>
+                    ) : null}
                   </span>
                 </div>
               </div>
@@ -2678,7 +2702,7 @@ function TaskActivity({ account }: { account: Agent }) {
           <TableModal<SendLogEntry>
             open={logsJobId !== null}
             onClose={() => setLogsJobId(null)}
-            title="Send Logs"
+            title={t('tasks.sendLogs')}
             subtitle={
               `Job #${logsJobId}` +
               (logJob?.message_preview ? ` · ${logJob.message_preview}` : '') +
@@ -2692,8 +2716,8 @@ function TaskActivity({ account }: { account: Agent }) {
             loading={logsLoading}
             emptyMessage={
               logTotal > 0
-                ? `No individual send records found. Job progress: ${logSent} sent, ${logFailed} failed of ${logTotal}.${logFailed > 0 && !logFailed ? ' All sends failed — the account may not have permission to post in the target groups.' : ''}`
-                : 'No send logs for this job. Messages may still be in progress.'
+                ? t('tasks.logsEmptyWithProgress', { sent: logSent, failed: logFailed, total: logTotal })
+                : t('tasks.logsEmptyNoProgress')
             }
             renderExpanded={(log) => (
               <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
@@ -2708,6 +2732,7 @@ function TaskActivity({ account }: { account: Agent }) {
 }
 
 function AccountAnalyticsPage({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [analytics, setAnalytics] = useState<AgentAnalytics | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2764,7 +2789,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
     }
   }
 
-  if (loading) return <Card title="Analytics" subtitle="Loading agent statistics..."><Note>Loading...</Note></Card>
+  if (loading) return <Card title={t('analytics.title')} subtitle={t('analytics.subtitle')}><Note>{t('common.loading')}</Note></Card>
 
   const a = analytics
   const totalJobs = a?.jobs.total ?? 0
@@ -2774,45 +2799,45 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
     : 0
 
   return (
-    <Card title="Analytics" subtitle="Safety score, lead pipeline, and job metrics for this agent.">
+    <Card title={t('analytics.title')} subtitle={t('analytics.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button tone="secondary" onClick={() => void refresh()}>Refresh</Button>
+        <Button tone="secondary" onClick={() => void refresh()}>{t('common.refresh')}</Button>
         <Button onClick={() => setShowSafety(!showSafety)}>
-          {showSafety ? 'Cancel' : 'Configure Safety'}
+          {showSafety ? t('subscription.close') : t('analytics.configureSafety')}
         </Button>
       </div>
 
       {showSafety ? (
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16, marginTop: 12 }}>
-          <div style={{ fontWeight: 600 }}>Safety Configuration</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.safetyConfigTitle')}</div>
           <InputField
-            label="Max actions per hour"
+            label={t('analytics.maxActionsPerHour')}
             value={safetyMaxPerHour}
             onChange={setSafetyMaxPerHour}
             type="number"
-            placeholder="e.g. 20"
+            placeholder={t('analytics.maxActionsPerHourPlaceholder')}
           />
           <InputField
-            label="Max messages per day"
+            label={t('analytics.maxMessagesPerDay')}
             value={safetyMaxPerDay}
             onChange={setSafetyMaxPerDay}
             type="number"
-            placeholder="e.g. 500"
+            placeholder={t('analytics.maxMessagesPerDayPlaceholder')}
           />
           <InputField
-            label="Min delay between actions (seconds)"
+            label={t('analytics.minDelay')}
             value={safetyMinDelay}
             onChange={setSafetyMinDelay}
             type="number"
-            placeholder="e.g. 5"
+            placeholder={t('analytics.minDelayPlaceholder')}
           />
           <InputField
-            label="Cooldown after hitting limit (minutes)"
+            label={t('analytics.cooldown')}
             value={safetyCooldown}
             onChange={setSafetyCooldown}
             type="number"
-            placeholder="e.g. 5"
+            placeholder={t('analytics.cooldownPlaceholder')}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ fontSize: 14, fontWeight: 500 }}>
@@ -2822,20 +2847,20 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
                 onChange={(e) => setSafetyEnabled(e.target.checked)}
                 style={{ marginRight: 6 }}
               />
-              Safety mode enabled (first 48h)
+              {t('analytics.safetyModeEnabled')}
             </label>
           </div>
           {safetyEnabled ? (
-            <SelectField label="Safety mode duration" value={safetyHours} onChange={setSafetyHours}>
-              <option value="0">Keep current</option>
-              <option value="24">24 hours</option>
-              <option value="48">48 hours</option>
-              <option value="72">72 hours</option>
-              <option value="168">7 days</option>
+            <SelectField label={t('analytics.safetyModeDuration')} value={safetyHours} onChange={setSafetyHours}>
+              <option value="0">{t('analytics.keepCurrent')}</option>
+              <option value="24">{t('analytics.hours', { count: 24 })}</option>
+              <option value="48">{t('analytics.hours', { count: 48 })}</option>
+              <option value="72">{t('analytics.hours', { count: 72 })}</option>
+              <option value="168">{t('analytics.days', { count: 7 })}</option>
             </SelectField>
           ) : null}
           <Button onClick={() => void saveSafety()} disabled={savingSafety}>
-            {savingSafety ? 'Saving...' : 'Save Settings'}
+            {savingSafety ? t('analytics.saving') : t('analytics.saveSettings')}
           </Button>
         </div>
       ) : null}
@@ -2844,59 +2869,59 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--miniapp-primary)' }}>{a?.leads?.total ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Total Leads</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.totalLeads')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#36664e' }}>{a?.leads?.by_status?.converted ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Converted</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.converted')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#475977' }}>{a?.jobs?.total ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Total Jobs</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.totalJobs')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: a?.notifications?.unseen ? 'var(--miniapp-coral)' : 'var(--miniapp-sage)' }}>{a?.notifications?.unseen ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Unseen Alerts</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.unseenAlerts')}</div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Safety Status</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.safetyStatus')}</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Safety mode</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.safetyMode')}</span>
               <Badge tone={a?.safety?.safety_mode_enabled ? 'success' : 'warning'}>
-                {a?.safety?.safety_mode_enabled ? 'Enabled' : 'Disabled'}
+                {a?.safety?.safety_mode_enabled ? t('analytics.enabled') : t('analytics.disabled')}
               </Badge>
             </div>
             {a?.safety?.safety_mode_until ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: 'var(--miniapp-text-muted)' }}>Safe until</span>
-                <span>{new Date(a.safety.safety_mode_until).toLocaleString()}</span>
+                <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.safeUntil')}</span>
+                <span>{formatDateTime(a.safety.safety_mode_until)}</span>
               </div>
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Max actions/hr</span>
-              <span>{a?.safety?.max_actions_per_hour || 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.maxActionsPerHourLabel')}</span>
+              <span>{a?.safety?.max_actions_per_hour || t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Max messages/day</span>
-              <span>{a?.safety?.max_messages_per_day || 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.maxMessagesPerDayLabel')}</span>
+              <span>{a?.safety?.max_messages_per_day || t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Min delay</span>
-              <span>{a?.safety?.min_delay_seconds ? `${a.safety.min_delay_seconds}s` : 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.minDelayLabel')}</span>
+              <span>{a?.safety?.min_delay_seconds ? `${a.safety.min_delay_seconds}s` : t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Cooldown</span>
-              <span>{a?.safety?.cooldown_minutes ? `${a.safety.cooldown_minutes}m` : 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.cooldownLabel')}</span>
+              <span>{a?.safety?.cooldown_minutes ? `${a.safety.cooldown_minutes}m` : t('analytics.notSet')}</span>
             </div>
           </div>
         </div>
 
         {a?.leads ? (
           <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-            <div style={{ fontWeight: 600 }}>Lead Pipeline</div>
+            <div style={{ fontWeight: 600 }}>{t('analytics.leadPipeline')}</div>
             {['new', 'contacted', 'interested', 'converted', 'junk', 'dismissed'].map((s) => {
               const count = a.leads.by_status[s] || 0
               const pct = a.leads.total > 0 ? Math.round((count / a.leads.total) * 100) : 0
@@ -2929,34 +2954,34 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
         ) : null}
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Job Health</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.jobHealth')}</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Success rate</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.successRate')}</span>
               <Badge tone={jobSuccessRate >= 80 ? 'success' : jobSuccessRate >= 50 ? 'warning' : 'warning'}>
                 {jobSuccessRate}%
               </Badge>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Completed</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.completed')}</span>
               <span style={{ color: '#36664e' }}>{a?.jobs?.completed ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Failed</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.failed')}</span>
               <span style={{ color: 'var(--miniapp-clay)' }}>{a?.jobs?.failed ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Pending</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.pending')}</span>
               <span style={{ color: '#475977' }}>{a?.jobs?.pending ?? 0}</span>
             </div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Conversion Rate</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.conversionRate')}</div>
           <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--miniapp-primary)' }}>{leadConversionRate}%</div>
           <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
-            {(a?.leads?.by_status?.interested ?? 0)} interested + {(a?.leads?.by_status?.converted ?? 0)} converted of {a?.leads?.total ?? 0} total leads
+            {t('analytics.conversionSummary', { interested: a?.leads?.by_status?.interested ?? 0, converted: a?.leads?.by_status?.converted ?? 0, total: a?.leads?.total ?? 0 })}
           </div>
         </div>
       </div>

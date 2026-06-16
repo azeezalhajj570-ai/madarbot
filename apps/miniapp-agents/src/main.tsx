@@ -5,6 +5,7 @@ import { init } from '@telegram-apps/sdk'
 import { AppRoot } from '@telegram-apps/telegram-ui'
 import '@telegram-apps/telegram-ui/dist/styles.css'
 
+import './i18n'
 import App from './App'
 
 try {

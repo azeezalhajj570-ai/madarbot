@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useRef, memo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export interface ColumnDef<T> {
   key: string
@@ -24,6 +25,7 @@ interface DataTableProps<T> {
 }
 
 function DebouncedInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const { t } = useTranslation()
   const [local, setLocal] = useState(value)
   const timer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -39,7 +41,7 @@ function DebouncedInput({ value, onChange, placeholder }: { value: string; onCha
       type="text"
       value={local}
       onChange={handleChange}
-      placeholder={placeholder || 'Search...'}
+      placeholder={placeholder || t('common.search')}
       style={{
         flex: 1, minWidth: 120, padding: '7px 10px', borderRadius: 8,
         border: '1px solid var(--miniapp-border-soft)',
@@ -92,9 +94,10 @@ const TableRow = memo(function TableRow<T>({
 export function DataTable<T extends Record<string, unknown>>({
   data, columns, keyField,
   searchable, searchAccessor,
-  pageSize = 25, loading, emptyMessage = 'No data.',
+  pageSize = 25, loading, emptyMessage,
   defaultSort, onRowClick, renderExpanded,
 }: DataTableProps<T>) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState(defaultSort?.key || '')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSort?.direction || 'asc')
@@ -147,13 +150,13 @@ export function DataTable<T extends Record<string, unknown>>({
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       {searchable ? (
-        <DebouncedInput value={search} onChange={handleSearchChange} placeholder="Search..." />
+        <DebouncedInput value={search} onChange={handleSearchChange} placeholder={t('common.search')} />
       ) : null}
 
       {loading ? (
-        <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)', padding: 16, textAlign: 'center' }}>Loading...</div>
+        <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)', padding: 16, textAlign: 'center' }}>{t('common.loading')}</div>
       ) : paginated.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)', padding: 16, textAlign: 'center' }}>{emptyMessage}</div>
+        <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)', padding: 16, textAlign: 'center' }}>{emptyMessage || t('common.noData')}</div>
       ) : (
         <div style={{
           overflowX: 'auto', borderRadius: 8, border: '1px solid var(--miniapp-border-soft)',
@@ -215,10 +218,10 @@ export function DataTable<T extends Record<string, unknown>>({
               cursor: safePage <= 1 ? 'default' : 'pointer', fontSize: 12, fontFamily: 'var(--miniapp-sans)',
             }}
           >
-            ← Prev
+            {t('common.prev')}
           </button>
           <span style={{ color: 'var(--miniapp-text-muted)' }}>
-            Page {safePage} of {totalPages} ({sorted.length} total)
+            {t('common.pagination', { page: safePage, total: totalPages, count: sorted.length })}
           </span>
           <button
             type="button"
@@ -231,7 +234,7 @@ export function DataTable<T extends Record<string, unknown>>({
               cursor: safePage >= totalPages ? 'default' : 'pointer', fontSize: 12, fontFamily: 'var(--miniapp-sans)',
             }}
           >
-            Next →
+            {t('common.next')}
           </button>
         </div>
       ) : null}
