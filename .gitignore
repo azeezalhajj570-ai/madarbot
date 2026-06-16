@@ -55,3 +55,4 @@ dump.rdb
 # OS
 .DS_Store
 Thumbs.db
+.venv/
