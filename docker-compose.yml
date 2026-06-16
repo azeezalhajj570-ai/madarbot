@@ -27,7 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: alembic upgrade 20260515_add_scheduled_at
+    command: alembic upgrade 20260516_add_campaigns
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
@@ -106,7 +106,7 @@ services:
       DEFAULT_LANGUAGE: ar
     restart: unless-stopped
     ports:
-      - "8000:8080"
+      - "8009:8080"
     depends_on:
       postgres:
         condition: service_healthy
