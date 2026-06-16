@@ -2732,6 +2732,7 @@ function TaskActivity({ account }: { account: Agent }) {
 }
 
 function AccountAnalyticsPage({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [analytics, setAnalytics] = useState<AgentAnalytics | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2788,7 +2789,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
     }
   }
 
-  if (loading) return <Card title="Analytics" subtitle="Loading agent statistics..."><Note>Loading...</Note></Card>
+  if (loading) return <Card title={t('analytics.title')} subtitle={t('analytics.subtitle')}><Note>{t('common.loading')}</Note></Card>
 
   const a = analytics
   const totalJobs = a?.jobs.total ?? 0
@@ -2798,45 +2799,45 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
     : 0
 
   return (
-    <Card title="Analytics" subtitle="Safety score, lead pipeline, and job metrics for this agent.">
+    <Card title={t('analytics.title')} subtitle={t('analytics.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button tone="secondary" onClick={() => void refresh()}>Refresh</Button>
+        <Button tone="secondary" onClick={() => void refresh()}>{t('common.refresh')}</Button>
         <Button onClick={() => setShowSafety(!showSafety)}>
-          {showSafety ? 'Cancel' : 'Configure Safety'}
+          {showSafety ? t('subscription.close') : t('analytics.configureSafety')}
         </Button>
       </div>
 
       {showSafety ? (
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16, marginTop: 12 }}>
-          <div style={{ fontWeight: 600 }}>Safety Configuration</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.safetyConfigTitle')}</div>
           <InputField
-            label="Max actions per hour"
+            label={t('analytics.maxActionsPerHour')}
             value={safetyMaxPerHour}
             onChange={setSafetyMaxPerHour}
             type="number"
-            placeholder="e.g. 20"
+            placeholder={t('analytics.maxActionsPerHourPlaceholder')}
           />
           <InputField
-            label="Max messages per day"
+            label={t('analytics.maxMessagesPerDay')}
             value={safetyMaxPerDay}
             onChange={setSafetyMaxPerDay}
             type="number"
-            placeholder="e.g. 500"
+            placeholder={t('analytics.maxMessagesPerDayPlaceholder')}
           />
           <InputField
-            label="Min delay between actions (seconds)"
+            label={t('analytics.minDelay')}
             value={safetyMinDelay}
             onChange={setSafetyMinDelay}
             type="number"
-            placeholder="e.g. 5"
+            placeholder={t('analytics.minDelayPlaceholder')}
           />
           <InputField
-            label="Cooldown after hitting limit (minutes)"
+            label={t('analytics.cooldown')}
             value={safetyCooldown}
             onChange={setSafetyCooldown}
             type="number"
-            placeholder="e.g. 5"
+            placeholder={t('analytics.cooldownPlaceholder')}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <label style={{ fontSize: 14, fontWeight: 500 }}>
@@ -2846,20 +2847,20 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
                 onChange={(e) => setSafetyEnabled(e.target.checked)}
                 style={{ marginRight: 6 }}
               />
-              Safety mode enabled (first 48h)
+              {t('analytics.safetyModeEnabled')}
             </label>
           </div>
           {safetyEnabled ? (
-            <SelectField label="Safety mode duration" value={safetyHours} onChange={setSafetyHours}>
-              <option value="0">Keep current</option>
-              <option value="24">24 hours</option>
-              <option value="48">48 hours</option>
-              <option value="72">72 hours</option>
-              <option value="168">7 days</option>
+            <SelectField label={t('analytics.safetyModeDuration')} value={safetyHours} onChange={setSafetyHours}>
+              <option value="0">{t('analytics.keepCurrent')}</option>
+              <option value="24">{t('analytics.hours', { count: 24 })}</option>
+              <option value="48">{t('analytics.hours', { count: 48 })}</option>
+              <option value="72">{t('analytics.hours', { count: 72 })}</option>
+              <option value="168">{t('analytics.days', { count: 7 })}</option>
             </SelectField>
           ) : null}
           <Button onClick={() => void saveSafety()} disabled={savingSafety}>
-            {savingSafety ? 'Saving...' : 'Save Settings'}
+            {savingSafety ? t('analytics.saving') : t('analytics.saveSettings')}
           </Button>
         </div>
       ) : null}
@@ -2868,59 +2869,59 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--miniapp-primary)' }}>{a?.leads?.total ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Total Leads</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.totalLeads')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#36664e' }}>{a?.leads?.by_status?.converted ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Converted</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.converted')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: '#475977' }}>{a?.jobs?.total ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Total Jobs</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.totalJobs')}</div>
           </div>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: a?.notifications?.unseen ? 'var(--miniapp-coral)' : 'var(--miniapp-sage)' }}>{a?.notifications?.unseen ?? 0}</div>
-            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>Unseen Alerts</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.unseenAlerts')}</div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Safety Status</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.safetyStatus')}</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Safety mode</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.safetyMode')}</span>
               <Badge tone={a?.safety?.safety_mode_enabled ? 'success' : 'warning'}>
-                {a?.safety?.safety_mode_enabled ? 'Enabled' : 'Disabled'}
+                {a?.safety?.safety_mode_enabled ? t('analytics.enabled') : t('analytics.disabled')}
               </Badge>
             </div>
             {a?.safety?.safety_mode_until ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: 'var(--miniapp-text-muted)' }}>Safe until</span>
+                <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.safeUntil')}</span>
                 <span>{new Date(a.safety.safety_mode_until).toLocaleString()}</span>
               </div>
             ) : null}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Max actions/hr</span>
-              <span>{a?.safety?.max_actions_per_hour || 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.maxActionsPerHourLabel')}</span>
+              <span>{a?.safety?.max_actions_per_hour || t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Max messages/day</span>
-              <span>{a?.safety?.max_messages_per_day || 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.maxMessagesPerDayLabel')}</span>
+              <span>{a?.safety?.max_messages_per_day || t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Min delay</span>
-              <span>{a?.safety?.min_delay_seconds ? `${a.safety.min_delay_seconds}s` : 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.minDelayLabel')}</span>
+              <span>{a?.safety?.min_delay_seconds ? `${a.safety.min_delay_seconds}s` : t('analytics.notSet')}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Cooldown</span>
-              <span>{a?.safety?.cooldown_minutes ? `${a.safety.cooldown_minutes}m` : 'Not set'}</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.cooldownLabel')}</span>
+              <span>{a?.safety?.cooldown_minutes ? `${a.safety.cooldown_minutes}m` : t('analytics.notSet')}</span>
             </div>
           </div>
         </div>
 
         {a?.leads ? (
           <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-            <div style={{ fontWeight: 600 }}>Lead Pipeline</div>
+            <div style={{ fontWeight: 600 }}>{t('analytics.leadPipeline')}</div>
             {['new', 'contacted', 'interested', 'converted', 'junk', 'dismissed'].map((s) => {
               const count = a.leads.by_status[s] || 0
               const pct = a.leads.total > 0 ? Math.round((count / a.leads.total) * 100) : 0
@@ -2953,34 +2954,34 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
         ) : null}
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Job Health</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.jobHealth')}</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Success rate</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.successRate')}</span>
               <Badge tone={jobSuccessRate >= 80 ? 'success' : jobSuccessRate >= 50 ? 'warning' : 'warning'}>
                 {jobSuccessRate}%
               </Badge>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Completed</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.completed')}</span>
               <span style={{ color: '#36664e' }}>{a?.jobs?.completed ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Failed</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.failed')}</span>
               <span style={{ color: 'var(--miniapp-clay)' }}>{a?.jobs?.failed ?? 0}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-              <span style={{ color: 'var(--miniapp-text-muted)' }}>Pending</span>
+              <span style={{ color: 'var(--miniapp-text-muted)' }}>{t('analytics.pending')}</span>
               <span style={{ color: '#475977' }}>{a?.jobs?.pending ?? 0}</span>
             </div>
           </div>
         </div>
 
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
-          <div style={{ fontWeight: 600 }}>Conversion Rate</div>
+          <div style={{ fontWeight: 600 }}>{t('analytics.conversionRate')}</div>
           <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--miniapp-primary)' }}>{leadConversionRate}%</div>
           <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
-            {(a?.leads?.by_status?.interested ?? 0)} interested + {(a?.leads?.by_status?.converted ?? 0)} converted of {a?.leads?.total ?? 0} total leads
+            {t('analytics.conversionSummary', { interested: a?.leads?.by_status?.interested ?? 0, converted: a?.leads?.by_status?.converted ?? 0, total: a?.leads?.total ?? 0 })}
           </div>
         </div>
       </div>
