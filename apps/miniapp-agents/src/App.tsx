@@ -926,6 +926,52 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
   )
 }
 
+function FooterLinks() {
+  const { t } = useTranslation()
+  const links = [
+    { href: '/docs', key: 'legal.docs' },
+    { href: '/legal/tos', key: 'legal.tos' },
+    { href: '/legal/privacy', key: 'legal.privacy' },
+    { href: '/legal/cookies', key: 'legal.cookies' },
+    { href: '/legal/disclaimer', key: 'legal.disclaimer' },
+    { href: '/legal/refund', key: 'legal.refund' },
+    { href: '/legal/contact', key: 'legal.contact' },
+    { href: '/legal/data-deletion', key: 'legal.dataDeletion' },
+    { href: '/legal/aup', key: 'legal.aup' },
+  ]
+  return (
+    <footer style={{
+      marginTop: 8,
+      padding: '16px 0 32px',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px 18px',
+      justifyContent: 'center',
+    }}>
+      {links.map((link, i) => (
+        <span key={link.href} style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <a
+            href={link.href}
+            style={{
+              color: 'var(--miniapp-text-muted)',
+              textDecoration: 'none',
+              fontSize: 11.5,
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={(e) => { (e.target as HTMLAnchorElement).style.color = 'var(--miniapp-text-primary)' }}
+            onMouseLeave={(e) => { (e.target as HTMLAnchorElement).style.color = 'var(--miniapp-text-muted)' }}
+          >
+            {t(link.key)}
+          </a>
+          {i < links.length - 1 ? (
+            <span style={{ color: 'var(--miniapp-border)', fontSize: 11 }}>·</span>
+          ) : null}
+        </span>
+      ))}
+    </footer>
+  )
+}
+
 export default function App() {
   useLanguage()
   const { t } = useTranslation()
@@ -1318,6 +1364,8 @@ export default function App() {
           )
         ) : null}
       </Grid>
+
+      <FooterLinks />
 
       <BottomNav currentPage={route.page} onNavigate={handleTabNavigate} />
 

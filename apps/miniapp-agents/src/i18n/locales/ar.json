@@ -692,5 +692,16 @@
     "conditionLabel": "عندما تحتوي الرسالة على: {{keyword}}",
     "privateSuffix": " · خاص",
     "groupFallback": "المجموعة {{tgGroupId}}"
+  },
+  "legal": {
+    "docs": "التوثيق",
+    "tos": "شروط الخدمة",
+    "privacy": "سياسة الخصوصية",
+    "cookies": "سياسة ملفات الارتباط",
+    "disclaimer": "إخلاء المسؤولية",
+    "refund": "سياسة الاسترداد",
+    "contact": "اتصل بنا",
+    "dataDeletion": "حذف البيانات",
+    "aup": "الاستخدام المقبول"
   }
 }
