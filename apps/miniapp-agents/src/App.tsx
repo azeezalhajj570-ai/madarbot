@@ -31,6 +31,8 @@ import type {
 } from '@miniapp/shared'
 
 import { useLanguage } from './i18n/useLanguage'
+import './i18n/rtl.css'
+import { LanguageSwitcher } from './components/LanguageSwitcher'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
@@ -1209,6 +1211,9 @@ export default function App() {
         ) : null}
         {appReady && isAuthenticated && !isWizardInProgress && route.page === 'settings' ? (
           <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 0' }}>
+              <LanguageSwitcher />
+            </div>
             <Card
               title="Subscription"
               subtitle={`${subscription?.status === 'active' ? `${subscription?.plan === 'business' ? 'Business' : 'Pro'} · Active` : 'No active subscription'}`}

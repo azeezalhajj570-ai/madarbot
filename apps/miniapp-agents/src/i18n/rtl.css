@@ -1,0 +1,15 @@
+[dir="rtl"] .rtl-mirror {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .rtl-flex-row {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .rtl-text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .rtl-text-right {
+  text-align: left;
+}
