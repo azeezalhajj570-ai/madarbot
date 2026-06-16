@@ -132,7 +132,13 @@
     "notifsTitle": "Notifications",
     "notifsSubtitle": "Scrape completion and account notifications for this agent.",
     "markAllSeen": "Mark all seen",
-    "subtitle": "Scrape completion and account notifications for this agent."
+    "subtitle": "Scrape completion and account notifications for this agent.",
+    "noUnseen": "No unseen notifications.",
+    "kindBulkMessage": "Bulk message",
+    "kindScrape": "Scrape",
+    "kindTask": "Task",
+    "kindQueued": "Queued",
+    "kindJobFailed": "Job failed"
   },
   "tasks": {
     "automationTitle": "Automation Tasks",

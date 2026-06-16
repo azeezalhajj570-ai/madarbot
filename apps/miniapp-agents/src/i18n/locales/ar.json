@@ -132,7 +132,13 @@
     "notifsTitle": "الإشعارات",
     "notifsSubtitle": "إشعارات استخراج البيانات والحساب لهذا الوكيل.",
     "markAllSeen": "تحديد الكل كمقروء",
-    "subtitle": "إشعارات إكمال الجلب وحساب الوكيل."
+    "subtitle": "إشعارات إكمال الجلب وحساب الوكيل.",
+    "noUnseen": "لا توجد إشعارات غير مقروءة.",
+    "kindBulkMessage": "رسالة جماعية",
+    "kindScrape": "استخراج بيانات",
+    "kindTask": "مهمة",
+    "kindQueued": "في الانتظار",
+    "kindJobFailed": "فشلت المهمة"
   },
   "tasks": {
     "automationTitle": "مهام الأتمتة",
