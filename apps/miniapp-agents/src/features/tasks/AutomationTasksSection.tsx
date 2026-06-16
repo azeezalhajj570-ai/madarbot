@@ -40,9 +40,15 @@ function taskTitle(task: AutomationTask, catalog: TaskCatalogItem[]) {
   return catalog.find((item) => item.key === task.task_key)?.title || task.task_key.replace(/_/g, ' ')
 }
 
+function _parseKeywords(raw: string | string[] | undefined | null): string[] {
+  if (Array.isArray(raw)) return raw.filter(Boolean)
+  if (!raw) return []
+  return String(raw).split(',').map((k) => k.trim()).filter(Boolean)
+}
+
 function taskConditionLabel(task: AutomationTask) {
-  const keyword = String(task.conditions.text_contains || '').trim()
-  return keyword ? `When message contains: ${keyword}` : 'No keyword condition'
+  const keywords = _parseKeywords(task.conditions.text_contains)
+  return keywords.length ? `When message contains: ${keywords.join(', ')}` : 'No keyword condition'
 }
 
 function taskConfigLabel(task: AutomationTask) {
@@ -68,7 +74,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [deleteTarget, setDeleteTarget] = useState<AutomationTask | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [taskKey, setTaskKey] = useState('reply_message')
-  const [taskKeyword, setTaskKeyword] = useState('')
+  const [taskKeywords, setTaskKeywords] = useState<string[]>([])
+  const [pendingKeyword, setPendingKeyword] = useState('')
   const [taskTemplate, setTaskTemplate] = useState('')
   const [taskReplyMode, setTaskReplyMode] = useState('public')
   const [taskDeliveryMode, setTaskDeliveryMode] = useState('text')
@@ -117,7 +124,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   function resetForm() {
     setEditingTask(null)
     setTaskKey(catalog[0]?.key || 'reply_message')
-    setTaskKeyword('')
+    setTaskKeywords([])
+    setPendingKeyword('')
     setTaskTemplate('')
     setTaskReplyMode('public')
     setTaskDeliveryMode('text')
@@ -134,7 +142,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     const matchingDestinationGroup = groups.find((g) => String(g.tg_group_id || '') === configuredDestination)
     setEditingTask(task)
     setTaskKey(task.task_key)
-    setTaskKeyword(String(task.conditions.text_contains || ''))
+    setTaskKeywords(_parseKeywords(task.conditions.text_contains))
+    setPendingKeyword('')
     setTaskTemplate(String(task.config.message_template || ''))
     setTaskReplyMode(String(task.config.reply_mode || 'public'))
     setTaskDeliveryMode(String(task.config.delivery_mode || 'text'))
@@ -148,7 +157,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   }
 
   async function handleSave() {
-    if (!taskKeyword.trim()) { setStatus('Keyword is required'); return }
+    if (!taskKeywords.length) { setStatus('At least one keyword is required'); return }
     const config: Record<string, unknown> = {}
     if (taskTemplate.trim()) config.message_template = taskTemplate.trim()
     if (taskKey === 'reply_message') config.reply_mode = taskReplyMode
@@ -162,7 +171,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       task_key: taskKey,
       executor_type: 'agent',
       enabled: true,
-      conditions: { text_contains: taskKeyword.trim() },
+      conditions: { text_contains: taskKeywords.join(',') },
       config,
       agent_id: account.id,
       group_tg_ids: taskGroups.map((g) => g.tg_group_id),
@@ -212,7 +221,21 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
             <SelectField label="Task type" value={taskKey} onChange={setTaskKey}>
               {extendedCatalog.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
             </SelectField>
-            <InputField label="Keyword condition" value={taskKeyword} onChange={setTaskKeyword} placeholder="support" />
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>Keyword condition</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {taskKeywords.map((kw, i) => (
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
+                    {kw}
+                    <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
+                  </span>
+                ))}
+              </div>
+              <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                placeholder="support" style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+            </div>
             <TextAreaField label="Message template" value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? 'Notify: {text}' : 'We will reply shortly.'} />
             {taskKey === 'reply_message' ? (
               <SelectField label="Reply mode" value={taskReplyMode} onChange={setTaskReplyMode}>
