@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { MultiGroupSelect } from './components/MultiGroupSelect'
 import { TableModal } from './components/TableModal'
@@ -743,13 +744,14 @@ function DismissibleStatus({
 }
 
 function NoAccountNotice({ onLink }: { onLink: () => void }) {
+  const { t } = useTranslation()
   return (
-    <Card title="Account required" subtitle="An active linked account is required to use this page.">
+    <Card title={t('noAccount.title')} subtitle={t('noAccount.subtitle')}>
       <Note tone="warning">
-        You haven't linked any Telegram accounts yet, or your selected account is not fully authenticated.
+        {t('noAccount.note')}
       </Note>
-      <div style={{ marginTop: 14 }}>
-        <Button onClick={onLink}>Go to Accounts</Button>
+      <div style={{ marginTop: 10 }}>
+        <Button onClick={onLink}>{t('noAccount.goToAccounts')}</Button>
       </div>
     </Card>
   )
@@ -819,10 +821,11 @@ function LinkedAccountCard({
 }
 
 function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNavigate: (page: AgentsPage) => void }) {
+  const { t } = useTranslation()
   const tabs: { id: AgentsPage; label: string; icon: React.ReactNode }[] = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="1.7" />
@@ -834,7 +837,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'leads',
-      label: 'Leads',
+      label: t('nav.leads'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.7" />
@@ -846,7 +849,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'campaigns',
-      label: 'Campaigns',
+      label: t('nav.campaigns'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -856,7 +859,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'tasks',
-      label: 'Tasks',
+      label: t('nav.tasks'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -866,7 +869,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
     },
     {
       id: 'settings',
-      label: 'Settings',
+      label: t('nav.settings'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
@@ -924,6 +927,7 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
 
 export default function App() {
   useLanguage()
+  const { t } = useTranslation()
   const basePath = import.meta.env.BASE_URL
   const session = useMiniappSession()
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
@@ -1146,10 +1150,10 @@ export default function App() {
       )
     }
     return label
-  }, [selectedAccount, subscription])
+  }, [selectedAccount, subscription, t])
 
   return (
-    <AppShell title="MadarAppBot" subtitle={headerSubtitle} actions={
+    <AppShell title={t('app.title')} subtitle={headerSubtitle} actions={
       <button
         type="button"
         onClick={() => setShowNotifications(true)}
@@ -1185,13 +1189,13 @@ export default function App() {
         {status ? <DismissibleStatus message={status} onClose={() => setStatus(null)} /> : null}
         {session.error ? <Note tone="warning">{session.error}</Note> : null}
         {!appReady ? (
-          <Card title="Loading" subtitle="Preparing accounts, groups, and agent tools.">
-            <Note>Please wait while the miniapp loads your workspace.</Note>
+          <Card title={t('app.loading')} subtitle={t('app.preparing')}>
+            <Note>{t('app.waitingWorkspace')}</Note>
           </Card>
         ) : null}
         {appReady && !isAuthenticated ? (
-          <Card title="Authentication required" subtitle="Open this WebApp from Telegram to load your agent workspace.">
-            <Note tone="warning">{session.error || 'Telegram authentication is unavailable.'}</Note>
+          <Card title={t('app.authRequired')} subtitle={t('app.authRequiredDesc')}>
+            <Note tone="warning">{session.error || t('app.authUnavailable')}</Note>
           </Card>
         ) : null}
         {appReady && isAuthenticated && isWizardInProgress ? (
@@ -1215,8 +1219,8 @@ export default function App() {
               <LanguageSwitcher />
             </div>
             <Card
-              title="Subscription"
-              subtitle={`${subscription?.status === 'active' ? `${subscription?.plan === 'business' ? 'Business' : 'Pro'} · Active` : 'No active subscription'}`}
+              title={t('subscription.title')}
+              subtitle={subscription?.status === 'active' ? `${subscription?.plan === 'business' ? t('subscription.businessActive') : t('subscription.proActive')}` : t('subscription.noActive')}
             >
               <div style={{ display: 'grid', gap: 0 }}>
                 <button
@@ -1228,7 +1232,7 @@ export default function App() {
                     color: 'var(--miniapp-text-muted)', fontSize: 12, fontFamily: 'var(--miniapp-sans)', fontWeight: 600,
                   }}
                 >
-                  <span>{subscriptionExpanded ? 'Hide details' : 'Show details'}</span>
+                  <span>{subscriptionExpanded ? t('subscription.hideDetails') : t('subscription.showDetails')}</span>
                   <span style={{ transform: subscriptionExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', fontSize: 14 }}>▾</span>
                 </button>
                 {subscriptionExpanded && (
@@ -1244,7 +1248,7 @@ export default function App() {
             </Card>
             {subscription?.status === 'active' ? (
               <>
-                <Card title="Linked accounts" subtitle="Manage your linked Telegram agents and their authentication status.">
+                <Card title={t('settings.linkedAccounts')} subtitle={t('settings.linkedAccountsSubtitle')}>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {accounts.length ? accounts.map((account) => (
                       <LinkedAccountCard
