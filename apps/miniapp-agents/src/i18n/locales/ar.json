@@ -18,6 +18,35 @@
     "failedRefresh": "فشل تحديث البيانات",
     "dismissNotification": "إغلاق الإشعار"
   },
+  "common": {
+    "loading": "جارٍ التحميل...",
+    "refresh": "تحديث"
+  },
+  "leads": {
+    "title": "العملاء",
+    "subtitle": "التقاط العملاء والتواصل معهم وإدارتهم.",
+    "noLeads": "لم يتم العثور على عملاء.",
+    "contact": "تواصل",
+    "dismiss": "تجاهل",
+    "previous": "السابق",
+    "next": "التالي",
+    "pageOf": "الصفحة {{page}} من {{totalPages}} ({{total}} إجمالي)",
+    "contactHeading": "التواصل مع {{name}}",
+    "forwardNote": "قم بإعادة توجيه الرسالة الأصلية للعميل إلى محادثته الخاصة، ثم أرسل رسالتك أدناه.",
+    "messageLabel": "الرسالة",
+    "messagePlaceholder": "اكتب رسالتك لهذا العميل...",
+    "includeOriginal": "تضمين الرسالة الأصلية",
+    "sendMode": "وضع الإرسال",
+    "modePrivate": "خاص (رسالة مباشرة)",
+    "modePublic": "عام (في المجموعة)",
+    "modeForward": "إعادة توجيه الرسالة الأصلية",
+    "sending": "جارٍ الإرسال...",
+    "forward": "إعادة توجيه",
+    "send": "إرسال",
+    "cancel": "إلغاء",
+    "groupLabel": "المجموعة: {{group}}",
+    "leadLabel": "الوسم: {{label}}"
+  },
   "noAccount": {
     "title": "الحساب مطلوب",
     "subtitle": "يلزم وجود حساب نشط لاستخدام هذه الصفحة.",

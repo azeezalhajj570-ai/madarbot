@@ -770,17 +770,18 @@ function LinkedAccountCard({
   onDelete: () => void
   onStatus: (msg: string) => void
 }) {
+  const { t } = useTranslation()
   const [isSyncing, setIsSyncing] = useState(false)
   const isActive = account.auth_state === 'active' && account.status === 'active'
 
   async function syncWorkspace() {
     setIsSyncing(true)
-    onStatus(`Syncing ${accountLabel(account)} workspace from Telegram...`)
+    onStatus(t('settings.syncingStatus', { name: accountLabel(account) }))
     try {
       await agentsApi.syncAgentWorkspace(account.id)
-      onStatus(`Workspace sync finished for ${accountLabel(account)}.`)
+      onStatus(t('settings.syncFinished', { name: accountLabel(account) }))
     } catch (error) {
-      onStatus(error instanceof Error ? error.message : 'Failed to sync workspace')
+      onStatus(error instanceof Error ? error.message : t('settings.syncFailed'))
     } finally {
       setIsSyncing(false)
     }
@@ -800,21 +801,21 @@ function LinkedAccountCard({
       <div>
         <strong>{account.phone_number || accountLabel(account)}</strong>
         <div style={{ color: '#655d52', marginTop: 4 }}>
-          {accountLabel(account) ? `${accountLabel(account)} · ` : ''}status {account.status} · auth {account.auth_state}
+          {accountLabel(account) ? `${accountLabel(account)} · ` : ''}{t('settings.status')} {account.status} · {t('settings.auth')} {account.auth_state}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {isActive ? (
           <>
-            <Button onClick={onOpen}>Open workspace</Button>
+            <Button onClick={onOpen}>{t('settings.openWorkspace')}</Button>
             <Button tone="secondary" onClick={() => void syncWorkspace()} disabled={isSyncing}>
-              {isSyncing ? 'Syncing...' : 'Sync'}
+              {isSyncing ? t('settings.syncing') : t('settings.sync')}
             </Button>
           </>
         ) : (
-          <Button onClick={onResume}>Resume setup</Button>
+          <Button onClick={onResume}>{t('settings.resumeSetup')}</Button>
         )}
-        <Button tone="danger" onClick={onDelete}>Delete</Button>
+        <Button tone="danger" onClick={onDelete}>{t('settings.delete')}</Button>
       </div>
     </div>
   )
@@ -1268,16 +1269,16 @@ export default function App() {
                           }
                         }}
                       />
-                    )) : <Note>No linked accounts yet. Link an account to start using agent tools.</Note>}
+                    )) : <Note>{t('settings.noLinkedAccounts')}</Note>}
                   </div>
                 </Card>
-                <Card title="Link new account">
+                <Card title={t('settings.linkNewAccount')}>
                   {subscription?.plan === 'pro' && accounts.length >= 1 ? (
                     <div style={{ display: 'grid', gap: 12 }}>
                       <Note tone="warning">
-                        Your Pro plan allows linking up to 1 account. Upgrade to Business to link more accounts.
+                        {t('settings.proAccountLimit')}
                       </Note>
-                      <Button onClick={() => setShowSubscription(true)}>Upgrade Plan</Button>
+                      <Button onClick={() => setShowSubscription(true)}>{t('settings.upgradePlan')}</Button>
                     </div>
                   ) : (
                     <CreateAccountPanel
@@ -1334,9 +1335,9 @@ export default function App() {
       />
       {deleteTarget ? (
         <ConfirmModal
-          title="Delete account"
-          message={`Delete ${accountLabel(deleteTarget)}? This removes the linked account from this workspace.`}
-          confirmLabel="Delete"
+          title={t('settings.deleteAccountTitle')}
+          message={t('settings.deleteAccountConfirm', { name: accountLabel(deleteTarget) })}
+          confirmLabel={t('settings.delete')}
           isBusy={isDeleting}
           onConfirm={() => void confirmDeleteAccount()}
           onCancel={() => setDeleteTarget(null)}
@@ -1353,7 +1354,8 @@ function CreateAccountPanel({
   onOpen: () => void
   disabled?: boolean
 }) {
-  return <Button onClick={onOpen} disabled={disabled}>Link new account</Button>
+  const { t } = useTranslation()
+  return <Button onClick={onOpen} disabled={disabled}>{t('settings.linkNewAccount')}</Button>
 }
 
 function MCPTokensCard() {
@@ -1414,19 +1416,21 @@ function MCPTokensCard() {
     }
   }
 
+  const { t } = useTranslation()
+
   const statusBadge = (s: string) => {
-    if (s === 'active') return <Badge tone="success">Active</Badge>
-    if (s === 'expired') return <Badge tone="warning">Expired</Badge>
-    return <Badge tone="neutral">Revoked</Badge>
+    if (s === 'active') return <Badge tone="success">{t('settings.tokenActive')}</Badge>
+    if (s === 'expired') return <Badge tone="warning">{t('settings.tokenExpired')}</Badge>
+    return <Badge tone="neutral">{t('settings.tokenRevoked')}</Badge>
   }
 
   return (
-    <Card title="MCP Tokens" subtitle="API tokens for external MCP access">
+    <Card title={t('settings.mcpTokens')} subtitle={t('settings.mcpTokensSubtitle')}>
       <div style={{ display: 'grid', gap: 12 }}>
         {loading ? (
-          <Note>Loading tokens...</Note>
+          <Note>{t('settings.mcpTokensLoading')}</Note>
         ) : tokens.length === 0 ? (
-          <Note>No tokens yet.</Note>
+          <Note>{t('settings.noTokens')}</Note>
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
             {tokens.map((t) => (
@@ -1457,7 +1461,7 @@ function MCPTokensCard() {
                         padding: '4px 8px', borderRadius: 6, fontFamily: 'var(--miniapp-sans)',
                       }}
                     >
-                      Revoke
+{t('settings.revoke')}
                     </button>
                   )}
                 </div>
@@ -1471,7 +1475,7 @@ function MCPTokensCard() {
             padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-sage-border)',
             background: 'var(--miniapp-sage-dim)', display: 'grid', gap: 8,
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-sage)' }}>Token created — copy it now (will not be shown again)</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-sage)' }}>{t('settings.tokenCopied')}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
               <input
                 readOnly
@@ -1491,7 +1495,7 @@ function MCPTokensCard() {
                   color: 'var(--miniapp-sage)', fontFamily: 'var(--miniapp-sans)', whiteSpace: 'nowrap',
                 }}
               >
-                Copy
+                {t('settings.copy')}
               </button>
             </div>
           </div>
@@ -1499,18 +1503,18 @@ function MCPTokensCard() {
 
         {showCreate ? (
           <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12 }}>
-            <InputField label="Token name" value={name} onChange={setName} placeholder="My API token" />
-            <InputField label="Expires in (days, optional)" value={expiryDays} onChange={(v) => setExpiryDays(v.replace(/\D/g, ''))} placeholder="Leave empty for no expiry" />
+            <InputField label={t('settings.tokenName')} value={name} onChange={setName} placeholder={t('settings.tokenNamePlaceholder')} />
+            <InputField label={t('settings.tokenExpiresLabel')} value={expiryDays} onChange={(v) => setExpiryDays(v.replace(/\D/g, ''))} placeholder={t('settings.tokenExpiresPlaceholder')} />
             {error && <Note tone="warning">{error}</Note>}
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={() => void handleCreate()} disabled={creating || !name.trim()}>
-                {creating ? 'Creating...' : 'Create token'}
+                {creating ? t('settings.creatingToken') : t('settings.createToken')}
               </Button>
-              <Button tone="secondary" onClick={() => { setShowCreate(false); setError(null) }}>Cancel</Button>
+              <Button tone="secondary" onClick={() => { setShowCreate(false); setError(null) }}>{t('subscription.close')}</Button>
             </div>
           </div>
         ) : (
-          <Button onClick={() => { setShowCreate(true); setCreatedToken(null); setError(null) }}>Create token</Button>
+          <Button onClick={() => { setShowCreate(true); setCreatedToken(null); setError(null) }}>{t('settings.createToken')}</Button>
         )}
       </div>
     </Card>
@@ -2100,6 +2104,7 @@ function AccountNotificationsPage({
 }
 
 function AccountLeadsPage({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [leads, setLeads] = useState<AgentLead[]>([])
   const [leadPage, setLeadPage] = useState<AgentLeadPage | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -2191,12 +2196,12 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   const totalPages = leadPage?.total_pages ?? 1
 
   return (
-    <Card title="Leads" subtitle="Capture, contact, and manage your leads.">
+    <Card title={t('leads.title')} subtitle={t('leads.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
-        {loading ? 'Loading...' : 'Refresh'}
+        {loading ? t('common.loading') : t('common.refresh')}
       </Button>
-      {!loading && leads.length === 0 ? <Note>No leads found.</Note> : null}
+      {!loading && leads.length === 0 ? <Note>{t('leads.noLeads')}</Note> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {leads.map((lead) => {
           const tone = _statusTone(lead.status)
@@ -2236,14 +2241,14 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                 </div>
               ) : null}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#9b9186' }}>
-                {lead.source_group_title ? <span>Group: {lead.source_group_title}</span> : null}
-                {lead.lead_label ? <span>Label: {lead.lead_label}</span> : null}
+                {lead.source_group_title ? <span>{t('leads.groupLabel', { group: lead.source_group_title })}</span> : null}
+                {lead.lead_label ? <span>{t('leads.leadLabel', { label: lead.lead_label })}</span> : null}
                 {lead.captured_at ? <span>{new Date(lead.captured_at).toLocaleDateString()}</span> : null}
               </div>
               {lead.status !== 'dismissed' ? (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <Button onClick={() => openContact(lead)}>Contact</Button>
-                  <Button tone="secondary" onClick={() => void dismissLead(lead)}>Dismiss</Button>
+                  <Button onClick={() => openContact(lead)}>{t('leads.contact')}</Button>
+                  <Button tone="secondary" onClick={() => void dismissLead(lead)}>{t('leads.dismiss')}</Button>
                 </div>
               ) : null}
             </div>
@@ -2253,11 +2258,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
       {totalPages > 1 ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
           <Button tone="secondary" onClick={() => setPage((c) => Math.max(1, c - 1))} disabled={page <= 1}>
-            Previous
+            {t('leads.previous')}
           </Button>
-          <Note>Page {page} of {totalPages} ({leadPage?.total ?? 0} total)</Note>
+          <Note>{t('leads.pageOf', { page, totalPages, total: leadPage?.total ?? 0 })}</Note>
           <Button tone="secondary" onClick={() => setPage((c) => Math.min(totalPages, c + 1))} disabled={page >= totalPages}>
-            Next
+            {t('leads.next')}
           </Button>
         </div>
       ) : null}
@@ -2284,11 +2289,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
             }}
           >
             <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>
-              Contact {contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}`}
+              {t('leads.contactHeading', { name: contactingLead.first_name || contactingLead.username || `User ${contactingLead.tg_user_id}` })}
             </h2>
             {contactMode === 'forward' ? (
               <>
-                <Note>Forward the lead's original message to their private chat, then send your message below.</Note>
+                <Note>{t('leads.forwardNote')}</Note>
                 {contactingLead.message_text ? (
                   <div style={{
                     padding: 12, borderRadius: 10,
@@ -2304,11 +2309,11 @@ function AccountLeadsPage({ account }: { account: Agent }) {
               </>
             ) : null}
             <TextAreaField
-              label="Message"
+              label={t('leads.messageLabel')}
               value={contactMessage}
               onChange={setContactMessage}
               rows={5}
-              placeholder="Type your message to this lead..."
+              placeholder={t('leads.messagePlaceholder')}
             />
             {contactingLead.message_text ? (
                   <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#655d52', cursor: 'pointer' }}>
@@ -2318,22 +2323,22 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                       onChange={(e) => setIncludeOriginal(e.target.checked)}
                       style={{ accentColor: 'var(--miniapp-coral)' }}
                     />
-                    Include original message
+                    {t('leads.includeOriginal')}
                   </label>
                 ) : null}
-            <SelectField label="Send mode" value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
-              <option value="private">Private (direct message)</option>
-              <option value="public">Public (in group)</option>
-              <option value="forward">Forward original message</option>
+            <SelectField label={t('leads.sendMode')} value={contactMode} onChange={(v) => setContactMode(v as 'private' | 'public' | 'forward')}>
+              <option value="private">{t('leads.modePrivate')}</option>
+              <option value="public">{t('leads.modePublic')}</option>
+              <option value="forward">{t('leads.modeForward')}</option>
             </SelectField>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
                 onClick={() => void sendContact()}
                 disabled={isSending || (contactMode === 'forward' && !contactingLead.source_message_id)}
               >
-                {isSending ? 'Sending...' : contactMode === 'forward' ? 'Forward' : 'Send'}
+                {isSending ? t('leads.sending') : contactMode === 'forward' ? t('leads.forward') : t('leads.send')}
               </Button>
-              <Button tone="secondary" onClick={closeContact}>Cancel</Button>
+              <Button tone="secondary" onClick={closeContact}>{t('leads.cancel')}</Button>
             </div>
           </div>
         </div>

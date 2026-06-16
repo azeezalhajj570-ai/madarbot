@@ -18,6 +18,35 @@
     "failedRefresh": "Failed to refresh data",
     "dismissNotification": "Dismiss notification"
   },
+  "common": {
+    "loading": "Loading...",
+    "refresh": "Refresh"
+  },
+  "leads": {
+    "title": "Leads",
+    "subtitle": "Capture, contact, and manage your leads.",
+    "noLeads": "No leads found.",
+    "contact": "Contact",
+    "dismiss": "Dismiss",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {{page}} of {{totalPages}} ({{total}} total)",
+    "contactHeading": "Contact {{name}}",
+    "forwardNote": "Forward the lead's original message to their private chat, then send your message below.",
+    "messageLabel": "Message",
+    "messagePlaceholder": "Type your message to this lead...",
+    "includeOriginal": "Include original message",
+    "sendMode": "Send mode",
+    "modePrivate": "Private (direct message)",
+    "modePublic": "Public (in group)",
+    "modeForward": "Forward original message",
+    "sending": "Sending...",
+    "forward": "Forward",
+    "send": "Send",
+    "cancel": "Cancel",
+    "groupLabel": "Group: {{group}}",
+    "leadLabel": "Label: {{label}}"
+  },
   "noAccount": {
     "title": "Account required",
     "subtitle": "An active linked account is required to use this page.",
