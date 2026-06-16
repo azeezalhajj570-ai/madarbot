@@ -301,7 +301,7 @@ function SubscriptionForm({
 
       <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
         {isActive && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Upgrade or extend your plan:</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.upgradeOrExtend')}</div>
         )}
         {!isActive && (
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>Or pay with Stripe:</div>
@@ -471,23 +471,23 @@ function NotificationSheet({
       >
         <div style={{ padding: '24px 24px 0 24px', display: 'grid', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>Notifications</h2>
+            <h2 style={{ margin: 0, fontFamily: 'var(--miniapp-serif)', fontSize: 20 }}>{t('notifications.title')}</h2>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark seen</Button>
-              <Button tone="secondary" onClick={onClose}>Close</Button>
+              <Button tone="secondary" onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>{t('notifications.markAllSeen')}</Button>
+              <Button tone="secondary" onClick={onClose}>{t('notifications.close')}</Button>
             </div>
           </div>
           {status ? <Note>{status}</Note> : null}
           <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
+            {loading ? t('common.loading') : t('common.refresh')}
           </Button>
-          {loading ? <Note>Loading notifications...</Note> : null}
-          {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
+          {loading ? <Note>{t('notifications.loading')}</Note> : null}
+          {!loading && visibleNotifications.length === 0 ? <Note>{t('notifications.noUnseen')}</Note> : null}
         </div>
         <div style={{ overflow: 'auto', padding: 24, display: 'grid', gap: 16 }}>
           {visibleNotifications.map((notification) => {
             const tone = notificationTone(notification.kind)
-            const chips = notificationChips(notification)
+            const chips = notificationChips(t, notification)
             return (
               <div
                 key={notification.id}
@@ -505,11 +505,11 @@ function NotificationSheet({
                       color: tone.accent, fontSize: 11, fontWeight: 700,
                       textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap',
                     }}>
-                      {notificationKindLabel(notification.kind)}
+                      {notificationKindLabel(t, notification.kind)}
                     </span>
                     <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
                   </div>
-                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(notification.created_at)}</div>
+                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(t, notification.created_at)}</div>
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <strong style={{ fontSize: 15 }}>{notification.title}</strong>
@@ -621,9 +621,9 @@ function taskConfigLabel(task: AutomationTask) {
   return `${summary}${mode}`
 }
 
-function notificationTimeLabel(createdAt?: string | null) {
+function notificationTimeLabel(t: (key: string) => string, createdAt?: string | null) {
   if (!createdAt) {
-    return 'Unknown time'
+    return t('notifications.unknownTime')
   }
   const date = new Date(createdAt)
   return Number.isNaN(date.getTime()) ? createdAt : date.toLocaleString()
@@ -654,16 +654,16 @@ function notificationTone(kind: string) {
   }
 }
 
-function notificationKindLabel(kind: string) {
-  if (kind.startsWith('bulk_message')) return 'Bulk message'
-  if (kind.startsWith('scrape')) return 'Scrape'
-  if (kind.startsWith('task')) return 'Task'
-  if (kind === 'job_queued') return 'Queued'
-  if (kind === 'job_failed') return 'Job failed'
+function notificationKindLabel(t: (key: string) => string, kind: string) {
+  if (kind.startsWith('bulk_message')) return t('notifications.kindBulkMessage')
+  if (kind.startsWith('scrape')) return t('notifications.kindScrape')
+  if (kind.startsWith('task')) return t('notifications.kindTask')
+  if (kind === 'job_queued') return t('notifications.kindQueued')
+  if (kind === 'job_failed') return t('notifications.kindJobFailed')
   return kind.replace(/_/g, ' ')
 }
 
-function notificationChips(notification: AgentNotification) {
+function notificationChips(t: (key: string, options?: Record<string, unknown>) => string, notification: AgentNotification) {
   const payload = notification.payload || {}
   const chips: string[] = []
   const groupTitle = typeof payload.group_title === 'string' ? payload.group_title.trim() : ''
@@ -681,24 +681,24 @@ function notificationChips(notification: AgentNotification) {
   if (taskLabel) chips.push(taskLabel)
   if (sourceGroupTitle) chips.push(sourceGroupTitle)
   else if (groupTitle) chips.push(groupTitle)
-  if (keyword) chips.push(`Keyword: ${keyword}`)
-  if (destination) chips.push(`To: ${destination}`)
-  if (selectedCount && notification.kind === 'job_queued') chips.push(`${selectedCount} selected`)
-  if (attemptedCount && notification.kind === 'bulk_message_completed') chips.push(`${attemptedCount} attempted`)
-  if (sentCount) chips.push(`${sentCount} sent`)
-  if (failedCount) chips.push(`${failedCount} failed`)
-  if (membersCount && notification.kind.startsWith('scrape')) chips.push(`${membersCount} members`)
-  if (messagesCount && notification.kind.startsWith('scrape')) chips.push(`${messagesCount} messages`)
+  if (keyword) chips.push(t('notifications.chipKeyword', { keyword }))
+  if (destination) chips.push(t('notifications.chipTo', { destination }))
+  if (selectedCount && notification.kind === 'job_queued') chips.push(t('notifications.chipSelected', { count: selectedCount }))
+  if (attemptedCount && notification.kind === 'bulk_message_completed') chips.push(t('notifications.chipAttempted', { count: attemptedCount }))
+  if (sentCount) chips.push(t('notifications.chipSent', { count: sentCount }))
+  if (failedCount) chips.push(t('notifications.chipFailed', { count: failedCount }))
+  if (membersCount && notification.kind.startsWith('scrape')) chips.push(t('notifications.chipMembers', { count: membersCount }))
+  if (messagesCount && notification.kind.startsWith('scrape')) chips.push(t('notifications.chipMessages', { count: messagesCount }))
 
   return chips.slice(0, 4)
 }
 
-function mapTaskGroups(task: AutomationTask) {
+function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask) {
   const tgGroupIds = Array.isArray(task.group_tg_ids) ? task.group_tg_ids : []
   const titles = Array.isArray(task.group_titles) ? task.group_titles : []
   return tgGroupIds.map((tgGroupId, index) => ({
     tg_group_id: Number(tgGroupId),
-    title: String(titles[index] || `Group ${tgGroupId}`),
+    title: String(titles[index] || t('automation.groupFallback', { tgGroupId })),
   }))
 }
 
@@ -1144,7 +1144,7 @@ export default function App() {
                 cursor: 'pointer',
               }}
             >
-              Upgrade
+{t('app.upgrade')}
             </button>
           )}
         </div>
@@ -2032,7 +2032,7 @@ function AccountNotificationsPage({
         {visibleNotifications.map((notification) => (
           (() => {
             const tone = notificationTone(notification.kind)
-            const chips = notificationChips(notification)
+            const chips = notificationChips(t, notification)
             return (
               <div
                 key={notification.id}
@@ -2064,11 +2064,11 @@ function AccountNotificationsPage({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {notificationKindLabel(notification.kind)}
+                      {notificationKindLabel(t, notification.kind)}
                     </span>
                     <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
                   </div>
-                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(notification.created_at)}</div>
+                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(t, notification.created_at)}</div>
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <strong style={{ fontSize: 15 }}>{notification.title}</strong>
@@ -2348,15 +2348,15 @@ function AccountLeadsPage({ account }: { account: Agent }) {
   )
 }
 
-function timeAgo(dateStr: string): string {
+function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const sec = Math.floor(diff / 1000)
-  if (sec < 5) return 'just now'
-  if (sec < 60) return `${sec}s ago`
+  if (sec < 5) return t('time.justNow')
+  if (sec < 60) return t('time.secondsAgo', { sec })
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
+  if (min < 60) return t('time.minutesAgo', { min })
   const hours = Math.floor(min / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return t('time.hoursAgo', { hours })
   return new Date(dateStr).toLocaleString()
 }
 
@@ -2569,7 +2569,7 @@ function TaskActivity({ account }: { account: Agent }) {
         {taskTypes.length > 1 ? (
           <FilterSelect value={filterType} onChange={setFilterType} options={[
             { label: t('tasks.filterAllTypes'), value: 'all' },
-            ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
+            ...taskTypes.map((jtype) => ({ label: JOB_TYPE_LABELS[jtype] || jtype.replace(/_/g, ' '), value: jtype })),
           ]} />
         ) : null}
       </div>
@@ -2637,7 +2637,7 @@ function TaskActivity({ account }: { account: Agent }) {
                   <span>{t('tasks.sent')}: <strong>{sent}</strong></span>
                   {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>{t('tasks.failed')}: <strong>{failed}</strong></span> : null}
                   {done > 0 ? <span>{t('tasks.success')}: <strong>{successRate}%</strong></span> : null}
-                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
+                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(t, job.updated_at)}</span> : null}
                   {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
                     {isScheduled ? (

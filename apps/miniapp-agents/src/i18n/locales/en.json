@@ -52,7 +52,22 @@
     "subtitle": "Scrape completion and account notifications for this agent.",
     "markAllSeen": "Mark all seen",
     "loading": "Loading notifications...",
-    "noUnseen": "No unseen notifications."
+    "noUnseen": "No unseen notifications.",
+    "close": "Close",
+    "unknownTime": "Unknown time",
+    "kindBulkMessage": "Bulk message",
+    "kindScrape": "Scrape",
+    "kindTask": "Task",
+    "kindQueued": "Queued",
+    "kindJobFailed": "Job failed",
+    "chipKeyword": "Keyword: {{keyword}}",
+    "chipTo": "To: {{destination}}",
+    "chipSelected": "{{count}} selected",
+    "chipAttempted": "{{count}} attempted",
+    "chipSent": "{{count}} sent",
+    "chipFailed": "{{count}} failed",
+    "chipMembers": "{{count}} members",
+    "chipMessages": "{{count}} messages"
   },
   "tasks": {
     "activityTitle": "Task Activity",
@@ -138,6 +153,12 @@
     "pending": "Pending",
     "conversionRate": "Conversion Rate",
     "conversionSummary": "{{interested}} interested + {{converted}} converted of {{total}} total leads"
+  },
+  "time": {
+    "justNow": "just now",
+    "secondsAgo": "{{sec}}s ago",
+    "minutesAgo": "{{min}}m ago",
+    "hoursAgo": "{{hours}}h ago"
   },
   "noAccount": {
     "title": "Account required",

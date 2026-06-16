@@ -52,7 +52,22 @@
     "subtitle": "إشعارات إكمال الجلب وحساب الوكيل.",
     "markAllSeen": "تحديد الكل كمقروء",
     "loading": "جارٍ تحميل الإشعارات...",
-    "noUnseen": "لا توجد إشعارات غير مقروءة."
+    "noUnseen": "لا توجد إشعارات غير مقروءة.",
+    "close": "إغلاق",
+    "unknownTime": "وقت غير معروف",
+    "kindBulkMessage": "رسالة جماعية",
+    "kindScrape": "جلب",
+    "kindTask": "مهمة",
+    "kindQueued": "في الطابور",
+    "kindJobFailed": "فشلت المهمة",
+    "chipKeyword": "الكلمة المفتاحية: {{keyword}}",
+    "chipTo": "إلى: {{destination}}",
+    "chipSelected": "{{count}} مختار",
+    "chipAttempted": "{{count}} تمت المحاولة",
+    "chipSent": "{{count}} تم الإرسال",
+    "chipFailed": "{{count}} فشل",
+    "chipMembers": "{{count}} أعضاء",
+    "chipMessages": "{{count}} رسائل"
   },
   "tasks": {
     "activityTitle": "نشاط المهام",
@@ -138,6 +153,12 @@
     "pending": "قيد الانتظار",
     "conversionRate": "معدل التحويل",
     "conversionSummary": "{{interested}} مهتم + {{converted}} تم تحويلهم من {{total}} إجمالي العملاء"
+  },
+  "time": {
+    "justNow": "الآن",
+    "secondsAgo": "منذ {{sec}} ثوانٍ",
+    "minutesAgo": "منذ {{min}} دقائق",
+    "hoursAgo": "منذ {{hours}} ساعات"
   },
   "noAccount": {
     "title": "الحساب مطلوب",
