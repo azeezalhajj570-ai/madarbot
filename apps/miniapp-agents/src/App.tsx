@@ -1983,6 +1983,7 @@ function AccountNotificationsPage({
   account: Agent
   onUnseenCountChange: (count: number) => void
 }) {
+  const { t } = useTranslation()
   const [notifications, setNotifications] = useState<AgentNotification[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2019,14 +2020,14 @@ function AccountNotificationsPage({
   const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
 
   return (
-    <Card title="Notifications" subtitle="Scrape completion and account notifications for this agent.">
+    <Card title={t('notifications.title')} subtitle={t('notifications.subtitle')}>
       {status ? <Note>{status}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>Refresh</Button>
-        <Button onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>Mark all seen</Button>
+        <Button tone="secondary" onClick={() => void refresh()} disabled={loading}>{t('common.refresh')}</Button>
+        <Button onClick={() => void markAllSeen()} disabled={isMarkingSeen || loading}>{t('notifications.markAllSeen')}</Button>
       </div>
-      {loading ? <Note>Loading notifications...</Note> : null}
-      {!loading && visibleNotifications.length === 0 ? <Note>No unseen notifications.</Note> : null}
+      {loading ? <Note>{t('notifications.loading')}</Note> : null}
+      {!loading && visibleNotifications.length === 0 ? <Note>{t('notifications.noUnseen')}</Note> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {visibleNotifications.map((notification) => (
           (() => {
@@ -2374,6 +2375,7 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 }
 
 function TaskActivity({ account }: { account: Agent }) {
+  const { t } = useTranslation()
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -2449,7 +2451,7 @@ function TaskActivity({ account }: { account: Agent }) {
 
   const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
     {
-      key: 'recipient', label: 'Recipient', sortable: true, width: '2fr',
+      key: 'recipient', label: t('tasks.logRecipient'), sortable: true, width: '2fr',
       render: (log) => (
         <div style={{ display: 'grid', gap: 1 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>
@@ -2462,11 +2464,11 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'type', label: 'Type', width: '60px',
+      key: 'type', label: t('tasks.logType'), width: '60px',
       render: (log) => log.username || log.tg_user_id ? '👤' : '👥',
     },
     {
-      key: 'status', label: 'Status', sortable: true, width: '80px',
+      key: 'status', label: t('tasks.logStatus'), sortable: true, width: '80px',
       render: (log) => (
         <span style={{
           padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
@@ -2478,7 +2480,7 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'message', label: 'Message', width: '2fr',
+      key: 'message', label: t('tasks.logMessage'), width: '2fr',
       render: (log) => (
         <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
           {(log.message_preview || '').slice(0, 120)}
@@ -2486,12 +2488,12 @@ function TaskActivity({ account }: { account: Agent }) {
       ),
     },
     {
-      key: 'time', label: 'Time', sortable: true, align: 'right' as const, width: '120px',
+      key: 'time', label: t('tasks.logTime'), sortable: true, align: 'right' as const, width: '120px',
       render: (log) => log.sent_at ? (
         <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{new Date(log.sent_at).toLocaleString()}</span>
       ) : '—',
     },
-  ], [])
+  ], [t])
 
   const filteredJobs = useMemo(() => {
     let result = [...jobs]
@@ -2538,15 +2540,15 @@ function TaskActivity({ account }: { account: Agent }) {
   }, [jobs])
 
   return (
-    <Card title="Task Activity" subtitle="Monitor bulk messaging tasks and send logs.">
+    <Card title={t('tasks.activityTitle')} subtitle={t('tasks.activitySubtitle')}>
       {statusMsg ? <Note>{statusMsg}</Note> : null}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        <Button tone="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
+        <Button tone="secondary" onClick={() => void load()} disabled={loading}>{t('common.refresh')}</Button>
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search task..."
+          placeholder={t('tasks.searchPlaceholder')}
           style={{
             flex: '1 1 160px', minWidth: 120, padding: '7px 10px', borderRadius: 8,
             border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)',
@@ -2554,27 +2556,27 @@ function TaskActivity({ account }: { account: Agent }) {
           }}
         />
         <FilterSelect value={filterStatus} onChange={setFilterStatus} options={[
-          { label: 'All status', value: 'all' }, { label: 'Running', value: 'running' },
-          { label: 'Completed', value: 'completed' }, { label: 'Failed', value: 'failed' },
-          { label: 'Pending', value: 'pending' }, { label: 'Queued', value: 'queued' },
-          { label: 'Scheduled', value: 'scheduled' },
+          { label: t('tasks.filterAll'), value: 'all' }, { label: t('tasks.filterRunning'), value: 'running' },
+          { label: t('tasks.filterCompleted'), value: 'completed' }, { label: t('tasks.filterFailed'), value: 'failed' },
+          { label: t('tasks.filterPending'), value: 'pending' }, { label: t('tasks.filterQueued'), value: 'queued' },
+          { label: t('tasks.filterScheduled'), value: 'scheduled' },
         ]} />
         <FilterSelect value={filterDate} onChange={setFilterDate} options={[
-          { label: 'All time', value: 'all' }, { label: 'Today', value: 'today' },
-          { label: 'Last 24h', value: '24h' }, { label: 'Last 7 days', value: '7d' },
-          { label: 'Last 30 days', value: '30d' },
+          { label: t('tasks.filterAllTime'), value: 'all' }, { label: t('tasks.filterToday'), value: 'today' },
+          { label: t('tasks.filterLast24h'), value: '24h' }, { label: t('tasks.filterLast7d'), value: '7d' },
+          { label: t('tasks.filterLast30d'), value: '30d' },
         ]} />
         {taskTypes.length > 1 ? (
           <FilterSelect value={filterType} onChange={setFilterType} options={[
-            { label: 'All types', value: 'all' },
+            { label: t('tasks.filterAllTypes'), value: 'all' },
             ...taskTypes.map((t) => ({ label: JOB_TYPE_LABELS[t] || t.replace(/_/g, ' '), value: t })),
           ]} />
         ) : null}
       </div>
 
-      {loading ? <Note>Loading...</Note> : null}
+      {loading ? <Note>{t('common.loading')}</Note> : null}
 
-      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? 'No tasks yet.' : 'No tasks match the selected filters.'}</Note> : null}
+      {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? t('tasks.noTasks') : t('tasks.noTasksFiltered')}</Note> : null}
 
       {!loading && filteredJobs.length > 0 ? (
         <div style={{ display: 'grid', gap: 6 }}>
@@ -2614,27 +2616,27 @@ function TaskActivity({ account }: { account: Agent }) {
                     background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
                     color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
                   }}>
-                    {isStopped ? 'Stopped' : job.status}
+                    {isStopped ? t('tasks.stopped') : job.status}
                   </span>
                 </div>
 
                 {isScheduled && job.scheduled_at ? (
                   <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                    Scheduled for {new Date(job.scheduled_at).toLocaleString()}
+                    {t('tasks.scheduledFor', { date: new Date(job.scheduled_at).toLocaleString() })}
                   </div>
                 ) : total > 0 ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
                     <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                      {job.target_type === 'groups' ? 'groups' : 'members'}
+                      {job.target_type === 'groups' ? t('tasks.groups') : t('tasks.members')}
                     </span>
                   </div>
                 ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
 
                 <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span>Sent: <strong>{sent}</strong></span>
-                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>Failed: <strong>{failed}</strong></span> : null}
-                  {done > 0 ? <span>Success: <strong>{successRate}%</strong></span> : null}
+                  <span>{t('tasks.sent')}: <strong>{sent}</strong></span>
+                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>{t('tasks.failed')}: <strong>{failed}</strong></span> : null}
+                  {done > 0 ? <span>{t('tasks.success')}: <strong>{successRate}%</strong></span> : null}
                   {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(job.updated_at)}</span> : null}
                   {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2646,7 +2648,7 @@ function TaskActivity({ account }: { account: Agent }) {
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Cancelling...' : 'Cancel'}
+                        {actingJobId === job.id ? t('tasks.cancelling') : t('tasks.cancel')}
                       </button>
                     ) : null}
                     {(isRunning || isQueued) && job.status !== 'aborted' ? (
@@ -2657,24 +2659,30 @@ function TaskActivity({ account }: { account: Agent }) {
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Stopping...' : 'Stop'}
+                        {actingJobId === job.id ? t('tasks.stopping') : t('tasks.stop')}
                       </button>
                     ) : null}
                     {(isFailed || job.status === 'aborted') ? (
                       <button type="button" disabled={actingJobId === job.id} onClick={() => void handleRetry(job.id)}
                         style={{
                           background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
-                          color: '#475977', fontSize: 11, fontWeight: 600,
+                          color: 'var(--miniapp-sage)', fontSize: 11, fontWeight: 600,
                           fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
                           opacity: actingJobId === job.id ? 0.5 : 1,
                         }}>
-                        {actingJobId === job.id ? 'Retrying...' : 'Retry'}
+                        {actingJobId === job.id ? t('tasks.retrying') : t('tasks.retry')}
                       </button>
                     ) : null}
-                    <button type="button" onClick={() => setLogsJobId(job.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475977', fontSize: 11, fontWeight: 600, fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0 }}>
-                      View Logs
-                    </button>
+                    {isCompleted && job.id ? (
+                      <button type="button" onClick={() => setLogsJobId(job.id)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--miniapp-text-muted)', fontSize: 11, fontWeight: 600,
+                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
+                        }}>
+                        {t('tasks.viewLogs')}
+                      </button>
+                    ) : null}
                   </span>
                 </div>
               </div>
@@ -2694,7 +2702,7 @@ function TaskActivity({ account }: { account: Agent }) {
           <TableModal<SendLogEntry>
             open={logsJobId !== null}
             onClose={() => setLogsJobId(null)}
-            title="Send Logs"
+            title={t('tasks.sendLogs')}
             subtitle={
               `Job #${logsJobId}` +
               (logJob?.message_preview ? ` · ${logJob.message_preview}` : '') +
@@ -2708,8 +2716,8 @@ function TaskActivity({ account }: { account: Agent }) {
             loading={logsLoading}
             emptyMessage={
               logTotal > 0
-                ? `No individual send records found. Job progress: ${logSent} sent, ${logFailed} failed of ${logTotal}.${logFailed > 0 && !logFailed ? ' All sends failed — the account may not have permission to post in the target groups.' : ''}`
-                : 'No send logs for this job. Messages may still be in progress.'
+                ? t('tasks.logsEmptyWithProgress', { sent: logSent, failed: logFailed, total: logTotal })
+                : t('tasks.logsEmptyNoProgress')
             }
             renderExpanded={(log) => (
               <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
