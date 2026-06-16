@@ -137,7 +137,6 @@ async def _open_private_settings(message: Message, state: FSMContext, *, lang: s
 @router.message(Command("app"))
 async def app_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    settings = get_settings()
     lang = await _resolve_lang(message)
     webapp_url = _webapp_url()
     show_buttons = await _can_show_dashboard(message)

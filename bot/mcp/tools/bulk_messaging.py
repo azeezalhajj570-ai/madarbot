@@ -19,8 +19,12 @@ def _serialize_job(job) -> dict:
         "id": job.id,
         "job_type": job.job_type,
         "status": job.status,
-        "created_at": job.created_at.isoformat() if isinstance(job.created_at, datetime) else str(job.created_at),
-        "updated_at": job.updated_at.isoformat() if isinstance(job.updated_at, datetime) else str(job.updated_at),
+        "created_at": job.created_at.isoformat()
+        if isinstance(job.created_at, datetime)
+        else str(job.created_at),
+        "updated_at": job.updated_at.isoformat()
+        if isinstance(job.updated_at, datetime)
+        else str(job.updated_at),
         "payload": payload,
         "progress": progress,
     }

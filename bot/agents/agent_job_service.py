@@ -339,10 +339,14 @@ class AgentJobService(AgentServiceSupport):
         if usernames:
             identity_filters.append(SentBroadcastMessage.username.in_(usernames))
 
-        group_filter = or_(
-            SentBroadcastMessage.tg_group_id == source_group_id,
-            SentBroadcastMessage.campaign_id == campaign_id if campaign_id else False,
-        ) if campaign_id else SentBroadcastMessage.tg_group_id == source_group_id
+        group_filter = (
+            or_(
+                SentBroadcastMessage.tg_group_id == source_group_id,
+                SentBroadcastMessage.campaign_id == campaign_id if campaign_id else False,
+            )
+            if campaign_id
+            else SentBroadcastMessage.tg_group_id == source_group_id
+        )
 
         sent_rows = (
             await self.session.execute(

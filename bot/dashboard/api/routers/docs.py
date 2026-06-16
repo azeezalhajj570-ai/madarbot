@@ -350,14 +350,21 @@ def active_class(page: str, target: str) -> str:
 def docs_page(page: str, title: str, description: str, content: str, jsonld: str = "") -> str:
     """Render a documentation page with sidebar navigation and SEO metadata."""
     sidebar = SIDEBAR_NAV % (
-        active_class(page, "home"), active_class(page, "getting-started"),
-        active_class(page, "accounts"), active_class(page, "groups"),
-        active_class(page, "scraping"), active_class(page, "campaigns"),
-        active_class(page, "automation"), active_class(page, "leads"),
-        active_class(page, "analytics"), active_class(page, "subscription"),
-        active_class(page, "mcp"), active_class(page, "agents"),
+        active_class(page, "home"),
+        active_class(page, "getting-started"),
+        active_class(page, "accounts"),
+        active_class(page, "groups"),
+        active_class(page, "scraping"),
+        active_class(page, "campaigns"),
+        active_class(page, "automation"),
+        active_class(page, "leads"),
+        active_class(page, "analytics"),
+        active_class(page, "subscription"),
+        active_class(page, "mcp"),
+        active_class(page, "agents"),
         active_class(page, "faq"),
-        active_class(page, "legal-tos"), active_class(page, "legal-privacy"),
+        active_class(page, "legal-tos"),
+        active_class(page, "legal-privacy"),
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -367,11 +374,11 @@ def docs_page(page: str, title: str, description: str, content: str, jsonld: str
 <meta name="theme-color" content="#0a0a0a">
 <meta name="description" content="{description}">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://madar.hamedco.com/docs/{'' if page == 'home' else page}">
+<link rel="canonical" href="https://madar.hamedco.com/docs/{"" if page == "home" else page}">
 <meta property="og:title" content="{title} — MadarBot Docs">
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://madar.hamedco.com/docs/{'' if page == 'home' else page}">
+<meta property="og:url" content="https://madar.hamedco.com/docs/{"" if page == "home" else page}">
 <title>{title} — MadarBot Docs</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.0/dist/fonts/geist-sans/style.css">
@@ -399,10 +406,15 @@ def docs_page(page: str, title: str, description: str, content: str, jsonld: str
 # LANDING PAGE
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 async def docs_home(request: Request) -> str:
-    return docs_page("home", "Documentation", "MadarBot — Telegram automation platform documentation for humans and AI agents.", """
+    return docs_page(
+        "home",
+        "Documentation",
+        "MadarBot — Telegram automation platform documentation for humans and AI agents.",
+        """
 <div class="hero">
   <h1>MadarBot <span>Documentation</span></h1>
   <p class="hero-sub">Automate Telegram groups — scrape members, run bulk campaigns, capture leads, and analyze engagement. Built for community managers and AI-powered workflows.</p>
@@ -456,16 +468,22 @@ async def docs_home(request: Request) -> str:
   <a class="btn btn-secondary" href="/docs/campaigns">Bulk Campaigns</a>
   <a class="btn btn-secondary" href="/docs/faq">FAQ</a>
 </div>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # GETTING STARTED
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/getting-started", response_class=HTMLResponse)
 async def docs_getting_started(request: Request) -> str:
-    return docs_page("getting-started", "Getting Started", "Learn how to set up MadarBot and link your first Telegram account.", """
+    return docs_page(
+        "getting-started",
+        "Getting Started",
+        "Learn how to set up MadarBot and link your first Telegram account.",
+        """
 <h1>Getting Started</h1>
 <p>Welcome to MadarBot! This guide will walk you through setting up your workspace, linking a Telegram account, and running your first operation.</p>
 
@@ -522,16 +540,22 @@ async def docs_getting_started(request: Request) -> str:
   <li>Connect an AI agent via the <a href="/docs/mcp">MCP Server</a>.</li>
   <li>Check the <a href="/docs/faq">FAQ</a> for common questions.</li>
 </ul>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # ACCOUNTS & SETUP
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/accounts", response_class=HTMLResponse)
 async def docs_accounts(request: Request) -> str:
-    return docs_page("accounts", "Accounts & Setup", "Link and manage Telegram accounts as agents for automation.", """
+    return docs_page(
+        "accounts",
+        "Accounts & Setup",
+        "Link and manage Telegram accounts as agents for automation.",
+        """
 <h1>Accounts & Setup</h1>
 <p>Linked Telegram accounts (agents) are the backbone of MadarBot. Each agent can independently scrape groups, send messages, and run automations.</p>
 
@@ -595,16 +619,22 @@ Content-Type: application/json
   <tr><td>Pro</td><td>1</td></tr>
   <tr><td>Business</td><td>Unlimited</td></tr>
 </table>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # GROUPS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/groups", response_class=HTMLResponse)
 async def docs_groups(request: Request) -> str:
-    return docs_page("groups", "Group Management", "Manage Telegram groups, view members, and sync group data.", """
+    return docs_page(
+        "groups",
+        "Group Management",
+        "Manage Telegram groups, view members, and sync group data.",
+        """
 <h1>Group Management</h1>
 <p>MadarBot helps you manage Telegram groups by providing member data, message history, and group insights extracted through scraping.</p>
 
@@ -656,16 +686,22 @@ async def docs_groups(request: Request) -> str:
   <span class="endpoint-path">/webapp/scraper/groups/{id}/messages</span>
   <span class="endpoint-desc">List group messages</span>
 </div>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # SCRAPING
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/scraping", response_class=HTMLResponse)
 async def docs_scraping(request: Request) -> str:
-    return docs_page("scraping", "Scraping", "Extract members, messages, and group data from Telegram groups.", """
+    return docs_page(
+        "scraping",
+        "Scraping",
+        "Extract members, messages, and group data from Telegram groups.",
+        """
 <h1>Group Scraping</h1>
 <p>The scraping engine extracts members, messages, and metadata from Telegram groups. Data is stored in your workspace and available for analytics, campaigns, and AI processing.</p>
 
@@ -720,16 +756,22 @@ GET /webapp/scraper/jobs/{job_id}</code></pre>
   <li>Schedule scrapes during off-peak hours for large groups.</li>
   <li>Only scrape groups where you have legitimate administrative interest.</li>
 </ul>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # CAMPAIGNS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/campaigns", response_class=HTMLResponse)
 async def docs_campaigns(request: Request) -> str:
-    return docs_page("campaigns", "Bulk Campaigns", "Create, schedule, and track bulk messaging campaigns to group members.", """
+    return docs_page(
+        "campaigns",
+        "Bulk Campaigns",
+        "Create, schedule, and track bulk messaging campaigns to group members.",
+        """
 <h1>Bulk Messaging Campaigns</h1>
 <p>Campaigns let you send targeted messages to group members with scheduling, rate limiting, and progress tracking.</p>
 
@@ -788,16 +830,22 @@ async def docs_campaigns(request: Request) -> str:
 </div>
 
 <div class="note-warn">Bulk messaging must comply with Telegram's Terms of Service and local anti-spam laws. Always respect opt-out requests and reasonable messaging hours.</div>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # AUTOMATION
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/automation", response_class=HTMLResponse)
 async def docs_automation(request: Request) -> str:
-    return docs_page("automation", "Automation", "Set up automated tasks — auto-reply, lead capture, welcome flows, and more.", """
+    return docs_page(
+        "automation",
+        "Automation",
+        "Set up automated tasks — auto-reply, lead capture, welcome flows, and more.",
+        """
 <h1>Automation Tasks</h1>
 <p>Automation tasks run on linked agent accounts and respond to group activity based on conditions you define.</p>
 
@@ -878,16 +926,22 @@ Content-Type: application/json
   <li>Tasks respect the agent's safety limits and rate constraints.</li>
   <li>Task activity is logged and visible in the dashboard.</li>
 </ul>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # LEADS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/leads", response_class=HTMLResponse)
 async def docs_leads(request: Request) -> str:
-    return docs_page("leads", "Leads", "Manage captured leads from group interactions and automation.", """
+    return docs_page(
+        "leads",
+        "Leads",
+        "Manage captured leads from group interactions and automation.",
+        """
 <h1>Lead Management</h1>
 <p>Leads are captured through automation tasks (lead_capture) and group scraping. Each lead is associated with a source group and a linked agent account.</p>
 
@@ -924,16 +978,22 @@ async def docs_leads(request: Request) -> str:
   <span class="endpoint-path">/webapp/agents/{id}/leads/{lead_id}</span>
   <span class="endpoint-desc">Update lead status or notes</span>
 </div>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # ANALYTICS
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/analytics", response_class=HTMLResponse)
 async def docs_analytics(request: Request) -> str:
-    return docs_page("analytics", "Analytics", "View metrics, reports, and analytics for your groups and accounts.", """
+    return docs_page(
+        "analytics",
+        "Analytics",
+        "View metrics, reports, and analytics for your groups and accounts.",
+        """
 <h1>Analytics & Reporting</h1>
 <p>MadarBot provides analytics at multiple levels — from per-agent summaries to group-level insights.</p>
 
@@ -983,16 +1043,22 @@ async def docs_analytics(request: Request) -> str:
   <li>Lead capture events</li>
   <li>Error and warning alerts</li>
 </ul>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # SUBSCRIPTION
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/subscription", response_class=HTMLResponse)
 async def docs_subscription(request: Request) -> str:
-    return docs_page("subscription", "Subscription", "Plans, billing, and upgrade information.", """
+    return docs_page(
+        "subscription",
+        "Subscription",
+        "Plans, billing, and upgrade information.",
+        """
 <h1>Subscription Plans</h1>
 <p>MadarBot offers tiered plans to suit different needs — from individual group managers to enterprise teams.</p>
 
@@ -1019,16 +1085,22 @@ async def docs_subscription(request: Request) -> str:
 
 <h2>Refunds</h2>
 <p>Refunds are available for billing errors, duplicate charges, or prolonged service outages. See the <a href="/legal/refund">Refund Policy</a> for details.</p>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # MCP SERVER
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/mcp", response_class=HTMLResponse)
 async def docs_mcp(request: Request) -> str:
-    return docs_page("mcp", "MCP Server", "Connect AI agents to MadarBot via the Model Context Protocol.", """
+    return docs_page(
+        "mcp",
+        "MCP Server",
+        "Connect AI agents to MadarBot via the Model Context Protocol.",
+        """
 <h1>MCP Server</h1>
 <p>The MCP (Model Context Protocol) server lets you connect AI agents like Claude, ChatGPT, and Cursor directly to your MadarBot workspace. With 27+ tools, AI agents can read group data, manage leads, run automations, and execute bulk campaigns on your behalf.</p>
 
@@ -1155,7 +1227,8 @@ python -m bot.run_mcp_server --transport streamable-http --host 0.0.0.0 --port 8
   <li><code>resources/list</code> — Resources (empty for MadarBot)</li>
   <li><code>prompts/list</code> — Prompts (empty for MadarBot)</li>
 </ul>
-""")
+""",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1187,9 +1260,14 @@ AI_AGENTS_JSONLD = """<script type="application/ld+json">
 }
 </script>"""
 
+
 @router.get("/agents", response_class=HTMLResponse)
 async def docs_agents(request: Request) -> str:
-    return docs_page("agents", "AI Agent Documentation", "Machine-readable documentation and MCP tool reference for AI agents.", """
+    return docs_page(
+        "agents",
+        "AI Agent Documentation",
+        "Machine-readable documentation and MCP tool reference for AI agents.",
+        """
 <h1>AI Agent Documentation</h1>
 <p>This page provides machine-readable documentation designed for AI agents (LLMs, MCP clients, coding assistants) to understand and use the MadarBot MCP server.</p>
 
@@ -1334,16 +1412,23 @@ async def docs_agents(request: Request) -> str:
   <tr><td><code>MCP_AUTH_TOKEN</code></td><td><code>null</code></td><td>Static auth token</td></tr>
   <tr><td><code>MCP_DEFAULT_ACTOR_USER_ID</code></td><td><code>null</code></td><td>Fallback Telegram user ID</td></tr>
 </table>
-""", jsonld=AI_AGENTS_JSONLD)
+""",
+        jsonld=AI_AGENTS_JSONLD,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # FAQ
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/faq", response_class=HTMLResponse)
 async def docs_faq(request: Request) -> str:
-    return docs_page("faq", "FAQ", "Frequently asked questions about MadarBot.", """
+    return docs_page(
+        "faq",
+        "FAQ",
+        "Frequently asked questions about MadarBot.",
+        """
 <h1>Frequently Asked Questions</h1>
 
 <h2>General</h2>
@@ -1405,4 +1490,5 @@ async def docs_faq(request: Request) -> str:
 
 <h3>How do I cancel my subscription?</h3>
 <p>Cancel from the Settings page at any time. Your access continues until the end of the current billing period.</p>
-""")
+""",
+    )

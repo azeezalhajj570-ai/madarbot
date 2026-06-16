@@ -29,14 +29,10 @@ class Campaign(Base):
 
     __tablename__ = "campaigns"
 
-    __table_args__ = (
-        Index("ix_campaigns_agent_status", "agent_id", "status"),
-    )
+    __table_args__ = (Index("ix_campaigns_agent_status", "agent_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[int] = mapped_column(
-        ForeignKey("agents.id", ondelete="CASCADE"), index=True
-    )
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     type: Mapped[str] = mapped_column(String(32), nullable=False, default="broadcast", index=True)
@@ -48,18 +44,10 @@ class Campaign(Base):
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    scheduled_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
-    )
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,

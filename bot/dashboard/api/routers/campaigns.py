@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.session import get_session
@@ -77,7 +77,8 @@ async def get_campaign(
     result["recent_jobs"] = [
         {
             "id": job.id,
-            "tg_group_id": job.job_payload.get("source_group_id") or job.job_payload.get("tg_group_id"),
+            "tg_group_id": job.job_payload.get("source_group_id")
+            or job.job_payload.get("tg_group_id"),
             "status": job.status,
             "created_at": job.created_at.isoformat() if job.created_at else None,
         }
@@ -159,9 +160,7 @@ async def get_campaign_send_logs(
     from sqlalchemy import desc, func, select
     from bot.db.models import SentBroadcastMessage
 
-    query = select(SentBroadcastMessage).where(
-        SentBroadcastMessage.campaign_id == campaign_id
-    )
+    query = select(SentBroadcastMessage).where(SentBroadcastMessage.campaign_id == campaign_id)
     count_query = select(func.count(SentBroadcastMessage.id)).where(
         SentBroadcastMessage.campaign_id == campaign_id
     )
@@ -175,12 +174,14 @@ async def get_campaign_send_logs(
     offset = (page - 1) * page_size
 
     rows = (
-        await session.execute(
-            query.order_by(desc(SentBroadcastMessage.sent_at))
-            .offset(offset)
-            .limit(page_size)
+        (
+            await session.execute(
+                query.order_by(desc(SentBroadcastMessage.sent_at)).offset(offset).limit(page_size)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return {
         "items": [

@@ -590,25 +590,29 @@ async def build_conversations_actor(
     async with SessionLocal() as session:
         try:
             rows = (
-                await session.execute(
-                    select(
-                        ScrapedMessage.message_id,
-                        ScrapedMessage.sender_user_id,
-                        ScrapedMessage.sender_username,
-                        ScrapedMessage.sender_first_name,
-                        ScrapedMessage.sender_last_name,
-                        ScrapedMessage.message_text,
-                        ScrapedMessage.message_date,
-                        ScrapedMessage.message_type,
-                        ScrapedMessage.reply_to_message_id,
-                        ScrapedMessage.reply_to_top_id,
-                    ).where(
-                        ScrapedMessage.scraped_group_id == scraped_group_id,
-                        ScrapedMessage.message_id >= first_id,
-                        ScrapedMessage.message_id <= last_id,
+                (
+                    await session.execute(
+                        select(
+                            ScrapedMessage.message_id,
+                            ScrapedMessage.sender_user_id,
+                            ScrapedMessage.sender_username,
+                            ScrapedMessage.sender_first_name,
+                            ScrapedMessage.sender_last_name,
+                            ScrapedMessage.message_text,
+                            ScrapedMessage.message_date,
+                            ScrapedMessage.message_type,
+                            ScrapedMessage.reply_to_message_id,
+                            ScrapedMessage.reply_to_top_id,
+                        ).where(
+                            ScrapedMessage.scraped_group_id == scraped_group_id,
+                            ScrapedMessage.message_id >= first_id,
+                            ScrapedMessage.message_id <= last_id,
+                        )
                     )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
             message_rows = [dict(r) for r in rows]
 

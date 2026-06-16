@@ -63,12 +63,16 @@ class CampaignService:
 
     async def get_campaign(self, campaign_id: int, agent_id: int) -> Campaign:
         campaign = (
-            await self.session.execute(
-                select(Campaign)
-                .options(joinedload(Campaign.jobs))
-                .where(Campaign.id == campaign_id, Campaign.agent_id == agent_id)
+            (
+                await self.session.execute(
+                    select(Campaign)
+                    .options(joinedload(Campaign.jobs))
+                    .where(Campaign.id == campaign_id, Campaign.agent_id == agent_id)
+                )
             )
-        ).unique().scalar_one_or_none()
+            .unique()
+            .scalar_one_or_none()
+        )
         if campaign is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -95,10 +99,14 @@ class CampaignService:
         offset = (page - 1) * page_size
 
         campaigns = (
-            await self.session.execute(
-                query.order_by(Campaign.created_at.desc()).offset(offset).limit(page_size)
+            (
+                await self.session.execute(
+                    query.order_by(Campaign.created_at.desc()).offset(offset).limit(page_size)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         return {
             "items": [self._to_dict(c) for c in campaigns],
@@ -182,7 +190,9 @@ class CampaignService:
                 detail="Campaign must have a message template before launching.",
             )
 
-        resolved_group_ids = group_ids or list((campaign.target_filters or {}).get("group_ids") or [])
+        resolved_group_ids = group_ids or list(
+            (campaign.target_filters or {}).get("group_ids") or []
+        )
 
         if not resolved_group_ids:
             raise HTTPException(
@@ -216,7 +226,9 @@ class CampaignService:
                     campaign_id=campaign.id,
                 )
                 await dispatch_agent_job(job.id)
-                created_jobs.append({"id": job.id, "tg_group_id": tg_group_id, "status": job.status})
+                created_jobs.append(
+                    {"id": job.id, "tg_group_id": tg_group_id, "status": job.status}
+                )
             except ValueError as exc:
                 created_jobs.append({"id": None, "tg_group_id": tg_group_id, "error": str(exc)})
 

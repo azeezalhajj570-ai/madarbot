@@ -33,9 +33,7 @@ class SentBroadcastMessage(Base):
 
     __tablename__ = "sent_broadcast_messages"
 
-    __table_args__ = (
-        Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),
-    )
+    __table_args__ = (Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)

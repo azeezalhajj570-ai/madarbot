@@ -407,10 +407,15 @@ async def get_scraped_group(
         .correlate(ScrapedGroup)
         .scalar_subquery()
     )
-    row = (await session.execute(
-        select(ScrapedGroup, member_total.label("members_total"), message_total.label("messages_total"))
-        .where(ScrapedGroup.id == group_id)
-    )).one()
+    row = (
+        await session.execute(
+            select(
+                ScrapedGroup,
+                member_total.label("members_total"),
+                message_total.label("messages_total"),
+            ).where(ScrapedGroup.id == group_id)
+        )
+    ).one()
 
     return {
         "id": row.ScrapedGroup.id,
@@ -423,8 +428,12 @@ async def get_scraped_group(
         "description": row.ScrapedGroup.description,
         "members_total": int(row.members_total or 0),
         "messages_total": int(row.messages_total or 0),
-        "created_at": row.ScrapedGroup.created_at.isoformat() if row.ScrapedGroup.created_at else None,
-        "updated_at": row.ScrapedGroup.updated_at.isoformat() if row.ScrapedGroup.updated_at else None,
+        "created_at": row.ScrapedGroup.created_at.isoformat()
+        if row.ScrapedGroup.created_at
+        else None,
+        "updated_at": row.ScrapedGroup.updated_at.isoformat()
+        if row.ScrapedGroup.updated_at
+        else None,
     }
 
 
