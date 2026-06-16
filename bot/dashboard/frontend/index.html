@@ -85,6 +85,30 @@
       min-width: 40px;
       text-align: center;
     }
+    #site-footer {
+      margin: 40px 0 0;
+      padding: 20px 24px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 24px;
+      align-items: center;
+      justify-content: center;
+    }
+    #site-footer a {
+      color: var(--text-muted, #6b6b6b);
+      text-decoration: none;
+      font-size: 12px;
+      transition: color 0.2s;
+    }
+    #site-footer a:hover { color: var(--text-primary, #f5f5f5); }
+    #site-footer .footer-sep {
+      color: rgba(255,255,255,0.08);
+      font-size: 12px;
+    }
+    @media (max-width: 640px) {
+      #site-footer { padding: 16px 16px; gap: 8px 14px; }
+    }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/dashboard/assets/js/state.js"></script>
@@ -97,6 +121,7 @@
   <div class="main">
     <header id="topbar"></header>
     <div id="content"></div>
+    <footer id="site-footer"></footer>
     <div id="bottom-nav" class="bottom-nav"></div>
   </div>
 </div>
@@ -112,6 +137,7 @@
       topbar: document.getElementById("topbar"),
       content: document.getElementById("content"),
       bottomNav: document.getElementById("bottom-nav"),
+      footer: document.getElementById("site-footer"),
       groupPopover: document.getElementById("group-popover-root"),
       modal: document.getElementById("modal-root"),
       drawer: document.getElementById("drawer-root"),
@@ -605,6 +631,7 @@
       renderTopbar();
       renderContent();
       renderBottomNav();
+      renderFooter();
     }
 
     function persistActiveGroup(groupId) {
@@ -949,6 +976,41 @@
           <span class="nav-label">${escapeHtml(item.label)}</span>
         </button>
       `).join("");
+    }
+
+    function renderFooter() {
+      if (state.subscriptionGate.active) {
+        roots.footer.innerHTML = "";
+        return;
+      }
+      var isArabic = (state.user && state.user.language_code === "ar") || document.documentElement.lang === "ar";
+      var legalLinks = isArabic ? [
+        { href: "/docs", label: "التوثيق" },
+        { href: "/legal/tos", label: "شروط الخدمة" },
+        { href: "/legal/privacy", label: "سياسة الخصوصية" },
+        { href: "/legal/cookies", label: "سياسة ملفات الارتباط" },
+        { href: "/legal/disclaimer", label: "إخلاء المسؤولية" },
+        { href: "/legal/refund", label: "سياسة الاسترداد" },
+        { href: "/legal/contact", label: "اتصل بنا" },
+        { href: "/legal/data-deletion", label: "حذف البيانات" },
+        { href: "/legal/aup", label: "سياسة الاستخدام المقبول" },
+      ] : [
+        { href: "/docs", label: "Docs" },
+        { href: "/legal/tos", label: "Terms of Service" },
+        { href: "/legal/privacy", label: "Privacy Policy" },
+        { href: "/legal/cookies", label: "Cookie Policy" },
+        { href: "/legal/disclaimer", label: "Disclaimer" },
+        { href: "/legal/refund", label: "Refund Policy" },
+        { href: "/legal/contact", label: "Contact" },
+        { href: "/legal/data-deletion", label: "Data Deletion" },
+        { href: "/legal/aup", label: "Acceptable Use" },
+      ];
+      roots.footer.innerHTML = legalLinks
+        .map(function(link, i) {
+          return (i > 0 ? '<span class="footer-sep">·</span>' : '') +
+            '<a href="' + escapeHtml(link.href) + '">' + escapeHtml(link.label) + '</a>';
+        })
+        .join("");
     }
 
     function panel(title, body, actions = "") {
@@ -5409,6 +5471,7 @@
         renderTopbar();
         renderContent();
         renderBottomNav();
+        renderFooter();
         renderGroupPopover();
         renderModal();
         renderDrawer();
@@ -6296,6 +6359,7 @@
         renderTopbar();
         renderContent();
         renderBottomNav();
+        renderFooter();
         renderGroupPopover();
       } else if (target.dataset.action === "logs-date-from") {
         state.ui.logsDateFrom = target.value;
@@ -7111,6 +7175,7 @@
       renderTopbar();
       renderContent();
       renderBottomNav();
+      renderFooter();
     });
 
     async function boot() {
@@ -7137,6 +7202,7 @@
       renderTopbar();
       renderContent();
       renderBottomNav();
+      renderFooter();
       renderToasts();
     }
 
@@ -7230,6 +7296,7 @@
       renderTopbar();
       renderContent();
       renderBottomNav();
+      renderFooter();
       if (!state.sessionExpired) {
         pushToast("Failed to load dashboard.", "danger");
       }
