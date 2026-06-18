@@ -25,6 +25,7 @@ from bot.core.plugin_manager import PluginManager
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine
 from bot.handlers import build_router
+from bot.middlewares.private_message_event import PrivateMessageEventMiddleware
 from bot.middlewares.update_logging import UpdateLoggingMiddleware
 from bot.utils.logging import configure_logging
 
@@ -103,12 +104,13 @@ async def run_bot() -> None:
     dispatcher.include_router(build_router())
 
     event_bus = EventBus()
+    dispatcher.message.middleware(PrivateMessageEventMiddleware())
     menu_engine = MenuEngine()
     plugin_manager = PluginManager()
     await plugin_manager.load_all(dispatcher, event_bus)
     agent_listener_manager: AgentListenerManager | None = None
     if settings.bot_app_kind in ("admin", "agents"):
-        agent_listener_manager = AgentListenerManager(bot=bot)
+        agent_listener_manager = AgentListenerManager(bot=bot, redis=redis)
         await agent_listener_manager.start()
 
     try:

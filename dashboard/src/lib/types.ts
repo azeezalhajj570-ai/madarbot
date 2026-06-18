@@ -142,6 +142,18 @@ export interface GroupSettings {
   settings: Record<string, boolean | number | string>
 }
 
+export interface SettingSchemaEntry {
+  key: string
+  type: 'toggle' | 'number' | 'text'
+  category: string
+  label_key: string
+  min: number | null
+  max: number | null
+  default: boolean | number | string | null
+}
+
+export type SettingsSchemaCatalog = Record<string, SettingSchemaEntry[]>
+
 export interface NotificationReport {
   id: number
   group_id: number

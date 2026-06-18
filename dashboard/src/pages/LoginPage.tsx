@@ -15,6 +15,7 @@ function LoginInner() {
   const location = useLocation()
   const { t, lang, setLang } = useI18n()
   const switching = new URLSearchParams(location.search).get('switch') === '1'
+  const loggingOut = new URLSearchParams(location.search).get('logout') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,6 +24,12 @@ function LoginInner() {
   const [showNewAccount, setShowNewAccount] = useState(!switching && storedAccounts.length === 0)
   const [telegramBotId, setTelegramBotId] = useState<string>('')
   const [telegramKey, setTelegramKey] = useState(0)
+
+  useEffect(() => {
+    if (loggingOut) {
+      setTelegramKey((k) => k + 1)
+    }
+  }, [loggingOut])
 
   useEffect(() => {
     const container = document.getElementById('telegram-login-widget')
@@ -144,9 +151,10 @@ function LoginInner() {
           <div id="telegram-login-widget" />
           <button
             onClick={handleSwitchTelegram}
-            style={{ background: 'none', border: 'none', padding: '8px 0 0', color: 'var(--ui-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'center' }}
+            disabled={!telegramBotId}
+            style={{ background: 'none', border: 'none', padding: '8px 0 0', color: 'var(--ui-text-muted)', cursor: telegramBotId ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'center', opacity: telegramBotId ? 1 : 0.5 }}
           >
-            Use another Telegram account
+            {telegramBotId ? 'Use another Telegram account' : 'Loading Telegram…'}
           </button>
           {error ? <div style={{ color: 'var(--ui-danger)', fontSize: 13, marginTop: 12 }}>{error}</div> : null}
           {!showNewAccount && storedAccounts.length > 0 ? (

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { Bot, Cpu, Crown, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Ticket, UserPlus, Users } from 'lucide-react'
 
 import { radius, spacing, uiVars } from '../../../shared/ui-system/tokens'
@@ -24,7 +24,6 @@ const NAV = [
 ]
 
 export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
-  const navigate = useNavigate()
   const user = getStoredUser()
   const { t, lang, setLang } = useI18n()
 
@@ -32,7 +31,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
     const current = getStoredUser()
     if (current) addAccount(current)
     clearAuth()
-    navigate('/login?switch=1')
+    window.location.href = '/dashboard/login?switch=1'
   }
 
   return (
@@ -113,7 +112,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
             <RefreshCw size={13} />
             {t('sidebar.switchAccount')}
           </button>
-          <button onClick={() => { clearAuth(); navigate('/login'); }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 8, color: uiVars.textMuted, cursor: 'pointer', fontWeight: 400, fontSize: 12, marginTop: 4 }}>
+          <button onClick={() => { clearAuth(); window.location.href = '/dashboard/login?logout=1'; }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 8, color: uiVars.textMuted, cursor: 'pointer', fontWeight: 400, fontSize: 12, marginTop: 4 }}>
             <LogOut size={11} />
             {t('sidebar.logout')}
           </button>

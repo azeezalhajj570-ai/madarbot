@@ -181,4 +181,52 @@ async def enable_plugin(
     return {"status": "ok"}
 
 
+@router.post("/pilot/test")
+async def test_ai_pilot(payload: dict[str, Any]) -> dict[str, Any]:
+    provider_name = str(payload.get("provider") or get_settings().ai_provider).strip().lower()
+    api_key = str(payload.get("api_key") or "").strip()
+    model = str(payload.get("model") or "").strip()
+    provider_url = str(payload.get("provider_url") or "").strip()
+
+    if not api_key:
+        settings = get_settings()
+        if provider_name == "openai":
+            api_key = settings.openai_api_key or ""
+        elif provider_name == "gemini":
+            api_key = settings.gemini_api_key or ""
+        elif provider_name == "openrouter":
+            api_key = settings.openrouter_api_key or ""
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="No API key configured")
+
+    from bot.plugins.ai_pilot.provider import (
+        AIPilotError,
+        GeminiPilotProvider,
+        HeuristicPilotProvider,
+        OpenAIPilotProvider,
+        OpenRouterPilotProvider,
+    )
+
+    if provider_name == "openai":
+        provider = OpenAIPilotProvider(api_key, model or "gpt-4.1-mini", provider_url or "https://api.openai.com/v1")
+    elif provider_name == "gemini":
+        provider = GeminiPilotProvider(api_key, model or "gemini-1.5-flash", provider_url or "https://generativelanguage.googleapis.com/v1beta/models")
+    elif provider_name == "openrouter":
+        provider = OpenRouterPilotProvider(api_key, model or "google/gemini-2.0-flash-001", provider_url or "https://openrouter.ai/api/v1")
+    else:
+        provider = HeuristicPilotProvider()
+
+    try:
+        reply = await provider.chat(
+            messages=[{"role": "user", "content": "Hello! Say hi back in one short sentence."}],
+            model=model or None,
+        )
+        return {"status": "ok", "reply": reply}
+    except AIPilotError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 __all__ = ["router"]
