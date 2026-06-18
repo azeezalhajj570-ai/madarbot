@@ -75,6 +75,7 @@ class AgentListenerManager:
         sync_interval_seconds: int = 15,
         log_message_events: bool | None = None,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+        redis: Any = None,
     ) -> None:
         self.bot = bot
         self.session_factory = session_factory
@@ -84,6 +85,7 @@ class AgentListenerManager:
             log_message_events = get_settings().log_agent_listener_messages
         self.log_message_events = bool(log_message_events)
         self.sleep = sleep
+        self.redis = redis
         self._agent_tasks: dict[int, asyncio.Task[Any]] = {}
         self._sync_task: asyncio.Task[Any] | None = None
         self._stopping = False
@@ -159,7 +161,7 @@ class AgentListenerManager:
                 client = await self.session_manager.get_client(agent_id)
 
                 async def _handle(event) -> None:
-                    await self._handle_telethon_message(agent_id, event)
+                    await self._handle_telethon_message(agent_id, event, client)
 
                 client.add_event_handler(_handle, events.NewMessage(incoming=True))
                 logger.info("agent_listener_started", agent_id=agent_id)
@@ -201,7 +203,7 @@ class AgentListenerManager:
                     return
                 await self.sleep(5)
 
-    async def _handle_telethon_message(self, agent_id: int, event: Any) -> None:
+    async def _handle_telethon_message(self, agent_id: int, event: Any, client: Any | None = None) -> None:
         chat_id = getattr(event, "chat_id", None)
         if chat_id is None:
             return
@@ -241,6 +243,13 @@ class AgentListenerManager:
                 is_group=chat_id < 0,
             )
         if chat_id >= 0:
+            await self._handle_private_message(
+                agent_id=agent_id,
+                client=client,
+                chat_id=chat_id,
+                sender_id=int(sender_id) if sender_id is not None else None,
+                text=text,
+            )
             return
         await self._persist_seen_group_message(
             agent_id=agent_id,
@@ -264,6 +273,112 @@ class AgentListenerManager:
             full_name=full_name,
             username=username,
         )
+
+    async def _handle_private_message(
+        self,
+        *,
+        agent_id: int,
+        client: Any,
+        chat_id: int,
+        sender_id: int | None,
+        text: str,
+    ) -> None:
+        if not text or client is None or self.redis is None:
+            return
+
+        from bot.config import get_settings
+
+        settings = get_settings()
+        if not settings.ai_pilot_enabled:
+            return
+
+        from bot.plugins.ai_pilot.provider import build_pilot_provider
+        from bot.plugins.ai_pilot.service import AIPilotService
+        from bot.services.settings_service import SettingsService
+
+        api_key: str | None = None
+        model: str | None = None
+        provider_url: str | None = None
+        system_prompt: str | None = None
+        max_history = 10
+        rate_limit_max = 5
+        rate_limit_window_s = 60
+
+        async with self.session_factory() as session:
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
+            group_id = int(agent.group_id) if agent and agent.group_id is not None else None
+
+            if group_id is not None:
+                ssvc = SettingsService(session)
+                raw_api_key = await ssvc.get_one(group_id, "ai_pilot_api_key")
+                if raw_api_key:
+                    api_key = str(raw_api_key)
+                raw_model = await ssvc.get_one(group_id, "ai_pilot_model")
+                if raw_model:
+                    model = str(raw_model)
+                raw_url = await ssvc.get_one(group_id, "ai_pilot_provider_url")
+                if raw_url:
+                    provider_url = str(raw_url)
+                raw_prompt = await ssvc.get_one(group_id, "ai_pilot_system_prompt")
+                if raw_prompt:
+                    system_prompt = str(raw_prompt)
+
+                raw_max = await ssvc.get_one(group_id, "ai_pilot_max_history")
+                if raw_max is not None:
+                    try:
+                        max_history = int(raw_max)
+                    except (ValueError, TypeError):
+                        pass
+                raw_rl_max = await ssvc.get_one(group_id, "ai_pilot_rate_limit_max")
+                if raw_rl_max is not None:
+                    try:
+                        rate_limit_max = int(raw_rl_max)
+                    except (ValueError, TypeError):
+                        pass
+                raw_rl_win = await ssvc.get_one(group_id, "ai_pilot_rate_limit_window_s")
+                if raw_rl_win is not None:
+                    try:
+                        rate_limit_window_s = int(raw_rl_win)
+                    except (ValueError, TypeError):
+                        pass
+
+        provider = build_pilot_provider(
+            api_key=api_key,
+            model=model,
+            base_url=provider_url,
+        )
+        service = AIPilotService(
+            redis=self.redis,
+            provider=provider,
+            system_prompt=system_prompt,
+            model=model,
+            max_history=max_history,
+            rate_limit_max=rate_limit_max,
+            rate_limit_window_s=rate_limit_window_s,
+        )
+        reply = await service.generate_reply(sender_id or chat_id, text)
+        if reply is None:
+            return
+
+        try:
+            await client.send_message(chat_id, reply)
+            logger.info(
+                "agent_dm_reply_sent",
+                agent_id=agent_id,
+                chat_id=chat_id,
+                user_id=sender_id,
+                reply_length=len(reply),
+            )
+        except Exception as exc:
+            logger.warning(
+                "agent_dm_reply_failed",
+                agent_id=agent_id,
+                chat_id=chat_id,
+                user_id=sender_id,
+                error=str(exc),
+            )
 
     async def _persist_seen_group_message(
         self,

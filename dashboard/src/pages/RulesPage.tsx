@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Card, Field, FieldRow, InlineMessage, Input, Select, ToggleRow } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
-import { fetchGroupSettings, updateGroupSettings } from '../lib/api'
+import { fetchGroupSettings, fetchSettingsSchema, updateGroupSettings, testAIPilot } from '../lib/api'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
 import { useI18n } from '../lib/i18n'
+import type { SettingSchemaEntry, SettingsSchemaCatalog } from '../lib/types'
 
 type ModerationToggleKey = 'anti_spam' | 'anti_ads' | 'anti_spam_mute' | 'anti_ads_mute'
 type ModerationLimitKey = 'anti_spam_mute_limit' | 'anti_ads_mute_limit' | 'warn_remove_limit'
@@ -81,6 +82,22 @@ export default function RulesPage() {
   const [savingLimits, setSavingLimits] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
+
+  const [schemaCatalog, setSchemaCatalog] = useState<SettingsSchemaCatalog>({})
+  const [pluginSaving, setPluginSaving] = useState<string | null>(null)
+  const [testLoading, setTestLoading] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const catalog = await fetchSettingsSchema()
+        if (!cancelled) setSchemaCatalog(catalog)
+      } catch { /* schema unavailable — plugin section hidden */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (currentGroupId == null) {
@@ -168,9 +185,64 @@ export default function RulesPage() {
     }
   }
 
+  async function handlePluginSettingChange(key: string, value: boolean | number | string) {
+    if (currentGroupId == null) return
+    setPluginSaving(key)
+    setError('')
+    setFeedback('')
+    try {
+      await updateGroupSettings(currentGroupId, { [key]: value })
+      setSettings((current) => ({ ...current, [key]: value }))
+      setFeedback(`Setting "${key}" saved.`)
+    } catch {
+      setError('Unable to save setting.')
+    } finally {
+      setPluginSaving(null)
+    }
+  }
+
+  async function handleTestAI() {
+    setTestLoading(true)
+    setTestResult(null)
+    setError('')
+    try {
+      const model = String(settings['ai_pilot_model'] || '').trim()
+      const providerUrl = String(settings['ai_pilot_provider_url'] || '').trim()
+      const apiKey = String(settings['ai_pilot_api_key'] || '').trim()
+      const result = await testAIPilot({
+        model: model || undefined,
+        provider_url: providerUrl || undefined,
+        api_key: apiKey || undefined,
+      })
+      if (result.status === 'ok') {
+        setTestResult({ ok: true, text: result.reply || 'No reply' })
+      } else {
+        setTestResult({ ok: false, text: result.error || result.detail || 'Unknown error' })
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || 'Test request failed'
+      setTestResult({ ok: false, text: detail })
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
+  const pluginCategories = useMemo(() => {
+    const categories = new Map<string, SettingSchemaEntry[]>()
+    for (const [, entries] of Object.entries(schemaCatalog)) {
+      for (const entry of entries) {
+        const cat = entry.category || 'general'
+        if (cat !== 'ai_provider') continue
+        if (!categories.has(cat)) categories.set(cat, [])
+        categories.get(cat)!.push(entry)
+      }
+    }
+    return Array.from(categories.entries()).filter(([, entries]) => entries.length > 0)
+  }, [schemaCatalog])
+
   return (
     <PageShell
-      eyebrow="Rules"
+      eyebrow="AI Pilot"
       titleKey="page.rules"
       descriptionKey="page.rules.desc"
       loading={loading}
@@ -186,45 +258,93 @@ export default function RulesPage() {
       )}
     >
       {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
-      {currentGroup ? <InlineMessage tone="neutral">Editing moderation rules for {currentGroup.title}.</InlineMessage> : null}
+      {!groupsLoading && groups.length === 0 ? (
+        <Card>
+          <div style={{ textAlign: 'center', padding: 32 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>&#9888;&#65039;</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>No groups found</div>
+            <div style={{ color: 'var(--color-muted)', maxWidth: 480, margin: '0 auto' }}>
+              Add the bot as an administrator in a Telegram group, then select it here.
+              For browser users, make sure your user ID is included in <code>DASHBOARD_BROWSER_USERS</code>.
+            </div>
+          </div>
+        </Card>
+      ) : null}
+      {!currentGroup && groups.length > 0 ? (
+        <InlineMessage tone="neutral">Select a group from the dropdown above to manage AI Pilot settings.</InlineMessage>
+      ) : null}
       {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        {toggleCards.map((rule) => (
-          <Card key={rule.key}>
-            <ToggleRow
-              title={rule.title}
-              subtitle={rule.description}
-              checked={rule.checked}
-              disabled={savingToggle === rule.key || currentGroupId == null}
-              onCheckedChange={(checked) => void handleToggleChange(rule.key, checked)}
-              action={savingToggle === rule.key ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
-            />
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>Moderation thresholds</div>
-        <FieldRow columns={3}>
-          {LIMIT_DEFINITIONS.map((item) => (
-            <Field key={item.key} label={item.label} hint={item.hint}>
-              <Input
-                type="number"
-                min={1}
-                value={limitDrafts[item.key]}
-                onChange={(event) => setLimitDrafts((current) => ({ ...current, [item.key]: event.target.value }))}
-              />
-            </Field>
-          ))}
-        </FieldRow>
-        <div style={{ marginTop: 12 }}>
-          <Button onClick={() => void handleSaveLimits()} disabled={savingLimits || currentGroupId == null}>
-            {savingLimits ? 'Saving…' : 'Save thresholds'}
-          </Button>
-        </div>
-      </Card>
+      {pluginCategories.length > 0 && pluginCategories.map(([category, entries]) => (
+        <Card key={category}>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12, textTransform: 'capitalize' }}>{category.replace(/_/g, ' ')}</div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {entries.map((entry) => {
+              const value = settings[entry.key] ?? entry.default ?? (entry.type === 'toggle' ? false : '')
+              const isSaving = pluginSaving === entry.key
+              if (entry.type === 'toggle') {
+                return (
+                  <ToggleRow
+                    key={entry.key}
+                    title={entry.label_key || entry.key}
+                    subtitle={entry.key}
+                    checked={Boolean(value)}
+                    disabled={isSaving || currentGroupId == null}
+                    onCheckedChange={(checked) => void handlePluginSettingChange(entry.key, checked)}
+                    action={isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                  />
+                )
+              }
+              if (entry.type === 'number') {
+                return (
+                  <Field key={entry.key} label={entry.label_key || entry.key} hint={entry.key}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {entry.min != null && entry.max != null ? (
+                        <input type="range" min={entry.min} max={entry.max} value={Number(value)} onChange={(e) => void handlePluginSettingChange(entry.key, Number(e.target.value))} disabled={isSaving || currentGroupId == null} style={{ flex: 1 }} />
+                      ) : null}
+                      <Input
+                        type="number"
+                        min={entry.min ?? undefined}
+                        max={entry.max ?? undefined}
+                        value={value === '' ? '' : Number(value)}
+                        onChange={(e) => void handlePluginSettingChange(entry.key, Number(e.target.value))}
+                        disabled={isSaving || currentGroupId == null}
+                        style={{ width: 80 }}
+                      />
+                      {isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                    </div>
+                  </Field>
+                )
+              }
+              return (
+                <Field key={entry.key} label={entry.label_key || entry.key} hint={entry.key}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Input
+                      type="text"
+                      value={String(value)}
+                      onChange={(e) => void handlePluginSettingChange(entry.key, e.target.value)}
+                      disabled={isSaving || currentGroupId == null}
+                      style={{ flex: 1 }}
+                    />
+                    {isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                  </div>
+                </Field>
+              )
+            })}
+          </div>
+          <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button onClick={() => void handleTestAI()} disabled={testLoading || currentGroupId == null}>
+              {testLoading ? 'Testing…' : 'Test Connection'}
+            </Button>
+            {testResult ? (
+              <InlineMessage tone={testResult.ok ? 'success' : 'danger'}>
+                {testResult.ok ? `\u2705 ${testResult.text}` : `\u274C ${testResult.text}`}
+              </InlineMessage>
+            ) : null}
+          </div>
+        </Card>
+      ))}
     </PageShell>
   )
 }

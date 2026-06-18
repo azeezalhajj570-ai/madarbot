@@ -98,18 +98,80 @@ class SessionContextFactory:
         return _Ctx()
 
 
+class FakeRedisPipeline:
+    def __init__(self, redis: FakeRedis) -> None:
+        self._redis = redis
+        self._ops: list[tuple[str, tuple, dict]] = []
+
+    def zremrangebyscore(self, key: str, min_score: str, max_score: float) -> FakeRedisPipeline:
+        self._ops.append(("zremrangebyscore", (key, min_score, max_score), {}))
+        return self
+
+    def zcard(self, key: str) -> FakeRedisPipeline:
+        self._ops.append(("zcard", (key,), {}))
+        return self
+
+    async def execute(self) -> list[Any]:
+        results: list[Any] = []
+        for op_name, args, _kwargs in self._ops:
+            if op_name == "zremrangebyscore":
+                key, min_score, max_score = args
+                min_val = float("-inf") if min_score == "-inf" else float(min_score)
+                results.append(await self._redis.zremrangebyscore(key, min_val, max_score))
+            elif op_name == "zcard":
+                key = args[0]
+                results.append(await self._redis.zcard(key))
+        return results
+
+    def __getattr__(self, name: str) -> Any:
+        async def _delegate(*args: Any, **kwargs: Any) -> FakeRedisPipeline:
+            self._ops.append((name, args, kwargs))
+            return self
+
+        return _delegate
+
+
 class FakeRedis:
     def __init__(self) -> None:
         self._store: dict[str, Any] = {}
+        self._sorted_sets: dict[str, dict[str, float]] = {}
 
-    async def set(self, key: str, value: Any) -> None:
+    async def set(self, key: str, value: Any, ex: int | None = None) -> None:
         self._store[key] = value
 
     async def get(self, key: str) -> Any:
         return self._store.get(key)
 
+    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        if key not in self._sorted_sets:
+            self._sorted_sets[key] = {}
+        self._sorted_sets[key].update(mapping)
+
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        if key not in self._sorted_sets:
+            return 0
+        removed = 0
+        to_remove = []
+        for member, score in list(self._sorted_sets[key].items()):
+            if min_score <= score <= max_score:
+                to_remove.append(member)
+                removed += 1
+        for member in to_remove:
+            del self._sorted_sets[key][member]
+        return removed
+
+    async def zcard(self, key: str) -> int:
+        return len(self._sorted_sets.get(key, {}))
+
+    async def expire(self, key: str, ttl: int) -> None:
+        pass
+
+    def pipeline(self) -> FakeRedisPipeline:
+        return FakeRedisPipeline(self)
+
     async def flushall(self) -> None:
         self._store.clear()
+        self._sorted_sets.clear()
 
 
 @dataclass
@@ -518,6 +580,7 @@ async def patch_db_dependencies(
     from bot.services import private_access_gate_service
 
     semantic_assistant_plugin = importlib.import_module("bot.plugins.semantic_assistant.plugin")
+    ai_pilot_plugin = importlib.import_module("bot.plugins.ai_pilot.plugin")
 
     monkeypatch.setattr("bot.db.session.SessionLocal", session_factory)
     monkeypatch.setattr(start, "SessionLocal", session_factory)
@@ -530,6 +593,7 @@ async def patch_db_dependencies(
     monkeypatch.setattr(reply_settings, "SessionLocal", session_factory)
     monkeypatch.setattr(anti_links_plugin, "SessionLocal", session_factory)
     monkeypatch.setattr(semantic_assistant_plugin, "SessionLocal", session_factory)
+    monkeypatch.setattr(ai_pilot_plugin, "SessionLocal", session_factory)
     monkeypatch.setattr(private_access_gate_service, "SessionLocal", session_factory)
 
     async def _override_get_session() -> AsyncIterator[AsyncSessionAdapter]:

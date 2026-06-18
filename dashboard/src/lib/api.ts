@@ -28,6 +28,7 @@ import type {
   WhatsAppLead,
   WhatsAppAutomation,
   WhatsAppNotificationSettings,
+  SettingsSchemaCatalog,
 } from '../lib/types'
 
 function resolveApiBaseUrl() {
@@ -124,6 +125,21 @@ export async function fetchGroupSettings(groupId: number): Promise<GroupSettings
 
 export async function updateGroupSettings(groupId: number, settings: Record<string, boolean | number | string>) {
   const { data } = await api.patch(`${ADMIN_API_PREFIX}/groups/${groupId}/settings`, { settings })
+  return data
+}
+
+export async function fetchSettingsSchema(): Promise<SettingsSchemaCatalog> {
+  const { data } = await api.get<SettingsSchemaCatalog>('/settings/schema')
+  return data
+}
+
+export async function testAIPilot(payload: {
+  provider?: string
+  model?: string
+  provider_url?: string
+  api_key?: string
+}): Promise<{ status: string; reply?: string; error?: string; detail?: string }> {
+  const { data } = await api.post('/pilot/test', payload)
   return data
 }
 

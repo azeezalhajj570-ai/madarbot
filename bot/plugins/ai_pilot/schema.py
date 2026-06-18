@@ -1,0 +1,68 @@
+"""AI Pilot plugin settings schema."""
+
+from bot.schemas.settings import SettingSchema, SettingType
+
+SETTINGS_SCHEMA = [
+    SettingSchema(
+        key="ai_pilot_enabled",
+        type=SettingType.TOGGLE,
+        category="automation",
+        label_key="ai_pilot_enabled",
+        default=False,
+    ),
+    SettingSchema(
+        key="ai_pilot_system_prompt",
+        type=SettingType.TEXT,
+        category="advanced",
+        label_key="ai_pilot_system_prompt",
+        default="",
+    ),
+    SettingSchema(
+        key="ai_pilot_max_history",
+        type=SettingType.NUMBER,
+        category="advanced",
+        label_key="ai_pilot_max_history",
+        min=1,
+        max=50,
+        default=10,
+    ),
+    SettingSchema(
+        key="ai_pilot_rate_limit_max",
+        type=SettingType.NUMBER,
+        category="rate_limit",
+        label_key="ai_pilot_rate_limit_max",
+        min=1,
+        max=60,
+        default=5,
+    ),
+    SettingSchema(
+        key="ai_pilot_rate_limit_window_s",
+        type=SettingType.NUMBER,
+        category="rate_limit",
+        label_key="ai_pilot_rate_limit_window_s",
+        min=5,
+        max=3600,
+        default=60,
+    ),
+    SettingSchema(
+        key="ai_pilot_model",
+        type=SettingType.TEXT,
+        category="ai_provider",
+        label_key="ai_pilot_model",
+        default="",
+    ),
+    SettingSchema(
+        key="ai_pilot_provider_url",
+        type=SettingType.TEXT,
+        category="ai_provider",
+        label_key="ai_pilot_provider_url",
+        default="",
+    ),
+    SettingSchema(
+        key="ai_pilot_api_key",
+        type=SettingType.TEXT,
+        category="ai_provider",
+        label_key="ai_pilot_api_key",
+        default="",
+    ),
+]

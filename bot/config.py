@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     log_raw_updates: bool = Field(default=False, alias="LOG_RAW_UPDATES")
     log_agent_listener_messages: bool = Field(default=False, alias="LOG_AGENT_LISTENER_MESSAGES")
     faq_auto_answer_enabled: bool = Field(default=False, alias="FAQ_AUTO_ANSWER_ENABLED")
+    ai_pilot_enabled: bool = Field(default=False, alias="AI_PILOT_ENABLED")
     telegram_polling_timeout: int = Field(default=30, alias="TELEGRAM_POLLING_TIMEOUT")
     telegram_request_timeout: float = Field(default=90.0, alias="TELEGRAM_REQUEST_TIMEOUT")
     scraper_history_page_size: int = Field(default=100, alias="SCRAPER_HISTORY_PAGE_SIZE")
