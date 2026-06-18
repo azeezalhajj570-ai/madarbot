@@ -13,8 +13,8 @@ SETTINGS_SCHEMA = [
     SettingSchema(
         key="ai_pilot_system_prompt",
         type=SettingType.TEXT,
-        category="advanced",
-        label_key="ai_pilot_system_prompt",
+        category="ai_provider",
+        label_key="ai_pilot_prompt",
         default="",
     ),
     SettingSchema(
