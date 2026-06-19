@@ -11,6 +11,13 @@ SETTINGS_SCHEMA = [
         default=False,
     ),
     SettingSchema(
+        key="ai_mention_reply_enabled",
+        type=SettingType.TOGGLE,
+        category="ai_provider",
+        label_key="AI auto-reply when mentioned",
+        default=False,
+    ),
+    SettingSchema(
         key="ai_pilot_system_prompt",
         type=SettingType.TEXT,
         category="ai_provider",

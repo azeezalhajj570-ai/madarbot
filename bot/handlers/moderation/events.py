@@ -97,6 +97,27 @@ def _is_bot_command_message(message: Message) -> bool:
     return getattr(first, "offset", None) == 0 and str(getattr(first, "type", "")) == "bot_command"
 
 
+async def _is_bot_mentioned(message: Message) -> bool:
+    """Check if the message contains a @mention of the current bot."""
+    entities = list(message.entities or []) + list(message.caption_entities or [])
+    text = message.text or message.caption or ""
+    mention_entities = [e for e in entities if str(getattr(e, "type", "")).lower() == "mention"]
+    if not mention_entities:
+        return False
+    try:
+        me = await message.bot.get_me()
+        bot_username = (me.username or "").lower()
+        if not bot_username:
+            return False
+    except Exception:
+        return False
+    for entity in mention_entities:
+        mentioned = text[entity.offset : entity.offset + entity.length].lower()
+        if mentioned == f"@{bot_username}":
+            return True
+    return False
+
+
 async def _required_group_titles(session, required_group_tg_ids: list[int]) -> list[str]:
     title_map: dict[int, str] = {}
     for required_group_tg_id in required_group_tg_ids:
@@ -468,6 +489,8 @@ async def on_group_message(
                     },
                 )
 
+        mentioned_bot = await _is_bot_mentioned(message)
+
         logger.info(
             "moderation_message_publish",
             chat_id=message.chat.id,
@@ -476,19 +499,25 @@ async def on_group_message(
             message_id=message.message_id,
             contains_link=contains_link,
             text=text,
+            mentioned_bot=mentioned_bot,
         )
+        event_payload: dict[str, object] = {
+            "text": text,
+            "message_id": message.message_id,
+            "chat_id": message.chat.id,
+            "bot": message.bot,
+            "contains_link": contains_link,
+            "lang": _message_lang(message),
+            "mentioned_bot": mentioned_bot,
+        }
+        if redis is not None:
+            event_payload["redis"] = redis
         await event_bus.publish(
             Event(
                 name="MessageReceived",
                 group_id=message.chat.id,
                 user_id=message.from_user.id if message.from_user else None,
-                payload={
-                    "text": text,
-                    "message_id": message.message_id,
-                    "bot": message.bot,
-                    "contains_link": contains_link,
-                    "lang": _message_lang(message),
-                },
+                payload=event_payload,
             )
         )
 

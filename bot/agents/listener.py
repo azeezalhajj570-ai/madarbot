@@ -273,6 +273,14 @@ class AgentListenerManager:
             full_name=full_name,
             username=username,
         )
+        await self._handle_group_mention(
+            agent_id=agent_id,
+            client=client,
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_id=int(sender_id) if sender_id is not None else None,
+        )
 
     async def _handle_private_message(
         self,
@@ -379,6 +387,112 @@ class AgentListenerManager:
                 user_id=sender_id,
                 error=str(exc),
             )
+
+    async def _handle_group_mention(
+        self,
+        *,
+        agent_id: int,
+        client: Any,
+        text: str,
+        message_id: int | None,
+        chat_id: int,
+        sender_id: int | None = None,
+    ) -> None:
+        if not text or client is None:
+            return
+        agent_username: str | None = None
+        async with self.session_factory() as session:
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
+            if agent is None:
+                return
+            agent_username = str((agent.details or {}).get("username") or "").strip().lstrip("@")
+            if not agent_username:
+                return
+            group_id = int(agent.group_id) if agent.group_id is not None else None
+            if group_id is None:
+                return
+            from bot.services.settings_service import SettingsService
+            svc = SettingsService(session)
+            mention_enabled = await svc.get_one(group_id, "ai_mention_reply_enabled")
+            if not mention_enabled:
+                return
+            if f"@{agent_username.lower()}" not in text.lower():
+                return
+            from bot.plugins.ai_pilot.provider import build_pilot_provider
+            from bot.plugins.ai_pilot.service import AIPilotService
+            api_key: str | None = None
+            model: str | None = None
+            provider_url: str | None = None
+            system_prompt: str | None = None
+            max_history = 10
+            rate_limit_max = 5
+            rate_limit_window_s = 60
+            raw_api_key = await svc.get_one(group_id, "ai_pilot_api_key")
+            if raw_api_key:
+                api_key = str(raw_api_key)
+            raw_model = await svc.get_one(group_id, "ai_pilot_model")
+            if raw_model:
+                model = str(raw_model)
+            raw_url = await svc.get_one(group_id, "ai_pilot_provider_url")
+            if raw_url:
+                provider_url = str(raw_url)
+            raw_prompt = await svc.get_one(group_id, "ai_pilot_system_prompt")
+            if raw_prompt:
+                system_prompt = str(raw_prompt)
+            raw_max = await svc.get_one(group_id, "ai_pilot_max_history")
+            if raw_max is not None:
+                try:
+                    max_history = int(raw_max)
+                except (ValueError, TypeError):
+                    pass
+            raw_rl_max = await svc.get_one(group_id, "ai_pilot_rate_limit_max")
+            if raw_rl_max is not None:
+                try:
+                    rate_limit_max = int(raw_rl_max)
+                except (ValueError, TypeError):
+                    pass
+            raw_rl_win = await svc.get_one(group_id, "ai_pilot_rate_limit_window_s")
+            if raw_rl_win is not None:
+                try:
+                    rate_limit_window_s = int(raw_rl_win)
+                except (ValueError, TypeError):
+                    pass
+            if self.redis is None:
+                return
+            provider = build_pilot_provider(
+                api_key=api_key,
+                model=model,
+                base_url=provider_url,
+            )
+            ai_service = AIPilotService(
+                redis=self.redis,
+                provider=provider,
+                system_prompt=system_prompt,
+                model=model,
+                max_history=max_history,
+                rate_limit_max=rate_limit_max,
+                rate_limit_window_s=rate_limit_window_s,
+            )
+            reply = await ai_service.generate_reply(sender_id or chat_id, text)
+            if reply is None:
+                return
+            try:
+                await client.send_message(chat_id, reply, reply_to=message_id)
+                logger.info(
+                    "agent_group_mention_reply_sent",
+                    agent_id=agent_id,
+                    chat_id=chat_id,
+                    reply_length=len(reply),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "agent_group_mention_reply_failed",
+                    agent_id=agent_id,
+                    chat_id=chat_id,
+                    error=str(exc),
+                )
 
     async def _persist_seen_group_message(
         self,

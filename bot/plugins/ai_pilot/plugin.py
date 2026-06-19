@@ -1,4 +1,4 @@
-"""AI Pilot — Intelligent auto-reply plugin for agent DM conversations."""
+"""AI Pilot — Intelligent auto-reply plugin for DMs and group @mentions."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class AIPilotPlugin:
     manifest = PluginManifest(
         name="ai_pilot",
         version="1.0.0",
-        description="Automatically replies to DM messages using AI with conversation history as context.",
+        description="Automatically replies to DM messages and group @mentions using AI.",
         categories=["automation"],
     )
     settings_schema = SETTINGS_SCHEMA
@@ -37,6 +37,7 @@ class AIPilotPlugin:
 
     async def on_message_received(self, event: Event) -> None:
         if event.group_id is not None:
+            await self._handle_group_mention(event)
             return
 
         settings = get_settings()
@@ -98,6 +99,128 @@ class AIPilotPlugin:
                 chat_id=event.payload.get("chat_id"),
                 error=str(exc),
             )
+
+    async def _handle_group_mention(self, event: Event) -> None:
+        if not event.payload.get("mentioned_bot"):
+            return
+
+        text = str(event.payload.get("text") or "").strip()
+        bot = event.payload.get("bot")
+        chat_id = event.payload.get("chat_id")
+        user_id = event.user_id
+        redis = event.payload.get("redis")
+
+        if not text or bot is None or chat_id is None or user_id is None:
+            return
+        if redis is None:
+            return
+
+        group_id = await self._resolve_group_id_by_chat(chat_id)
+        if group_id is None:
+            return
+
+        mention_enabled = await self._check_mention_enabled(group_id)
+        if not mention_enabled:
+            return
+
+        per_group_settings = await self._load_group_settings(group_id)
+        system_prompt = per_group_settings.get("system_prompt") or ""
+        max_history = per_group_settings.get("max_history", 10)
+        rate_limit_max = per_group_settings.get("rate_limit_max", 5)
+        rate_limit_window_s = per_group_settings.get("rate_limit_window_s", 60)
+        model = per_group_settings.get("model") or None
+        provider_url = per_group_settings.get("provider_url") or None
+        api_key = per_group_settings.get("api_key") or None
+
+        provider = build_pilot_provider(
+            api_key=api_key,
+            model=model,
+            base_url=provider_url,
+        )
+        service = AIPilotService(
+            redis=redis,
+            provider=provider,
+            system_prompt=system_prompt if system_prompt else None,
+            max_history=max_history,
+            rate_limit_max=rate_limit_max,
+            rate_limit_window_s=rate_limit_window_s,
+            model=model,
+        )
+
+        reply = await service.generate_reply(user_id, text)
+        if reply is None:
+            return
+
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=reply,
+                reply_to_message_id=event.payload.get("message_id"),
+            )
+        except Exception as exc:
+            logger.warning(
+                "ai_pilot_group_mention_reply_failed",
+                user_id=user_id,
+                chat_id=chat_id,
+                error=str(exc),
+            )
+
+    async def _resolve_group_id_by_chat(self, chat_id: int) -> int | None:
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(Group.id).where(Group.tg_group_id == chat_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def _check_mention_enabled(self, group_id: int) -> bool:
+        async with SessionLocal() as session:
+            svc = SettingsService(session)
+            value = await svc.get_one(group_id, "ai_mention_reply_enabled")
+            return bool(value) if value is not None else False
+
+    async def _load_group_settings(self, group_id: int) -> dict:
+        result = {
+            "system_prompt": "",
+            "max_history": 10,
+            "rate_limit_max": 5,
+            "rate_limit_window_s": 60,
+            "model": "",
+            "provider_url": "",
+            "api_key": "",
+        }
+        async with SessionLocal() as session:
+            svc = SettingsService(session)
+            raw_prompt = await svc.get_one(group_id, "ai_pilot_system_prompt")
+            if raw_prompt:
+                result["system_prompt"] = str(raw_prompt)
+            raw_max = await svc.get_one(group_id, "ai_pilot_max_history")
+            if raw_max is not None:
+                try:
+                    result["max_history"] = int(raw_max)
+                except (ValueError, TypeError):
+                    pass
+            raw_rl_max = await svc.get_one(group_id, "ai_pilot_rate_limit_max")
+            if raw_rl_max is not None:
+                try:
+                    result["rate_limit_max"] = int(raw_rl_max)
+                except (ValueError, TypeError):
+                    pass
+            raw_rl_win = await svc.get_one(group_id, "ai_pilot_rate_limit_window_s")
+            if raw_rl_win is not None:
+                try:
+                    result["rate_limit_window_s"] = int(raw_rl_win)
+                except (ValueError, TypeError):
+                    pass
+            raw_model = await svc.get_one(group_id, "ai_pilot_model")
+            if raw_model:
+                result["model"] = str(raw_model)
+            raw_url = await svc.get_one(group_id, "ai_pilot_provider_url")
+            if raw_url:
+                result["provider_url"] = str(raw_url)
+            raw_key = await svc.get_one(group_id, "ai_pilot_api_key")
+            if raw_key:
+                result["api_key"] = str(raw_key)
+        return result
 
     async def _check_plugin_enabled_for_bot(self, bot: Bot) -> bool:
         async with SessionLocal() as session:
