@@ -4,6 +4,7 @@
     "leads": "العملاء",
     "campaigns": "الحملات",
     "tasks": "المهام",
+    "blacklist": "القائمة السوداء",
     "settings": "الإعدادات"
   },
   "app": {
@@ -511,6 +512,7 @@
     "summaryAdminsExcluded": "المشرفون المستبعدون: {count}",
     "summaryBotsExcluded": "البوتات المستبعدة: {count}",
     "summaryAlreadySent": "المرسلة سابقاً المستبعدة: {count}",
+    "summaryBlacklisted": "المحظورون المستبعدون: {count}",
     "summaryFinal": "النهائي {type}: {count}",
     "preparingSummary": "جارٍ تجهيز الملخص...",
     "confirmSchedule": "تأكيد وجدولة",
@@ -692,6 +694,31 @@
     "conditionLabel": "عندما تحتوي الرسالة على: {{keyword}}",
     "privateSuffix": " · خاص",
     "groupFallback": "المجموعة {{tgGroupId}}"
+  },
+  "blacklist": {
+    "title": "القائمة السوداء",
+    "subtitle": "إدارة الأعضاء المحظورين من الرسائل الجماعية.",
+    "loading": "جارٍ تحميل القائمة السوداء...",
+    "empty": "لا توجد إدخالات محظورة بعد.",
+    "loadError": "فشل تحميل القائمة السوداء.",
+    "deleteError": "فشل حذف الإدخال.",
+    "resolveError": "فشل تحليل أرقام الهواتف.",
+    "addError": "فشل إضافة إدخالات.",
+    "addEntry": "إضافة إدخال",
+    "userId": "معرف المستخدم في تيليغرام",
+    "username": "اسم المستخدم",
+    "phone": "رقم الهاتف",
+    "reason": "السبب",
+    "reasonPlaceholder": "لماذا تم حظر هذا المستخدم؟",
+    "bulkPhonesHint": "أو أضف عدة أرقام هواتف مرة واحدة:",
+    "bulkPhones": "أرقام الهواتف (رقم في كل سطر)",
+    "resolve": "تحليل",
+    "resolving": "جارٍ التحليل...",
+    "resolvedCount": "تم تحليل {count} رقم هاتف.",
+    "add": "إضافة إلى القائمة السوداء",
+    "adding": "جارٍ الإضافة...",
+    "remove": "إزالة",
+    "cancel": "إلغاء"
   },
   "legal": {
     "docs": "التوثيق",

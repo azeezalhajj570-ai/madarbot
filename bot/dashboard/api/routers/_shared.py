@@ -99,6 +99,27 @@ class AgentJobCreateRequest(BaseModel):
     scheduled_at: datetime | None = None
 
 
+class BlacklistAddEntry(BaseModel):
+    tg_user_id: int | None = Field(default=None, ge=1)
+    username: str | None = Field(default=None, min_length=1, max_length=255)
+    phone: str | None = Field(default=None, min_length=1, max_length=32)
+    reason: str = Field(default="admin_blocked", pattern="^(admin_blocked|user_opt_out|bounced|spam_report)$")
+
+
+class BlacklistAddRequest(BaseModel):
+    entries: list[BlacklistAddEntry] = Field(min_length=1, max_length=500)
+
+
+class BlacklistResolveRequest(BaseModel):
+    phones: list[str] = Field(min_length=1, max_length=500)
+
+
+class BlacklistResolveResult(BaseModel):
+    phone: str
+    tg_user_id: int | None = None
+    resolved: bool = False
+
+
 class BulkPreflightRequest(BaseModel):
     target_type: str = Field(default="members", pattern="^(members|groups)$")
     source_group_id: int = Field(default=0)
@@ -266,6 +287,10 @@ def tally_recent_activity(rows: list[Any]) -> dict[str, int]:
 
 __all__ = [
     "AccessGateUpdateRequest",
+    "BlacklistAddEntry",
+    "BlacklistAddRequest",
+    "BlacklistResolveRequest",
+    "BlacklistResolveResult",
     "AgentJobCreateRequest",
     "AgentSafetyUpdateRequest",
     "AgentLinkRequest",

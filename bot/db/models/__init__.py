@@ -20,6 +20,7 @@ from bot.db.models.billing import (
     SubscriptionItem,
 )
 from bot.db.models.bulk_messaging import (
+    AgentBlacklistEntry,
     BulkMessageBatch,
     BulkMessageRecipient,
     MessagingSuppression,
@@ -128,6 +129,7 @@ class TaskStatus(StrEnum):
 __all__ = [
     "AdminRole",
     "Agent",
+    "AgentBlacklistEntry",
     "AgentJob",
     "AgentLead",
     "AgentNotification",

@@ -12,7 +12,7 @@ from bot.agents.jobs import (
     normalize_group_member_broadcast_payload,
 )
 from bot.core.event_bus import EventBus
-from bot.db.models import Agent, AgentJob, ScrapedMember, SentBroadcastMessage
+from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, ScrapedMember, SentBroadcastMessage
 
 from .agent_notification_service import AgentNotificationService
 from .service_support import AgentServiceSupport
@@ -104,6 +104,7 @@ class AgentJobService(AgentServiceSupport):
                             "admins_excluded",
                             "bots_excluded",
                             "already_sent_excluded",
+                            "blacklisted_excluded",
                             "final_count",
                         )
                     }
@@ -278,6 +279,7 @@ class AgentJobService(AgentServiceSupport):
                 "admins_excluded": 0,
                 "bots_excluded": 0,
                 "already_sent_excluded": 0,
+                "blacklisted_excluded": 0,
                 "final_count": 0,
                 "filtered_user_ids": [],
             }
@@ -364,11 +366,38 @@ class AgentJobService(AgentServiceSupport):
             if row[0] is not None:
                 already_sent_set.add(int(row[0]))
 
-        # Build filtered list: exclude admins, bots, already-sent
+        # Determine blacklisted users
+        blacklisted_set: set[int] = set()
+        blacklist_rows = (
+            await self.session.execute(
+                select(AgentBlacklistEntry).where(
+                    AgentBlacklistEntry.agent_id == agent.id,
+                )
+            )
+        ).all()
+        for bl_entry in blacklist_rows:
+            entry = bl_entry[0] if hasattr(bl_entry, "__getitem__") else bl_entry
+            if entry.tg_user_id is not None and entry.tg_user_id in selected_user_ids:
+                blacklisted_set.add(int(entry.tg_user_id))
+            if entry.username:
+                uname = entry.username.strip().lower()
+                for uid in selected_user_ids:
+                    info = member_map.get(uid)
+                    if info and info.get("username") and info["username"].strip().lower() == uname:
+                        blacklisted_set.add(uid)
+            if entry.phone:
+                ph = entry.phone.strip()
+                for uid in selected_user_ids:
+                    info = member_map.get(uid)
+                    if info and info.get("phone") and info["phone"].strip() == ph:
+                        blacklisted_set.add(uid)
+
+        # Build filtered list: exclude admins, bots, already-sent, blacklisted
         excluded: set[int] = set()
         excluded.update(admins)
         excluded.update(bots)
         excluded.update(already_sent_set)
+        excluded.update(blacklisted_set)
         filtered = [uid for uid in selected_user_ids if uid not in excluded]
 
         return {
@@ -376,6 +405,7 @@ class AgentJobService(AgentServiceSupport):
             "admins_excluded": len(admins),
             "bots_excluded": len(bots),
             "already_sent_excluded": len(already_sent_set),
+            "blacklisted_excluded": len(blacklisted_set),
             "final_count": len(filtered),
             "filtered_user_ids": filtered,
         }

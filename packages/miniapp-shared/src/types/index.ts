@@ -205,6 +205,7 @@ export interface AgentJobRecord {
     admins_excluded: number
     bots_excluded: number
     already_sent_excluded: number
+    blacklisted_excluded: number
     final_count: number
   }
 }
@@ -261,8 +262,41 @@ export interface BulkPreflightResult {
   admins_excluded: number
   bots_excluded: number
   already_sent_excluded: number
+  blacklisted_excluded: number
   final_count: number
   filtered_user_ids: number[]
+}
+
+export interface AgentBlacklistEntry {
+  id: number
+  agent_id: number
+  tg_user_id?: number | null
+  username?: string | null
+  phone?: string | null
+  reason?: string | null
+  created_by?: number | null
+  created_at?: string
+}
+
+export interface BlacklistListResponse {
+  entries: AgentBlacklistEntry[]
+  total: number
+}
+
+export interface BlacklistAddEntry {
+  tg_user_id?: number | null
+  username?: string | null
+  phone?: string | null
+  reason?: string | null
+}
+
+export interface BlacklistResolveResponse {
+  resolved: Array<{
+    input: string
+    tg_user_id?: number | null
+    username?: string | null
+    phone?: string | null
+  }>
 }
 
 export interface Campaign {

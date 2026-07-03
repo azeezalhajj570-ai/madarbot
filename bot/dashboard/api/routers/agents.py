@@ -42,6 +42,8 @@ from ._shared import (
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
+    BlacklistAddRequest,
+    BlacklistResolveRequest,
     BulkPreflightRequest,
     AgentSafetyUpdateRequest,
     AgentUpdateRequest,
@@ -1033,6 +1035,126 @@ async def webapp_reconcile_stale_jobs(
     from bot.agents.dispatch import reconcile_stale_jobs
 
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
+
+
+@router.get(
+    "/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
+)
+@router.get(
+    "/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_agent_blacklist(
+    agent_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AgentBlacklistService(session).list_blacklist(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+@router.post(
+    "/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_agent_blacklist_add(
+    agent_id: int,
+    payload: BlacklistAddRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        entries = [e.model_dump() for e in payload.entries]
+        created = await AgentBlacklistService(session).add_entries(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            entries=entries,
+        )
+        return {"status": "ok", "created": created, "count": len(created)}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+@router.delete(
+    "/api/agents/{agent_id}/blacklist/{entry_id}",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.delete(
+    "/webapp/agents/{agent_id}/blacklist/{entry_id}",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_agent_blacklist_delete(
+    agent_id: int,
+    entry_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        deleted = await AgentBlacklistService(session).delete_entry(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            entry_id=entry_id,
+        )
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+        return {"status": "ok", "deleted": True}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+@router.post(
+    "/api/agents/{agent_id}/blacklist/resolve",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/blacklist/resolve",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_agent_blacklist_resolve(
+    agent_id: int,
+    payload: BlacklistResolveRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        results = await AgentBlacklistService(session).resolve_phones(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            phones=payload.phones,
+        )
+        return {"status": "ok", "results": results}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 __all__ = ["router"]

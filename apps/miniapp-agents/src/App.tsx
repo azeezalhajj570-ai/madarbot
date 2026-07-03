@@ -38,12 +38,13 @@ import { LanguageSwitcher } from './components/LanguageSwitcher'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
+import { BlacklistSection } from './features/blacklist/BlacklistSection'
 import { ConfirmModal } from './components/ConfirmModal'
 import { FormActions } from './components/FormActions'
 import { GroupAutocompleteField } from './components/GroupAutocompleteField'
 import { GroupDestinationField } from './components/GroupDestinationField'
 
-type AgentsPage = 'dashboard' | 'leads' | 'campaigns' | 'tasks' | 'settings'
+type AgentsPage = 'dashboard' | 'leads' | 'campaigns' | 'tasks' | 'blacklist' | 'settings'
 type WizardStep = 'code' | 'password' | 'finish'
 type TaskDestinationMode = 'group' | 'text'
 type SelectedGroupChip = {
@@ -560,6 +561,7 @@ function parseAgentsRoute(pathname: string, basePath: string) {
     leads: 'leads',
     groups: 'leads',
     campaigns: 'campaigns',
+    blacklist: 'blacklist',
     settings: 'settings',
     dashboard: 'dashboard',
   }
@@ -866,6 +868,17 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M9 11l3 3L22 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      id: 'blacklist',
+      label: t('nav.blacklist'),
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.7" />
+          <line x1="8" y1="8" x2="16" y2="16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <line x1="16" y1="8" x2="8" y2="16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       ),
     },
@@ -1358,6 +1371,9 @@ export default function App() {
                   <AutomationTasksSection account={selectedAccount} onSaved={setStatus} />
                   <TaskActivity account={selectedAccount} />
                 </>
+              ) : null}
+              {route.page === 'blacklist' ? (
+                <BlacklistSection account={selectedAccount} />
               ) : null}
             </>
           ) : (

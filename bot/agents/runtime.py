@@ -280,6 +280,7 @@ class GroupMemberBroadcastRuntime:
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
         from bot.db.models.agent import SentBroadcastMessage
+        from bot.db.models.bulk_messaging import AgentBlacklistEntry
         from redis.asyncio import Redis
         from sqlalchemy import or_, select
 
@@ -399,6 +400,24 @@ class GroupMemberBroadcastRuntime:
                 "failures": failures,
             }
 
+            if session is not None:
+                bl_stmt = select(AgentBlacklistEntry).where(
+                    AgentBlacklistEntry.agent_id == agent.id
+                )
+                bl_rows = (await session.execute(bl_stmt)).scalars().all()
+                blacklist_tg_ids = {
+                    int(e.tg_user_id) for e in bl_rows if e.tg_user_id is not None
+                }
+                blacklist_usernames = {
+                    e.username.strip().lower() for e in bl_rows if e.username
+                }
+                blacklist_phones = {e.phone.strip() for e in bl_rows if e.phone}
+            else:
+                blacklist_tg_ids = set()
+                blacklist_usernames = set()
+                blacklist_phones = set()
+
+            blacklist_skipped = 0
             for index, recipient_id in enumerate(remaining):
                 cooldown_mins = getattr(agent, "cooldown_minutes", None)
                 if cooldown_mins is not None and cooldown_mins > 0:
@@ -434,6 +453,23 @@ class GroupMemberBroadcastRuntime:
                     wait = await limiter.enforce_delay(agent.id, float(min_delay))
                     if wait > 0:
                         await self.sleep(wait)
+
+                identity = recipient_identities.get(recipient_id, {})
+                id_phone = (identity.get("phone") or "").strip().lower()
+                id_username = (identity.get("username") or "").strip().lower()
+
+                if recipient_id in blacklist_tg_ids:
+                    blacklist_skipped += 1
+                    skipped_count += 1
+                    continue
+                if id_username and id_username in blacklist_usernames:
+                    blacklist_skipped += 1
+                    skipped_count += 1
+                    continue
+                if id_phone and id_phone in blacklist_phones:
+                    blacklist_skipped += 1
+                    skipped_count += 1
+                    continue
 
                 try:
                     await client.send_message(recipient_id, message)

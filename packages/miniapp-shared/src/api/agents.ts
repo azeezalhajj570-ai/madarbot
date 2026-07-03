@@ -2,6 +2,7 @@ import { apiClient } from './base'
 import type {
   Agent,
   AgentAnalytics,
+  AgentBlacklistEntry,
   AgentGroupMember,
   AgentGroupMemberMessagesPage,
   AgentGroupMembersPage,
@@ -13,6 +14,9 @@ import type {
   AgentJobRecord,
   AgentManagedGroup,
   AutomationTask,
+  BlacklistAddEntry,
+  BlacklistListResponse,
+  BlacklistResolveResponse,
   BulkPreflightResult,
   Campaign,
   CampaignList,
@@ -345,4 +349,20 @@ export async function sendCampaign(agentId: number, campaignId: number, payload?
 
 export async function getCampaignSendLogs(agentId: number, campaignId: number, options?: { status?: string; page?: number; page_size?: number }) {
   return apiClient.get<CampaignSendLogList>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/send-logs`, options)
+}
+
+export async function fetchBlacklist(agentId: number) {
+  return apiClient.get<BlacklistListResponse>(`/webapp/agents/${agentId}/blacklist`)
+}
+
+export async function addBlacklistEntries(agentId: number, entries: BlacklistAddEntry[]) {
+  return apiClient.post<{ entries: AgentBlacklistEntry[] }>(`/webapp/agents/${agentId}/blacklist`, { entries })
+}
+
+export async function deleteBlacklistEntry(agentId: number, entryId: number) {
+  return apiClient.delete(`/webapp/agents/${agentId}/blacklist/${entryId}`)
+}
+
+export async function resolveBlacklistPhones(agentId: number, phones: string[]) {
+  return apiClient.post<BlacklistResolveResponse>(`/webapp/agents/${agentId}/blacklist/resolve`, { phones })
 }

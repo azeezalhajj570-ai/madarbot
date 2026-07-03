@@ -4,6 +4,7 @@
     "leads": "Leads",
     "campaigns": "Campaigns",
     "tasks": "Tasks",
+    "blacklist": "Blacklist",
     "settings": "Settings"
   },
   "app": {
@@ -511,6 +512,7 @@
     "summaryAdminsExcluded": "Admins excluded: {count}",
     "summaryBotsExcluded": "Bots excluded: {count}",
     "summaryAlreadySent": "Already sent excluded: {count}",
+    "summaryBlacklisted": "Blacklisted excluded: {count}",
     "summaryFinal": "Final {type}: {count}",
     "preparingSummary": "Preparing summary...",
     "confirmSchedule": "Confirm & Schedule",
@@ -692,6 +694,31 @@
     "conditionLabel": "When message contains: {{keyword}}",
     "privateSuffix": " · private",
     "groupFallback": "Group {{tgGroupId}}"
+  },
+  "blacklist": {
+    "title": "Blacklist",
+    "subtitle": "Manage blocked members for bulk messaging.",
+    "loading": "Loading blacklist...",
+    "empty": "No blacklisted entries yet.",
+    "loadError": "Failed to load blacklist.",
+    "deleteError": "Failed to delete entry.",
+    "resolveError": "Failed to resolve phone numbers.",
+    "addError": "Failed to add entries.",
+    "addEntry": "Add entry",
+    "userId": "Telegram User ID",
+    "username": "Username",
+    "phone": "Phone number",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why is this user blacklisted?",
+    "bulkPhonesHint": "Or add multiple phone numbers at once:",
+    "bulkPhones": "Phone numbers (one per line)",
+    "resolve": "Resolve",
+    "resolving": "Resolving...",
+    "resolvedCount": "{count} phone numbers resolved.",
+    "add": "Add to blacklist",
+    "adding": "Adding...",
+    "remove": "Remove",
+    "cancel": "Cancel"
   },
   "legal": {
     "docs": "Docs",
