@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import ChatAdminRequiredError
 
@@ -626,6 +629,7 @@ async def webapp_update_agent(
 )
 async def webapp_bulk_preflight(
     agent_id: int,
+    request: Request,
     payload: BulkPreflightRequest,
     identity: TelegramWebAppIdentity = Depends(require_active_subscription),
     session: AsyncSession = Depends(get_session),
@@ -654,6 +658,12 @@ async def webapp_bulk_preflight(
         )
         return {**exclusions, "target_type": "members"}
     except ValueError as exc:
+        logger.warning(
+            "bulk_preflight_422 agent=%d body=%s error=%s",
+            agent_id,
+            payload.model_dump_json(),
+            exc,
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc

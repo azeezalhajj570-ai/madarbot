@@ -109,7 +109,6 @@ services:
       - "8009:8080"
     networks:
       - default
-      - global_network
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,5 +130,3 @@ volumes:
 
 networks:
   default:
-  global_network:
-    external: true
