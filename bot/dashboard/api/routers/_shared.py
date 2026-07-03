@@ -99,6 +99,12 @@ class AgentJobCreateRequest(BaseModel):
     scheduled_at: datetime | None = None
 
 
+class BulkMemberAddRequest(BaseModel):
+    target_tg_group_id: int = Field(ge=1)
+    interval_seconds: int = Field(default=20, ge=1, le=3600)
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+
+
 class BulkPreflightRequest(BaseModel):
     target_type: str = Field(default="members", pattern="^(members|groups)$")
     source_group_id: int = Field(default=0)
@@ -266,6 +272,7 @@ def tally_recent_activity(rows: list[Any]) -> dict[str, int]:
 
 __all__ = [
     "AccessGateUpdateRequest",
+    "BulkMemberAddRequest",
     "AgentJobCreateRequest",
     "AgentSafetyUpdateRequest",
     "AgentLinkRequest",

@@ -137,6 +137,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
 
             results = []
             for row in scraped_rows:
+                is_supergroup = row.group_type in {"supergroup", "channel"}
                 results.append(
                     {
                         "id": row.id,
@@ -146,6 +147,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "group_type": row.group_type,
                         "member_count": member_counts.get(int(row.id), int(row.member_count or 0)),
                         "messages_count": message_counts.get(int(row.id), 0),
+                        "can_add_members": not is_supergroup,
                     }
                 )
             return results

@@ -14,6 +14,7 @@ from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    MEMBER_ADD_JOB_TYPE,
     SCRAPER_FULL_GROUP_JOB_TYPE,
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
@@ -34,11 +35,13 @@ from bot.workers.app import redis_broker
 __all__ = [
     "ADD_CONTACT_JOB_TYPE",
     "GROUP_MEMBER_BROADCAST_JOB_TYPE",
+    "MEMBER_ADD_JOB_TYPE",
     "SCRAPER_FULL_GROUP_JOB_TYPE",
     "SCRAPER_GROUP_INFO_JOB_TYPE",
     "SCRAPER_MEMBERS_JOB_TYPE",
     "SCRAPER_MESSAGES_JOB_TYPE",
     "AddContactRuntime",
+    "BulkAddMembersRuntime",
     "GroupMemberBroadcastRuntime",
     "ScraperRuntime",
     "UserAgentExecutor",
@@ -773,6 +776,201 @@ class ScraperRuntime:
                 }
             else:
                 raise ValueError(f"Unsupported scraper job type: {active_job_type}")
+
+
+class BulkAddMembersRuntime:
+    def __init__(self, *, sleep=asyncio.sleep) -> None:
+        self.sleep = sleep
+
+    async def execute(
+        self, *, client, agent: Agent, payload: dict[str, Any], session=None
+    ) -> dict[str, Any]:
+        from bot.agents.group_membership import add_user_to_group
+        from bot.agents.jobs import normalize_member_add_payload
+        from bot.db.models.audit import MembershipAuditLog
+        from bot.db.models.group import GroupMember
+        from bot.config import get_settings
+        from bot.utils.rate_limiter import AgentRateLimiter
+        from redis.asyncio import Redis
+
+        normalized = normalize_member_add_payload(payload)
+        target_tg_group_id = int(normalized["target_tg_group_id"])
+        user_ids = normalized["user_ids"]
+        base_interval = float(normalized.get("interval_seconds") or 20.0)
+
+        redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
+        limiter = AgentRateLimiter(redis_client)
+
+        progress = dict(payload.get("progress") or {})
+        success_count = progress.get("success_count", 0)
+        failure_count = progress.get("failure_count", 0)
+        skip_count = progress.get("skip_count", 0)
+        total_count = len(user_ids)
+        results: list[dict[str, Any]] = list(progress.get("results", []))
+
+        try:
+            for index, user_id in enumerate(user_ids):
+                cooldown_mins = getattr(agent, "cooldown_minutes", None)
+                if cooldown_mins is not None and cooldown_mins > 0:
+                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
+                    if in_cooldown:
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skip_count": skip_count,
+                            "results": results,
+                            "stopped_at": index,
+                            "stop_reason": "cooldown",
+                            "retry_after": int(cd_remaining),
+                        }
+                        raise Exception(f"Agent cooldown: {cd_remaining}s")
+
+                max_per_hour = getattr(agent, "max_actions_per_hour", None)
+                if max_per_hour is not None and max_per_hour > 0:
+                    allowed, hour_count = await limiter.check_and_increment(agent.id, max_per_hour)
+                    if not allowed:
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skip_count": skip_count,
+                            "results": results,
+                            "stopped_at": index,
+                            "stop_reason": "hourly_limit",
+                        }
+                        raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
+
+                max_per_day = getattr(agent, "max_messages_per_day", None) or 500
+                if max_per_day > 0:
+                    allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day)
+                    if not allowed:
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skip_count": skip_count,
+                            "results": results,
+                            "stopped_at": index,
+                            "stop_reason": "daily_limit",
+                        }
+                        raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
+
+                min_delay = getattr(agent, "min_delay_seconds", None)
+                if min_delay is not None and min_delay > 0:
+                    wait = await limiter.enforce_delay(agent.id, float(min_delay))
+                    if wait > 0:
+                        await self.sleep(wait)
+
+                import random
+
+                if session is not None:
+                    existing = (
+                        await session.execute(
+                            select(GroupMember).where(
+                                GroupMember.group_id == (agent.group_id or 0),
+                                GroupMember.tg_user_id == user_id,
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if existing is not None:
+                        skip_count += 1
+                        results.append({"user_id": user_id, "status": "skipped", "reason": "already_member"})
+                        continue
+
+                from bot.agents.group_membership import (
+                    ERROR_USER_ALREADY_IN_GROUP,
+                )
+
+                add_result = await add_user_to_group(client, target_tg_group_id, user_id)
+
+                result_entry: dict[str, Any] = {
+                    "user_id": user_id,
+                    "status": "success" if add_result.success else "failed",
+                    "error_code": add_result.error_code,
+                }
+
+                if add_result.success:
+                    success_count += 1
+                    if session is not None:
+                        session.add(
+                            GroupMember(
+                                group_id=agent.group_id or 0,
+                                tg_user_id=user_id,
+                                role="member",
+                                source="membership_add",
+                            )
+                        )
+                        session.add(
+                            MembershipAuditLog(
+                                group_id=target_tg_group_id,
+                                user_id=user_id,
+                                requested_by=agent.linked_by_user_id or 0,
+                                action="add",
+                                result="success",
+                            )
+                        )
+                        await session.commit()
+                else:
+                    failure_count += 1
+                    result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
+                    if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
+                        skip_count += 1
+                        failure_count -= 1
+                        result_entry["status"] = "skipped"
+                        result_entry["reason"] = "already_in_target_group"
+
+                    if add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0:
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skip_count": skip_count,
+                            "results": results,
+                            "stopped_at": index,
+                            "stop_reason": "flood_wait",
+                            "retry_after": add_result.flood_wait_seconds,
+                        }
+                        raise Exception(f"Flood wait: {add_result.flood_wait_seconds}s")
+
+                    if session is not None:
+                        session.add(
+                            MembershipAuditLog(
+                                group_id=target_tg_group_id,
+                                user_id=user_id,
+                                requested_by=agent.linked_by_user_id or 0,
+                                action="add",
+                                result=str(add_result.error_code or "unknown"),
+                                flood_wait_sec=add_result.flood_wait_seconds,
+                            )
+                        )
+                        await session.commit()
+
+                results.append(result_entry)
+
+                effective_interval = base_interval
+                if base_interval > 0:
+                    jitter = random.uniform(-0.3, 0.3) * base_interval
+                    effective_interval = max(0.5, base_interval + jitter)
+                if index < len(user_ids) - 1 and effective_interval > 0:
+                    await self.sleep(effective_interval)
+
+            return {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "skip_count": skip_count,
+                "total_count": total_count,
+                "results": results,
+                "_progress": {
+                    "total_count": total_count,
+                    "success_count": success_count,
+                    "failure_count": failure_count,
+                    "skip_count": skip_count,
+                    "results": results,
+                },
+            }
+        finally:
+            await redis_client.aclose()
 
 
 class AgentTaskRuntime:

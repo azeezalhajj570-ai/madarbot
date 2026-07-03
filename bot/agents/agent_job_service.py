@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.agents.contracts import AgentJobOwnership
 from bot.agents.jobs import (
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    MEMBER_ADD_JOB_TYPE,
     JOB_STATUS_SCHEDULED,
     normalize_group_member_broadcast_payload,
 )
@@ -48,6 +49,16 @@ def _job_queued_notification(
                 "job_payload": dict(payload),
             }
         return "Bulk message queued", summary, notification_payload
+
+    if job_type == MEMBER_ADD_JOB_TYPE:
+        user_count = len(list(payload.get("user_ids") or []))
+        summary = f"Queued to add {user_count} member(s)."
+        notification_payload = {
+            "job_type": job_type,
+            "user_count": user_count,
+            "job_payload": dict(payload),
+        }
+        return "Bulk add members queued", summary, notification_payload
 
     return (
         "Job queued",

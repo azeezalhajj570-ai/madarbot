@@ -23,6 +23,8 @@ from bot.agents.jobs import (
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
     JOB_STATUS_SCHEDULED,
+    MEMBER_ADD_JOB_TYPE,
+    normalize_member_add_payload,
 )
 from bot.db.models import AgentJob
 from bot.db.session import get_session
@@ -42,6 +44,7 @@ from ._shared import (
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
+    BulkMemberAddRequest,
     BulkPreflightRequest,
     AgentSafetyUpdateRequest,
     AgentUpdateRequest,
@@ -667,6 +670,59 @@ async def webapp_bulk_preflight(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.post(
+    "/api/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_bulk_add_members(
+    agent_id: int,
+    payload: BulkMemberAddRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    if agent.auth_state != "active":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Agent is not authenticated",
+        )
+    try:
+        normalized = normalize_member_add_payload(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    try:
+        job = await AgentJobService(session).create_job(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            job_type=MEMBER_ADD_JOB_TYPE,
+            job_payload=normalized,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    from bot.agents.dispatch import dispatch_agent_job
+
+    await dispatch_agent_job(job.id)
+    return {
+        "status": "ok",
+        "job": {
+            "id": job.id,
+            "agent_id": job.agent_id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "user_count": len(normalized.get("user_ids", [])),
+            "target_tg_group_id": normalized.get("target_tg_group_id"),
+        },
+    }
 
 
 @router.post("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
