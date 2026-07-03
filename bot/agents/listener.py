@@ -250,6 +250,16 @@ class AgentListenerManager:
                 sender_id=int(sender_id) if sender_id is not None else None,
                 text=text,
             )
+            await self._dispatch_private_message_automation(
+                agent_id=agent_id,
+                chat_id=chat_id,
+                text=text,
+                message_id=message_id,
+                user_id=int(sender_id) if sender_id is not None else None,
+                first_name=first_name,
+                full_name=full_name,
+                username=username,
+            )
             return
         await self._persist_seen_group_message(
             agent_id=agent_id,
@@ -387,6 +397,76 @@ class AgentListenerManager:
                 user_id=sender_id,
                 error=str(exc),
             )
+
+    async def _dispatch_private_message_automation(
+        self,
+        agent_id: int,
+        *,
+        chat_id: int,
+        text: str,
+        message_id: int | None,
+        user_id: int | None,
+        first_name: str = "",
+        full_name: str = "",
+        username: str = "",
+    ) -> bool:
+        async with self.session_factory() as session:
+            agent = (
+                await session.execute(select(Agent).where(Agent.id == agent_id))
+            ).scalar_one_or_none()
+            if agent is None or agent.group_id is None:
+                return False
+
+            group_id = int(agent.group_id)
+            group = (
+                await session.execute(select(Group).where(Group.id == group_id))
+            ).scalars().first()
+            if group is None:
+                return False
+
+            store = TaskService(
+                session,
+                dispatch_agent_job=dispatch_agent_job,
+                dispatch_follow_up=schedule_task_follow_up,
+                dispatch_delete_message=schedule_bot_message_delete,
+            ).store
+            assignments = await store.list_assignments(group_id)
+
+            filtered = [
+                a
+                for a in assignments
+                if a.executor_type == "agent"
+                and a.agent_id == agent_id
+                and a.config.get("reply_mode") == "private"
+                and a.enabled
+            ]
+            if not filtered:
+                return False
+
+            await TaskService(
+                session,
+                dispatch_agent_job=dispatch_agent_job,
+                dispatch_follow_up=schedule_task_follow_up,
+                dispatch_delete_message=schedule_bot_message_delete,
+            )._handle_event_with_assignments(
+                assignments=filtered,
+                event_name="message.received",
+                group_id=group_id,
+                user_id=user_id,
+                payload={
+                    "chat_id": chat_id,
+                    "group_title": group.title,
+                    "text": text,
+                    "message_id": message_id,
+                    "first_name": first_name,
+                    "full_name": full_name,
+                    "username": username,
+                    "bot": self.bot,
+                    "contains_link": _message_contains_link(text),
+                    "lang": get_settings().default_language,
+                },
+            )
+            return True
 
     async def _handle_group_mention(
         self,

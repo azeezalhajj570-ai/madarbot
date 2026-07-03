@@ -97,6 +97,14 @@ async def reply_message_handler(config: dict[str, Any], event: TaskEvent) -> dic
             result["reply_markup"] = reply_markup
     if reply_mode == "private" and event.user_id is not None:
         result["chat_id"] = event.user_id
+        forward_user_message = str(
+            config.get("forward_user_message") or "false"
+        ).strip().lower() in ("true", "1", "yes")
+        if forward_user_message and event.payload.get("message_id"):
+            result["forward_message_id"] = event.payload.get("message_id")
+            result["forward_from_chat_id"] = event.payload.get(
+                "chat_id", event.group_id
+            )
     else:
         result["reply_to_message_id"] = event.payload.get("message_id")
     delete_after_seconds = int(config.get("delete_after_seconds") or 0)
@@ -293,7 +301,7 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
         TaskDefinition(
             key="reply_message",
             title="Reply To Group Message",
-            description="Replies in a group when a message matches the configured conditions.",
+            description="Replies in a group or via direct message when a message matches the configured conditions.",
             trigger="message.received",
             config_schema={
                 "message_template": {
@@ -320,6 +328,11 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "type": "integer",
                     "required": False,
                     "description": "Optional auto-delete delay for bot-sent replies.",
+                },
+                "forward_user_message": {
+                    "type": "boolean",
+                    "required": False,
+                    "description": "When reply_mode is private, also forward the user's original message alongside the reply.",
                 },
             },
             handler=reply_message_handler,
