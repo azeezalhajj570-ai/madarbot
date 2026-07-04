@@ -441,12 +441,6 @@ class GroupMemberBroadcastRuntime:
                         raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
 
                 max_per_day = getattr(agent, "max_messages_per_day", None) or 500
-                if max_per_day > 0:
-                    allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day)
-                    if not allowed:
-                        payload["progress"]["stopped_at"] = index
-                        payload["progress"]["stop_reason"] = "daily_limit"
-                        raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
 
                 min_delay = getattr(agent, "min_delay_seconds", None)
                 if min_delay is not None and min_delay > 0:
@@ -471,6 +465,13 @@ class GroupMemberBroadcastRuntime:
                     skipped_count += 1
                     continue
 
+                if max_per_day > 0:
+                    allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day, recipient_id)
+                    if not allowed:
+                        payload["progress"]["stopped_at"] = index
+                        payload["progress"]["stop_reason"] = "daily_limit"
+                        raise Exception(f"Daily unique contact limit reached ({day_count}/{max_per_day})")
+
                 try:
                     await client.send_message(recipient_id, message)
                     success_count += 1
@@ -494,7 +495,7 @@ class GroupMemberBroadcastRuntime:
                             )
                         )
                         await session.commit()
-                    await limiter.record_send(agent.id)
+                    await limiter.record_send(agent.id, recipient_id)
                 except Exception as exc:
                     failure_count += 1
                     translated = _translate_client_exception(exc)
