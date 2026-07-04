@@ -111,7 +111,7 @@ export async function preflightBulkMessage(agentId: number, payload: {
   target_type?: string
   source_group_id?: number
   source_group_title?: string
-  message: string
+  messages: string[]
   selected_user_ids?: number[]
   target_group_ids?: number[]
   threshold?: number

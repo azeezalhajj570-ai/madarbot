@@ -292,7 +292,7 @@ class GroupMemberBroadcastRuntime:
         limiter = AgentRateLimiter(redis_client)
         try:
             target_type = normalized["target_type"]
-            message = normalized["message"]
+            messages: list[str] = normalized["messages"]
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
 
@@ -308,7 +308,7 @@ class GroupMemberBroadcastRuntime:
                     client=client,
                     agent=agent,
                     normalized=normalized,
-                    message=message,
+                    messages=messages,
                     threshold=threshold,
                     base_interval=base_interval,
                     progress=progress,
@@ -360,7 +360,9 @@ class GroupMemberBroadcastRuntime:
             recipients = [r for r in recipients if r not in already_sent]
             total_count = len(recipients_set)
 
-            message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+            message_hash = hashlib.sha256(
+                "||".join(m.lower().strip() for m in messages).encode()
+            ).hexdigest()
             dedup_skip_count = 0
             recently_sent: set[int] = set()
             if session is not None:
@@ -473,7 +475,12 @@ class GroupMemberBroadcastRuntime:
                         raise Exception(f"Daily unique contact limit reached ({day_count}/{max_per_day})")
 
                 try:
-                    await client.send_message(recipient_id, message)
+                    for mi, msg in enumerate(messages):
+                        await client.send_message(recipient_id, msg)
+                        if mi < len(messages) - 1 and base_interval > 0:
+                            jitter = random.uniform(-0.3, 0.3) * base_interval
+                            msg_interval = max(0.3, base_interval + jitter)
+                            await self.sleep(msg_interval)
                     success_count += 1
                     already_sent.add(recipient_id)
                     if session is not None:
@@ -487,7 +494,7 @@ class GroupMemberBroadcastRuntime:
                                 phone_number=identity.get("phone"),
                                 username=identity.get("username"),
                                 tg_group_id=source_group_id,
-                                message_text=message,
+                                message_text="\n\n".join(messages),
                                 message_hash=message_hash,
                                 status="sent",
                                 sent_at=datetime.now(timezone.utc),
@@ -534,7 +541,7 @@ class GroupMemberBroadcastRuntime:
         client,
         agent,
         normalized,
-        message,
+        messages,
         threshold,
         base_interval,
         progress,
@@ -565,6 +572,10 @@ class GroupMemberBroadcastRuntime:
             "sent_users": list(already_sent),
             "failures": failures,
         }
+
+        message_hash = hashlib.sha256(
+            "||".join(m.lower().strip() for m in messages).encode()
+        ).hexdigest()
 
         for index, group_id in enumerate(remaining):
             cooldown_mins = getattr(agent, "cooldown_minutes", None)
@@ -599,12 +610,16 @@ class GroupMemberBroadcastRuntime:
                     await self.sleep(wait)
 
             try:
-                await client.send_message(group_id, message)
+                for mi, msg in enumerate(messages):
+                    await client.send_message(group_id, msg)
+                    if mi < len(messages) - 1 and base_interval > 0:
+                        jitter = random.uniform(-0.3, 0.3) * base_interval
+                        msg_interval = max(0.3, base_interval + jitter)
+                        await self.sleep(msg_interval)
                 success_count += 1
                 already_sent.add(group_id)
                 payload["progress"]["success_count"] = success_count
                 if session is not None:
-                    message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
                     session.add(
                         SentBroadcastMessage(
                             agent_id=agent.id,
@@ -612,7 +627,7 @@ class GroupMemberBroadcastRuntime:
                             job_id=payload.get("job_id"),
                             tg_user_id=None,
                             tg_group_id=group_id,
-                            message_text=message,
+                            message_text="\n\n".join(messages),
                             message_hash=message_hash,
                             status="sent",
                             sent_at=datetime.now(timezone.utc),
@@ -626,7 +641,6 @@ class GroupMemberBroadcastRuntime:
                 payload["progress"]["failure_count"] = failure_count
                 payload["progress"]["sent_users"] = list(already_sent)
                 if session is not None:
-                    message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
                     session.add(
                         SentBroadcastMessage(
                             agent_id=agent.id,
@@ -634,7 +648,7 @@ class GroupMemberBroadcastRuntime:
                             job_id=payload.get("job_id"),
                             tg_user_id=None,
                             tg_group_id=group_id,
-                            message_text=message,
+                            message_text="\n\n".join(messages),
                             message_hash=message_hash,
                             status="failed",
                             sent_at=datetime.now(timezone.utc),

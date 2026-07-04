@@ -266,6 +266,7 @@ export interface BulkPreflightResult {
   blacklisted_excluded: number
   final_count: number
   filtered_user_ids: number[]
+  message_count?: number
 }
 
 export interface AgentBlacklistEntry {

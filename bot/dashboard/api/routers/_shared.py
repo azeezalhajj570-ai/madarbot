@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bot.db.models import Agent
 
@@ -124,11 +124,22 @@ class BulkPreflightRequest(BaseModel):
     target_type: str = Field(default="members", pattern="^(members|groups)$")
     source_group_id: int = Field(default=0)
     source_group_title: str = ""
-    message: str = Field(min_length=1)
+    message: str = ""
+    messages: list[str] = Field(default_factory=list)
     selected_user_ids: list[int] = Field(default_factory=list)
     target_group_ids: list[int] = Field(default_factory=list)
     threshold: int = Field(default=25, ge=1, le=500)
     interval_seconds: float = Field(default=15, ge=0)
+
+    @model_validator(mode="after")
+    def _normalize_messages(self) -> BulkPreflightRequest:
+        if self.messages:
+            self.messages = [m.strip() for m in self.messages if m.strip()]
+        if not self.messages and self.message.strip():
+            self.messages = [self.message.strip()]
+        if not self.messages:
+            raise ValueError("At least one message is required")
+        return self
 
 
 class AgentSafetyUpdateRequest(BaseModel):

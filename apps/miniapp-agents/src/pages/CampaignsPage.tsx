@@ -13,7 +13,6 @@ import {
   Card,
   InputField,
   Note,
-  TextAreaField,
 } from '@miniapp/shared'
 import type {
   Agent,
@@ -45,7 +44,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [quickMessage, setQuickMessage] = useState('')
   const [quickSaving, setQuickSaving] = useState(false)
   const [bulkTargetType, setBulkTargetType] = useState<'members' | 'groups'>('members')
-  const [bulkMessage, setBulkMessage] = useState('')
+  const [bulkMessages, setBulkMessages] = useState<string[]>([''])
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
   const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 30))
@@ -113,11 +112,11 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   useEffect(() => {
     if (qsSelectedCampaignId === '') return
     const campaign = campaigns.find((c) => c.id === qsSelectedCampaignId)
-    if (campaign?.message_template) setBulkMessage(campaign.message_template)
+    if (campaign?.message_template) setBulkMessages([campaign.message_template])
   }, [qsSelectedCampaignId])
 
   function resetForm() {
-    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessage('')
+    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages([''])
     setBulkThreshold('25'); setBulkIntervalSeconds('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
@@ -127,7 +126,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   }
 
   async function handleSend() {
-    if (!bulkMessage.trim()) { setStatus(t('campaigns.msgRequired')); return }
+    const filledMessages = bulkMessages.filter((m) => m.trim())
+    if (!filledMessages.length) { setStatus(t('campaigns.msgRequired')); return }
     if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) { setStatus(t('campaigns.sourceRequired')); return }
     if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) { setStatus(t('campaigns.targetRequired')); return }
     const threshold = Number.parseInt(bulkThreshold, 10)
@@ -137,7 +137,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (bulkSummary) {
       setBulkSaving(true)
       try {
-        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
         if (bulkTargetType === 'members') {
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
@@ -153,7 +153,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     }
     setLoadingBulkSummary(true); setStatus(null)
     try {
-      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
       if (bulkTargetType === 'members') {
         preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id; preflightPayload.source_group_title = bulkSourceGroup!.title
         preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
@@ -212,7 +212,24 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
             />
             {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
-            <TextAreaField label={t('campaigns.message')} value={bulkMessage} onChange={setBulkMessage} rows={4} placeholder={t('campaigns.messagePlaceholder')} />
+            <div style={{ display: 'grid', gap: 8 }}>
+              {bulkMessages.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                  <textarea value={msg} onChange={(e) => {
+                    const next = [...bulkMessages]
+                    next[i] = e.target.value
+                    setBulkMessages(next)
+                  }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                  {bulkMessages.length > 1 ? (
+                    <button type="button" onClick={() => setBulkMessages((m) => m.filter((_, j) => j !== i))}
+                      style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                  ) : null}
+                </div>
+              ))}
+              <button type="button" onClick={() => setBulkMessages((m) => [...m, ''])}
+                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
+            </div>
             <InputField label={t('campaigns.selectMembers')} value={bulkMemberQuery} onChange={setBulkMemberQuery} placeholder={bulkSourceGroup ? t('campaigns.searchMembersPlaceholder') : t('campaigns.chooseSourceFirst')} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               {bulkSelectedMembers.length ? <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '8px 10px', fontSize: 16, lineHeight: '18px', cursor: 'pointer' }}>✕ {bulkSelectedMembers.length}</button> : null}
@@ -278,7 +295,24 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           <>
             <MultiGroupSelect query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} selected={bulkSelectedTargetGroups}
               onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
-            <TextAreaField label={t('campaigns.message')} value={bulkMessage} onChange={setBulkMessage} rows={4} placeholder={t('campaigns.messagePlaceholder')} />
+            <div style={{ display: 'grid', gap: 8 }}>
+              {bulkMessages.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                  <textarea value={msg} onChange={(e) => {
+                    const next = [...bulkMessages]
+                    next[i] = e.target.value
+                    setBulkMessages(next)
+                  }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                  {bulkMessages.length > 1 ? (
+                    <button type="button" onClick={() => setBulkMessages((m) => m.filter((_, j) => j !== i))}
+                      style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                  ) : null}
+                </div>
+              ))}
+              <button type="button" onClick={() => setBulkMessages((m) => [...m, ''])}
+                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
+            </div>
           </>
         )}
 
@@ -321,8 +355,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
             <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>
             <div>{t('campaigns.summaryTotal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.matched'), count: bulkSummary.total })}</div>
+            {bulkSummary.message_count > 1 ? <div>{t('campaigns.summaryMessages', { count: bulkSummary.message_count })}</div> : null}
             {bulkSummary.target_type !== 'groups' ? (<>{bulkSummary.admins_excluded > 0 ? <div>{t('campaigns.summaryAdminsExcluded', { count: bulkSummary.admins_excluded })}</div> : null}{bulkSummary.bots_excluded > 0 ? <div>{t('campaigns.summaryBotsExcluded', { count: bulkSummary.bots_excluded })}</div> : null}{bulkSummary.already_sent_excluded > 0 ? <div>{t('campaigns.summaryAlreadySent', { count: bulkSummary.already_sent_excluded })}</div> : null}{bulkSummary.blacklisted_excluded > 0 ? <div>{t('campaigns.summaryBlacklisted', { count: bulkSummary.blacklisted_excluded })}</div> : null}</>) : null}
             <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>{t('campaigns.summaryFinal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.recipients'), count: bulkSummary.final_count })}</div>
+            {bulkSummary.message_count > 0 ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.summaryTotalSends', { contacts: bulkSummary.final_count, msgs: bulkSummary.message_count, total: bulkSummary.final_count * (bulkSummary.message_count || 1) })}</div> : null}
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
@@ -369,7 +405,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                 if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
                 try {
                   const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
-                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
+                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessages([quickMessage.trim()]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
                 } catch (e) { setStatus(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
                 finally { setQuickSaving(false) }
               }}>{quickSaving ? t('campaigns.saving') : t('campaigns.save')}</Button>
