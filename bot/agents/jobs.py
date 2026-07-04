@@ -71,6 +71,7 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
         "message": "\n\n".join(messages),
         "threshold": threshold,
         "interval_seconds": interval_seconds,
+        "interval_between_contacts": float(normalized.get("interval_between_contacts") or interval_seconds),
         "skip_bots": bool(normalized.get("skip_bots", True)),
     }
 

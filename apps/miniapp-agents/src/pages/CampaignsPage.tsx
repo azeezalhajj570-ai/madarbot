@@ -47,6 +47,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [bulkMessages, setBulkMessages] = useState<string[]>([''])
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
+  const [bulkIntervalContacts, setBulkIntervalContacts] = useState('5')
   const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 30))
   const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
@@ -117,7 +118,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages([''])
-    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
+    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
@@ -134,10 +135,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (!Number.isFinite(threshold) || threshold <= 0) { setStatus(t('campaigns.thresholdInvalid')); return }
     const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
     if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) { setStatus(t('campaigns.intervalInvalid')); return }
+    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) { setStatus(t('campaigns.intervalInvalid')); return }
     if (bulkSummary) {
       setBulkSaving(true)
       try {
-        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, interval_between_contacts: intervalContacts, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
         if (bulkTargetType === 'members') {
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
@@ -153,7 +156,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     }
     setLoadingBulkSummary(true); setStatus(null)
     try {
-      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, interval_between_contacts: intervalContacts, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
       if (bulkTargetType === 'members') {
         preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id; preflightPayload.source_group_title = bulkSourceGroup!.title
         preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
@@ -326,6 +329,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             <div style={{ flex: 1 }}>
               <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
               <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalHint')}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.intervalContacts')} value={bulkIntervalContacts} onChange={setBulkIntervalContacts} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalContactsHint')}</div>
             </div>
           </div>
           <div>
