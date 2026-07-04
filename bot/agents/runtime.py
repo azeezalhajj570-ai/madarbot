@@ -295,6 +295,7 @@ class GroupMemberBroadcastRuntime:
             messages: list[str] = normalized["messages"]
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
+            contact_interval = float(normalized.get("interval_between_contacts") or base_interval)
 
             progress = dict(payload.get("progress") or {})
             already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
@@ -311,6 +312,7 @@ class GroupMemberBroadcastRuntime:
                     messages=messages,
                     threshold=threshold,
                     base_interval=base_interval,
+                    contact_interval=contact_interval,
                     progress=progress,
                     payload=payload,
                     limiter=limiter,
@@ -515,10 +517,10 @@ class GroupMemberBroadcastRuntime:
                         raise translated from exc
                     failures.append({"user_id": str(recipient_id), "error": str(exc)[:200]})
 
-                effective_interval = base_interval
-                if base_interval > 0:
-                    jitter = random.uniform(-0.3, 0.3) * base_interval
-                    effective_interval = max(0.3, base_interval + jitter)
+                effective_interval = contact_interval
+                if contact_interval > 0:
+                    jitter = random.uniform(-0.3, 0.3) * contact_interval
+                    effective_interval = max(0.3, contact_interval + jitter)
                 if index < len(remaining) - 1 and effective_interval > 0:
                     await self.sleep(effective_interval)
 
@@ -544,6 +546,7 @@ class GroupMemberBroadcastRuntime:
         messages,
         threshold,
         base_interval,
+        contact_interval,
         progress,
         payload,
         limiter,
@@ -665,10 +668,10 @@ class GroupMemberBroadcastRuntime:
                     raise translated from exc
                 failures.append({"group_id": str(group_id), "error": str(exc)[:200]})
 
-            effective_interval = base_interval
-            if base_interval > 0:
-                jitter = random.uniform(-0.3, 0.3) * base_interval
-                effective_interval = max(0.3, base_interval + jitter)
+            effective_interval = contact_interval
+            if contact_interval > 0:
+                jitter = random.uniform(-0.3, 0.3) * contact_interval
+                effective_interval = max(0.3, contact_interval + jitter)
             if index < len(remaining) - 1 and effective_interval > 0:
                 await self.sleep(effective_interval)
 

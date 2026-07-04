@@ -130,6 +130,7 @@ class BulkPreflightRequest(BaseModel):
     target_group_ids: list[int] = Field(default_factory=list)
     threshold: int = Field(default=25, ge=1, le=500)
     interval_seconds: float = Field(default=15, ge=0)
+    interval_between_contacts: float = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _normalize_messages(self) -> BulkPreflightRequest:

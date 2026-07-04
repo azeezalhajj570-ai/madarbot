@@ -510,6 +510,8 @@
     "thresholdHint": "Max messages to send per job run (up to 500)",
     "intervalSeconds": "Delay between messages",
     "intervalHint": "Seconds to wait between each message (e.g. 5)",
+    "intervalContacts": "Delay between contacts",
+    "intervalContactsHint": "Seconds to wait after all messages before next contact (e.g. 30)",
     "messagesPerDay": "Max new contacts per day",
     "messagesPerDayHint": "Daily limit of unique new contacts (default 30)",
     "deliverySettings": "Delivery settings",

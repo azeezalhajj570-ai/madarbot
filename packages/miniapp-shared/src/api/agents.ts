@@ -116,6 +116,7 @@ export async function preflightBulkMessage(agentId: number, payload: {
   target_group_ids?: number[]
   threshold?: number
   interval_seconds?: number
+  interval_between_contacts?: number
   messages_per_day?: number
 }) {
   return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
