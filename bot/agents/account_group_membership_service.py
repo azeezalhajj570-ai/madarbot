@@ -811,9 +811,15 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 tg_group_id=tg_group_id,
                 session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(
-                client, int(tg_group_id), self.session
-            )
+            try:
+                entity = await entity_resolver.resolve_group_entity(
+                    client, int(tg_group_id), self.session
+                )
+            except ValueError:
+                raise ValueError(
+                    "This agent account cannot access this group. "
+                    "Make sure the account is a member of the group and the group is not deleted or private."
+                )
             canonical_id = canonical_tg_group_id(int(tg_group_id))
 
             from telethon.tl.functions.channels import GetParticipantsRequest
