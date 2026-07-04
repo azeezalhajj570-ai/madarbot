@@ -5,6 +5,7 @@ import { formatDateTime, formatTime } from '../i18n/format'
 import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
 import { GroupDestinationField } from '../components/GroupDestinationField'
+import { BlacklistSection } from '../features/blacklist/BlacklistSection'
 
 import {
   agentsApi,
@@ -47,6 +48,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [bulkMessage, setBulkMessage] = useState('')
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
+  const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 500))
   const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
@@ -116,7 +118,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessage('')
-    setBulkThreshold('25'); setBulkIntervalSeconds('1')
+    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 500))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
@@ -135,7 +137,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (bulkSummary) {
       setBulkSaving(true)
       try {
-        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds }
+        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
         if (bulkTargetType === 'members') {
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
@@ -151,7 +153,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     }
     setLoadingBulkSummary(true); setStatus(null)
     try {
-      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds }
+      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
       if (bulkTargetType === 'members') {
         preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id; preflightPayload.source_group_title = bulkSourceGroup!.title
         preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
@@ -214,6 +216,14 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             <InputField label={t('campaigns.selectMembers')} value={bulkMemberQuery} onChange={setBulkMemberQuery} placeholder={bulkSourceGroup ? t('campaigns.searchMembersPlaceholder') : t('campaigns.chooseSourceFirst')} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               {bulkSelectedMembers.length ? <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '8px 10px', fontSize: 16, lineHeight: '18px', cursor: 'pointer' }}>✕ {bulkSelectedMembers.length}</button> : null}
+              {bulkMemberResults.length > 0 ? (
+                <Button tone="secondary" onClick={() => {
+                  const existingIds = new Set(bulkSelectedMembers.map((m) => m.user_id))
+                  const newMembers = bulkMemberResults.filter((m) => !existingIds.has(m.user_id))
+                  setBulkSelectedMembers((c) => [...c, ...newMembers])
+                  setBulkMemberResults((r) => r.filter((m) => existingIds.has(m.user_id)))
+                }}>{t('campaigns.selectAll')} ({bulkMemberResults.length})</Button>
+              ) : null}
               {bulkSelectedMembers.map((member) => (
                 <span key={member.user_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 999, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', fontSize: 12.5 }}>
                   {member.full_name || member.username || t('campaigns.userFallback', { userId: member.user_id })}
@@ -272,10 +282,23 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </>
         )}
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-          <div style={{ flex: 1 }}><InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" /></div>
+        <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.deliverySettings')}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.thresholdHint')}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalHint')}</div>
+            </div>
+          </div>
+          <div>
+            <InputField label={t('campaigns.messagesPerDay')} value={messagesPerDay} onChange={setMessagesPerDay} type="number" />
+            <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.messagesPerDayHint')}</div>
+          </div>
         </div>
-        <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
 
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
           {(['now', 'schedule'] as const).map((m) => (
@@ -355,6 +378,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         </div>
       ) : null}
+
+      <BlacklistSection account={account} />
     </>
   )
 }

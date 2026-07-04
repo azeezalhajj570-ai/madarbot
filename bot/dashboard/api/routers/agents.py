@@ -1015,6 +1015,7 @@ async def webapp_agent_analytics(
         },
         "safety": {
             "max_actions_per_hour": agent.max_actions_per_hour,
+            "max_messages_per_day": agent.max_messages_per_day,
             "min_delay_seconds": agent.min_delay_seconds,
             "cooldown_minutes": agent.cooldown_minutes,
             "safety_mode_enabled": agent.safety_mode_enabled,

@@ -116,6 +116,7 @@ export async function preflightBulkMessage(agentId: number, payload: {
   target_group_ids?: number[]
   threshold?: number
   interval_seconds?: number
+  messages_per_day?: number
 }) {
   return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
 }
@@ -254,6 +255,7 @@ export interface MCPTokenData {
 
 export async function updateAgentSafety(agentId: number, payload: {
   max_actions_per_hour?: number
+  max_messages_per_day?: number
   min_delay_seconds?: number
   cooldown_minutes?: number
   safety_mode_enabled?: boolean

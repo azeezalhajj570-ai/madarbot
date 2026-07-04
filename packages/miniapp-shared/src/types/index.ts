@@ -171,6 +171,7 @@ export interface Agent {
   auth_state: 'active' | 'pending_code' | 'pending_2fa' | 'failed'
   metadata?: Record<string, unknown>
   max_actions_per_hour?: number | null
+  max_messages_per_day?: number | null
   min_delay_seconds?: number | null
   cooldown_minutes?: number | null
   safety_mode_enabled?: boolean
@@ -527,6 +528,7 @@ export interface AgentAnalytics {
   }
   safety: {
     max_actions_per_hour?: number | null
+    max_messages_per_day?: number | null
     min_delay_seconds?: number | null
     cooldown_minutes?: number | null
     safety_mode_enabled?: boolean
