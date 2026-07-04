@@ -6,6 +6,7 @@ import {
   Card,
   InputField,
   Note,
+  TextAreaField,
 } from '@miniapp/shared'
 import type { Agent, AgentBlacklistEntry } from '@miniapp/shared'
 
@@ -25,6 +26,8 @@ export function BlacklistSection({ account }: Props) {
   const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
+  const [bulkInput, setBulkInput] = useState('')
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   async function loadEntries() {
     setLoading(true)
@@ -94,6 +97,40 @@ export function BlacklistSection({ account }: Props) {
     setSaving(false)
   }
 
+  function parseBulkLines(lines: string[]): Record<string, unknown>[] {
+    const parsed: Record<string, unknown>[] = []
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      if (trimmed.startsWith('+') || /^\d{7,}$/.test(trimmed)) {
+        parsed.push({ phone: trimmed })
+      } else if (trimmed.startsWith('@')) {
+        parsed.push({ username: trimmed.slice(1) })
+      } else if (/^\d+$/.test(trimmed)) {
+        parsed.push({ tg_user_id: Number(trimmed) })
+      } else {
+        parsed.push({ username: trimmed })
+      }
+    }
+    return parsed
+  }
+
+  async function handleBulkAdd() {
+    const lines = bulkInput.split('\n').map(l => l.trim()).filter(Boolean)
+    if (!lines.length) return
+
+    setBulkSaving(true)
+    try {
+      const parsed = parseBulkLines(lines)
+      const result = await agentsApi.addBlacklistEntries(account.id, parsed as any)
+      setEntries(prev => [...result.entries, ...prev])
+      setBulkInput('')
+    } catch (err: any) {
+      setError(err.message || t('blacklist.addError'))
+    }
+    setBulkSaving(false)
+  }
+
   return (
     <Card title={t('blacklist.title')} subtitle={t('blacklist.subtitle')}>
       <div style={{ display: 'grid', gap: 12 }}>
@@ -151,9 +188,26 @@ export function BlacklistSection({ account }: Props) {
         )}
 
         {!showForm ? (
-          <Button onClick={() => { setShowForm(true); setError(null) }}>
-            {t('blacklist.addEntry')}
-          </Button>
+          <>
+            <div style={{ borderTop: '1px solid var(--miniapp-border-soft)', margin: '8px 0' }} />
+            <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)' }}>
+              <Note tone="neutral">{t('blacklist.bulkHint')}</Note>
+              <TextAreaField
+                label={t('blacklist.bulkInput')}
+                value={bulkInput}
+                onChange={setBulkInput}
+                rows={5}
+                placeholder={t('blacklist.bulkPlaceholder')}
+              />
+              <Button onClick={() => void handleBulkAdd()} disabled={bulkSaving || !bulkInput.trim()}>
+                {bulkSaving ? t('blacklist.saving') : t('blacklist.bulkAdd')}
+              </Button>
+            </div>
+            <div style={{ borderTop: '1px solid var(--miniapp-border-soft)', margin: '8px 0' }} />
+            <Button onClick={() => { setShowForm(true); setError(null) }}>
+              {t('blacklist.addEntry')}
+            </Button>
+          </>
         ) : (
           <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12 }}>
             {editingEntry ? (
