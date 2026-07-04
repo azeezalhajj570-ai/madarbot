@@ -103,7 +103,7 @@ class BlacklistAddEntry(BaseModel):
     tg_user_id: int | None = Field(default=None, ge=1)
     username: str | None = Field(default=None, min_length=1, max_length=255)
     phone: str | None = Field(default=None, min_length=1, max_length=32)
-    reason: str = Field(default="admin_blocked", pattern="^(admin_blocked|user_opt_out|bounced|spam_report)$")
+    reason: str = Field(default="admin_blocked", min_length=1, max_length=255)
 
 
 class BlacklistAddRequest(BaseModel):

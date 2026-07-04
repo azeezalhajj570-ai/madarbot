@@ -6,9 +6,8 @@ import {
   Card,
   InputField,
   Note,
-  TextAreaField,
 } from '@miniapp/shared'
-import type { Agent, AgentBlacklistEntry, BlacklistAddEntry } from '@miniapp/shared'
+import type { Agent, AgentBlacklistEntry } from '@miniapp/shared'
 
 interface Props {
   account: Agent
@@ -19,15 +18,13 @@ export function BlacklistSection({ account }: Props) {
   const [entries, setEntries] = useState<AgentBlacklistEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<AgentBlacklistEntry | null>(null)
   const [userId, setUserId] = useState('')
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
   const [reason, setReason] = useState('')
-  const [bulkPhones, setBulkPhones] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [resolving, setResolving] = useState(false)
-  const [resolvedEntries, setResolvedEntries] = useState<BlacklistAddEntry[]>([])
+  const [saving, setSaving] = useState(false)
 
   async function loadEntries() {
     setLoading(true)
@@ -51,52 +48,50 @@ export function BlacklistSection({ account }: Props) {
     }
   }
 
-  function resetAddForm() {
+  function resetForm() {
     setUserId('')
     setUsername('')
     setPhone('')
     setReason('')
-    setBulkPhones('')
-    setResolvedEntries([])
+    setEditingEntry(null)
   }
 
-  async function handleResolve() {
-    const phones = bulkPhones.split('\n').map(p => p.trim()).filter(Boolean)
-    if (!phones.length) return
-    setResolving(true)
-    try {
-      const result = await agentsApi.resolveBlacklistPhones(account.id, phones)
-      setResolvedEntries(result.resolved.map(r => ({
-        tg_user_id: r.tg_user_id ?? undefined,
-        username: r.username ?? undefined,
-        phone: r.phone ?? undefined,
-        reason: undefined,
-      })))
-    } catch (err: any) {
-      setError(err.message || t('blacklist.resolveError'))
-    }
-    setResolving(false)
+  function startEdit(entry: AgentBlacklistEntry) {
+    setEditingEntry(entry)
+    setUserId(entry.tg_user_id ? String(entry.tg_user_id) : '')
+    setUsername(entry.username || '')
+    setPhone(entry.phone || '')
+    setReason(entry.reason || '')
+    setShowForm(true)
+    setError(null)
   }
 
-  async function handleAdd() {
-    const singleEntry: BlacklistAddEntry[] = []
-    if (userId) singleEntry.push({ tg_user_id: Number(userId), reason: reason.trim() || undefined })
-    else if (username) singleEntry.push({ username: username.trim().replace(/^@/, ''), reason: reason.trim() || undefined })
-    else if (phone) singleEntry.push({ phone: phone.trim(), reason: reason.trim() || undefined })
+  async function handleSave() {
+    const hasUserId = userId.trim() && /^\d+$/.test(userId.trim())
+    const hasUsername = username.trim().length > 0
+    const hasPhone = phone.trim().length > 0
+    if (!hasUserId && !hasUsername && !hasPhone) return
 
-    const allEntries = [...singleEntry, ...resolvedEntries]
-    if (!allEntries.length) return
-
-    setAdding(true)
+    setSaving(true)
     try {
-      const result = await agentsApi.addBlacklistEntries(account.id, allEntries)
+      if (editingEntry) {
+        await agentsApi.deleteBlacklistEntry(account.id, editingEntry.id)
+        setEntries(prev => prev.filter(e => e.id !== editingEntry.id))
+      }
+
+      const entry: Record<string, unknown> = { reason: reason.trim() || undefined }
+      if (hasUserId) entry.tg_user_id = Number(userId.trim())
+      if (hasUsername) entry.username = username.trim().replace(/^@/, '')
+      if (hasPhone) entry.phone = phone.trim()
+
+      const result = await agentsApi.addBlacklistEntries(account.id, [entry as any])
       setEntries(prev => [...result.entries, ...prev])
-      resetAddForm()
-      setShowAddForm(false)
+      resetForm()
+      setShowForm(false)
     } catch (err: any) {
-      setError(err.message || t('blacklist.addError'))
+      setError(err.message || t(editingEntry ? 'blacklist.updateError' : 'blacklist.addError'))
     }
-    setAdding(false)
+    setSaving(false)
   }
 
   return (
@@ -130,6 +125,17 @@ export function BlacklistSection({ account }: Props) {
                 </div>
                 <button
                   type="button"
+                  onClick={() => startEdit(entry)}
+                  style={{
+                    border: 'none', background: 'transparent', cursor: 'pointer',
+                    color: 'var(--miniapp-text-muted)', fontSize: 12, fontWeight: 600,
+                    padding: '4px 8px', borderRadius: 6, fontFamily: 'var(--miniapp-sans)',
+                  }}
+                >
+                  {t('blacklist.edit')}
+                </button>
+                <button
+                  type="button"
                   onClick={() => void handleDelete(entry.id)}
                   style={{
                     border: 'none', background: 'transparent', cursor: 'pointer',
@@ -144,34 +150,24 @@ export function BlacklistSection({ account }: Props) {
           </div>
         )}
 
-        {!showAddForm ? (
-          <Button onClick={() => { setShowAddForm(true); setError(null) }}>
+        {!showForm ? (
+          <Button onClick={() => { setShowForm(true); setError(null) }}>
             {t('blacklist.addEntry')}
           </Button>
         ) : (
           <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12 }}>
-            <InputField label={t('blacklist.userId')} value={userId} onChange={setUserId} placeholder="123456789" />
-            <InputField label={t('blacklist.username')} value={username} onChange={setUsername} placeholder="@username" />
-            <InputField label={t('blacklist.phone')} value={phone} onChange={setPhone} placeholder="+966501234567" />
-            <InputField label={t('blacklist.reason')} value={reason} onChange={setReason} placeholder={t('blacklist.reasonPlaceholder')} />
-            <div style={{ borderTop: '1px solid var(--miniapp-border-soft)', margin: '4px 0' }} />
-            <Note tone="neutral">{t('blacklist.bulkPhonesHint')}</Note>
-            <TextAreaField label={t('blacklist.bulkPhones')} value={bulkPhones} onChange={setBulkPhones} placeholder="+966501234567&#10;+966507654321" />
-            {bulkPhones.trim() ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button onClick={() => void handleResolve()} disabled={resolving} tone="secondary">
-                  {resolving ? t('blacklist.resolving') : t('blacklist.resolve')}
-                </Button>
-              </div>
+            {editingEntry ? (
+              <Note tone="neutral">{t('blacklist.editing', { id: editingEntry.tg_user_id ? `#${editingEntry.tg_user_id}` : editingEntry.username ? `@${editingEntry.username}` : editingEntry.phone || '' })}</Note>
             ) : null}
-            {resolvedEntries.length > 0 && (
-              <Note>{t('blacklist.resolvedCount', { count: resolvedEntries.length })}</Note>
-            )}
+            <InputField label={t('blacklist.userId')} value={userId} onChange={setUserId} placeholder={t('blacklist.userIdPlaceholder')} />
+            <InputField label={t('blacklist.username')} value={username} onChange={setUsername} placeholder={t('blacklist.usernamePlaceholder')} />
+            <InputField label={t('blacklist.phone')} value={phone} onChange={setPhone} placeholder={t('blacklist.phonePlaceholder')} />
+            <InputField label={t('blacklist.reason')} value={reason} onChange={setReason} placeholder={t('blacklist.reasonPlaceholder')} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => void handleAdd()} disabled={adding || (!userId && !username && !phone && !resolvedEntries.length)}>
-                {adding ? t('blacklist.adding') : t('blacklist.add')}
+              <Button onClick={() => void handleSave()} disabled={saving || (!userId.trim() && !username.trim() && !phone.trim())}>
+                {saving ? t('blacklist.saving') : editingEntry ? t('blacklist.saveEdit') : t('blacklist.add')}
               </Button>
-              <Button tone="secondary" onClick={() => { setShowAddForm(false); resetAddForm() }}>
+              <Button tone="secondary" onClick={() => { setShowForm(false); resetForm() }}>
                 {t('blacklist.cancel')}
               </Button>
             </div>

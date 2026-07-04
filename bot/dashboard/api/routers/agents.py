@@ -1089,7 +1089,11 @@ async def webapp_agent_blacklist_add(
             agent_id=agent.id,
             entries=entries,
         )
-        return {"status": "ok", "created": created, "count": len(created)}
+        return {
+            "status": "ok",
+            "entries": created,
+            "count": len(created),
+        }
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)

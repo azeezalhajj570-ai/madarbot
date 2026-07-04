@@ -105,10 +105,13 @@ class AgentBlacklistService(AgentServiceSupport):
             await self.session.flush()
             created.append({
                 "id": blacklist_entry.id,
+                "agent_id": blacklist_entry.agent_id,
                 "tg_user_id": blacklist_entry.tg_user_id,
                 "username": blacklist_entry.username,
                 "phone": blacklist_entry.phone,
                 "reason": blacklist_entry.reason,
+                "created_by": blacklist_entry.created_by,
+                "created_at": blacklist_entry.created_at.isoformat() if blacklist_entry.created_at else None,
             })
 
         await self.session.commit()
