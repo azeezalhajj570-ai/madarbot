@@ -92,7 +92,7 @@ class AgentJobService(AgentServiceSupport):
                     exclusions = await self.compute_bulk_exclusions(
                         agent=agent,
                         source_group_id=normalized_payload.get("source_group_id", 0),
-                        message=normalized_payload["message"],
+                        messages=normalized_payload["messages"],
                         selected_user_ids=selected_ids,
                         campaign_id=campaign_id,
                     )
@@ -258,7 +258,7 @@ class AgentJobService(AgentServiceSupport):
         *,
         agent: Agent,
         source_group_id: int,
-        message: str,
+        messages: list[str],
         selected_user_ids: list[int],
         campaign_id: int | None = None,
     ) -> dict[str, Any]:
@@ -282,6 +282,7 @@ class AgentJobService(AgentServiceSupport):
                 "blacklisted_excluded": 0,
                 "final_count": 0,
                 "filtered_user_ids": [],
+                "message_count": len(messages),
             }
 
         # Fetch scraped member data for selected users
@@ -332,7 +333,8 @@ class AgentJobService(AgentServiceSupport):
                 bots.add(uid)
 
         # Determine already-sent from sent_broadcast_messages
-        message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+        combined = "||".join(m.lower().strip() for m in messages)
+        message_hash = hashlib.sha256(combined.encode()).hexdigest()
         already_sent_set: set[int] = set()
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         identity_filters = [SentBroadcastMessage.tg_user_id.in_(selected_user_ids)]
@@ -408,6 +410,7 @@ class AgentJobService(AgentServiceSupport):
             "blacklisted_excluded": len(blacklisted_set),
             "final_count": len(filtered),
             "filtered_user_ids": filtered,
+            "message_count": len(messages),
         }
 
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:

@@ -650,12 +650,14 @@ async def webapp_bulk_preflight(
                 "admins_excluded": 0,
                 "bots_excluded": 0,
                 "already_sent_excluded": 0,
+                "blacklisted_excluded": 0,
                 "filtered_user_ids": [],
+                "message_count": len(normalized.get("messages", [])),
             }
         exclusions = await AgentJobService(session).compute_bulk_exclusions(
             agent=agent,
             source_group_id=payload.source_group_id,
-            message=payload.message,
+            messages=payload.messages,
             selected_user_ids=payload.selected_user_ids,
         )
         return {**exclusions, "target_type": "members"}

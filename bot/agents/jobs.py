@@ -34,9 +34,14 @@ def _normalize_group_reference(value: Any) -> int | str:
 
 def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     normalized = dict(payload or {})
-    message = str(normalized.get("message") or "").strip()
-    if not message:
-        raise ValueError("message is required")
+
+    messages_raw = normalized.get("messages")
+    if not messages_raw:
+        message = str(normalized.get("message") or "").strip()
+        messages_raw = [message] if message else []
+    messages = [str(m).strip() for m in messages_raw if str(m).strip()]
+    if not messages:
+        raise ValueError("messages is required")
 
     target_type = str(normalized.get("target_type", "members")).strip().lower()
     if target_type not in ("members", "groups"):
@@ -62,7 +67,8 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
     result: dict[str, Any] = {
         "target_type": target_type,
         "source_group_title": source_group_title,
-        "message": message,
+        "messages": messages,
+        "message": "\n\n".join(messages),
         "threshold": threshold,
         "interval_seconds": interval_seconds,
         "skip_bots": bool(normalized.get("skip_bots", True)),
