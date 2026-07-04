@@ -274,7 +274,7 @@
     "sendLogs": "سجلات الإرسال",
     "logsEmptyNoProgress": "لا توجد سجلات إرسال لهذه المهمة. قد تكون الرسائل قيد المعالجة.",
     "logsEmptyWithProgress": "لا توجد سجلات إرسال فردية. تقدم المهمة: {sent} أُرسلت، {failed} فشلت من أصل {total}.",
-    "scheduledFor": "مجدول في {{date}}"
+    "scheduledFor": "مجدول في {date}"
   },
   "analytics": {
     "title": "الإحصائيات",
@@ -329,8 +329,8 @@
     "pending": "معلقة",
     "conversionRate": "نسبة التحويل",
     "conversionBreakdown": "{interested} مهتم + {converted} تم تحويلهم من أصل {total} عميل",
-    "hours": "{{count}} ساعة",
-    "days": "{{count}} أيام"
+    "hours": "{count} ساعة",
+    "days": "{count} أيام"
   },
   "time": {
     "justNow": "الآن",
@@ -558,7 +558,7 @@
     "summaryTitle": "ملخص الإرسال",
     "matched": "متطابق",
     "recipients": "مستلمين",
-    "userFallback": "المستخدم {{userId}}",
+    "userFallback": "المستخدم {userId}",
     "scrapeFailed": "فشل استخراج البيانات"
   },
   "multiGroup": {
@@ -627,9 +627,9 @@
     "findGroup": "ابحث عن مجموعة للاستخراج",
     "groupPlaceholder": "اكتب اسم أو معرف المجموعة",
     "searchingDb": "جارٍ البحث في قاعدة البيانات...",
-    "groupFallback": "المجموعة {{tgGroupId}}",
+    "groupFallback": "المجموعة {tgGroupId}",
     "noTgId": "لا يوجد معرف",
-    "membersCount": "{{count}} عضو",
+    "membersCount": "{count} عضو",
     "maxMembers": "الحد الأقصى لاستخراج الأعضاء",
     "maxMessages": "الحد الأقصى لاستخراج الرسائل",
     "maxAgeDays": "الحد الأقصى لعمر الرسالة بالأيام",
@@ -647,7 +647,7 @@
     "save": "حفظ",
     "working": "جارٍ العمل...",
     "chooseGroupFirst": "اختر مجموعة أولاً",
-    "scrapeQueued": "تمت إضافة مهمة استخراج لـ {{title}} إلى قائمة الانتظار.",
+    "scrapeQueued": "تمت إضافة مهمة استخراج لـ {title} إلى قائمة الانتظار.",
     "failedQueue": "فشل إضافة مهمة الاستخراج",
     "atLeastOneKeyword": "مطلوب كلمة مفتاحية واحدة على الأقل",
     "leadCaptureCreated": "تم إنشاء مهمة التقاط العملاء",
@@ -683,7 +683,7 @@
     "saveTask": "حفظ المهمة",
     "configuredTitle": "المهام المكوَّنة",
     "configuredSubtitle": "قواعد الأتمتة الحالية لهذه المجموعة.",
-    "groupsLabel": "المجموعات: {{titles}}",
+    "groupsLabel": "المجموعات: {titles}",
     "edit": "تعديل",
     "delete": "حذف",
     "deleteModalTitle": "حذف المهمة",
@@ -700,9 +700,9 @@
     "noDest": "لا توجد وجهة",
     "noTemplate": "لا يوجد قالب رسالة",
     "noKeyword": "لا توجد كلمة مفتاحية",
-    "conditionLabel": "عندما تحتوي الرسالة على: {{keyword}}",
+    "conditionLabel": "عندما تحتوي الرسالة على: {keyword}",
     "privateSuffix": " · خاص",
-    "groupFallback": "المجموعة {{tgGroupId}}"
+    "groupFallback": "المجموعة {tgGroupId}"
   },
   "blacklist": {
     "title": "القائمة السوداء",

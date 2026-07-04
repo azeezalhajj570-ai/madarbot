@@ -2291,7 +2291,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                 </div>
               ) : null}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#9b9186' }}>
-                {lead.source_group_title ? <span>{t('leads.groupLabel', { group: lead.source_group_title })}</span> : null}
+                {lead.source_group_title ? <span>{t('leads.groupLabel', { title: lead.source_group_title })}</span> : null}
                 {lead.lead_label ? <span>{t('leads.leadLabel', { label: lead.lead_label })}</span> : null}
                 {lead.captured_at ? <span>{formatDate(lead.captured_at)}</span> : null}
               </div>
@@ -2401,11 +2401,11 @@ function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, 
   const diff = Date.now() - new Date(dateStr).getTime()
   const sec = Math.floor(diff / 1000)
   if (sec < 5) return t('time.justNow')
-  if (sec < 60) return t('time.secondsAgo', { sec })
+  if (sec < 60) return t('time.secondsAgo', { n: sec })
   const min = Math.floor(sec / 60)
-  if (min < 60) return t('time.minutesAgo', { min })
+  if (min < 60) return t('time.minutesAgo', { n: min })
   const hours = Math.floor(min / 60)
-  if (hours < 24) return t('time.hoursAgo', { hours })
+  if (hours < 24) return t('time.hoursAgo', { n: hours })
   return formatDateTime(dateStr)
 }
 

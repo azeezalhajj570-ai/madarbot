@@ -246,9 +246,9 @@
     "typeUser": " 👤",
     "typeGroup": " 👥",
     "statusSent": "sent",
-    "sent": "Sent: {count}",
-    "failed": "Failed: {count}",
-    "success": "Success: {percent}%",
+    "sent": "Sent",
+    "failed": "Failed",
+    "success": "Success",
     "groups": "groups",
     "members": "members",
     "filterAll": "All status",
@@ -274,7 +274,7 @@
     "sendLogs": "Send Logs",
     "logsEmptyNoProgress": "No send logs for this job. Messages may still be in progress.",
     "logsEmptyWithProgress": "No individual send records found. Job progress: {sent} sent, {failed} failed of {total}.",
-    "scheduledFor": "Scheduled for {{date}}"
+    "scheduledFor": "Scheduled for {date}"
   },
   "analytics": {
     "title": "Analytics",
@@ -558,7 +558,7 @@
     "summaryTitle": "Send summary",
     "matched": "matched",
     "recipients": "recipients",
-    "userFallback": "User {{userId}}",
+    "userFallback": "User {userId}",
     "scrapeFailed": "Scrape failed"
   },
   "multiGroup": {
@@ -627,9 +627,9 @@
     "findGroup": "Find group to scrape",
     "groupPlaceholder": "Type group title or ID",
     "searchingDb": "Searching database...",
-    "groupFallback": "Group {{tgGroupId}}",
+    "groupFallback": "Group {tgGroupId}",
     "noTgId": "no tg id",
-    "membersCount": "members {{count}}",
+    "membersCount": "members {count}",
     "maxMembers": "Max members to scrape",
     "maxMessages": "Max messages to scrape",
     "maxAgeDays": "Max message age in days",
@@ -647,7 +647,7 @@
     "save": "Save",
     "working": "Working...",
     "chooseGroupFirst": "Choose a group first",
-    "scrapeQueued": "Scraping job queued for {{title}}.",
+    "scrapeQueued": "Scraping job queued for {title}.",
     "failedQueue": "Failed to queue scrape job",
     "atLeastOneKeyword": "At least one keyword is required",
     "leadCaptureCreated": "Lead capture task created",
@@ -683,7 +683,7 @@
     "saveTask": "Save task",
     "configuredTitle": "Configured Tasks",
     "configuredSubtitle": "Existing automation rules for this group.",
-    "groupsLabel": "Groups: {{titles}}",
+    "groupsLabel": "Groups: {titles}",
     "edit": "Edit",
     "delete": "Delete",
     "deleteModalTitle": "Delete task",
@@ -700,9 +700,9 @@
     "noDest": "No destination",
     "noTemplate": "No message template",
     "noKeyword": "No keyword condition",
-    "conditionLabel": "When message contains: {{keyword}}",
+    "conditionLabel": "When message contains: {keyword}",
     "privateSuffix": " · private",
-    "groupFallback": "Group {{tgGroupId}}"
+    "groupFallback": "Group {tgGroupId}"
   },
   "blacklist": {
     "title": "Blacklist",
