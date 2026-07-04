@@ -48,7 +48,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [bulkMessage, setBulkMessage] = useState('')
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
-  const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 500))
+  const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 30))
   const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
@@ -118,7 +118,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessage('')
-    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 500))
+    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
