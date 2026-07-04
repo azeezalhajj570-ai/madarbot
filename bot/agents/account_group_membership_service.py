@@ -19,6 +19,8 @@ from bot.db.models import (
     ScrapedMessage,
     User,
 )
+from bot.db.models.agent import SentBroadcastMessage
+from bot.db.models.bulk_messaging import AgentBlacklistEntry
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scraper_service import ScraperService
 
@@ -405,24 +407,58 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 )
             )
 
+        blacklisted_tg_subq = (
+            select(AgentBlacklistEntry.tg_user_id)
+            .where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.tg_user_id.isnot(None),
+            )
+        ).subquery()
+        filters.append(ScrapedMember.tg_user_id.notin_(select(blacklisted_tg_subq)))
+
+        blacklisted_username_subq = (
+            select(func.lower(AgentBlacklistEntry.username))
+            .where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.username.isnot(None),
+            )
+        ).subquery()
+        filters.append(
+            func.lower(func.coalesce(ScrapedMember.username, "")).notin_(
+                select(blacklisted_username_subq)
+            )
+        )
+
+        blacklisted_phone_subq = (
+            select(AgentBlacklistEntry.phone)
+            .where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.phone.isnot(None),
+            )
+        ).subquery()
+        filters.append(
+            func.coalesce(ScrapedMember.phone, "").notin_(select(blacklisted_phone_subq))
+        )
+
+        already_sent_subq = (
+            select(SentBroadcastMessage.tg_user_id)
+            .where(
+                SentBroadcastMessage.agent_id == agent.id,
+                SentBroadcastMessage.tg_group_id == canonical_id,
+                SentBroadcastMessage.status == "sent",
+                SentBroadcastMessage.tg_user_id.isnot(None),
+            )
+        ).subquery()
+        filters.append(ScrapedMember.tg_user_id.notin_(select(already_sent_subq)))
+
         try:
-            total = (
-                int(scraped_group.member_count or 0)
-                if scraped_group is not None
-                and not normalized_query
-                and not exclude_bots
-                and not exclude_admins
-                and not only_admins
-                and not only_bots
-                and scraped_group.member_count is not None
-                else int(
-                    (
-                        await self.session.execute(
-                            select(func.count(ScrapedMember.id)).where(*filters)
-                        )
-                    ).scalar_one()
-                    or 0
-                )
+            total = int(
+                (
+                    await self.session.execute(
+                        select(func.count(ScrapedMember.id)).where(*filters)
+                    )
+                ).scalar_one()
+                or 0
             )
 
             base_query = select(
