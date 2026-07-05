@@ -807,6 +807,73 @@ async def webapp_retry_agent_job(
     return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_QUEUED}
 
 
+@router.get(
+    "/api/agents/{agent_id}/jobs/health", dependencies=[Depends(require_agents_boundary)]
+)
+@router.get(
+    "/webapp/agents/{agent_id}/jobs/health",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_agent_jobs_health(
+    agent_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.exceptions import JobValidationError
+
+    await ensure_agent_admin(agent_id, session, identity)
+    try:
+        result = await AgentJobService(session).get_job_health(
+            actor_user_id=identity.user_id,
+            agent_id=agent_id,
+        )
+        return result
+    except JobValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": str(exc), **exc.details},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
+@router.post(
+    "/api/agents/{agent_id}/jobs/{job_id}/recover",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/{job_id}/recover",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_recover_agent_job(
+    agent_id: int,
+    job_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.exceptions import JobValidationError
+
+    await ensure_agent_admin(agent_id, session, identity)
+    try:
+        result = await AgentJobService(session).recover_job(
+            actor_user_id=identity.user_id,
+            agent_id=agent_id,
+            job_id=job_id,
+        )
+        return {"status": "ok", **result}
+    except JobValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": str(exc), **exc.details},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
 @router.delete("/api/agents/{agent_id}", dependencies=[Depends(require_agents_boundary)])
 @router.delete("/webapp/agents/{agent_id}", dependencies=[Depends(require_agents_boundary)])
 async def webapp_delete_agent(

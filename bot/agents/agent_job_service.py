@@ -413,6 +413,104 @@ class AgentJobService(AgentServiceSupport):
             "message_count": len(messages),
         }
 
+    async def get_job_health(
+        self, *, actor_user_id: int, agent_id: int
+    ) -> dict[str, Any]:
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+
+        from datetime import datetime, timezone
+
+        running_result = await self.session.execute(
+            select(AgentJob).where(
+                AgentJob.agent_id == agent_id,
+                AgentJob.status.in_(["running", "pending", "queued"]),
+            ).order_by(AgentJob.updated_at.desc())
+        )
+        jobs = list(running_result.scalars())
+
+        items = []
+        for job in jobs:
+            payload = dict(job.job_payload or {})
+            progress = payload.get("progress", {})
+            sent = progress.get("success_count", 0)
+            total = payload.get("total_recipients", 0) or len(payload.get("selected_user_ids", []))
+            elapsed = (datetime.now(timezone.utc) - job.updated_at).total_seconds()
+            last_checkpoint = progress.get("last_checkpoint_at")
+            is_stuck = False
+            if last_checkpoint:
+                try:
+                    cp_age = (
+                        datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint)
+                    ).total_seconds()
+                    is_stuck = cp_age > 7200
+                except (ValueError, TypeError):
+                    is_stuck = True
+
+            est_remaining = None
+            if sent > 0 and total > 0 and sent < total:
+                per_contact = elapsed / sent
+                est_remaining = (total - sent) * per_contact
+
+            items.append({
+                "job_id": job.id,
+                "agent_id": agent_id,
+                "job_type": job.job_type,
+                "status": job.status,
+                "messages_sent": sent,
+                "total_recipients": total,
+                "elapsed_seconds": elapsed,
+                "estimated_completion_seconds": est_remaining,
+                "last_checkpoint_at": last_checkpoint,
+                "is_possibly_stuck": is_stuck,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+            })
+
+        return {"running_jobs": items}
+
+    async def recover_job(
+        self, *, actor_user_id: int, agent_id: int, job_id: int
+    ) -> dict[str, Any]:
+        from bot.agents.jobs import JOB_STATUS_PENDING, JOB_STATUS_RUNNING
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+
+        job = (
+            await self.session.execute(
+                select(AgentJob).where(
+                    AgentJob.id == job_id,
+                    AgentJob.agent_id == agent_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if job is None:
+            raise ValueError("Job not found")
+
+        if job.status != JOB_STATUS_RUNNING:
+            raise ValueError(f"Job is not running (status={job.status})")
+
+        payload = dict(job.job_payload or {})
+        progress = payload.get("progress", {})
+        progress["retry_count"] = progress.get("retry_count", 0) + 1
+        payload["progress"] = progress
+        job.job_payload = payload
+        job.status = JOB_STATUS_PENDING
+        await self.session.commit()
+
+        from bot.agents.dispatch import dispatch_agent_job
+        await dispatch_agent_job(job.id)
+
+        return {
+            "job_id": job.id,
+            "status": JOB_STATUS_PENDING,
+            "retry_count": progress["retry_count"],
+        }
+
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
