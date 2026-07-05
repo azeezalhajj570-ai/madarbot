@@ -77,10 +77,10 @@ class Agent(Base):
     session_string: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     phone_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     details: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    max_actions_per_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    max_messages_per_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    min_delay_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_actions_per_hour: Mapped[Optional[int]] = mapped_column(Integer, default=50, nullable=True)
+    max_messages_per_day: Mapped[Optional[int]] = mapped_column(Integer, default=200, nullable=True)
+    min_delay_seconds: Mapped[Optional[float]] = mapped_column(Float, default=30.0, nullable=True)
+    cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=60, nullable=True)
     safety_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     safety_mode_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
