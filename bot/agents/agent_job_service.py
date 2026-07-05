@@ -412,6 +412,42 @@ class AgentJobService(AgentServiceSupport):
             "filtered_user_ids": filtered,
             "message_count": len(messages),
         }
+    async def check_broadcast_accessibility(
+        self, *, actor_user_id: int, agent_id: int, group_ids: list[int]
+    ) -> dict[str, Any]:
+        from bot.agents.session import SessionManager
+        from bot.agents.exceptions import JobValidationError
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+        if agent.auth_state != "active":
+            raise ValueError("Agent is not authenticated")
+
+        session_manager = SessionManager()
+        try:
+            result = await session_manager.check_group_accessibility(agent.id, group_ids)
+        except Exception as exc:
+            raise JobValidationError(
+                f"Failed to check group accessibility: {exc}",
+                details={"agent_id": agent.id, "group_ids": group_ids},
+            ) from exc
+
+        if result["inaccessible"]:
+            raise JobValidationError(
+                f"Agent cannot access {len(result['inaccessible'])} group(s). "
+                f"Ensure the agent has joined these groups before creating a broadcast.",
+                details={
+                    "accessible_groups": result["accessible"],
+                    "inaccessible_groups": result["inaccessible"],
+                },
+            )
+
+        return {
+            "accessible_groups": result["accessible"],
+            "inaccessible_groups": result["inaccessible"],
+        }
 
     async def check_broadcast_accessibility(
         self, *, actor_user_id: int, agent_id: int, group_ids: list[int]
@@ -547,7 +583,6 @@ class AgentJobService(AgentServiceSupport):
             "status": JOB_STATUS_PENDING,
             "retry_count": progress["retry_count"],
         }
-
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter

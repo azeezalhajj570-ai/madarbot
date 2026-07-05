@@ -90,7 +90,6 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
     )
     has_explicit_interval = (
         normalized.get("interval_between_contacts") is not None
-        or normalized.get("interval_seconds") is not None
     )
     interval_strategy = str(
         normalized.get("interval_strategy") or ""
