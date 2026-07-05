@@ -9,6 +9,27 @@ SCRAPER_MEMBERS_JOB_TYPE = "scraper_members"
 SCRAPER_MESSAGES_JOB_TYPE = "scraper_messages"
 SCRAPER_FULL_GROUP_JOB_TYPE = "scraper_full_group"
 
+GRADUATED_INTERVAL_TIERS: list[tuple[int, float]] = [
+    (50, 30.0),
+    (100, 60.0),
+    (200, 120.0),
+    (400, 180.0),
+    (-1, 300.0),
+]
+
+
+def get_interval_for_contact(
+    cumulative_sent: int,
+    strategy: str,
+    custom_interval: float | None = None,
+) -> float:
+    if strategy == "fixed" and custom_interval is not None and custom_interval > 0:
+        return custom_interval
+    for threshold, interval in GRADUATED_INTERVAL_TIERS:
+        if threshold == -1 or cumulative_sent < threshold:
+            return interval
+    return 300.0
+
 # AgentJob statuses
 JOB_STATUS_PENDING = "pending"
 JOB_STATUS_QUEUED = "queued"
@@ -64,6 +85,21 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
     if interval_seconds < 0:
         raise ValueError("interval_seconds must be a non-negative number")
 
+    interval_between_contacts = float(
+        normalized.get("interval_between_contacts") or interval_seconds
+    )
+    has_explicit_interval = (
+        normalized.get("interval_between_contacts") is not None
+        or normalized.get("interval_seconds") is not None
+    )
+    interval_strategy = str(
+        normalized.get("interval_strategy") or ""
+    ).strip().lower()
+    if not interval_strategy:
+        interval_strategy = "fixed" if has_explicit_interval and interval_between_contacts > 0 else "graduated"
+    if interval_strategy not in ("graduated", "fixed"):
+        raise ValueError("interval_strategy must be 'graduated' or 'fixed'")
+
     result: dict[str, Any] = {
         "target_type": target_type,
         "source_group_title": source_group_title,
@@ -71,7 +107,8 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
         "message": "\n\n".join(messages),
         "threshold": threshold,
         "interval_seconds": interval_seconds,
-        "interval_between_contacts": float(normalized.get("interval_between_contacts") or interval_seconds),
+        "interval_between_contacts": interval_between_contacts,
+        "interval_strategy": interval_strategy,
         "skip_bots": bool(normalized.get("skip_bots", True)),
     }
 

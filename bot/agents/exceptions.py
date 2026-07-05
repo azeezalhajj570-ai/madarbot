@@ -25,3 +25,11 @@ class AgentBannedError(AgentError):
 
 class AgentAuthError(AgentError):
     """Authentication step failed."""
+
+
+class JobValidationError(AgentError):
+    """Job payload validation failed before dispatch."""
+
+    def __init__(self, message: str, details: dict | None = None):
+        self.details = details or {}
+        super().__init__(message)

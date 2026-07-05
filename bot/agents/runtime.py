@@ -18,6 +18,7 @@ from bot.agents.jobs import (
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
+    get_interval_for_contact,
     normalize_group_member_broadcast_payload,
 )
 from bot.automation.agent_task_store import AgentTaskStore
@@ -296,6 +297,7 @@ class GroupMemberBroadcastRuntime:
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
             contact_interval = float(normalized.get("interval_between_contacts") or base_interval)
+            interval_strategy = str(normalized.get("interval_strategy") or "graduated").strip().lower()
 
             progress = dict(payload.get("progress") or {})
             already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
@@ -552,10 +554,12 @@ class GroupMemberBroadcastRuntime:
                         raise translated from exc
                     failures.append({"user_id": str(recipient_id), "error": str(exc)[:200]})
 
-                effective_interval = contact_interval
-                if contact_interval > 0:
-                    jitter = random.uniform(-0.3, 0.3) * contact_interval
-                    effective_interval = max(0.3, contact_interval + jitter)
+                effective_interval = get_interval_for_contact(
+                    success_count, interval_strategy, contact_interval
+                )
+                if effective_interval > 0:
+                    jitter = random.uniform(-0.1, 0.1) * effective_interval
+                    effective_interval = max(0.3, effective_interval + jitter)
                 if index < len(remaining) - 1 and effective_interval > 0:
                     await self.sleep(effective_interval)
 
@@ -703,10 +707,12 @@ class GroupMemberBroadcastRuntime:
                     raise translated from exc
                 failures.append({"group_id": str(group_id), "error": str(exc)[:200]})
 
-            effective_interval = contact_interval
-            if contact_interval > 0:
-                jitter = random.uniform(-0.3, 0.3) * contact_interval
-                effective_interval = max(0.3, contact_interval + jitter)
+            effective_interval = get_interval_for_contact(
+                success_count, "fixed", contact_interval
+            )
+            if effective_interval > 0:
+                jitter = random.uniform(-0.1, 0.1) * effective_interval
+                effective_interval = max(0.3, effective_interval + jitter)
             if index < len(remaining) - 1 and effective_interval > 0:
                 await self.sleep(effective_interval)
 
