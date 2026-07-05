@@ -25,6 +25,11 @@ from bot.automation.agent_task_store import AgentTaskStore
 from bot.automation.models import TaskEvent
 from bot.automation.registry import Registry
 from bot.config import get_settings
+from bot.agents.rpc_wrapper import (
+    call_with_retry,
+    check_agent_health,
+    iter_participants_with_timeout,
+)
 from bot.db.models import Agent, AgentJob, ScrapedMember
 from bot.db.session import SessionLocal
 from bot.utils.rate_limiter import AgentRateLimiter
@@ -51,15 +56,37 @@ logger = structlog.get_logger(__name__)
 def _translate_client_exception(exc: Exception) -> Exception | None:
     try:
         from telethon.errors import FloodWaitError
-        from telethon.errors.rpcerrorlist import PhoneNumberBannedError, UserDeactivatedBanError
+        from telethon.errors.rpcerrorlist import (
+            PeerFloodError,
+            PhoneNumberBannedError,
+            UserDeactivatedBanError,
+        )
 
         if isinstance(exc, FloodWaitError):
             return AgentFloodWaitError(retry_after=exc.seconds)
+        if isinstance(exc, PeerFloodError):
+            return AgentFloodWaitError(retry_after=3600)
         if isinstance(exc, (PhoneNumberBannedError, UserDeactivatedBanError)):
             return AgentBannedError()
     except ImportError:
         pass
     return None
+
+
+_SEND_TIMEOUT_SECONDS = 60
+
+
+async def send_message_with_timeout(client, *args, **kwargs):
+    try:
+        return await call_with_retry(
+            client,
+            lambda: client.send_message(*args, **kwargs),
+            rpc_name="send_message",
+            timeout=_SEND_TIMEOUT_SECONDS,
+            max_retries=0,
+        )
+    except (asyncio.TimeoutError, TimeoutError):
+        raise TimeoutError(f"send_message timed out after {_SEND_TIMEOUT_SECONDS}s")
 
 
 class UserAgentExecutor:
@@ -72,7 +99,7 @@ class UserAgentExecutor:
         if not chat_id or not text:
             return False
         try:
-            await client.send_message(int(chat_id), str(text))
+            await send_message_with_timeout(client, int(chat_id), str(text))
             return True
         except Exception:
             return False
@@ -116,7 +143,11 @@ class AddContactRuntime:
 
         canonical_id = canonical_tg_group_id(tg_group_id)
         try:
-            return await client.get_entity(tg_group_id)
+            return await call_with_retry(
+                client,
+                lambda: client.get_entity(tg_group_id),
+                rpc_name="get_entity",
+            )
         except Exception:
             async with SessionLocal() as session:
                 stmt = select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical_id).limit(1)
@@ -125,16 +156,24 @@ class AddContactRuntime:
                     g_access_hash = group_record.raw_data.get("access_hash")
                     if g_access_hash:
                         if group_record.group_type in {"channel", "supergroup"}:
-                            return await client.get_entity(
-                                InputPeerChannel(
-                                    channel_id=abs(canonical_id) % (10**10)
-                                    if canonical_id < -(10**12)
-                                    else abs(canonical_id),
-                                    access_hash=int(g_access_hash),
-                                )
+                            return await call_with_retry(
+                                client,
+                                lambda: client.get_entity(
+                                    InputPeerChannel(
+                                        channel_id=abs(canonical_id) % (10**10)
+                                        if canonical_id < -(10**12)
+                                        else abs(canonical_id),
+                                        access_hash=int(g_access_hash),
+                                    )
+                                ),
+                                rpc_name="get_entity",
                             )
                         else:
-                            return await client.get_entity(InputPeerChat(chat_id=abs(canonical_id)))
+                            return await call_with_retry(
+                                client,
+                                lambda: client.get_entity(InputPeerChat(chat_id=abs(canonical_id))),
+                                rpc_name="get_entity",
+                            )
             raise
 
     async def execute(self, *, client, agent: Agent, payload: dict[str, Any]) -> dict[str, Any]:
@@ -208,7 +247,7 @@ class AddContactRuntime:
                 group_entity = await self.resolve_group_entity(client, int(tg_group_id))
                 if group_entity:
                     # Search for the user in this group to prime the cache
-                    async for u in client.iter_participants(group_entity, search=str(user_id_int)):
+                    async for u in iter_participants_with_timeout(client, group_entity, search=str(user_id_int)):
                         if u.id == user_id_int:
                             target_peer = await client.get_input_entity(u)
                             break
@@ -227,7 +266,11 @@ class AddContactRuntime:
             except Exception:
                 # Absolute last resort: try a global entity fetch
                 try:
-                    target_peer = await client.get_entity(user_id_int)
+                    target_peer = await call_with_retry(
+                        client,
+                        lambda: client.get_entity(user_id_int),
+                        rpc_name="get_entity",
+                    )
                 except Exception:
                     raise ValueError(
                         f"Could not resolve user {user_id_int}. Try syncing the workspace or scraping again."
@@ -333,10 +376,12 @@ class GroupMemberBroadcastRuntime:
             source_group_id = int(normalized["source_group_id"])
             selected_user_ids = {int(uid) for uid in normalized.get("selected_user_ids", [])}
 
+            await check_agent_health(client)
+
             group_entity = await AddContactRuntime().resolve_group_entity(client, source_group_id)
             recipients: list[int] = []
             recipient_identities: dict[int, dict[str, str | None]] = {}
-            async for participant in client.iter_participants(group_entity):
+            async for participant in iter_participants_with_timeout(client, group_entity):
                 pid = getattr(participant, "id", None)
                 if pid is None:
                     continue
@@ -484,7 +529,7 @@ class GroupMemberBroadcastRuntime:
                 try:
                     sent_msg = None
                     for mi, msg in enumerate(messages):
-                        sent_msg = await client.send_message(recipient_id, msg)
+                        sent_msg = await send_message_with_timeout(client, recipient_id, msg)
                         if mi < len(messages) - 1 and base_interval > 0:
                             jitter = random.uniform(-0.3, 0.3) * base_interval
                             msg_interval = max(0.3, base_interval + jitter)
@@ -563,6 +608,15 @@ class GroupMemberBroadcastRuntime:
                 if effective_interval > 0:
                     jitter = random.uniform(-0.1, 0.1) * effective_interval
                     effective_interval = max(0.3, effective_interval + jitter)
+                logger.info(
+                    "broadcast_interval",
+                    strategy=interval_strategy,
+                    contact_interval=contact_interval,
+                    success_count=success_count,
+                    effective_interval=round(effective_interval, 1),
+                    index=index,
+                    total=len(remaining),
+                )
                 if index < len(remaining) - 1 and effective_interval > 0:
                     await self.sleep(effective_interval)
 
@@ -656,7 +710,7 @@ class GroupMemberBroadcastRuntime:
 
             try:
                 for mi, msg in enumerate(messages):
-                    await client.send_message(group_id, msg)
+                    await send_message_with_timeout(client, group_id, msg)
                     if mi < len(messages) - 1 and base_interval > 0:
                         jitter = random.uniform(-0.3, 0.3) * base_interval
                         msg_interval = max(0.3, base_interval + jitter)
@@ -1048,10 +1102,10 @@ class AgentTaskRuntime:
                     kwargs["reply_to"] = reply_to
                 sent = None
                 if result.get("_safety_mode"):
-                    sent = await client.send_message(chat_id, text, **kwargs)
+                    sent = await send_message_with_timeout(client, chat_id, text, **kwargs)
                     logger.info("safety_mode_action_executed", agent_id=agent.id, task_key=task_key)
                 else:
-                    sent = await client.send_message(chat_id, text, **kwargs)
+                    sent = await send_message_with_timeout(client, chat_id, text, **kwargs)
 
                 delete_after = result.get("delete_after_seconds", 0)
                 if delete_after > 0 and sent is not None:

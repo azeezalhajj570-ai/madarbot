@@ -14,6 +14,7 @@ from bot.agents.exceptions import (
     AgentSessionError,
     AgentSessionRevokedError,
 )
+from bot.agents.rpc_wrapper import call_with_retry
 from bot.config import get_settings
 from bot.db.models import Agent
 from bot.db.session import SessionLocal
@@ -307,7 +308,11 @@ class SessionManager:
             from telethon.tl.types import InputPeerChannel
             for gid in group_ids:
                 try:
-                    entity = await client.get_entity(gid)
+                    entity = await call_with_retry(
+                        client,
+                        lambda: client.get_entity(gid),
+                        rpc_name="get_entity",
+                    )
                     if entity is not None:
                         accessible.append(gid)
                     else:
