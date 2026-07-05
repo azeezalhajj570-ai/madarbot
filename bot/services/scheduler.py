@@ -66,3 +66,21 @@ async def _tick() -> None:
             logger.bind(job_id=job_id, agent_id=agent_id).info("scheduled_job_dispatched")
         except Exception:
             logger.bind(job_id=job_id, agent_id=agent_id).exception("scheduled_job_dispatch_failed")
+
+
+async def reconcile_loop() -> None:
+    settings = get_settings()
+    logger.bind(
+        poll_interval=settings.reconcile_poll_interval,
+        enabled=settings.reconcile_enabled,
+    ).info("reconcile_loop_started")
+    while True:
+        try:
+            from bot.agents.dispatch import reconcile_stale_jobs
+
+            result = await reconcile_stale_jobs()
+            if result.get("reconciled") or result.get("recovered_running"):
+                logger.info("reconcile_cycle_complete", **result)
+        except Exception:
+            logger.exception("reconcile_tick_failed")
+        await asyncio.sleep(settings.reconcile_poll_interval)

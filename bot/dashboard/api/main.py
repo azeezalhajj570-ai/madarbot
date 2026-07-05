@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -95,8 +96,21 @@ async def lifespan(app: FastAPI):
         scheduler_task = asyncio.create_task(scheduler_loop())
         logger.info("scheduler_loop_task_created")
 
+    reconcile_task = None
+    if settings.reconcile_enabled:
+        from bot.services.scheduler import reconcile_loop
+
+        reconcile_task = asyncio.create_task(reconcile_loop())
+        logger.info("reconcile_loop_task_created")
+
     yield
 
+    if reconcile_task:
+        reconcile_task.cancel()
+        try:
+            await reconcile_task
+        except asyncio.CancelledError:
+            pass
     if scheduler_task:
         scheduler_task.cancel()
         try:

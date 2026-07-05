@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
     scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")
     scheduler_poll_interval: int = Field(default=30, alias="SCHEDULER_POLL_INTERVAL")
+    reconcile_enabled: bool = Field(default=True, alias="RECONCILE_ENABLED")
+    reconcile_poll_interval: int = Field(default=1800, alias="RECONCILE_POLL_INTERVAL")
     stuck_job_threshold_hours: int = Field(default=2, alias="STUCK_JOB_THRESHOLD_HOURS")
     stuck_job_max_retries: int = Field(default=3, alias="STUCK_JOB_MAX_RETRIES")
     default_language: str = Field(default="ar", alias="DEFAULT_LANGUAGE")
