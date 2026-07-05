@@ -46,6 +46,8 @@ class SentBroadcastMessage(Base):
     tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    tg_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     tg_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     message_text: Mapped[str] = mapped_column(Text, nullable=False)
     message_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
