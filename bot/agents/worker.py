@@ -451,6 +451,15 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     broadcast_payload = dict(job.job_payload or {})
                     broadcast_payload["job_id"] = job.id
                     broadcast_payload["campaign_id"] = job.campaign_id
+                    existing_progress = broadcast_payload.get("progress")
+                    if existing_progress and existing_progress.get("sent_users"):
+                        sent_count = len(existing_progress.get("sent_users", []))
+                        last_checkpoint = existing_progress.get("last_checkpoint_at")
+                        bound_logger.info(
+                            "agent_job_resuming_from_checkpoint",
+                            sent_count=sent_count,
+                            last_checkpoint_at=last_checkpoint,
+                        )
                     result = await broadcast_runtime.execute(
                         client=client, agent=agent, payload=broadcast_payload, session=session
                     )
@@ -465,6 +474,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             "failures": progress.get("failures", []),
                             "stopped_at": progress.get("stopped_at"),
                             "stop_reason": progress.get("stop_reason"),
+                            "last_checkpoint_at": progress.get("last_checkpoint_at"),
                             "target_type": progress.get("target_type")
                             or result.get("target_type", "members"),
                         }

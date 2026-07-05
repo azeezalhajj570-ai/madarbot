@@ -280,7 +280,7 @@ class GroupMemberBroadcastRuntime:
         from datetime import datetime, timedelta, timezone
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
-        from bot.db.models.agent import SentBroadcastMessage
+        from bot.db.models.agent import SentBroadcastMessage, AgentJob
         from bot.db.models.bulk_messaging import AgentBlacklistEntry
         from redis.asyncio import Redis
         from sqlalchemy import or_, select
@@ -305,6 +305,8 @@ class GroupMemberBroadcastRuntime:
             success_count = progress.get("success_count", 0)
             failure_count = progress.get("failure_count", 0)
             failures: list[dict[str, Any]] = list(progress.get("failures", []))
+            last_checkpoint_at = progress.get("last_checkpoint_at")
+            checkpoint_send_count = 0
 
             if target_type == "groups":
                 result = await self._execute_groups_mode(
@@ -404,6 +406,7 @@ class GroupMemberBroadcastRuntime:
                 "dedup_skipped": dedup_skip_count,
                 "sent_users": list(already_sent),
                 "failures": failures,
+                "last_checkpoint_at": last_checkpoint_at or datetime.now(timezone.utc).isoformat(),
             }
 
             if session is not None:
@@ -487,6 +490,7 @@ class GroupMemberBroadcastRuntime:
                             await self.sleep(msg_interval)
                     success_count += 1
                     already_sent.add(recipient_id)
+                    checkpoint_send_count += 1
                     if session is not None:
                         identity = recipient_identities.get(recipient_id, {})
                         session.add(
@@ -507,6 +511,37 @@ class GroupMemberBroadcastRuntime:
                         )
                         await session.commit()
                     await limiter.record_send(agent.id, recipient_id)
+
+                    should_checkpoint = (
+                        checkpoint_send_count >= 10
+                        or last_checkpoint_at is None
+                        or (datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint_at)).total_seconds() >= 60
+                    )
+                    if should_checkpoint and session is not None:
+                        last_checkpoint_at = datetime.now(timezone.utc).isoformat()
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skipped_count": skipped_count + dedup_skip_count,
+                            "dedup_skipped": dedup_skip_count,
+                            "sent_users": list(already_sent),
+                            "failures": failures,
+                            "last_checkpoint_at": last_checkpoint_at,
+                        }
+                        job_obj = (
+                            await session.execute(
+                                select(AgentJob).where(AgentJob.id == payload.get("job_id"))
+                            )
+                            if payload.get("job_id")
+                            else None
+                        )
+                        if job_obj is not None:
+                            job_record = job_obj.scalar_one_or_none()
+                            if job_record is not None:
+                                job_record.job_payload = dict(payload)
+                                await session.commit()
+                        checkpoint_send_count = 0
                 except Exception as exc:
                     failure_count += 1
                     translated = _translate_client_exception(exc)
