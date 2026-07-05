@@ -455,12 +455,6 @@ class AgentJobService(AgentServiceSupport):
             if threshold > 500:
                 raise ValueError(f"Maximum batch size is 500. Requested: {threshold}")
 
-            selected = list(payload.get("selected_user_ids") or [])
-            if len(selected) > threshold:
-                raise ValueError(
-                    f"Selected members ({len(selected)}) exceeds threshold ({threshold})"
-                )
-
         finally:
             await redis_client.aclose()
 
