@@ -482,8 +482,9 @@ class GroupMemberBroadcastRuntime:
                         raise Exception(f"Daily unique contact limit reached ({day_count}/{max_per_day})")
 
                 try:
+                    sent_msg = None
                     for mi, msg in enumerate(messages):
-                        await client.send_message(recipient_id, msg)
+                        sent_msg = await client.send_message(recipient_id, msg)
                         if mi < len(messages) - 1 and base_interval > 0:
                             jitter = random.uniform(-0.3, 0.3) * base_interval
                             msg_interval = max(0.3, base_interval + jitter)
@@ -501,6 +502,8 @@ class GroupMemberBroadcastRuntime:
                                 tg_user_id=recipient_id,
                                 phone_number=identity.get("phone"),
                                 username=identity.get("username"),
+                                message_id=sent_msg.id if sent_msg else None,
+                                tg_chat_id=recipient_id,
                                 tg_group_id=source_group_id,
                                 message_text="\n\n".join(messages),
                                 message_hash=message_hash,
