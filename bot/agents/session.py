@@ -296,3 +296,24 @@ class SessionManager:
             "agent_session_availability_checked", available=True, state=state
         )
         return True
+
+    async def check_group_accessibility(
+        self, agent_id: int, group_ids: list[int]
+    ) -> dict[str, list[int]]:
+        client = await self.get_client(agent_id)
+        accessible: list[int] = []
+        inaccessible: list[int] = []
+        try:
+            from telethon.tl.types import InputPeerChannel
+            for gid in group_ids:
+                try:
+                    entity = await client.get_entity(gid)
+                    if entity is not None:
+                        accessible.append(gid)
+                    else:
+                        inaccessible.append(gid)
+                except Exception:
+                    inaccessible.append(gid)
+        finally:
+            pass
+        return {"accessible": accessible, "inaccessible": inaccessible}
