@@ -678,6 +678,48 @@ async def webapp_bulk_preflight(
         ) from exc
 
 
+@router.post(
+    "/api/agents/{agent_id}/jobs/check-accessibility",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/jobs/check-accessibility",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_check_group_accessibility(
+    agent_id: int,
+    request: Request,
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.exceptions import JobValidationError
+
+    await ensure_agent_admin(agent_id, session, identity)
+    group_ids = payload.get("group_ids", [])
+    if not group_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="group_ids is required",
+        )
+    try:
+        result = await AgentJobService(session).check_broadcast_accessibility(
+            actor_user_id=identity.user_id,
+            agent_id=agent_id,
+            group_ids=[int(gid) for gid in group_ids],
+        )
+        return result
+    except JobValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": str(exc), **exc.details},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
 @router.post("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
 @router.post("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
 async def webapp_create_agent_job(
