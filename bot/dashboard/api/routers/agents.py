@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -654,6 +655,10 @@ async def webapp_bulk_preflight(
                 "filtered_user_ids": [],
                 "message_count": len(normalized.get("messages", [])),
             }
+        if payload.selected_user_ids and len(payload.selected_user_ids) > payload.threshold:
+            raise ValueError(
+                f"Selected members ({len(payload.selected_user_ids)}) exceeds threshold ({payload.threshold})"
+            )
         exclusions = await AgentJobService(session).compute_bulk_exclusions(
             agent=agent,
             source_group_id=payload.source_group_id,
@@ -1099,6 +1104,11 @@ async def webapp_agent_blacklist_add(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This user is already blacklisted",
         ) from exc
 
 
