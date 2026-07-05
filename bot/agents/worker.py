@@ -401,6 +401,57 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
         return {"sent": True, "message_id": sent.id, "chat_id": tg_user_id, "mode": "private"}
 
 
+async def _try_auto_broadcast_dispatch(
+    session,
+    agent: Agent,
+    job_payload: dict,
+    bound_logger,
+) -> None:
+    if not agent.auto_broadcast_enabled or not agent.auto_broadcast_template:
+        return
+    source_group_id = job_payload.get("source_group_id") or job_payload.get("group_id")
+    if not source_group_id:
+        bound_logger.debug("agent_auto_broadcast_skipped_no_group_id")
+        return
+    from bot.db.models.scraper import ScrapedMember
+    from sqlalchemy import func, select
+
+    member_count = await session.scalar(
+        select(func.count()).select_from(ScrapedMember).where(
+            ScrapedMember.scraped_group_id == int(source_group_id)
+        )
+    )
+    if not member_count or member_count == 0:
+        bound_logger.debug("agent_auto_broadcast_skipped_empty_group")
+        return
+
+    new_job = AgentJob(
+        agent_id=agent.id,
+        job_type=GROUP_MEMBER_BROADCAST_JOB_TYPE,
+        job_payload={
+            "source_group_id": int(source_group_id),
+            "messages": [agent.auto_broadcast_template],
+            "target_type": "members",
+            "threshold": 500,
+            "skip_bots": True,
+        },
+        status=JOB_STATUS_PENDING,
+    )
+    session.add(new_job)
+    await session.commit()
+    try:
+        from bot.agents.dispatch import dispatch_agent_job
+        await dispatch_agent_job(new_job.id)
+    except Exception:
+        bound_logger.exception("agent_auto_broadcast_dispatch_failed")
+    bound_logger.info(
+        "agent_auto_broadcast_dispatched",
+        group_id=source_group_id,
+        member_count=member_count,
+        new_job_id=new_job.id,
+    )
+
+
 async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     message = CurrentMessage.get_current_message()
     message_options = message.options or {} if message is not None else {}
@@ -531,6 +582,13 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         job_type=job.job_type,
                     )
                     await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    if job.job_type in {SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
+                        await _try_auto_broadcast_dispatch(
+                            session=session,
+                            agent=agent,
+                            job_payload=dict(job.job_payload or {}),
+                            bound_logger=bound_logger,
+                        )
                     handled = True
                 if not handled:
                     await _set_job_state(
