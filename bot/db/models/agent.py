@@ -85,6 +85,8 @@ class Agent(Base):
     safety_mode_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    auto_broadcast_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_broadcast_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
