@@ -297,6 +297,24 @@ def tally_recent_activity(rows: list[Any]) -> dict[str, int]:
     return dict(sorted(message_activity.items()))
 
 
+class JobHealthItem(BaseModel):
+    job_id: int
+    agent_id: int
+    job_type: str
+    status: str
+    messages_sent: int = 0
+    total_recipients: int = 0
+    elapsed_seconds: float = 0.0
+    estimated_completion_seconds: float | None = None
+    last_checkpoint_at: str | None = None
+    is_possibly_stuck: bool = False
+    created_at: str | None = None
+
+
+class JobHealthResponse(BaseModel):
+    running_jobs: list[JobHealthItem]
+
+
 __all__ = [
     "AccessGateUpdateRequest",
     "BlacklistAddEntry",
