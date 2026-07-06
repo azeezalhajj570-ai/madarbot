@@ -129,13 +129,14 @@ class GeminiPilotProvider(BasePilotProvider):
             },
         }
 
-        url = f"{self.base_url}/{resolved_model}:generateContent?key={self.api_key}"
+        url = f"{self.base_url}/{resolved_model}:generateContent"
 
         settings = get_settings()
         timeout = settings.ai_request_timeout_seconds
+        headers = {"x-goog-api-key": self.api_key}
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
 
         if response.status_code >= 400:
             logger.warning(

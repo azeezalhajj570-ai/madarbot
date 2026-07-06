@@ -1184,7 +1184,8 @@ class ScraperService:
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
         if query:
-            stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{query}%"))
+            escaped_query = query.replace("%", "\\%").replace("_", "\\_")
+            stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
         if sender_user_id is not None:
             stmt = stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
         if message_type:
@@ -1198,7 +1199,8 @@ class ScraperService:
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
         if query:
-            count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{query}%"))
+            escaped_query = query.replace("%", "\\%").replace("_", "\\_")
+            count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
         if sender_user_id is not None:
             count_stmt = count_stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
         if message_type:

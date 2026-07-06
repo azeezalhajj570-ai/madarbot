@@ -81,7 +81,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 if word in {"-", "_", ".", ","} and len(query_words) > 1:
                     continue
 
-                pattern = f"%{word}%"
+                safe_word = word.replace("%", "\\%").replace("_", "\\_")
+                pattern = f"%{safe_word}%"
                 word_conditions.append(
                     or_(
                         ScrapedGroup.title.ilike(pattern),
@@ -396,7 +397,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if only_bots:
             filters.append(ScrapedMember.is_bot.is_(True))
         if normalized_query:
-            pattern = f"%{normalized_query.lower()}%"
+            safe_query = normalized_query.replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{safe_query.lower()}%"
             filters.append(
                 or_(
                     func.lower(func.coalesce(ScrapedMember.username, "")).like(pattern),

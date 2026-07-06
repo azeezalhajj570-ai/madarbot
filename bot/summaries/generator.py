@@ -186,10 +186,11 @@ class LLMSummaryGenerator(SummaryGenerator):
             }
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{self.model}:generateContent?key={self.api_key}"
+                f"{self.model}:generateContent"
             )
+            headers = {"x-goog-api-key": self.api_key}
             async with httpx.AsyncClient(timeout=20) as client:
-                response = await client.post(url, json=payload)
+                response = await client.post(url, json=payload, headers=headers)
             if response.status_code >= 400:
                 raise AIProviderError(f"gemini_http_{response.status_code}")
             data = response.json()
