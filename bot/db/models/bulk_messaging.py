@@ -97,9 +97,7 @@ class AgentBlacklistEntry(Base):
     """
 
     __tablename__ = "agent_blacklist"
-    __table_args__ = (
-        UniqueConstraint("agent_id", "tg_user_id", name="uq_blacklist_agent_user"),
-    )
+    __table_args__ = (UniqueConstraint("agent_id", "tg_user_id", name="uq_blacklist_agent_user"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)

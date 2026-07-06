@@ -167,9 +167,7 @@ class AIPilotPlugin:
 
     async def _resolve_group_id_by_chat(self, chat_id: int) -> int | None:
         async with SessionLocal() as session:
-            result = await session.execute(
-                select(Group.id).where(Group.tg_group_id == chat_id)
-            )
+            result = await session.execute(select(Group.id).where(Group.tg_group_id == chat_id))
             return result.scalar_one_or_none()
 
     async def _check_mention_enabled(self, group_id: int) -> bool:

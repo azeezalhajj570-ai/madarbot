@@ -249,7 +249,9 @@ class AddContactRuntime:
                 group_entity = await self.resolve_group_entity(client, int(tg_group_id))
                 if group_entity:
                     # Search for the user in this group to prime the cache
-                    async for u in iter_participants_with_timeout(client, group_entity, search=str(user_id_int)):
+                    async for u in iter_participants_with_timeout(
+                        client, group_entity, search=str(user_id_int)
+                    ):
                         if u.id == user_id_int:
                             target_peer = await client.get_input_entity(u)
                             break
@@ -343,7 +345,9 @@ class GroupMemberBroadcastRuntime:
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
             contact_interval = float(normalized.get("interval_between_contacts") or base_interval)
-            interval_strategy = str(normalized.get("interval_strategy") or "graduated").strip().lower()
+            interval_strategy = (
+                str(normalized.get("interval_strategy") or "graduated").strip().lower()
+            )
 
             progress = dict(payload.get("progress") or {})
             already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
@@ -463,12 +467,8 @@ class GroupMemberBroadcastRuntime:
                     AgentBlacklistEntry.agent_id == agent.id
                 )
                 bl_rows = (await session.execute(bl_stmt)).scalars().all()
-                blacklist_tg_ids = {
-                    int(e.tg_user_id) for e in bl_rows if e.tg_user_id is not None
-                }
-                blacklist_usernames = {
-                    e.username.strip().lower() for e in bl_rows if e.username
-                }
+                blacklist_tg_ids = {int(e.tg_user_id) for e in bl_rows if e.tg_user_id is not None}
+                blacklist_usernames = {e.username.strip().lower() for e in bl_rows if e.username}
                 blacklist_phones = {e.phone.strip() for e in bl_rows if e.phone}
             else:
                 blacklist_tg_ids = set()
@@ -524,11 +524,15 @@ class GroupMemberBroadcastRuntime:
                     continue
 
                 if max_per_day > 0:
-                    allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day, recipient_id)
+                    allowed, day_count = await limiter.check_daily_limit(
+                        agent.id, max_per_day, recipient_id
+                    )
                     if not allowed:
                         payload["progress"]["stopped_at"] = index
                         payload["progress"]["stop_reason"] = "daily_limit"
-                        raise Exception(f"Daily unique contact limit reached ({day_count}/{max_per_day})")
+                        raise Exception(
+                            f"Daily unique contact limit reached ({day_count}/{max_per_day})"
+                        )
 
                 pending_record = None
                 try:
@@ -559,7 +563,9 @@ class GroupMemberBroadcastRuntime:
                     for mi, msg in enumerate(messages):
                         media_url = media_urls[mi] if mi < len(media_urls) else None
                         if media_url:
-                            sent_msg = await send_file_with_timeout(client, recipient_id, msg, media_url)
+                            sent_msg = await send_file_with_timeout(
+                                client, recipient_id, msg, media_url
+                            )
                         else:
                             sent_msg = await send_message_with_timeout(client, recipient_id, msg)
                         if mi < len(messages) - 1 and base_interval > 0:
@@ -580,7 +586,10 @@ class GroupMemberBroadcastRuntime:
                     should_checkpoint = (
                         checkpoint_send_count >= 10
                         or last_checkpoint_at is None
-                        or (datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint_at)).total_seconds() >= 60
+                        or (
+                            datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint_at)
+                        ).total_seconds()
+                        >= 60
                     )
                     if should_checkpoint and session is not None:
                         last_checkpoint_at = datetime.now(timezone.utc).isoformat()
@@ -792,9 +801,7 @@ class GroupMemberBroadcastRuntime:
                     raise translated from exc
                 failures.append({"group_id": str(group_id), "error": str(exc)[:200]})
 
-            effective_interval = get_interval_for_contact(
-                success_count, "fixed", contact_interval
-            )
+            effective_interval = get_interval_for_contact(success_count, "fixed", contact_interval)
             if effective_interval > 0:
                 jitter = random.uniform(-0.1, 0.1) * effective_interval
                 effective_interval = max(0.3, effective_interval + jitter)

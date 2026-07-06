@@ -129,13 +129,14 @@ class GeminiPilotProvider(BasePilotProvider):
             },
         }
 
-        url = f"{self.base_url}/{resolved_model}:generateContent?key={self.api_key}"
+        url = f"{self.base_url}/{resolved_model}:generateContent"
 
         settings = get_settings()
         timeout = settings.ai_request_timeout_seconds
+        headers = {"x-goog-api-key": self.api_key}
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
 
         if response.status_code >= 400:
             logger.warning(
@@ -269,7 +270,9 @@ def build_pilot_provider(
             logger.warning("ai_pilot_no_gemini_key")
             return HeuristicPilotProvider()
         resolved_model = model or settings.ai_model or settings.gemini_model
-        resolved_url = _normalize_url(base_url, "https://generativelanguage.googleapis.com/v1beta/models")
+        resolved_url = _normalize_url(
+            base_url, "https://generativelanguage.googleapis.com/v1beta/models"
+        )
         return GeminiPilotProvider(resolved_key, resolved_model, resolved_url)
 
     if provider_name == "openrouter":

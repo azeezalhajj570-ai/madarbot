@@ -110,6 +110,13 @@ async def run_bot() -> None:
     await plugin_manager.load_all(dispatcher, event_bus)
     agent_listener_manager: AgentListenerManager | None = None
     if settings.bot_app_kind in ("admin", "agents"):
+        if not settings.session_encryption_key:
+            logger.critical(
+                "SESSION_ENCRYPTION_KEY is not configured. "
+                "Agent session strings would be stored in plaintext. Refusing to start. "
+                "Set SESSION_ENCRYPTION_KEY in your .env file."
+            )
+            raise SystemExit(1)
         agent_listener_manager = AgentListenerManager(bot=bot, redis=redis)
         await agent_listener_manager.start()
 

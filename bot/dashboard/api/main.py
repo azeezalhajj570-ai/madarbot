@@ -197,7 +197,20 @@ webapp_admin_dir = webapp_frontend_dir / "admin"
 webapp_admin_assets_dir = webapp_admin_dir / "assets"
 webapp_agents_dir = webapp_frontend_dir / "agents"
 webapp_agents_assets_dir = webapp_agents_dir / "assets"
-UPLOADS_DIR = Path("/app/uploads")
+UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", "/app/uploads"))
+
+
+def _ensure_uploads_dir() -> Path:
+    try:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        return UPLOADS_DIR
+    except OSError:
+        import tempfile
+
+        fallback = Path(tempfile.gettempdir()) / "madarbot-uploads"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
 
 webapp_channels_dir = webapp_frontend_dir / "channels"
 webapp_channels_assets_dir = webapp_channels_dir / "assets"
@@ -237,10 +250,7 @@ if browser_assets_dir.exists():
         "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
     )
 
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount(
-    "/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads"
-)
+app.mount("/uploads", StaticFiles(directory=str(_ensure_uploads_dir())), name="media-uploads")
 
 app.include_router(owner_router)
 app.include_router(scraper_router)
@@ -266,6 +276,13 @@ if settings.mcp_enabled:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import JSONResponse as StarletteJSONResponse
 
+    if not settings.mcp_auth_token:
+        logger.critical(
+            "MCP_ENABLED=true but MCP_AUTH_TOKEN is not configured. "
+            "Set MCP_AUTH_TOKEN in your .env file or set MCP_ENABLED=false."
+        )
+        raise SystemExit(1)
+
     class McpAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             path = request.url.path
@@ -274,8 +291,6 @@ if settings.mcp_enabled:
                 auth_header = request.headers.get("authorization", "")
                 if auth_header.startswith("Bearer "):
                     token = auth_header[7:]
-                if not token:
-                    token = request.query_params.get("token")
                 _, tg_user_id = await verify_mcp_auth_async(token)
                 if tg_user_id is None:
                     ok, _ = verify_mcp_auth(token)
@@ -283,7 +298,7 @@ if settings.mcp_enabled:
                         return StarletteJSONResponse(
                             status_code=401,
                             content={
-                                "error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"
+                                "error": "Invalid or missing MCP auth token. Pass via Authorization: Bearer header"
                             },
                         )
                 if tg_user_id is not None:

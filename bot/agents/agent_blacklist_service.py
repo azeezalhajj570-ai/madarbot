@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.phone import normalize_optional_agent_phone_number
-from bot.db.models import Agent, AgentBlacklistEntry, ScrapedMember
+from bot.db.models import AgentBlacklistEntry, ScrapedMember
 
 from .service_support import AgentServiceSupport
 
@@ -42,10 +42,7 @@ class AgentBlacklistService(AgentServiceSupport):
         )
         rows = (await self.session.execute(stmt)).scalars().all()
 
-        total_stmt = (
-            select(AgentBlacklistEntry.id)
-            .where(AgentBlacklistEntry.agent_id == agent.id)
-        )
+        total_stmt = select(AgentBlacklistEntry.id).where(AgentBlacklistEntry.agent_id == agent.id)
         total = len((await self.session.execute(total_stmt)).scalars().all())
 
         return {
@@ -103,16 +100,20 @@ class AgentBlacklistService(AgentServiceSupport):
             )
             self.session.add(blacklist_entry)
             await self.session.flush()
-            created.append({
-                "id": blacklist_entry.id,
-                "agent_id": blacklist_entry.agent_id,
-                "tg_user_id": blacklist_entry.tg_user_id,
-                "username": blacklist_entry.username,
-                "phone": blacklist_entry.phone,
-                "reason": blacklist_entry.reason,
-                "created_by": blacklist_entry.created_by,
-                "created_at": blacklist_entry.created_at.isoformat() if blacklist_entry.created_at else None,
-            })
+            created.append(
+                {
+                    "id": blacklist_entry.id,
+                    "agent_id": blacklist_entry.agent_id,
+                    "tg_user_id": blacklist_entry.tg_user_id,
+                    "username": blacklist_entry.username,
+                    "phone": blacklist_entry.phone,
+                    "reason": blacklist_entry.reason,
+                    "created_by": blacklist_entry.created_by,
+                    "created_at": blacklist_entry.created_at.isoformat()
+                    if blacklist_entry.created_at
+                    else None,
+                }
+            )
 
         await self.session.commit()
         logger.info(
@@ -201,13 +202,14 @@ class AgentBlacklistService(AgentServiceSupport):
             try:
                 normalized = normalize_optional_agent_phone_number(phone)
                 user_id = phone_to_user.get(normalized) if normalized else None
-                results.append({
-                    "phone": phone,
-                    "tg_user_id": user_id,
-                    "resolved": user_id is not None,
-                })
+                results.append(
+                    {
+                        "phone": phone,
+                        "tg_user_id": user_id,
+                        "resolved": user_id is not None,
+                    }
+                )
             except ValueError:
                 results.append({"phone": phone, "tg_user_id": None, "resolved": False})
 
         return results
-

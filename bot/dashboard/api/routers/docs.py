@@ -225,28 +225,37 @@ tbody tr:hover td { background: var(--surface-hover); }
 
 def _sidebar_nav(lang: str) -> list[tuple[str, list[tuple[str, str]]]]:
     return [
-        (tr("doc_section_docs", lang), [
-            ("/docs", tr("home", lang)),
-            ("/docs/getting-started", tr("getting_started", lang)),
-            ("/docs/accounts", tr("accounts_setup", lang)),
-            ("/docs/groups", tr("group_management", lang)),
-            ("/docs/scraping", tr("scraping_engine", lang)),
-            ("/docs/campaigns", tr("bulk_campaigns", lang)),
-            ("/docs/automation", tr("automation_tasks", lang)),
-            ("/docs/leads", tr("leads_management", lang)),
-            ("/docs/analytics", tr("analytics", lang)),
-            ("/docs/subscription", tr("subscription_plans", lang)),
-        ]),
-        (tr("doc_section_api", lang), [
-            ("/docs/mcp", tr("mcp_server", lang)),
-            ("/docs/agents", tr("ai_agent_integration", lang)),
-        ]),
-        (tr("doc_section_resources", lang), [
-            ("/docs/faq", tr("faq", lang)),
-            ("/legal/tos", tr("terms_of_service", lang)),
-            ("/legal/privacy", tr("privacy_policy", lang)),
-            ("/legal/contact", tr("contact_us", lang)),
-        ]),
+        (
+            tr("doc_section_docs", lang),
+            [
+                ("/docs", tr("home", lang)),
+                ("/docs/getting-started", tr("getting_started", lang)),
+                ("/docs/accounts", tr("accounts_setup", lang)),
+                ("/docs/groups", tr("group_management", lang)),
+                ("/docs/scraping", tr("scraping_engine", lang)),
+                ("/docs/campaigns", tr("bulk_campaigns", lang)),
+                ("/docs/automation", tr("automation_tasks", lang)),
+                ("/docs/leads", tr("leads_management", lang)),
+                ("/docs/analytics", tr("analytics", lang)),
+                ("/docs/subscription", tr("subscription_plans", lang)),
+            ],
+        ),
+        (
+            tr("doc_section_api", lang),
+            [
+                ("/docs/mcp", tr("mcp_server", lang)),
+                ("/docs/agents", tr("ai_agent_integration", lang)),
+            ],
+        ),
+        (
+            tr("doc_section_resources", lang),
+            [
+                ("/docs/faq", tr("faq", lang)),
+                ("/legal/tos", tr("terms_of_service", lang)),
+                ("/legal/privacy", tr("privacy_policy", lang)),
+                ("/legal/contact", tr("contact_us", lang)),
+            ],
+        ),
     ]
 
 
@@ -254,9 +263,15 @@ def _render_sidebar(active_page: str, lang: str) -> str:
     parts = []
     nav = _sidebar_nav(lang)
     for section_title, links in nav:
-        parts.append(f'<div class="sidebar-section"><div class="sidebar-section-title">{section_title}</div>')
+        parts.append(
+            f'<div class="sidebar-section"><div class="sidebar-section-title">{section_title}</div>'
+        )
         for url, label in links:
-            cls = "active" if url == active_page or (active_page.startswith(url) and url != "/docs") else ""
+            cls = (
+                "active"
+                if url == active_page or (active_page.startswith(url) and url != "/docs")
+                else ""
+            )
             lang_url = f"{url}?lang={lang}" if "?" not in url else f"{url}&lang={lang}"
             parts.append(f'<a class="sidebar-link {cls}" href="{lang_url}">{label}</a>')
         parts.append("</div>")
@@ -264,11 +279,11 @@ def _render_sidebar(active_page: str, lang: str) -> str:
 
 
 def _extract_toc(content: str) -> list[tuple[str, str]]:
-    headings = re.findall(r'<h2[^>]*>(.*?)</h2>', content)
+    headings = re.findall(r"<h2[^>]*>(.*?)</h2>", content)
     toc = []
     for h in headings:
-        clean = re.sub(r'<[^>]+>', '', h).strip()
-        slug = re.sub(r'[^a-z0-9]+', '-', clean.lower()).strip('-')
+        clean = re.sub(r"<[^>]+>", "", h).strip()
+        slug = re.sub(r"[^a-z0-9]+", "-", clean.lower()).strip("-")
         toc.append((slug, clean))
     return toc
 
@@ -277,12 +292,9 @@ def _render_toc(content: str, lang: str) -> str:
     toc = _extract_toc(content)
     if not toc:
         return ""
-    items = "\n".join(
-        f'<a href="#{slug}">{html_mod.escape(label)}</a>'
-        for slug, label in toc
-    )
+    items = "\n".join(f'<a href="#{slug}">{html_mod.escape(label)}</a>' for slug, label in toc)
     return f"""<aside class="toc-sidebar">
-<div class="toc-title">{tr('on_this_page', lang)}</div>
+<div class="toc-title">{tr("on_this_page", lang)}</div>
 {items}
 </aside>"""
 
@@ -323,11 +335,11 @@ def docs_page(
 <meta name="theme-color" content="#0a0a0a">
 <meta name="description" content="{html_mod.escape(display_desc)}">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://madar.hamedco.com/docs/{'' if page == 'home' else page}">
+<link rel="canonical" href="https://madar.hamedco.com/docs/{"" if page == "home" else page}">
 <meta property="og:title" content="{html_mod.escape(display_title)} — MadarBot">
 <meta property="og:description" content="{html_mod.escape(display_desc)}">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://madar.hamedco.com/docs/{'' if page == 'home' else page}">
+<meta property="og:url" content="https://madar.hamedco.com/docs/{"" if page == "home" else page}">
 <title>{html_mod.escape(display_title)} — MadarBot</title>
 {jsonld}
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -347,8 +359,8 @@ def docs_page(
     </div>
     <div class="header-actions">
       <a href="{current_url}?lang={other_lang}" class="lang-toggle" title="{other_label}">{other_label}</a>
-      <a href="/legal/contact?lang={lang}">{tr('support', lang)}</a>
-      <a href="/webapp/agents" class="primary">{tr('dashboard', lang)}</a>
+      <a href="/legal/contact?lang={lang}">{tr("support", lang)}</a>
+      <a href="/webapp/agents" class="primary">{tr("dashboard", lang)}</a>
     </div>
   </div>
 </header>
@@ -360,16 +372,16 @@ def docs_page(
     <h1{h1_class}>{html_mod.escape(display_title)}</h1>
     <p class="hero-desc">{html_mod.escape(display_desc)}</p>
     <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
-      <button class="feedback-copy" onclick="copyPageForLLM()" title="{tr('copy_llm', lang)}">{tr('copy_llm', lang)}</button>
+      <button class="feedback-copy" onclick="copyPageForLLM()" title="{tr("copy_llm", lang)}">{tr("copy_llm", lang)}</button>
     </div>
 {display_content}
     <div class="feedback">
-      <span class="feedback-label">{tr('was_helpful', lang)}</span>
+      <span class="feedback-label">{tr("was_helpful", lang)}</span>
       <div class="feedback-btns">
-        <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('fb-thanks').classList.add('show')" aria-label="{tr('yes', lang)}">{tr('yes', lang)}</button>
-        <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('fb-thanks').classList.add('show')" aria-label="{tr('no', lang)}">{tr('no', lang)}</button>
+        <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('fb-thanks').classList.add('show')" aria-label="{tr("yes", lang)}">{tr("yes", lang)}</button>
+        <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('fb-thanks').classList.add('show')" aria-label="{tr("no", lang)}">{tr("no", lang)}</button>
       </div>
-      <span class="feedback-thanks" id="fb-thanks">{tr('thanks_feedback', lang)}</span>
+      <span class="feedback-thanks" id="fb-thanks">{tr("thanks_feedback", lang)}</span>
     </div>
   </main>
   {toc}
@@ -381,7 +393,7 @@ function copyPageForLLM() {{
   navigator.clipboard.writeText(text).then(() => {{
     const btn = document.querySelector('.feedback-copy');
     const orig = btn.textContent;
-    btn.textContent = '{tr('copied', lang)}';
+    btn.textContent = '{tr("copied", lang)}';
     setTimeout(() => btn.textContent = orig, 2000);
   }});
 }}
@@ -500,9 +512,12 @@ HOME_AR = """
 async def docs_home(request: Request, lang: str = Query(default="en")) -> str:
     _ = request
     return docs_page(
-        "home", "MadarBot Documentation",
+        "home",
+        "MadarBot Documentation",
         "Everything you need to automate, analyze, and manage your Telegram communities with MadarBot.",
-        HOME_EN, lang=lang, hero=True,
+        HOME_EN,
+        lang=lang,
+        hero=True,
         title_ar="توثيق مداربوت",
         description_ar="كل ما تحتاجه لأتمتة وتحليل وإدارة مجتمعات تيليغرام باستخدام مداربوت.",
         content_ar=HOME_AR,
@@ -568,9 +583,11 @@ GS_AR = """
 async def docs_getting_started(request: Request, lang: str = Query(default="en")) -> str:
     _ = request
     return docs_page(
-        "getting-started", "Getting Started",
+        "getting-started",
+        "Getting Started",
         "Set up MadarBot in 5 minutes: authenticate, link accounts, add groups, and run your first scrape.",
-        GS_EN, lang=lang,
+        GS_EN,
+        lang=lang,
         title_ar="البدء",
         description_ar="إعداد مداربوت في 5 دقائق: توثيق الدخول، ربط الحسابات، إضافة المجموعات، وتشغيل أول استخراج.",
         content_ar=GS_AR,
@@ -638,7 +655,16 @@ ACCOUNTS_AR = """
 
 @router.get("/accounts", response_class=HTMLResponse)
 async def docs_accounts(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("accounts", "Accounts & Setup", "Learn how to link Telegram accounts, manage roles, and understand safety limits.", ACCOUNTS_EN, lang=lang, title_ar="الحسابات والإعداد", description_ar="تعلم كيفية ربط حسابات تيليغرام وإدارة الأدوار وفهم حدود الأمان.", content_ar=ACCOUNTS_AR)
+    return docs_page(
+        "accounts",
+        "Accounts & Setup",
+        "Learn how to link Telegram accounts, manage roles, and understand safety limits.",
+        ACCOUNTS_EN,
+        lang=lang,
+        title_ar="الحسابات والإعداد",
+        description_ar="تعلم كيفية ربط حسابات تيليغرام وإدارة الأدوار وفهم حدود الأمان.",
+        content_ar=ACCOUNTS_AR,
+    )
 
 
 GROUPS_EN = """<h2 id="overview">Overview</h2><p>The Groups section gives you a unified view of all Telegram groups you manage through MadarBot.</p><h2 id="adding">Adding Groups</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">POST</span><span class="endpoint-path">/webapp/scraper/groups</span></div><p>Add a group by username or invite link.</p></div><h2 id="sync">Syncing Admins and Bots</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">POST</span><span class="endpoint-path">/webapp/agents/{agent_id}/groups/{group_id}/sync-admins-bots</span></div><p>Synchronize admin list and bot members.</p></div><h2 id="daily-summaries">Daily Summaries & Knowledge</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">GET</span><span class="endpoint-path">/webapp/scraper/groups/{id}/daily-summaries</span></div><p>AI-generated daily summaries of group activity.</p></div>"""
@@ -647,7 +673,16 @@ GROUPS_AR = """<h2 id="overview">نظرة عامة</h2><p>قسم المجموع�
 
 @router.get("/groups", response_class=HTMLResponse)
 async def docs_groups(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("groups", "Group Management", "Add, monitor, and manage Telegram groups with member lists and admin sync.", GROUPS_EN, lang=lang, title_ar="إدارة المجموعات", description_ar="أضف وراقب وأدر مجموعات تيليغرام مع قوائم الأعضاء ومزامنة المشرفين.", content_ar=GROUPS_AR)
+    return docs_page(
+        "groups",
+        "Group Management",
+        "Add, monitor, and manage Telegram groups with member lists and admin sync.",
+        GROUPS_EN,
+        lang=lang,
+        title_ar="إدارة المجموعات",
+        description_ar="أضف وراقب وأدر مجموعات تيليغرام مع قوائم الأعضاء ومزامنة المشرفين.",
+        content_ar=GROUPS_AR,
+    )
 
 
 SCRAPING_EN = """<h2 id="overview">Overview</h2><p>The Scraping Engine extracts data from Telegram groups you administer including member lists and message history.</p><h2 id="api">API Endpoints</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">POST</span><span class="endpoint-path">/webapp/scraper/scrape-members</span></div><p>Start a member scraping job.</p></div><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">POST</span><span class="endpoint-path">/webapp/scraper/scrape-messages</span></div><p>Start a message scraping job.</p></div><h2 id="limits">Rate Limits</h2><p>Use a dedicated Scraper account. Platform auto-pauses on flood wait. Page size: 100, pause: 0.2s between pages.</p></div>"""
@@ -656,7 +691,16 @@ SCRAPING_AR = """<h2 id="overview">نظرة عامة</h2><p>محرك الاست�
 
 @router.get("/scraping", response_class=HTMLResponse)
 async def docs_scraping(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("scraping", "Scraping Engine", "Extract member lists, message history, and group data.", SCRAPING_EN, lang=lang, title_ar="محرك الاستخراج", description_ar="استخرج قوائم الأعضاء وسجل الرسائل وبيانات المجموعات.", content_ar=SCRAPING_AR)
+    return docs_page(
+        "scraping",
+        "Scraping Engine",
+        "Extract member lists, message history, and group data.",
+        SCRAPING_EN,
+        lang=lang,
+        title_ar="محرك الاستخراج",
+        description_ar="استخرج قوائم الأعضاء وسجل الرسائل وبيانات المجموعات.",
+        content_ar=SCRAPING_AR,
+    )
 
 
 CAMPAIGNS_EN = """<h2 id="overview">Overview</h2><p>Bulk Campaigns let you send targeted messages to group members at scale.</p><h2 id="creating">Creating a Campaign</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">POST</span><span class="endpoint-path">/webapp/agents/{agent_id}/campaigns</span></div><p>Create a new bulk messaging campaign.</p></div><h2 id="best-practices">Best Practices</h2><ul><li>Personalize with {first_name}</li><li>Test on small groups first</li><li>Respect rate limits (30-60 msg/min)</li><li>Include opt-out instructions</li></ul>"""
@@ -665,7 +709,16 @@ CAMPAIGNS_AR = """<h2 id="overview">نظرة عامة</h2><p>الحملات ال
 
 @router.get("/campaigns", response_class=HTMLResponse)
 async def docs_campaigns(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("campaigns", "Bulk Campaigns", "Create targeted bulk messaging campaigns with delivery tracking.", CAMPAIGNS_EN, lang=lang, title_ar="الحملات الجماعية", description_ar="أنشئ حملات مراسلة جماعية مستهدفة مع تتبع التسليم.", content_ar=CAMPAIGNS_AR)
+    return docs_page(
+        "campaigns",
+        "Bulk Campaigns",
+        "Create targeted bulk messaging campaigns with delivery tracking.",
+        CAMPAIGNS_EN,
+        lang=lang,
+        title_ar="الحملات الجماعية",
+        description_ar="أنشئ حملات مراسلة جماعية مستهدفة مع تتبع التسليم.",
+        content_ar=CAMPAIGNS_AR,
+    )
 
 
 AUTOMATION_EN = """<h2 id="overview">Overview</h2><p>Automation tasks process incoming messages and trigger actions based on configurable rules.</p><h2 id="task-types">Task Types</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>Function</th></tr></thead><tbody><tr><td><code>reply_message</code></td><td>Auto-reply to keyword matches</td></tr><tr><td><code>welcome_flow</code></td><td>Send welcome to new members</td></tr><tr><td><code>lead_capture</code></td><td>Capture contact info</td></tr><tr><td><code>escalation_alert</code></td><td>Notify admins of conditions</td></tr><tr><td><code>notify_destination</code></td><td>Forward to another chat</td></tr></tbody></table></div>"""
@@ -674,7 +727,16 @@ AUTOMATION_AR = """<h2 id="overview">نظرة عامة</h2><p>مهام الأت�
 
 @router.get("/automation", response_class=HTMLResponse)
 async def docs_automation(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("automation", "Automation Tasks", "Configure auto-replies, welcome flows, lead capture, and more.", AUTOMATION_EN, lang=lang, title_ar="مهام الأتمتة", description_ar="إعداد الردود التلقائية وتدفقات الترحيب والتقاط العملاء والمزيد.", content_ar=AUTOMATION_AR)
+    return docs_page(
+        "automation",
+        "Automation Tasks",
+        "Configure auto-replies, welcome flows, lead capture, and more.",
+        AUTOMATION_EN,
+        lang=lang,
+        title_ar="مهام الأتمتة",
+        description_ar="إعداد الردود التلقائية وتدفقات الترحيب والتقاط العملاء والمزيد.",
+        content_ar=AUTOMATION_AR,
+    )
 
 
 LEADS_EN = """<h2 id="overview">Overview</h2><p>The Leads system captures and organizes contacts from automated lead capture tasks.</p><h2 id="api">API Endpoints</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">GET</span><span class="endpoint-path">/webapp/agents/{id}/leads</span></div><p>List leads with filtering by status, source, and date.</p></div><h2 id="ai-leads">AI-Assisted Lead Management</h2><p>AI agents via MCP can read, score, and update leads automatically.</p>"""
@@ -683,7 +745,16 @@ LEADS_AR = """<h2 id="overview">نظرة عامة</h2><p>نظام العملاء
 
 @router.get("/leads", response_class=HTMLResponse)
 async def docs_leads(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("leads", "Leads Management", "Capture, track, and manage leads with AI-assisted scoring.", LEADS_EN, lang=lang, title_ar="إدارة العملاء", description_ar="التقاط وتتبع وإدارة العملاء مع تقييم بالذكاء الاصطناعي.", content_ar=LEADS_AR)
+    return docs_page(
+        "leads",
+        "Leads Management",
+        "Capture, track, and manage leads with AI-assisted scoring.",
+        LEADS_EN,
+        lang=lang,
+        title_ar="إدارة العملاء",
+        description_ar="التقاط وتتبع وإدارة العملاء مع تقييم بالذكاء الاصطناعي.",
+        content_ar=LEADS_AR,
+    )
 
 
 ANALYTICS_EN = """<h2 id="overview">Overview</h2><p>View platform usage metrics, group activity, agent performance, and AI feature effectiveness.</p><h2 id="api">API</h2><div class="endpoint"><div class="endpoint-header"><span class="endpoint-method">GET</span><span class="endpoint-path">/webapp/agents/{id}/analytics</span></div><p>Analytics summary for a specific agent.</p></div><h2 id="notifications">Notifications</h2><p>Alerts for new leads, escalation, subscription limits, account state changes, and campaign completion.</p>"""
@@ -692,7 +763,16 @@ ANALYTICS_AR = """<h2 id="overview">نظرة عامة</h2><p>اعرض مقايي
 
 @router.get("/analytics", response_class=HTMLResponse)
 async def docs_analytics(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("analytics", "Analytics", "View platform usage, group activity, lead conversion, and AI performance.", ANALYTICS_EN, lang=lang, title_ar="التحليلات", description_ar="اعرض استخدام المنصة ونشاط المجموعات وتحويل العملاء وأداء الذكاء الاصطناعي.", content_ar=ANALYTICS_AR)
+    return docs_page(
+        "analytics",
+        "Analytics",
+        "View platform usage, group activity, lead conversion, and AI performance.",
+        ANALYTICS_EN,
+        lang=lang,
+        title_ar="التحليلات",
+        description_ar="اعرض استخدام المنصة ونشاط المجموعات وتحويل العملاء وأداء الذكاء الاصطناعي.",
+        content_ar=ANALYTICS_AR,
+    )
 
 
 SUB_EN = """<h2 id="plans">Plans</h2><div class="table-wrap"><table><thead><tr><th>Feature</th><th>Free</th><th>Pro</th><th>Business</th></tr></thead><tbody><tr><td>Dashboard access</td><td>View only</td><td>Full</td><td>Full</td></tr><tr><td>Linked accounts</td><td>1</td><td>5</td><td>25</td></tr><tr><td>Groups</td><td>5</td><td>50</td><td>Unlimited</td></tr><tr><td>Scraping jobs/day</td><td>3</td><td>50</td><td>Unlimited</td></tr><tr><td>Bulk messages/day</td><td>—</td><td>500</td><td>10,000</td></tr><tr><td>Automation tasks</td><td>5</td><td>50</td><td>500</td></tr><tr><td>MCP Server</td><td>Read-only</td><td>Read-only</td><td>Read + Write</td></tr><tr><td>AI features</td><td>—</td><td>Basic</td><td>Full</td></tr><tr><td>Data retention</td><td>30 days</td><td>90 days</td><td>Custom</td></tr><tr><td>Priority support</td><td>—</td><td>—</td><td>Yes</td></tr></tbody></table></div><h2 id="billing">Billing</h2><p>Paid plans billed monthly/annually via Stripe. Cancel anytime from Settings → Billing.</p>"""
@@ -701,7 +781,16 @@ SUB_AR = """<h2 id="plans">الخطط</h2><div class="table-wrap"><table><thead>
 
 @router.get("/subscription", response_class=HTMLResponse)
 async def docs_subscription(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("subscription", "Subscription Plans", "Compare Free, Pro, and Business plans.", SUB_EN, lang=lang, title_ar="خطط الاشتراك", description_ar="قارن بين الخطط المجانية والمحترفة والأعمال.", content_ar=SUB_AR)
+    return docs_page(
+        "subscription",
+        "Subscription Plans",
+        "Compare Free, Pro, and Business plans.",
+        SUB_EN,
+        lang=lang,
+        title_ar="خطط الاشتراك",
+        description_ar="قارن بين الخطط المجانية والمحترفة والأعمال.",
+        content_ar=SUB_AR,
+    )
 
 
 MCP_EN = """<h2 id="overview">Overview</h2><p>The MCP Server exposes your MadarBot workspace to AI agents via JSON-RPC 2.0.</p><h2 id="enabling">Enabling</h2><ol><li>Set <code>MCP_ENABLED=true</code> in environment</li><li>Generate an MCP token in Settings → MCP Tokens</li><li>Configure your AI client with the endpoint</li></ol><h2 id="tools">Available Tools</h2><h3>Read Operations</h3><ul><li><code>health</code>, <code>list_accounts</code>, <code>list_groups</code>, <code>list_members</code>, <code>list_messages</code>, <code>list_leads</code>, <code>list_tasks</code>, <code>list_campaigns</code>, <code>get_analytics</code>, <code>get_group_knowledge</code>, <code>get_daily_summary</code></li></ul><h3>Write Operations</h3><ul><li><code>create_task</code>, <code>update_task</code>, <code>delete_task</code>, <code>update_lead</code>, <code>create_campaign</code>, <code>cancel_campaign</code>, <code>send_message</code></li></ul><h2 id="auth">Authentication</h2><pre><code>Authorization: Bearer &lt;mcp_token&gt;</code></pre><h2 id="example">Configuration Example</h2><pre><code>{{
@@ -724,7 +813,16 @@ MCP_AR = """<h2 id="overview">نظرة عامة</h2><p>خادم MCP يعرض م�
 
 @router.get("/mcp", response_class=HTMLResponse)
 async def docs_mcp(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("mcp", "MCP Server", "Connect AI agents via Model Context Protocol (JSON-RPC API).", MCP_EN, lang=lang, title_ar="خادم MCP", description_ar="اربط وكلاء الذكاء الاصطناعي عبر بروتوكول MCP (JSON-RPC API).", content_ar=MCP_AR)
+    return docs_page(
+        "mcp",
+        "MCP Server",
+        "Connect AI agents via Model Context Protocol (JSON-RPC API).",
+        MCP_EN,
+        lang=lang,
+        title_ar="خادم MCP",
+        description_ar="اربط وكلاء الذكاء الاصطناعي عبر بروتوكول MCP (JSON-RPC API).",
+        content_ar=MCP_AR,
+    )
 
 
 AGENTS_EN = """<h2 id="overview">Overview</h2><p>MadarBot's MCP Server enables AI agents to interact with your Telegram workspace programmatically.</p><h2 id="capabilities">What AI Agents Can Do</h2><div class="table-wrap"><table><thead><tr><th>Capability</th><th>Plan Required</th></tr></thead><tbody><tr><td>Read workspace data</td><td>Free+</td></tr><tr><td>Manage leads</td><td>Pro+</td></tr><tr><td>Create automation tasks</td><td>Pro+</td></tr><tr><td>Run campaigns</td><td>Business</td></tr><tr><td>Send messages</td><td>Business</td></tr><tr><td>View analytics</td><td>Free+</td></tr></tbody></table></div><h2 id="setup">Setup Guide</h2><h3>Claude Desktop</h3><pre><code>{{
@@ -741,7 +839,16 @@ AGENTS_AR = """<h2 id="overview">نظرة عامة</h2><p>خادم MCP في مد
 
 @router.get("/agents", response_class=HTMLResponse)
 async def docs_agents(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("agents", "AI Agent Integration", "Connect AI assistants to your workspace via MCP.", AGENTS_EN, lang=lang, title_ar="تكامل الذكاء الاصطناعي", description_ar="اربط مساعدي الذكاء الاصطناعي بمساحة عملك عبر MCP.", content_ar=AGENTS_AR)
+    return docs_page(
+        "agents",
+        "AI Agent Integration",
+        "Connect AI assistants to your workspace via MCP.",
+        AGENTS_EN,
+        lang=lang,
+        title_ar="تكامل الذكاء الاصطناعي",
+        description_ar="اربط مساعدي الذكاء الاصطناعي بمساحة عملك عبر MCP.",
+        content_ar=AGENTS_AR,
+    )
 
 
 FAQ_EN = """<h2 id="general">General</h2><h3>What is MadarBot?</h3><p>MadarBot is a Telegram automation platform for managing groups, scraping data, sending campaigns, and connecting AI agents.</p><h3>Is it free?</h3><p>Free plan available with limited features. Pro and Business unlock full capabilities.</p><h2 id="accounts">Accounts</h2><h3>Is my Telegram account safe?</h3><p>Yes. Credentials are encrypted at rest. You can unlink anytime.</p><h3>Can I use multiple accounts?</h3><p>Yes. Pro supports 5, Business supports 25 linked accounts.</p><h2 id="mcp-faq">MCP & AI Agents</h2><h3>What AI agents can connect?</h3><p>Any MCP-compatible client: Claude Desktop, Cursor, Cline, Windsurf, ChatGPT (via GPT Actions).</p><h3>Can AI agents send messages?</h3><p>Yes, on Business plans with MCP_READONLY=false.</p><h2 id="billing">Billing</h2><h3>How do I cancel?</h3><p>Cancel from Settings → Billing. Active until end of billing period.</p>"""
@@ -750,4 +857,13 @@ FAQ_AR = """<h2 id="general">عام</h2><h3>ما هو مداربوت؟</h3><p>م
 
 @router.get("/faq", response_class=HTMLResponse)
 async def docs_faq(request: Request, lang: str = Query(default="en")) -> str:
-    return docs_page("faq", "FAQ", "Frequently asked questions about MadarBot.", FAQ_EN, lang=lang, title_ar="الأسئلة الشائعة", description_ar="أسئلة متكررة حول مداربوت.", content_ar=FAQ_AR)
+    return docs_page(
+        "faq",
+        "FAQ",
+        "Frequently asked questions about MadarBot.",
+        FAQ_EN,
+        lang=lang,
+        title_ar="الأسئلة الشائعة",
+        description_ar="أسئلة متكررة حول مداربوت.",
+        content_ar=FAQ_AR,
+    )

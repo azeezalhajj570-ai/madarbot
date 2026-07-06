@@ -148,7 +148,10 @@ async def test_group_warnings_endpoint(api_client, db_session) -> None:
 
 @pytest.mark.asyncio
 async def test_settings_schema_endpoint(api_client) -> None:
-    response = await api_client.get("/settings/schema")
+    response = await api_client.get(
+        "/settings/schema",
+        headers={"X-Telegram-Init-Data": _webapp_init_data(user_id=6666)},
+    )
     assert response.status_code == 200
     payload = response.json()
     assert "anti_links" in payload
