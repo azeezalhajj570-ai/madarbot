@@ -713,9 +713,10 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if agent is None:
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
-        await self._ensure_agent_group_visible(agent=agent, tg_group_id=tg_group_id)
-        if agent.auth_state != "active" or not agent.session_string:
+        session_string = agent.session_string
+        if agent.auth_state != "active" or not session_string:
             raise ValueError("Link an active agent first to scrape group members")
+        await self._ensure_agent_group_visible(agent=agent, tg_group_id=tg_group_id)
         results = await ScraperService(self.session).scrape_full_group(
             agent_id=agent.id,
             tg_group_id=tg_group_id,
@@ -780,8 +781,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if not settings.telegram_api_id or not settings.telegram_api_hash:
             return []
 
+        sess_str = agent.session_string
         client = TelegramClient(
-            StringSession(agent.session_string),
+            StringSession(sess_str),
             settings.telegram_api_id,
             settings.telegram_api_hash,
         )
@@ -834,7 +836,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if agent is None:
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
-        if agent.auth_state != "active" or not agent.session_string:
+        session_string = agent.session_string
+        if agent.auth_state != "active" or not session_string:
             raise ValueError("Link an active agent first")
 
         from bot.agents.session import SessionManager
