@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MadarBot - System Monitor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0e0e10; color: #e4e4e7;
+    min-height: 100vh; padding: 24px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; padding-bottom: 16px;
+    border-bottom: 1px solid #27272a;
+  }
+  header h1 { font-size: 20px; font-weight: 600; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  }
+  .status-badge.ok { background: #052e16; color: #4ade80; }
+  .status-badge.degraded { background: #451a03; color: #fb923c; }
+  .status-badge.down { background: #450a0a; color: #f87171; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .status-dot.ok { background: #4ade80; }
+  .status-dot.degraded { background: #fb923c; }
+  .status-dot.down { background: #f87171; }
+  .status-dot.unknown { background: #71717a; }
+  .timestamp { font-size: 12px; color: #71717a; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card {
+    background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .card-header { display: flex; justify-content: space-between; align-items: center; }
+  .card-title { font-size: 13px; color: #a1a1aa; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card-value { font-size: 14px; }
+  .card-metric { font-size: 12px; color: #71717a; }
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  th { text-align: left; padding: 8px 12px; border-bottom: 1px solid #27272a; color: #71717a; font-weight: 500; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1f1f23; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .bar-label { width: 80px; font-size: 12px; color: #a1a1aa; }
+  .bar-track { flex: 1; height: 20px; background: #1f1f23; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 6px; font-size: 11px; color: #fff; font-weight: 500; }
+  .bar-count { width: 40px; text-align: right; font-size: 12px; color: #e4e4e7; }
+  .stats-row {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px;
+  }
+  .stat-item {
+    background: #18181b; border: 1px solid #27272a; border-radius: 6px;
+    padding: 12px; text-align: center;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: #71717a; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .error-row { color: #f87171; }
+  .loading { text-align: center; padding: 48px; color: #71717a; }
+  .fail-table { width: 100%; }
+  .fail-empty { color: #71717a; padding: 12px; text-align: center; }
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    .cards { grid-template-columns: 1fr 1fr; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>MadarBot System Monitor</h1>
+    <div>
+      <span id="statusBadge" class="status-badge">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Loading...</span>
+      </span>
+      <div class="timestamp" id="timestamp"></div>
+    </div>
+  </header>
+
+  <div class="cards" id="serviceCards"></div>
+
+  <div class="section">
+    <div class="section-title">Jobs by Status</div>
+    <div id="jobBars"></div>
+    <div style="display:flex;gap:24px;margin-top:12px;font-size:13px;">
+      <div>Stuck Jobs: <strong id="stuckJobs">-</strong></div>
+      <div>Failure Rate (24h): <strong id="failureRate">-</strong></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Recent Failures (24h)</div>
+    <table id="failTable">
+      <thead><tr><th>ID</th><th>Agent</th><th>Type</th><th>Time</th></tr></thead>
+      <tbody id="failBody"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Stats Summary</div>
+    <div class="stats-row" id="statsRow"></div>
+  </div>
+</div>
+
+<script>
+const BASE = '/api/internal';
+const OWNER_BASE = '/webapp/owner';
+
+const JOB_COLORS = {
+  pending: '#a78bfa',
+  queued: '#60a5fa',
+  running: '#4ade80',
+  completed: '#22d3ee',
+  failed: '#f87171',
+  aborted: '#a1a1aa',
+};
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function updateStatus(overall) {
+  const badge = document.getElementById('statusBadge');
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  badge.className = 'status-badge ' + (overall || 'unknown');
+  dot.className = 'status-dot ' + (overall || 'unknown');
+  text.textContent = (overall || 'Unknown').toUpperCase();
+}
+
+function renderCards(checks) {
+  const cards = document.getElementById('serviceCards');
+  const items = [
+    { key: 'database', label: 'Database' },
+    { key: 'redis', label: 'Redis' },
+    { key: 'bot_worker', label: 'Bot Worker' },
+    { key: 'agent_worker', label: 'Agent Worker' },
+    { key: 'queue', label: 'Queue' },
+  ];
+  cards.innerHTML = items.map(item => {
+    const c = checks[item.key] || {};
+    const status = c.status || 'unknown';
+    const dot = `<span class="status-dot ${status}"></span>`;
+    let extra = '';
+    if (item.key === 'database' || item.key === 'redis') {
+      extra = `<div class="card-metric">${c.latency_ms || '-'} ms</div>`;
+    } else if (item.key === 'bot_worker' || item.key === 'agent_worker') {
+      extra = `<div class="card-metric">${c.last_seen ? new Date(parseFloat(c.last_seen) * 1000).toLocaleTimeString() : '-'}</div>`;
+    } else if (item.key === 'queue') {
+      extra = `<div class="card-metric">Pending: ${c.pending || 0} | Running: ${c.running || 0}</div>`;
+    }
+    return `<div class="card">
+      <div class="card-header">
+        <span class="card-title">${item.label}</span>
+        ${dot}
+      </div>
+      <div class="card-value">${status.toUpperCase()}</div>
+      ${extra}
+      ${c.detail ? `<div class="card-metric" style="color:#f87171;font-size:11px">${c.detail}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderJobBars(checks) {
+  const queue = checks.queue || {};
+  const jbs = queue.jobs_by_status || {};
+  const total = queue.total || Object.values(jbs).reduce((a, b) => a + b, 0);
+  const el = document.getElementById('jobBars');
+  if (total === 0) {
+    el.innerHTML = '<div style="color:#71717a;font-size:13px">No jobs found</div>';
+    return;
+  }
+  const entries = Object.entries(jbs).sort((a, b) => b[1] - a[1]);
+  el.innerHTML = entries.map(([status, count]) => {
+    const pct = (count / total) * 100;
+    const color = JOB_COLORS[status] || '#71717a';
+    return `<div class="bar-row">
+      <span class="bar-label">${status}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:${color}">${pct > 10 ? count : ''}</div>
+      </div>
+      <span class="bar-count">${count}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('stuckJobs').textContent = queue.stuck ?? '-';
+  const failures = checks.recent_failures_24h || {};
+  const failedCount = failures.count || 0;
+  const completed24 = queue.jobs_by_status?.completed || 0;
+  const total24 = failedCount + completed24;
+  const rate = total24 > 0 ? ((failedCount / total24) * 100).toFixed(1) + '%' : '0%';
+  document.getElementById('failureRate').textContent = rate;
+}
+
+function renderFailures(checks) {
+  const failures = checks.recent_failures_24h || {};
+  const jobs = failures.jobs || [];
+  const tbody = document.getElementById('failBody');
+  if (jobs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="fail-empty">No failures in last 24h</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => `<tr class="error-row">
+    <td>${j.id}</td>
+    <td>#${j.agent_id}</td>
+    <td>${j.job_type}</td>
+    <td>${j.updated_at ? new Date(j.updated_at).toLocaleString() : '-'}</td>
+  </tr>`).join('');
+}
+
+function renderStats(stats) {
+  const el = document.getElementById('statsRow');
+  const items = [
+    { label: 'Groups', value: stats.total_groups ?? '-' },
+    { label: 'Active', value: stats.active_groups ?? '-' },
+    { label: 'Agents', value: stats.linked_agents ?? '-' },
+    { label: 'Active Ag.', value: stats.active_agents ?? '-' },
+    { label: 'Msgs/24h', value: stats.messages_sent_24h ?? '-' },
+    { label: 'Mod Actions', value: stats.moderation_actions ?? '-' },
+    { label: 'Warnings', value: stats.open_warnings ?? '-' },
+    { label: 'Plugins', value: stats.enabled_plugins ?? '-' },
+    { label: 'Total Jobs', value: stats.total_jobs ?? '-' },
+  ];
+  el.innerHTML = items.map(i => `<div class="stat-item">
+    <div class="stat-value">${i.value}</div>
+    <div class="stat-label">${i.label}</div>
+  </div>`).join('');
+}
+
+async function loadHealth() {
+  try {
+    const data = await fetchJSON(BASE + '/system-health');
+    updateStatus(data.status);
+    document.getElementById('timestamp').textContent = 'Last updated: ' + new Date(data.timestamp).toLocaleTimeString();
+    renderCards(data.checks || {});
+    renderJobBars(data.checks || {});
+    renderFailures(data.checks || {});
+  } catch (err) {
+    updateStatus('down');
+    document.getElementById('timestamp').textContent = 'Error: ' + err.message;
+    document.getElementById('serviceCards').innerHTML =
+      '<div class="card" style="grid-column:1/-1;text-align:center;color:#f87171">Failed to fetch health data</div>';
+  }
+}
+
+async function loadStats() {
+  try {
+    const data = await fetchJSON(OWNER_BASE + '/stats');
+    renderStats(data);
+  } catch (_) {}
+}
+
+loadHealth();
+loadStats();
+setInterval(loadHealth, 15000);
+setInterval(loadStats, 30000);
+</script>
+</body>
+</html>

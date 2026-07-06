@@ -66,6 +66,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost', 8080); c.request('GET', '/health'); r=c.getresponse(); exit(0) if r.status == 200 else exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   agent_worker:
     build:
@@ -93,6 +99,12 @@ services:
       REDIS_URL: redis://redis:6379/0
       DEFAULT_LANGUAGE: ar
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'dramatiq bot.agents.worker' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   backend:
     build:
@@ -114,6 +126,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost', 8080); c.request('GET', '/health'); r=c.getresponse(); exit(0) if r.status == 200 else exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   miniapp_agents:
     build:
