@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 
 import dramatiq
 from dramatiq.middleware.current_message import CurrentMessage
@@ -45,6 +47,17 @@ from bot.workers.app import redis_broker  # noqa: F401
 
 
 logger = structlog.get_logger(__name__)
+
+from bot.config import get_settings as _get_worker_settings
+_worker_settings = _get_worker_settings()
+if _worker_settings.bot_app_kind in ("admin", "agents") and not _worker_settings.session_encryption_key:
+    logging.getLogger(__name__).critical(
+        "SESSION_ENCRYPTION_KEY is not configured. "
+        "Agent session strings would be stored in plaintext. Refusing to start worker. "
+        "Set SESSION_ENCRYPTION_KEY in your .env file."
+    )
+    sys.exit(1)
+
 _DEFAULT_SESSION_LOCAL = db_session.SessionLocal
 SessionLocal = _DEFAULT_SESSION_LOCAL
 

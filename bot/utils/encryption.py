@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import logging
+
 from bot.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def _get_fernet():
     key = get_settings().session_encryption_key
     if not key:
+        logger.warning(
+            "SESSION_ENCRYPTION_KEY is not configured — session strings will be stored in plaintext. "
+            "Set SESSION_ENCRYPTION_KEY in your environment to encrypt agent session strings at rest."
+        )
         return None
     try:
         from cryptography.fernet import Fernet
 
         return Fernet(key.encode() if isinstance(key, str) else key)
     except (ImportError, ValueError):
+        logger.error("SESSION_ENCRYPTION_KEY is invalid — cannot initialize Fernet cipher")
         return None
 
 
