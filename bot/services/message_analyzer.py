@@ -254,12 +254,13 @@ async def analyze_group_messages(
         if isinstance(keywords, str):
             keywords = [k.strip() for k in keywords.split(",") if k.strip()]
 
+        escaped_q = question[:30].replace("%", "\\%").replace("_", "\\_")
         existing = (
             (
                 await session.execute(
                     select(FAQEntry).where(
                         FAQEntry.group_id == managed_group_id,
-                        FAQEntry.question.ilike(f"%{question[:30].replace('%', '\\%').replace('_', '\\_')}%"),
+                        FAQEntry.question.ilike(f"%{escaped_q}%"),
                     )
                 )
             ).scalar_one_or_none()
