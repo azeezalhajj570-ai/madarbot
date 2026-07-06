@@ -36,6 +36,7 @@ from ..dependencies import (
     get_identity,
     require_active_subscription,
     require_business_plan,
+    require_bot_owner,
 )
 from .auth_boundary import require_agents_boundary, require_any_boundary
 from ._shared import (
@@ -1148,6 +1149,7 @@ async def webapp_agent_analytics(
 async def webapp_reconcile_stale_jobs(
     max_hours: int = Query(default=2, ge=1, le=168),
     mark_failed: bool = Query(default=False),
+    _: TelegramWebAppIdentity = Depends(require_bot_owner),
 ) -> dict[str, Any]:
     """Reconcile stale pending/queued agent jobs older than max_hours."""
     from bot.agents.dispatch import reconcile_stale_jobs

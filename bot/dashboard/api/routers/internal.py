@@ -143,7 +143,9 @@ async def group_plugins(
 
 
 @router.get("/settings/schema")
-async def settings_schema() -> dict[str, list[dict[str, Any]]]:
+async def settings_schema(
+    _: TelegramWebAppIdentity = Depends(_require_bot_owner),
+) -> dict[str, list[dict[str, Any]]]:
     catalog = plugin_manager.discover_schema_catalog()
     return {plugin: [entry.model_dump() for entry in schema] for plugin, schema in catalog.items()}
 
@@ -181,25 +183,38 @@ async def enable_plugin(
     return {"status": "ok"}
 
 
-@router.post("/pilot/test")
-async def test_ai_pilot(payload: dict[str, Any]) -> dict[str, Any]:
-    provider_name = str(payload.get("provider") or get_settings().ai_provider).strip().lower()
-    api_key = str(payload.get("api_key") or "").strip()
-    model = str(payload.get("model") or "").strip()
-    provider_url = str(payload.get("provider_url") or "").strip()
+ALLOWED_PROVIDER_URLS: dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/models",
+    "openrouter": "https://openrouter.ai/api/v1",
+}
 
-    if not api_key:
-        settings = get_settings()
-        if provider_name == "openai":
-            api_key = settings.openai_api_key or ""
-        elif provider_name == "gemini":
-            api_key = settings.gemini_api_key or ""
-        elif provider_name == "openrouter":
-            api_key = settings.openrouter_api_key or ""
+
+@router.post("/pilot/test")
+async def test_ai_pilot(
+    payload: dict[str, Any],
+    _: TelegramWebAppIdentity = Depends(_require_bot_owner),
+) -> dict[str, Any]:
+    provider_name = str(payload.get("provider") or get_settings().ai_provider).strip().lower()
+
+    settings = get_settings()
+    if provider_name == "openai":
+        api_key = settings.openai_api_key or ""
+    elif provider_name == "gemini":
+        api_key = settings.gemini_api_key or ""
+    elif provider_name == "openrouter":
+        api_key = settings.openrouter_api_key or ""
+    else:
+        api_key = ""
 
     if not api_key:
         raise HTTPException(status_code=400, detail="No API key configured")
 
+    provider_url = ALLOWED_PROVIDER_URLS.get(provider_name)
+    if not provider_url:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_name}")
+
+    model = str(payload.get("model") or "").strip()
     from bot.plugins.ai_pilot.provider import (
         AIPilotError,
         GeminiPilotProvider,
@@ -209,11 +224,11 @@ async def test_ai_pilot(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     if provider_name == "openai":
-        provider = OpenAIPilotProvider(api_key, model or "gpt-4.1-mini", provider_url or "https://api.openai.com/v1")
+        provider = OpenAIPilotProvider(api_key, model or "gpt-4.1-mini", provider_url)
     elif provider_name == "gemini":
-        provider = GeminiPilotProvider(api_key, model or "gemini-1.5-flash", provider_url or "https://generativelanguage.googleapis.com/v1beta/models")
+        provider = GeminiPilotProvider(api_key, model or "gemini-1.5-flash", provider_url)
     elif provider_name == "openrouter":
-        provider = OpenRouterPilotProvider(api_key, model or "google/gemini-2.0-flash-001", provider_url or "https://openrouter.ai/api/v1")
+        provider = OpenRouterPilotProvider(api_key, model or "google/gemini-2.0-flash-001", provider_url)
     else:
         provider = HeuristicPilotProvider()
 
