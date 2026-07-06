@@ -250,7 +250,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
-                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
+                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media'}</span>
                       <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
                         const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
@@ -358,7 +358,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                   </div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
-                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
+                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media'}</span>
                       <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
                         const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
