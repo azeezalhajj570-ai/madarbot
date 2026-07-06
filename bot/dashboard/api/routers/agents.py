@@ -851,9 +851,7 @@ async def webapp_retry_agent_job(
     return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_QUEUED}
 
 
-@router.get(
-    "/api/agents/{agent_id}/jobs/health", dependencies=[Depends(require_agents_boundary)]
-)
+@router.get("/api/agents/{agent_id}/jobs/health", dependencies=[Depends(require_agents_boundary)])
 @router.get(
     "/webapp/agents/{agent_id}/jobs/health",
     dependencies=[Depends(require_agents_boundary)],
@@ -1157,12 +1155,8 @@ async def webapp_reconcile_stale_jobs(
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
 
 
-@router.get(
-    "/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
-)
-@router.get(
-    "/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
-)
+@router.get("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
 async def webapp_agent_blacklist(
     agent_id: int,
     page: int = Query(default=1, ge=1),
@@ -1186,12 +1180,8 @@ async def webapp_agent_blacklist(
         ) from exc
 
 
-@router.post(
-    "/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
-)
-@router.post(
-    "/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)]
-)
+@router.post("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
 async def webapp_agent_blacklist_add(
     agent_id: int,
     payload: BlacklistAddRequest,
@@ -1304,7 +1294,7 @@ async def upload_agent_media(
 
     from bot.dashboard.api.main import UPLOADS_DIR
 
-    agent = await ensure_agent_admin(agent_id, session, identity)
+    await ensure_agent_admin(agent_id, session, identity)
 
     ext = ""
     if file.filename:
@@ -1317,7 +1307,7 @@ async def upload_agent_media(
     if len(content) > MAX_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large ({len(content)} bytes). Max {MAX_SIZE // (1024*1024)}MB.",
+            detail=f"File too large ({len(content)} bytes). Max {MAX_SIZE // (1024 * 1024)}MB.",
         )
     dest.write_bytes(content)
 

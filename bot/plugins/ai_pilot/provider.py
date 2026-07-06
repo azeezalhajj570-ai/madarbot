@@ -270,7 +270,9 @@ def build_pilot_provider(
             logger.warning("ai_pilot_no_gemini_key")
             return HeuristicPilotProvider()
         resolved_model = model or settings.ai_model or settings.gemini_model
-        resolved_url = _normalize_url(base_url, "https://generativelanguage.googleapis.com/v1beta/models")
+        resolved_url = _normalize_url(
+            base_url, "https://generativelanguage.googleapis.com/v1beta/models"
+        )
         return GeminiPilotProvider(resolved_key, resolved_model, resolved_url)
 
     if provider_name == "openrouter":

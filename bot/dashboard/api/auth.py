@@ -28,8 +28,7 @@ def _dashboard_jwt_secret() -> str:
     secret = settings.dashboard_jwt_secret
     if not secret:
         raise RuntimeError(
-            "DASHBOARD_JWT_SECRET is not configured. "
-            "Set DASHBOARD_JWT_SECRET in your .env file."
+            "DASHBOARD_JWT_SECRET is not configured. Set DASHBOARD_JWT_SECRET in your .env file."
         )
     return secret
 

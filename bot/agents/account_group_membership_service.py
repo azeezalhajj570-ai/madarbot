@@ -410,8 +410,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
             )
 
         blacklisted_tg_subq = (
-            select(AgentBlacklistEntry.tg_user_id)
-            .where(
+            select(AgentBlacklistEntry.tg_user_id).where(
                 AgentBlacklistEntry.agent_id == agent.id,
                 AgentBlacklistEntry.tg_user_id.isnot(None),
             )
@@ -419,8 +418,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         filters.append(ScrapedMember.tg_user_id.notin_(select(blacklisted_tg_subq)))
 
         blacklisted_username_subq = (
-            select(func.lower(AgentBlacklistEntry.username))
-            .where(
+            select(func.lower(AgentBlacklistEntry.username)).where(
                 AgentBlacklistEntry.agent_id == agent.id,
                 AgentBlacklistEntry.username.isnot(None),
             )
@@ -432,8 +430,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         )
 
         blacklisted_phone_subq = (
-            select(AgentBlacklistEntry.phone)
-            .where(
+            select(AgentBlacklistEntry.phone).where(
                 AgentBlacklistEntry.agent_id == agent.id,
                 AgentBlacklistEntry.phone.isnot(None),
             )
@@ -443,8 +440,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         )
 
         already_sent_subq = (
-            select(SentBroadcastMessage.tg_user_id)
-            .where(
+            select(SentBroadcastMessage.tg_user_id).where(
                 SentBroadcastMessage.agent_id == agent.id,
                 SentBroadcastMessage.tg_group_id == canonical_id,
                 SentBroadcastMessage.status == "sent",
@@ -456,9 +452,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         try:
             total = int(
                 (
-                    await self.session.execute(
-                        select(func.count(ScrapedMember.id)).where(*filters)
-                    )
+                    await self.session.execute(select(func.count(ScrapedMember.id)).where(*filters))
                 ).scalar_one()
                 or 0
             )

@@ -228,7 +228,9 @@ async def test_ai_pilot(
     elif provider_name == "gemini":
         provider = GeminiPilotProvider(api_key, model or "gemini-1.5-flash", provider_url)
     elif provider_name == "openrouter":
-        provider = OpenRouterPilotProvider(api_key, model or "google/gemini-2.0-flash-001", provider_url)
+        provider = OpenRouterPilotProvider(
+            api_key, model or "google/gemini-2.0-flash-001", provider_url
+        )
     else:
         provider = HeuristicPilotProvider()
 

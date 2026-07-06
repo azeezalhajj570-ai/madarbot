@@ -103,9 +103,7 @@ async def iter_participants_with_timeout(
         while True:
             batch_start = time.monotonic()
             try:
-                participant = await asyncio.wait_for(
-                    ait.__anext__(), timeout=timeout
-                )
+                participant = await asyncio.wait_for(ait.__anext__(), timeout=timeout)
                 total_yielded += 1
                 yield participant
             except StopAsyncIteration:
@@ -159,9 +157,7 @@ async def send_file_with_timeout(
     temp_path: str | None = None
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                media_url, timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as resp:
+            async with session.get(media_url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                 resp.raise_for_status()
                 original_name = os.path.basename(urlparse(media_url).path) or "file"
                 fd, temp_path = tempfile.mkstemp(suffix=f"_{original_name}")

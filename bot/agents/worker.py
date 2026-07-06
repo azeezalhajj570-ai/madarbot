@@ -49,8 +49,12 @@ from bot.workers.app import redis_broker  # noqa: F401
 logger = structlog.get_logger(__name__)
 
 from bot.config import get_settings as _get_worker_settings
+
 _worker_settings = _get_worker_settings()
-if _worker_settings.bot_app_kind in ("admin", "agents") and not _worker_settings.session_encryption_key:
+if (
+    _worker_settings.bot_app_kind in ("admin", "agents")
+    and not _worker_settings.session_encryption_key
+):
     logging.getLogger(__name__).critical(
         "SESSION_ENCRYPTION_KEY is not configured. "
         "Agent session strings would be stored in plaintext. Refusing to start worker. "
@@ -430,9 +434,9 @@ async def _try_auto_broadcast_dispatch(
     from sqlalchemy import func, select
 
     member_count = await session.scalar(
-        select(func.count()).select_from(ScrapedMember).where(
-            ScrapedMember.scraped_group_id == int(source_group_id)
-        )
+        select(func.count())
+        .select_from(ScrapedMember)
+        .where(ScrapedMember.scraped_group_id == int(source_group_id))
     )
     if not member_count or member_count == 0:
         bound_logger.debug("agent_auto_broadcast_skipped_empty_group")
@@ -454,6 +458,7 @@ async def _try_auto_broadcast_dispatch(
     await session.commit()
     try:
         from bot.agents.dispatch import dispatch_agent_job
+
         await dispatch_agent_job(new_job.id)
     except Exception:
         bound_logger.exception("agent_auto_broadcast_dispatch_failed")

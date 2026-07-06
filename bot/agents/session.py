@@ -305,7 +305,8 @@ class SessionManager:
         accessible: list[int] = []
         inaccessible: list[int] = []
         try:
-            from telethon.tl.types import InputPeerChannel
+            from telethon.tl.types import InputPeerChannel  # noqa: F401  (runtime import in try-block)
+
             for gid in group_ids:
                 try:
                     entity = await call_with_retry(

@@ -30,6 +30,7 @@ def get_interval_for_contact(
             return interval
     return 300.0
 
+
 # AgentJob statuses
 JOB_STATUS_PENDING = "pending"
 JOB_STATUS_QUEUED = "queued"
@@ -88,22 +89,19 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
     interval_between_contacts = float(
         normalized.get("interval_between_contacts") or interval_seconds
     )
-    has_explicit_interval = (
-        normalized.get("interval_between_contacts") is not None
-    )
-    interval_strategy = str(
-        normalized.get("interval_strategy") or ""
-    ).strip().lower()
+    has_explicit_interval = normalized.get("interval_between_contacts") is not None
+    interval_strategy = str(normalized.get("interval_strategy") or "").strip().lower()
     if not interval_strategy:
-        interval_strategy = "fixed" if has_explicit_interval and interval_between_contacts > 0 else "graduated"
+        interval_strategy = (
+            "fixed" if has_explicit_interval and interval_between_contacts > 0 else "graduated"
+        )
     if interval_strategy not in ("graduated", "fixed"):
         raise ValueError("interval_strategy must be 'graduated' or 'fixed'")
 
     media_urls_raw = normalized.get("media_urls")
     if isinstance(media_urls_raw, list):
         media_urls = [
-            str(u).strip() if u is not None and str(u).strip() else None
-            for u in media_urls_raw
+            str(u).strip() if u is not None and str(u).strip() else None for u in media_urls_raw
         ]
     else:
         media_urls = []

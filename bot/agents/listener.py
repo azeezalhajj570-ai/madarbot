@@ -203,7 +203,9 @@ class AgentListenerManager:
                     return
                 await self.sleep(5)
 
-    async def _handle_telethon_message(self, agent_id: int, event: Any, client: Any | None = None) -> None:
+    async def _handle_telethon_message(
+        self, agent_id: int, event: Any, client: Any | None = None
+    ) -> None:
         chat_id = getattr(event, "chat_id", None)
         if chat_id is None:
             return
@@ -414,6 +416,7 @@ class AgentListenerManager:
             if group_id is None:
                 return
             from bot.services.settings_service import SettingsService
+
             svc = SettingsService(session)
             mention_enabled = await svc.get_one(group_id, "ai_mention_reply_enabled")
             if not mention_enabled:
@@ -422,6 +425,7 @@ class AgentListenerManager:
                 return
             from bot.plugins.ai_pilot.provider import build_pilot_provider
             from bot.plugins.ai_pilot.service import AIPilotService
+
             api_key: str | None = None
             model: str | None = None
             provider_url: str | None = None

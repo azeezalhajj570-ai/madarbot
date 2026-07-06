@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -238,9 +237,7 @@ if browser_assets_dir.exists():
     )
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount(
-    "/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads"
-)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads")
 
 app.include_router(owner_router)
 app.include_router(scraper_router)

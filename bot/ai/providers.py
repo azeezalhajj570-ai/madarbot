@@ -75,8 +75,7 @@ class GeminiProvider:
             f"message: {text}"
         )
         url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self.model}:generateContent"
+            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         )
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
