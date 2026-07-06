@@ -1284,12 +1284,19 @@ async def webapp_agent_blacklist_resolve(
         ) from exc
 
 
-@router.post("/webapp/agents/{agent_id}/media/upload")
+@router.post(
+    "/api/agents/{agent_id}/media/upload",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/media/upload",
+    dependencies=[Depends(require_agents_boundary)],
+)
 async def upload_agent_media(
     agent_id: int,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
-    identity: Any = Depends(require_webapp_auth),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
 ) -> dict[str, str]:
     import uuid
 
