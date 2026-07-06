@@ -88,7 +88,6 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_schema_bootstrap:
         await ensure_schema(engine)
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     await _backfill_lead_group_titles()
 
     scheduler_task = None
@@ -238,10 +237,10 @@ if browser_assets_dir.exists():
         "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
     )
 
-if UPLOADS_DIR.exists():
-    app.mount(
-        "/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads"
-    )
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads"
+)
 
 app.include_router(owner_router)
 app.include_router(scraper_router)
