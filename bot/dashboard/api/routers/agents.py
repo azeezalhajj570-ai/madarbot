@@ -1303,7 +1303,13 @@ async def upload_agent_media(
     unique_name = f"{uuid.uuid4().hex}{ext}"
     dest = UPLOADS_DIR / unique_name
 
+    MAX_SIZE = 20 * 1024 * 1024
     content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large ({len(content)} bytes). Max {MAX_SIZE // (1024*1024)}MB.",
+        )
     dest.write_bytes(content)
 
     return {"url": f"http://backend:8080/uploads/{unique_name}"}

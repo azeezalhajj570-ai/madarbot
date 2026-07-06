@@ -252,12 +252,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                     <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
                       <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
                       <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
                         if (!file) return
+                        if (file.size > MAX_SIZE) { setStatus(`File too large (max 20MB)`); return }
                         const form = new FormData()
                         form.append('file', file)
                         try {
                           const res = await fetch(`/webapp/agents/${account.id}/media/upload`, { method: 'POST', body: form })
+                          if (!res.ok) { setStatus('Upload failed: ' + (await res.text()).slice(0, 100)); return }
                           const data = await res.json() as { url: string }
                           const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
                         } catch { setStatus('Upload failed') }
@@ -357,12 +360,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                     <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
                       <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
                       <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
                         if (!file) return
+                        if (file.size > MAX_SIZE) { setStatus(`File too large (max 20MB)`); return }
                         const form = new FormData()
                         form.append('file', file)
                         try {
                           const res = await fetch(`/webapp/agents/${account.id}/media/upload`, { method: 'POST', body: form })
+                          if (!res.ok) { setStatus('Upload failed: ' + (await res.text()).slice(0, 100)); return }
                           const data = await res.json() as { url: string }
                           const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
                         } catch { setStatus('Upload failed') }
