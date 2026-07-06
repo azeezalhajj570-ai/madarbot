@@ -153,6 +153,7 @@ async def send_file_with_timeout(
     import aiohttp
     import os
     import tempfile
+    from urllib.parse import urlparse
 
     start = time.monotonic()
     temp_path: str | None = None
@@ -162,7 +163,8 @@ async def send_file_with_timeout(
                 media_url, timeout=aiohttp.ClientTimeout(total=timeout)
             ) as resp:
                 resp.raise_for_status()
-                fd, temp_path = tempfile.mkstemp(suffix=".media")
+                original_name = os.path.basename(urlparse(media_url).path) or "file"
+                fd, temp_path = tempfile.mkstemp(suffix=f"_{original_name}")
                 with os.fdopen(fd, "wb") as f:
                     async for chunk in resp.content.iter_chunked(65536):
                         f.write(chunk)
