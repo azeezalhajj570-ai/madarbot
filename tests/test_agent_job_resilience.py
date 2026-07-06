@@ -17,43 +17,51 @@ from bot.dashboard.api.routers._shared import JobHealthItem, JobHealthResponse
 
 # ─── US1: Progress Checkpointing ──────────────────────────────────────────────
 
+
 class TestCheckpointProgress:
     def test_progress_schema_in_payload(self):
         """T035: progress is tracked in job_payload during runtime."""
         from bot.agents.jobs import normalize_group_member_broadcast_payload as normalize
 
-        payload = normalize({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 25,
-            "interval_seconds": 5,
-        })
+        payload = normalize(
+            {
+                "source_group_id": -100123456,
+                "message": "Hello!",
+                "threshold": 25,
+                "interval_seconds": 5,
+            }
+        )
         assert payload is not None
 
     def test_job_without_checkpoint_starts_fresh(self):
         """T038: backward compatible — no progress key means start from scratch."""
-        payload = normalize_group_member_broadcast_payload({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 25,
-            "interval_seconds": 5,
-        })
+        payload = normalize_group_member_broadcast_payload(
+            {
+                "source_group_id": -100123456,
+                "message": "Hello!",
+                "threshold": 25,
+                "interval_seconds": 5,
+            }
+        )
         assert "progress" not in payload or not payload["progress"]
 
     def test_skipped_count_reflects_already_sent(self):
         """T037: already_sent recipients are counted as skipped."""
-        payload = normalize_group_member_broadcast_payload({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 10,
-            "interval_seconds": 5,
-            "selected_user_ids": [101, 102, 103, 104, 105],
-        })
+        payload = normalize_group_member_broadcast_payload(
+            {
+                "source_group_id": -100123456,
+                "message": "Hello!",
+                "threshold": 10,
+                "interval_seconds": 5,
+                "selected_user_ids": [101, 102, 103, 104, 105],
+            }
+        )
         middleware = payload.get("selected_user_ids", [])
         assert 101 in middleware
 
 
 # ─── US2: Graduated Interval Strategy ──────────────────────────────────────────
+
 
 class TestGraduatedIntervals:
     def test_tiers_are_correctly_defined(self):
@@ -112,48 +120,57 @@ class TestGraduatedIntervals:
 
     def test_normalize_payload_defaults_to_graduated(self):
         """Default interval_strategy is 'graduated' when no explicit interval set."""
-        payload = normalize_group_member_broadcast_payload({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 25,
-            "interval_seconds": 5,
-        })
-        assert payload["interval_strategy"] == "graduated"
-
-    def test_normalize_payload_fixed_when_explicit_interval(self):
-        """Explicit interval_between_contacts sets strategy to 'fixed'."""
-        payload = normalize_group_member_broadcast_payload({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 25,
-            "interval_seconds": 5,
-            "interval_between_contacts": 10,
-        })
-        assert payload["interval_strategy"] == "fixed"
-
-    def test_normalize_payload_explicit_strategy(self):
-        """Explicit interval_strategy overrides auto-detection."""
-        payload = normalize_group_member_broadcast_payload({
-            "source_group_id": -100123456,
-            "message": "Hello!",
-            "threshold": 25,
-            "interval_seconds": 5,
-            "interval_strategy": "graduated",
-        })
-        assert payload["interval_strategy"] == "graduated"
-
-    def test_invalid_strategy_raises(self):
-        with pytest.raises(ValueError, match="interval_strategy must be 'graduated' or 'fixed'"):
-            normalize_group_member_broadcast_payload({
+        payload = normalize_group_member_broadcast_payload(
+            {
                 "source_group_id": -100123456,
                 "message": "Hello!",
                 "threshold": 25,
                 "interval_seconds": 5,
-                "interval_strategy": "exponential",
-            })
+            }
+        )
+        assert payload["interval_strategy"] == "graduated"
+
+    def test_normalize_payload_fixed_when_explicit_interval(self):
+        """Explicit interval_between_contacts sets strategy to 'fixed'."""
+        payload = normalize_group_member_broadcast_payload(
+            {
+                "source_group_id": -100123456,
+                "message": "Hello!",
+                "threshold": 25,
+                "interval_seconds": 5,
+                "interval_between_contacts": 10,
+            }
+        )
+        assert payload["interval_strategy"] == "fixed"
+
+    def test_normalize_payload_explicit_strategy(self):
+        """Explicit interval_strategy overrides auto-detection."""
+        payload = normalize_group_member_broadcast_payload(
+            {
+                "source_group_id": -100123456,
+                "message": "Hello!",
+                "threshold": 25,
+                "interval_seconds": 5,
+                "interval_strategy": "graduated",
+            }
+        )
+        assert payload["interval_strategy"] == "graduated"
+
+    def test_invalid_strategy_raises(self):
+        with pytest.raises(ValueError, match="interval_strategy must be 'graduated' or 'fixed'"):
+            normalize_group_member_broadcast_payload(
+                {
+                    "source_group_id": -100123456,
+                    "message": "Hello!",
+                    "threshold": 25,
+                    "interval_seconds": 5,
+                    "interval_strategy": "exponential",
+                }
+            )
 
 
 # ─── US3: Group Accessibility Validation ──────────────────────────────────────
+
 
 class TestGroupAccessibility:
     def test_job_validation_error(self):
@@ -175,6 +192,7 @@ class TestGroupAccessibility:
 
 
 # ─── US4: Stuck Job Recovery ─────────────────────────────────────────────────
+
 
 class TestStuckJobRecovery:
     def test_stuck_threshold_config(self):
@@ -208,6 +226,7 @@ class TestStuckJobRecovery:
 
 # ─── US5: Auto-Dispatch on Scrape Completion ──────────────────────────────────
 
+
 class TestAutoDispatch:
     def test_agent_model_has_auto_broadcast_fields(self):
         """T047: Agent model includes auto_broadcast_enabled and auto_broadcast_template."""
@@ -227,6 +246,7 @@ class TestAutoDispatch:
 
 
 # ─── US6: Rate Limit Defaults ─────────────────────────────────────────────────
+
 
 class TestRateLimitDefaults:
     def test_agent_model_has_rate_limit_fields(self):
@@ -262,6 +282,7 @@ class TestRateLimitDefaults:
 
 
 # ─── US7: Dashboard Job Health Monitoring ─────────────────────────────────────
+
 
 class TestJobHealth:
     def test_job_health_item_schema(self):
@@ -300,9 +321,7 @@ class TestJobHealth:
         """T053: JobHealthResponse wraps list of items."""
         response = JobHealthResponse(
             running_jobs=[
-                JobHealthItem(
-                    job_id=1, agent_id=1, job_type="test", status="running"
-                ),
+                JobHealthItem(job_id=1, agent_id=1, job_type="test", status="running"),
             ]
         )
         assert len(response.running_jobs) == 1
@@ -310,14 +329,10 @@ class TestJobHealth:
 
     def test_possibly_stuck_flag_logic(self):
         """T055: possibly_stuck is True when last_checkpoint > 2 hours old."""
-        old_checkpoint = (
-            datetime.now(timezone.utc) - timedelta(hours=3)
-        ).isoformat()
+        old_checkpoint = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
         from datetime import datetime as dt
 
-        cp_age = (
-            dt.now(timezone.utc) - dt.fromisoformat(old_checkpoint)
-        ).total_seconds()
+        cp_age = (dt.now(timezone.utc) - dt.fromisoformat(old_checkpoint)).total_seconds()
         assert cp_age > 7200
         assert dt.fromisoformat(old_checkpoint) < dt.now(timezone.utc)
 
@@ -326,7 +341,5 @@ class TestJobHealth:
         recent_checkpoint = datetime.now(timezone.utc).isoformat()
         from datetime import datetime as dt
 
-        cp_age = (
-            dt.now(timezone.utc) - dt.fromisoformat(recent_checkpoint)
-        ).total_seconds()
+        cp_age = (dt.now(timezone.utc) - dt.fromisoformat(recent_checkpoint)).total_seconds()
         assert cp_age < 7200

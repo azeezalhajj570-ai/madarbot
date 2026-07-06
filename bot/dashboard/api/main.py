@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -196,7 +197,20 @@ webapp_admin_dir = webapp_frontend_dir / "admin"
 webapp_admin_assets_dir = webapp_admin_dir / "assets"
 webapp_agents_dir = webapp_frontend_dir / "agents"
 webapp_agents_assets_dir = webapp_agents_dir / "assets"
-UPLOADS_DIR = Path("/app/uploads")
+UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", "/app/uploads"))
+
+
+def _ensure_uploads_dir() -> Path:
+    try:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        return UPLOADS_DIR
+    except OSError:
+        import tempfile
+
+        fallback = Path(tempfile.gettempdir()) / "madarbot-uploads"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
 
 webapp_channels_dir = webapp_frontend_dir / "channels"
 webapp_channels_assets_dir = webapp_channels_dir / "assets"
@@ -236,8 +250,7 @@ if browser_assets_dir.exists():
         "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
     )
 
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads")
+app.mount("/uploads", StaticFiles(directory=str(_ensure_uploads_dir())), name="media-uploads")
 
 app.include_router(owner_router)
 app.include_router(scraper_router)
