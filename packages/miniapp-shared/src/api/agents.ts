@@ -1,4 +1,4 @@
-import { apiClient } from './base'
+import { apiClient, ensureMiniappToken } from './base'
 import type {
   Agent,
   AgentAnalytics,
@@ -369,4 +369,28 @@ export async function deleteBlacklistEntry(agentId: number, entryId: number) {
 
 export async function resolveBlacklistPhones(agentId: number, phones: string[]) {
   return apiClient.post<BlacklistResolveResponse>(`/webapp/agents/${agentId}/blacklist/resolve`, { phones })
+}
+
+export async function uploadAgentMedia(agentId: number, file: File) {
+  const token = await ensureMiniappToken()
+  const headers: Record<string, string> = {
+    'X-App-Boundary': 'agents',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else {
+    const initData = window.Telegram?.WebApp?.initData?.trim()
+    if (initData) {
+      headers['X-Telegram-Init-Data'] = initData
+    }
+  }
+
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`/webapp/agents/${agentId}/media/upload`, { method: 'POST', headers, body: form })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text.slice(0, 100) || `Upload failed with status ${res.status}`)
+  }
+  return res.json() as Promise<{ url: string }>
 }
