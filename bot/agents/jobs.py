@@ -99,10 +99,23 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
     if interval_strategy not in ("graduated", "fixed"):
         raise ValueError("interval_strategy must be 'graduated' or 'fixed'")
 
+    media_urls_raw = normalized.get("media_urls")
+    if isinstance(media_urls_raw, list):
+        media_urls = [
+            str(u).strip() if u is not None and str(u).strip() else None
+            for u in media_urls_raw
+        ]
+    else:
+        media_urls = []
+
+    if len(media_urls) < len(messages):
+        media_urls += [None] * (len(messages) - len(media_urls))
+
     result: dict[str, Any] = {
         "target_type": target_type,
         "source_group_title": source_group_title,
         "messages": messages,
+        "media_urls": media_urls[: len(messages)],
         "message": "\n\n".join(messages),
         "threshold": threshold,
         "interval_seconds": interval_seconds,

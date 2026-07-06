@@ -29,6 +29,7 @@ from bot.agents.rpc_wrapper import (
     call_with_retry,
     check_agent_health,
     iter_participants_with_timeout,
+    send_file_with_timeout,
 )
 from bot.db.models import Agent, AgentJob, ScrapedMember
 from bot.db.session import SessionLocal
@@ -337,6 +338,7 @@ class GroupMemberBroadcastRuntime:
         try:
             target_type = normalized["target_type"]
             messages: list[str] = normalized["messages"]
+            media_urls: list[str | None] = list(normalized.get("media_urls") or [])
             threshold = int(normalized.get("threshold") or 0)
             base_interval = float(normalized.get("interval_seconds") or 2.0)
             contact_interval = float(normalized.get("interval_between_contacts") or base_interval)
@@ -357,6 +359,7 @@ class GroupMemberBroadcastRuntime:
                     agent=agent,
                     normalized=normalized,
                     messages=messages,
+                    media_urls=media_urls,
                     threshold=threshold,
                     base_interval=base_interval,
                     contact_interval=contact_interval,
@@ -553,7 +556,11 @@ class GroupMemberBroadcastRuntime:
 
                     sent_msg = None
                     for mi, msg in enumerate(messages):
-                        sent_msg = await send_message_with_timeout(client, recipient_id, msg)
+                        media_url = media_urls[mi] if mi < len(media_urls) else None
+                        if media_url:
+                            sent_msg = await send_file_with_timeout(client, recipient_id, msg, media_url)
+                        else:
+                            sent_msg = await send_message_with_timeout(client, recipient_id, msg)
                         if mi < len(messages) - 1 and base_interval > 0:
                             jitter = random.uniform(-0.3, 0.3) * base_interval
                             msg_interval = max(0.3, base_interval + jitter)
@@ -652,6 +659,7 @@ class GroupMemberBroadcastRuntime:
         agent,
         normalized,
         messages,
+        media_urls,
         threshold,
         base_interval,
         contact_interval,
@@ -740,7 +748,11 @@ class GroupMemberBroadcastRuntime:
                     await session.commit()
 
                 for mi, msg in enumerate(messages):
-                    await send_message_with_timeout(client, group_id, msg)
+                    media_url = media_urls[mi] if mi < len(media_urls) else None
+                    if media_url:
+                        await send_file_with_timeout(client, group_id, msg, media_url)
+                    else:
+                        await send_message_with_timeout(client, group_id, msg)
                     if mi < len(messages) - 1 and base_interval > 0:
                         jitter = random.uniform(-0.3, 0.3) * base_interval
                         msg_interval = max(0.3, base_interval + jitter)

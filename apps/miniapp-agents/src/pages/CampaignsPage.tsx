@@ -45,6 +45,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [quickSaving, setQuickSaving] = useState(false)
   const [bulkTargetType, setBulkTargetType] = useState<'members' | 'groups'>('members')
   const [bulkMessages, setBulkMessages] = useState<string[]>([''])
+  const [bulkMediaUrls, setBulkMediaUrls] = useState<(string | null)[]>([null])
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
   const [bulkIntervalContacts, setBulkIntervalContacts] = useState('5')
@@ -117,7 +118,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   }, [qsSelectedCampaignId])
 
   function resetForm() {
-    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages([''])
+    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages(['']); setBulkMediaUrls([null])
     setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
@@ -140,7 +141,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (bulkSummary) {
       setBulkSaving(true)
       try {
-        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, interval_between_contacts: intervalContacts, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+        const jobPayload: Record<string, unknown> = {
+          target_type: bulkTargetType,
+          messages: filledMessages,
+          media_urls: bulkMediaUrls,
+          threshold,
+          interval_seconds: intervalSeconds,
+          interval_between_contacts: intervalContacts,
+          messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined
+        }
         if (bulkTargetType === 'members') {
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
@@ -156,9 +165,18 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     }
     setLoadingBulkSummary(true); setStatus(null)
     try {
-      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, messages: filledMessages, threshold, interval_seconds: intervalSeconds, interval_between_contacts: intervalContacts, messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined }
+      const preflightPayload: Parameters<typeof agentsApi.preflightBulkMessage>[1] = {
+        target_type: bulkTargetType,
+        messages: filledMessages,
+        media_urls: bulkMediaUrls,
+        threshold,
+        interval_seconds: intervalSeconds,
+        interval_between_contacts: intervalContacts,
+        messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined
+      }
       if (bulkTargetType === 'members') {
-        preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id; preflightPayload.source_group_title = bulkSourceGroup!.title
+        preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id;
+        preflightPayload.source_group_title = bulkSourceGroup!.title
         preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
       } else { preflightPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
       const result = await agentsApi.preflightBulkMessage(account.id, preflightPayload)
@@ -217,20 +235,28 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
             <div style={{ display: 'grid', gap: 8 }}>
               {bulkMessages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                  <textarea value={msg} onChange={(e) => {
-                    const next = [...bulkMessages]
-                    next[i] = e.target.value
-                    setBulkMessages(next)
-                  }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
-                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
-                  {bulkMessages.length > 1 ? (
-                    <button type="button" onClick={() => setBulkMessages((m) => m.filter((_, j) => j !== i))}
-                      style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
-                  ) : null}
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea value={msg} onChange={(e) => {
+                      const next = [...bulkMessages]
+                      next[i] = e.target.value
+                      setBulkMessages(next)
+                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                    {bulkMessages.length > 1 ? (
+                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
+                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                    ) : null}
+                  </div>
+                  <input value={bulkMediaUrls[i] || ''} onChange={(e) => {
+                    const next = [...bulkMediaUrls]
+                    next[i] = e.target.value || null
+                    setBulkMediaUrls(next)
+                  }} placeholder={t('campaigns.mediaUrlPlaceholder') || 'Media URL (optional)'}
+                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)', outline: 'none' }} />
                 </div>
               ))}
-              <button type="button" onClick={() => setBulkMessages((m) => [...m, ''])}
+              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
                 style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
             </div>
             <InputField label={t('campaigns.selectMembers')} value={bulkMemberQuery} onChange={setBulkMemberQuery} placeholder={bulkSourceGroup ? t('campaigns.searchMembersPlaceholder') : t('campaigns.chooseSourceFirst')} />
@@ -300,20 +326,28 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
             <div style={{ display: 'grid', gap: 8 }}>
               {bulkMessages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                  <textarea value={msg} onChange={(e) => {
-                    const next = [...bulkMessages]
-                    next[i] = e.target.value
-                    setBulkMessages(next)
-                  }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
-                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
-                  {bulkMessages.length > 1 ? (
-                    <button type="button" onClick={() => setBulkMessages((m) => m.filter((_, j) => j !== i))}
-                      style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
-                  ) : null}
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea value={msg} onChange={(e) => {
+                      const next = [...bulkMessages]
+                      next[i] = e.target.value
+                      setBulkMessages(next)
+                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                    {bulkMessages.length > 1 ? (
+                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
+                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                    ) : null}
+                  </div>
+                  <input value={bulkMediaUrls[i] || ''} onChange={(e) => {
+                    const next = [...bulkMediaUrls]
+                    next[i] = e.target.value || null
+                    setBulkMediaUrls(next)
+                  }} placeholder={t('campaigns.mediaUrlPlaceholder') || 'Media URL (optional)'}
+                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)', outline: 'none' }} />
                 </div>
               ))}
-              <button type="button" onClick={() => setBulkMessages((m) => [...m, ''])}
+              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
                 style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
             </div>
           </>

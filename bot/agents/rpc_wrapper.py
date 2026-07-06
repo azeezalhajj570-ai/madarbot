@@ -139,6 +139,74 @@ async def iter_participants_with_timeout(
             pass
 
 
+SEND_FILE_TIMEOUT: float = 120.0
+
+
+async def send_file_with_timeout(
+    client: Any,
+    entity: Any,
+    text: str,
+    media_url: str,
+    *,
+    timeout: float = SEND_FILE_TIMEOUT,
+) -> Any:
+    import aiohttp
+    import os
+    import tempfile
+
+    start = time.monotonic()
+    temp_path: str | None = None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                media_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as resp:
+                resp.raise_for_status()
+                fd, temp_path = tempfile.mkstemp(suffix=".media")
+                with os.fdopen(fd, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(65536):
+                        f.write(chunk)
+
+        result = await call_with_retry(
+            client,
+            lambda: client.send_file(entity, temp_path, caption=text),
+            rpc_name="send_file",
+            timeout=timeout,
+            max_retries=0,
+        )
+        elapsed = time.monotonic() - start
+        logger.info(
+            "rpc_send_file_completed",
+            elapsed=round(elapsed, 3),
+        )
+        return result
+    except Exception as exc:
+        elapsed = time.monotonic() - start
+        exc_type = type(exc).__name__
+        exc_module = type(exc).__module__
+        logger.warning(
+            "rpc_send_file_failed",
+            elapsed=round(elapsed, 3),
+            exc_type=exc_type,
+            exc_module=exc_module,
+            error=str(exc)[:200],
+        )
+        # Fall back to text-only send
+        return await call_with_retry(
+            client,
+            lambda: client.send_message(entity, text),
+            rpc_name="send_message",
+            timeout=DEFAULT_TIMEOUT,
+            max_retries=0,
+        )
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
+
+
 async def check_agent_health(
     client: Any,
     *,
