@@ -7,6 +7,7 @@ import json
 import time
 from typing import Any
 
+import bcrypt
 from fastapi import Header, HTTPException, Query, status
 
 from bot.config import DashboardBrowserUser, get_settings
@@ -179,8 +180,11 @@ def authenticate_browser_user(identifier: str, password: str) -> DashboardBrowse
         normalized_username = str(user.username or "").strip().lower()
         if normalized_identifier not in {normalized_email, normalized_username}:
             continue
-        if hmac.compare_digest(user.password, password):
-            return user
+        try:
+            if bcrypt.checkpw(password.encode("utf-8"), user.password.encode("utf-8")):
+                return user
+        except ValueError:
+            continue
     return None
 
 

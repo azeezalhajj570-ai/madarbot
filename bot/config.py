@@ -1,13 +1,24 @@
 from __future__ import annotations
-
 import json
 from functools import lru_cache
 from typing import Literal
 
+import bcrypt
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 AppKind = Literal["admin", "agents"]
+
+
+_BCRYPT_PREFIX = b"$2b$"
+
+
+def _ensure_bcrypt(password: str) -> str:
+    pwb = password.encode("utf-8")
+    if pwb.startswith(_BCRYPT_PREFIX):
+        return password
+    return bcrypt.hashpw(pwb, bcrypt.gensalt()).decode("utf-8")
 
 
 class DashboardBrowserUser(BaseModel):
@@ -17,6 +28,11 @@ class DashboardBrowserUser(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _hash_password(cls, v: str) -> str:
+        return _ensure_bcrypt(v)
 
 
 class Settings(BaseSettings):
