@@ -266,6 +266,13 @@ if settings.mcp_enabled:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import JSONResponse as StarletteJSONResponse
 
+    if not settings.mcp_auth_token:
+        logger.critical(
+            "MCP_ENABLED=true but MCP_AUTH_TOKEN is not configured. "
+            "Set MCP_AUTH_TOKEN in your .env file or set MCP_ENABLED=false."
+        )
+        raise SystemExit(1)
+
     class McpAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             path = request.url.path
@@ -274,8 +281,6 @@ if settings.mcp_enabled:
                 auth_header = request.headers.get("authorization", "")
                 if auth_header.startswith("Bearer "):
                     token = auth_header[7:]
-                if not token:
-                    token = request.query_params.get("token")
                 _, tg_user_id = await verify_mcp_auth_async(token)
                 if tg_user_id is None:
                     ok, _ = verify_mcp_auth(token)
@@ -283,7 +288,7 @@ if settings.mcp_enabled:
                         return StarletteJSONResponse(
                             status_code=401,
                             content={
-                                "error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"
+                                "error": "Invalid or missing MCP auth token. Pass via Authorization: Bearer header"
                             },
                         )
                 if tg_user_id is not None:
