@@ -248,12 +248,26 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
                     ) : null}
                   </div>
-                  <input value={bulkMediaUrls[i] || ''} onChange={(e) => {
-                    const next = [...bulkMediaUrls]
-                    next[i] = e.target.value || null
-                    setBulkMediaUrls(next)
-                  }} placeholder={t('campaigns.mediaUrlPlaceholder') || 'Media URL (optional)'}
-                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)', outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
+                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
+                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const form = new FormData()
+                        form.append('file', file)
+                        try {
+                          const res = await fetch(`/webapp/agents/${account.id}/media/upload`, { method: 'POST', body: form })
+                          const data = await res.json() as { url: string }
+                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
+                        } catch { setStatus('Upload failed') }
+                      }} />
+                    </label>
+                    {bulkMediaUrls[i] ? (
+                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
+                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
               <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
@@ -339,12 +353,26 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
                     ) : null}
                   </div>
-                  <input value={bulkMediaUrls[i] || ''} onChange={(e) => {
-                    const next = [...bulkMediaUrls]
-                    next[i] = e.target.value || null
-                    setBulkMediaUrls(next)
-                  }} placeholder={t('campaigns.mediaUrlPlaceholder') || 'Media URL (optional)'}
-                    style={{ boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)', outline: 'none' }} />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
+                      <span>{bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : t('campaigns.attachMedia') || '+ Attach media'}</span>
+                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const form = new FormData()
+                        form.append('file', file)
+                        try {
+                          const res = await fetch(`/webapp/agents/${account.id}/media/upload`, { method: 'POST', body: form })
+                          const data = await res.json() as { url: string }
+                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
+                        } catch { setStatus('Upload failed') }
+                      }} />
+                    </label>
+                    {bulkMediaUrls[i] ? (
+                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
+                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
               <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}

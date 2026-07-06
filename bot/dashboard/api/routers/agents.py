@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -1281,6 +1282,31 @@ async def webapp_agent_blacklist_resolve(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.post("/webapp/agents/{agent_id}/media/upload")
+async def upload_agent_media(
+    agent_id: int,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+    identity: Any = Depends(require_webapp_auth),
+) -> dict[str, str]:
+    import uuid
+
+    from bot.dashboard.api.main import UPLOADS_DIR
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+
+    ext = ""
+    if file.filename:
+        _, ext = os.path.splitext(file.filename)
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    dest = UPLOADS_DIR / unique_name
+
+    content = await file.read()
+    dest.write_bytes(content)
+
+    return {"url": f"http://backend:8080/uploads/{unique_name}"}
 
 
 __all__ = ["router"]

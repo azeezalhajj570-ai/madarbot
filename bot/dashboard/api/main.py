@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -87,6 +88,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     if settings.run_schema_bootstrap:
         await ensure_schema(engine)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     await _backfill_lead_group_titles()
 
     scheduler_task = None
@@ -196,6 +198,8 @@ webapp_admin_dir = webapp_frontend_dir / "admin"
 webapp_admin_assets_dir = webapp_admin_dir / "assets"
 webapp_agents_dir = webapp_frontend_dir / "agents"
 webapp_agents_assets_dir = webapp_agents_dir / "assets"
+UPLOADS_DIR = Path("/app/uploads")
+
 webapp_channels_dir = webapp_frontend_dir / "channels"
 webapp_channels_assets_dir = webapp_channels_dir / "assets"
 webapp_modbot_dir = webapp_frontend_dir / "modbot"
@@ -232,6 +236,11 @@ if webapp_modbot_assets_dir.exists():
 if browser_assets_dir.exists():
     app.mount(
         "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
+    )
+
+if UPLOADS_DIR.exists():
+    app.mount(
+        "/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="media-uploads"
     )
 
 app.include_router(owner_router)
