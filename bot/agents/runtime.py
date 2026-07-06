@@ -14,6 +14,7 @@ from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    JOB_STATUS_ABORTED,
     SCRAPER_FULL_GROUP_JOB_TYPE,
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
@@ -636,6 +637,15 @@ class GroupMemberBroadcastRuntime:
                     index=index,
                     total=len(remaining),
                 )
+                if index % 5 == 0 and session is not None and payload.get("job_id"):
+                    job_check = await session.execute(
+                        select(AgentJob).where(AgentJob.id == payload["job_id"])
+                    )
+                    job_row = job_check.scalar_one_or_none()
+                    if job_row is not None and job_row.status == JOB_STATUS_ABORTED:
+                        logger.info("broadcast_aborted_detected", job_id=payload["job_id"])
+                        raise Exception("Job aborted by user")
+
                 if index < len(remaining) - 1 and effective_interval > 0:
                     await self.sleep(effective_interval)
 
@@ -788,6 +798,15 @@ class GroupMemberBroadcastRuntime:
             if effective_interval > 0:
                 jitter = random.uniform(-0.1, 0.1) * effective_interval
                 effective_interval = max(0.3, effective_interval + jitter)
+            if index % 5 == 0 and session is not None and payload.get("job_id"):
+                job_check = await session.execute(
+                    select(AgentJob).where(AgentJob.id == payload["job_id"])
+                )
+                job_row = job_check.scalar_one_or_none()
+                if job_row is not None and job_row.status == JOB_STATUS_ABORTED:
+                    logger.info("broadcast_aborted_detected", job_id=payload["job_id"])
+                    raise Exception("Job aborted by user")
+
             if index < len(remaining) - 1 and effective_interval > 0:
                 await self.sleep(effective_interval)
 

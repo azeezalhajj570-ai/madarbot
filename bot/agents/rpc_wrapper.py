@@ -171,7 +171,7 @@ async def send_file_with_timeout(
 
         result = await call_with_retry(
             client,
-            lambda: client.send_file(entity, temp_path, caption=text),
+            lambda: client.send_file(entity, temp_path, caption=text, file_name=original_name),
             rpc_name="send_file",
             timeout=timeout,
             max_retries=0,
