@@ -433,7 +433,7 @@ class GroupMemberBroadcastRuntime:
                         SentBroadcastMessage.tg_group_id == source_group_id,
                         SentBroadcastMessage.message_hash == message_hash,
                         SentBroadcastMessage.sent_at >= seven_days_ago,
-                        SentBroadcastMessage.status == "sent",
+                        SentBroadcastMessage.status.in_(["sent", "pending"]),
                         or_(*identity_filters),
                     )
                 )
@@ -526,7 +526,31 @@ class GroupMemberBroadcastRuntime:
                         payload["progress"]["stop_reason"] = "daily_limit"
                         raise Exception(f"Daily unique contact limit reached ({day_count}/{max_per_day})")
 
+                pending_record = None
                 try:
+                    # Insert pending record BEFORE sending — if we crash after this,
+                    # the dedup query catches it and prevents duplicate sends on retry.
+                    if session is not None:
+                        identity = recipient_identities.get(recipient_id, {})
+                        pending_record = SentBroadcastMessage(
+                            agent_id=agent.id,
+                            campaign_id=campaign_id,
+                            job_id=payload.get("job_id"),
+                            tg_user_id=recipient_id,
+                            phone_number=identity.get("phone"),
+                            username=identity.get("username"),
+                            message_id=None,
+                            tg_chat_id=recipient_id,
+                            tg_group_id=source_group_id,
+                            message_text="\n\n".join(messages),
+                            message_hash=message_hash,
+                            status="pending",
+                            sent_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        session.add(pending_record)
+                        await session.commit()
+
                     sent_msg = None
                     for mi, msg in enumerate(messages):
                         sent_msg = await send_message_with_timeout(client, recipient_id, msg)
@@ -537,27 +561,12 @@ class GroupMemberBroadcastRuntime:
                     success_count += 1
                     already_sent.add(recipient_id)
                     checkpoint_send_count += 1
-                    if session is not None:
-                        identity = recipient_identities.get(recipient_id, {})
-                        session.add(
-                            SentBroadcastMessage(
-                                agent_id=agent.id,
-                                campaign_id=campaign_id,
-                                job_id=payload.get("job_id"),
-                                tg_user_id=recipient_id,
-                                phone_number=identity.get("phone"),
-                                username=identity.get("username"),
-                                message_id=sent_msg.id if sent_msg else None,
-                                tg_chat_id=recipient_id,
-                                tg_group_id=source_group_id,
-                                message_text="\n\n".join(messages),
-                                message_hash=message_hash,
-                                status="sent",
-                                sent_at=datetime.now(timezone.utc),
-                                created_at=datetime.now(timezone.utc),
-                            )
-                        )
+
+                    if pending_record is not None:
+                        pending_record.status = "sent"
+                        pending_record.message_id = sent_msg.id if sent_msg else None
                         await session.commit()
+
                     await limiter.record_send(agent.id, recipient_id)
 
                     should_checkpoint = (
@@ -592,6 +601,9 @@ class GroupMemberBroadcastRuntime:
                         checkpoint_send_count = 0
                 except Exception as exc:
                     failure_count += 1
+                    if pending_record is not None:
+                        pending_record.status = "failed"
+                        await session.commit()
                     translated = _translate_client_exception(exc)
                     if translated is not None:
                         payload["progress"]["stopped_at"] = index
@@ -708,7 +720,25 @@ class GroupMemberBroadcastRuntime:
                 if wait > 0:
                     await self.sleep(wait)
 
+            pending_record = None
             try:
+                # Insert pending record BEFORE sending
+                if session is not None:
+                    pending_record = SentBroadcastMessage(
+                        agent_id=agent.id,
+                        campaign_id=campaign_id,
+                        job_id=payload.get("job_id"),
+                        tg_user_id=None,
+                        tg_group_id=group_id,
+                        message_text="\n\n".join(messages),
+                        message_hash=message_hash,
+                        status="pending",
+                        sent_at=datetime.now(timezone.utc),
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    session.add(pending_record)
+                    await session.commit()
+
                 for mi, msg in enumerate(messages):
                     await send_message_with_timeout(client, group_id, msg)
                     if mi < len(messages) - 1 and base_interval > 0:
@@ -718,42 +748,18 @@ class GroupMemberBroadcastRuntime:
                 success_count += 1
                 already_sent.add(group_id)
                 payload["progress"]["success_count"] = success_count
-                if session is not None:
-                    session.add(
-                        SentBroadcastMessage(
-                            agent_id=agent.id,
-                            campaign_id=campaign_id,
-                            job_id=payload.get("job_id"),
-                            tg_user_id=None,
-                            tg_group_id=group_id,
-                            message_text="\n\n".join(messages),
-                            message_hash=message_hash,
-                            status="sent",
-                            sent_at=datetime.now(timezone.utc),
-                            created_at=datetime.now(timezone.utc),
-                        )
-                    )
+
+                if pending_record is not None:
+                    pending_record.status = "sent"
                     await session.commit()
+
                 await limiter.record_send(agent.id)
             except Exception as exc:
                 failure_count += 1
                 payload["progress"]["failure_count"] = failure_count
                 payload["progress"]["sent_users"] = list(already_sent)
-                if session is not None:
-                    session.add(
-                        SentBroadcastMessage(
-                            agent_id=agent.id,
-                            campaign_id=campaign_id,
-                            job_id=payload.get("job_id"),
-                            tg_user_id=None,
-                            tg_group_id=group_id,
-                            message_text="\n\n".join(messages),
-                            message_hash=message_hash,
-                            status="failed",
-                            sent_at=datetime.now(timezone.utc),
-                            created_at=datetime.now(timezone.utc),
-                        )
-                    )
+                if pending_record is not None:
+                    pending_record.status = "failed"
                     await session.commit()
                 translated = _translate_client_exception(exc)
                 if translated is not None:
