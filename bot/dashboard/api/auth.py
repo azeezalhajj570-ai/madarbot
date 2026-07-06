@@ -25,7 +25,13 @@ class DashboardJWTError(ValueError):
 
 def _dashboard_jwt_secret() -> str:
     settings = get_settings()
-    return settings.dashboard_jwt_secret or settings.bot_token
+    secret = settings.dashboard_jwt_secret
+    if not secret:
+        raise RuntimeError(
+            "DASHBOARD_JWT_SECRET is not configured. "
+            "Set DASHBOARD_JWT_SECRET in your .env file."
+        )
+    return secret
 
 
 def _b64url_encode(value: bytes) -> str:
