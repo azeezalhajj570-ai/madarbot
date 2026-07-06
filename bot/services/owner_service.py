@@ -14,6 +14,7 @@ from bot.db.models import (
     ModerationLog,
     PluginEnabled,
     Warning,
+    SentBroadcastMessage,
 )
 from bot.services.settings_service import SettingsService
 
@@ -221,6 +222,8 @@ class OwnerService:
         }
 
     async def stats(self) -> dict[str, int]:
+        from datetime import datetime, timedelta, timezone
+
         total_groups = (await self.session.execute(select(func.count(Group.id)))).scalar_one()
         active_groups = (
             await self.session.execute(
@@ -250,6 +253,61 @@ class OwnerService:
             )
         ).scalar_one()
 
+        # Job breakdown by status
+        status_counts = (
+            await self.session.execute(
+                select(AgentJob.status, func.count(AgentJob.id)).group_by(AgentJob.status)
+            )
+        ).all()
+        jobs_by_status = {row.status: int(row[1]) for row in status_counts}
+        total_jobs = sum(jobs_by_status.values()) if jobs_by_status else 0
+
+        # Stuck jobs
+        threshold_hours = 2
+        stuck_cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
+        stuck = (
+            await self.session.execute(
+                select(func.count(AgentJob.id)).where(
+                    AgentJob.status == "running", AgentJob.updated_at < stuck_cutoff
+                )
+            )
+        ).scalar_one()
+
+        # Failure rate (24h)
+        cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        failed_24h = (
+            await self.session.execute(
+                select(func.count(AgentJob.id)).where(
+                    AgentJob.status == "failed", AgentJob.updated_at > cutoff_24h
+                )
+            )
+        ).scalar_one()
+        completed_24h = (
+            await self.session.execute(
+                select(func.count(AgentJob.id)).where(
+                    AgentJob.status == "completed", AgentJob.updated_at > cutoff_24h
+                )
+            )
+        ).scalar_one()
+        total_24h = int(failed_24h or 0) + int(completed_24h or 0)
+        failure_rate = round(int(failed_24h or 0) / total_24h, 4) if total_24h > 0 else 0.0
+
+        # Messages sent 24h
+        msgs_24h = (
+            await self.session.execute(
+                select(func.count(SentBroadcastMessage.id)).where(
+                    SentBroadcastMessage.sent_at > cutoff_24h
+                )
+            )
+        ).scalar_one()
+
+        # Active agents
+        active_agents = (
+            await self.session.execute(
+                select(func.count(Agent.id)).where(Agent.status == "active")
+            )
+        ).scalar_one()
+
         return {
             "total_groups": int(total_groups or 0),
             "active_groups": int(active_groups or 0),
@@ -259,6 +317,12 @@ class OwnerService:
             "enabled_plugins": int(enabled_plugins or 0),
             "linked_agents": int(linked_agents or 0),
             "pending_agent_jobs": int(pending_agent_jobs or 0),
+            "jobs_by_status": jobs_by_status,
+            "total_jobs": total_jobs,
+            "stuck_jobs": int(stuck or 0),
+            "failure_rate_24h": failure_rate,
+            "messages_sent_24h": int(msgs_24h or 0),
+            "active_agents": int(active_agents or 0),
         }
 
     async def disable_group(self, group_id: int) -> dict[str, Any] | None:

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
 from bot.core.plugin_manager import PluginManager
 from bot.core.runtime.replay import RuntimeReplayService
-from bot.db.models import Group, GroupSetting, ModerationLog, PluginEnabled, Warning
+from bot.db.models import Group, GroupSetting, ModerationLog, PluginEnabled, Warning, AgentJob
 from bot.db.session import get_session
 from bot.services.plugin_service import PluginService
 from bot.services.settings_service import SettingsService
@@ -41,6 +42,161 @@ async def favicon() -> Response:
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/system-health")
+async def system_health(
+    session: AsyncSession = Depends(get_session),
+    _: TelegramWebAppIdentity = Depends(_require_bot_owner),
+) -> dict[str, Any]:
+    checks: dict[str, Any] = {}
+    overall = "ok"
+
+    now = datetime.now(timezone.utc)
+
+    # Database check
+    try:
+        import asyncio
+
+        start = asyncio.get_event_loop().time()
+        await session.execute(select(1))
+        db_latency = asyncio.get_event_loop().time() - start
+        checks["database"] = {"status": "ok", "latency_ms": round(db_latency * 1000, 1)}
+    except Exception as e:
+        checks["database"] = {"status": "down", "detail": str(e)}
+        overall = "down"
+
+    # Redis check
+    try:
+        from bot.dashboard.api.main import app
+
+        redis = getattr(app.state, "redis", None)
+        if redis is not None:
+            start = asyncio.get_event_loop().time()
+            await redis.ping()
+            redis_latency = asyncio.get_event_loop().time() - start
+            checks["redis"] = {"status": "ok", "latency_ms": round(redis_latency * 1000, 1)}
+        else:
+            checks["redis"] = {"status": "unknown", "detail": "Redis not initialized"}
+    except Exception as e:
+        checks["redis"] = {"status": "down", "detail": str(e)}
+        if overall != "down":
+            overall = "degraded"
+
+    # Bot worker presence
+    try:
+        redis = getattr(app.state, "redis", None)
+        bot_last_seen = None
+        if redis is not None:
+            bot_ts = await redis.get("bot:worker:last_seen")
+            if bot_ts:
+                bot_last_seen = bot_ts
+                last_seen_dt = datetime.fromtimestamp(float(bot_ts), tz=timezone.utc)
+                if (now - last_seen_dt).total_seconds() < 120:
+                    checks["bot_worker"] = {"status": "ok", "last_seen": bot_last_seen}
+                else:
+                    checks["bot_worker"] = {
+                        "status": "stale",
+                        "last_seen": bot_last_seen,
+                        "detail": "Last seen > 2 minutes ago",
+                    }
+                    if overall == "ok":
+                        overall = "degraded"
+            else:
+                checks["bot_worker"] = {"status": "unknown", "detail": "No presence key in Redis"}
+    except Exception as e:
+        checks["bot_worker"] = {"status": "unknown", "detail": str(e)}
+
+    # Agent worker presence
+    try:
+        redis = getattr(app.state, "redis", None)
+        agent_last_seen = None
+        if redis is not None:
+            agent_ts = await redis.get("agent:worker:last_seen")
+            if agent_ts:
+                agent_last_seen = agent_ts
+                last_seen_dt = datetime.fromtimestamp(float(agent_ts), tz=timezone.utc)
+                if (now - last_seen_dt).total_seconds() < 120:
+                    checks["agent_worker"] = {"status": "ok", "last_seen": agent_last_seen}
+                else:
+                    checks["agent_worker"] = {
+                        "status": "stale",
+                        "last_seen": agent_last_seen,
+                        "detail": "Last seen > 2 minutes ago",
+                    }
+                    if overall == "ok":
+                        overall = "degraded"
+            else:
+                checks["agent_worker"] = {"status": "unknown", "detail": "No presence key in Redis"}
+    except Exception as e:
+        checks["agent_worker"] = {"status": "unknown", "detail": str(e)}
+
+    # Queue stats
+    try:
+        status_counts = (
+            await session.execute(
+                select(AgentJob.status, func.count(AgentJob.id)).group_by(AgentJob.status)
+            )
+        ).all()
+        jobs_by_status = {row.status: row[1] for row in status_counts}
+        pending = jobs_by_status.get("pending", 0) + jobs_by_status.get("queued", 0)
+        running = jobs_by_status.get("running", 0)
+        failed = jobs_by_status.get("failed", 0)
+        total = sum(jobs_by_status.values())
+
+        threshold_hours = get_settings().stuck_job_threshold_hours
+        stuck_cutoff = now - timedelta(hours=threshold_hours)
+        stuck = (
+            await session.execute(
+                select(func.count(AgentJob.id)).where(
+                    AgentJob.status == "running", AgentJob.updated_at < stuck_cutoff
+                )
+            )
+        ).scalar_one()
+
+        checks["queue"] = {
+            "status": "ok" if pending < 50 else "degraded",
+            "jobs_by_status": jobs_by_status,
+            "total": total,
+            "pending": pending,
+            "running": running,
+            "stuck": int(stuck or 0),
+        }
+        if pending >= 50 and overall == "ok":
+            overall = "degraded"
+    except Exception as e:
+        checks["queue"] = {"status": "unknown", "detail": str(e)}
+
+    # Recent failures (24h)
+    try:
+        cutoff_24h = now - timedelta(hours=24)
+        failed_jobs_24h = (
+            await session.execute(
+                select(AgentJob.id, AgentJob.agent_id, AgentJob.job_type, AgentJob.updated_at).where(
+                    AgentJob.status == "failed", AgentJob.updated_at > cutoff_24h
+                ).order_by(AgentJob.updated_at.desc()).limit(20)
+            )
+        ).all()
+        checks["recent_failures_24h"] = {
+            "count": len(failed_jobs_24h),
+            "jobs": [
+                {
+                    "id": row.id,
+                    "agent_id": row.agent_id,
+                    "job_type": row.job_type,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+                for row in failed_jobs_24h
+            ],
+        }
+    except Exception as e:
+        checks["recent_failures_24h"] = {"count": 0, "detail": str(e)}
+
+    return {
+        "status": overall,
+        "checks": checks,
+        "timestamp": now.isoformat(),
+    }
 
 
 @router.get("/groups")

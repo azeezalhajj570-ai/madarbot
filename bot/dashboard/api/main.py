@@ -35,6 +35,8 @@ from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine
 from bot.agents.session import shutdown_client_pool
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+import sentry_sdk
 
 
 async def _backfill_lead_group_titles() -> None:
@@ -104,8 +106,34 @@ async def lifespan(app: FastAPI):
         reconcile_task = asyncio.create_task(reconcile_loop())
         logger.info("reconcile_loop_task_created")
 
+    alert_task = None
+    if settings.sentry_dsn:
+        try:
+            from bot.monitoring.health_alerts import HealthAlertService
+
+            alert_service = HealthAlertService()
+
+            async def alert_loop():
+                while True:
+                    await asyncio.sleep(300)
+                    try:
+                        await alert_service.check_and_alert()
+                    except Exception:
+                        logger.exception("health_alert_check_failed")
+
+            alert_task = asyncio.create_task(alert_loop())
+            logger.info("health_alert_loop_task_created")
+        except Exception:
+            logger.exception("health_alert_loop_init_failed")
+
     yield
 
+    if alert_task:
+        alert_task.cancel()
+        try:
+            await alert_task
+        except asyncio.CancelledError:
+            pass
     if reconcile_task:
         reconcile_task.cancel()
         try:
@@ -134,6 +162,14 @@ app = FastAPI(
 )
 
 settings = get_settings()
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment="production",
+    )
+    logger.info("sentry_initialized for dashboard API")
+
 app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
 cors_origins = [
     origin
@@ -339,6 +375,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon_ico():
     return Response(status_code=204)
@@ -436,6 +477,14 @@ def _dashboard_shell() -> Response:
     if not index_file.exists():
         return HTMLResponse("<h3>Browser dashboard frontend not found</h3>", status_code=404)
     return FileResponse(index_file)
+
+
+@app.get("/dashboard/monitor", include_in_schema=False)
+async def dashboard_monitor():
+    monitor_file = webapp_frontend_dir / "monitor.html"
+    if not monitor_file.exists():
+        return HTMLResponse("<h3>Monitoring page not found</h3>", status_code=404)
+    return FileResponse(monitor_file)
 
 
 @app.get("/dashboard")
