@@ -746,5 +746,9 @@
     "contact": "اتصل بنا",
     "dataDeletion": "حذف البيانات",
     "aup": "الاستخدام المقبول"
+  },
+  "toast": {
+    "notifications": "الإشعارات",
+    "dismiss": "إغلاق"
   }
 }
