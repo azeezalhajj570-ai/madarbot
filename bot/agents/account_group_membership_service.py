@@ -94,7 +94,12 @@ class AccountGroupMembershipService(AgentServiceSupport):
             if normalized_query and not word_conditions:
                 return []
 
-            filters = [ScrapedGroup.last_agent_id == agent_id, ScrapedGroup.group_type != "channel"]
+            agent_group_ids = (
+                select(ScrapedMember.scraped_group_id)
+                .where(ScrapedMember.tg_user_id == agent.telegram_user_id)
+                .distinct()
+            )
+            filters = [ScrapedGroup.id.in_(agent_group_ids), ScrapedGroup.group_type != "channel"]
             filters.extend(word_conditions)
             stmt = (
                 select(ScrapedGroup)
