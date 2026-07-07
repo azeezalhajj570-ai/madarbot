@@ -376,6 +376,27 @@ async def _resolve_selected_recipients(
                         pass
 
         if peer is None:
+            from bot.db.models.agent import SentBroadcastMessage
+            try:
+                sbm = (
+                    await session.execute(
+                        select(SentBroadcastMessage).where(
+                            SentBroadcastMessage.tg_user_id == uid,
+                            SentBroadcastMessage.status == "sent",
+                        ).order_by(SentBroadcastMessage.sent_at.desc()).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if sbm and (sbm.phone_number or sbm.username):
+                    lookup = sbm.username or sbm.phone_number
+                    if lookup:
+                        try:
+                            peer = await client.get_input_entity(str(lookup))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        if peer is None:
             logger.warning(
                 "broadcast_resolve_user_failed",
                 user_id=uid,
