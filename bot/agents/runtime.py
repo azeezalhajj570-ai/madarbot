@@ -498,6 +498,20 @@ class GroupMemberBroadcastRuntime:
                         else None,
                     }
 
+            if selected_user_ids:
+                unfound = [uid for uid in selected_user_ids if uid not in recipients]
+                if unfound:
+                    await _resolve_selected_recipients(
+                        client=client,
+                        agent=agent,
+                        session=session,
+                        user_ids=unfound,
+                        recipients=recipients,
+                        resolved_peers=resolved_peers,
+                        recipient_identities=recipient_identities,
+                        skip_bots=bool(normalized.get("skip_bots", True)),
+                    )
+
             recipients_set = set(recipients)
             recipients = [r for r in recipients if r not in already_sent]
             total_selected = len(selected_user_ids) if selected_user_ids else len(recipients_set)
