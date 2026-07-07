@@ -1038,9 +1038,12 @@ class ScraperService:
                 sender_raw_data["access_hash"] = int(ah)
             else:
                 cache[uid] = None
-            phone = getattr(full_user, "phone", None)
-            if phone and not sender_raw_data.get("phone"):
-                sender_raw_data["phone"] = str(phone)
+            for attr in ["bot", "username", "first_name", "last_name", "phone", "premium"]:
+                val = getattr(full_user, attr, None)
+                if val is not None and attr not in sender_raw_data:
+                    sender_raw_data[attr] = (
+                        str(val) if not isinstance(val, (int, float, bool, str, type(None))) else val
+                    )
         except Exception:
             cache[uid] = None
 
