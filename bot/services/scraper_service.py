@@ -14,7 +14,7 @@ from telethon.tl.types import ChannelParticipantsAdmins
 
 from dataclasses import dataclass, field
 
-from bot.agents.exceptions import AgentSessionError
+from bot.agents.exceptions import AgentFloodWaitError, AgentSessionError
 from bot.agents.session import SessionManager
 from bot.config import get_settings
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
@@ -66,7 +66,7 @@ class ScraperService:
             try:
                 managed_client = await SessionManager().get_client(agent_id)
                 should_disconnect = True
-            except AgentSessionError:
+            except (AgentSessionError, AgentFloodWaitError):
                 logger.warning("scraper_session_failed", agent_id=agent_id)
                 return []
 
