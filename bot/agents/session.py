@@ -260,11 +260,12 @@ class SessionManager:
             return client
 
     async def mark_flood_wait(self, agent_id: int, retry_after: int) -> None:
-        # Only update if the new wait is LONGER than the remaining time
         client = await self._get_redis()
-        remaining = await client.ttl(self._state_key(agent_id))
-        if remaining and remaining > 0 and retry_after <= remaining:
-            return
+        current = await client.get(self._state_key(agent_id))
+        if current == "flood_wait":
+            remaining = await client.ttl(self._state_key(agent_id))
+            if remaining and remaining > 0:
+                return  # Already in flood wait, don't reset the timer
         await self._set_state(agent_id, "flood_wait", retry_after=max(retry_after, 0))
 
     async def mark_banned(self, agent_id: int) -> None:
