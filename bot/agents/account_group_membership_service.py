@@ -360,6 +360,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         exclude_bots: bool = True,
         only_admins: bool = False,
         only_bots: bool = False,
+        exclude_self: bool = True,
         order_by: str = "message_count",
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
@@ -396,6 +397,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
             filters.append(ScrapedMember.role.in_(["admin", "creator"]))
         if only_bots:
             filters.append(ScrapedMember.is_bot.is_(True))
+        if exclude_self and agent.telegram_user_id is not None:
+            filters.append(ScrapedMember.tg_user_id != agent.telegram_user_id)
         if normalized_query:
             safe_query = normalized_query.replace("%", "\\%").replace("_", "\\_")
             pattern = f"%{safe_query.lower()}%"

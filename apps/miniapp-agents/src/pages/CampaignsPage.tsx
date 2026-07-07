@@ -143,7 +143,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
-    setExcludeAdmins(false); setExcludeBots(false); setBulkSummary(null)
+    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null)
     setQsSelectedCampaignId(''); setStatus(null)
   }
 
