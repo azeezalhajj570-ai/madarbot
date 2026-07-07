@@ -567,13 +567,24 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     if progress:
                         broadcast_payload["result"] = result
                         job.job_payload = broadcast_payload
-                        job.status = JOB_STATUS_COMPLETED
-                        await session.commit()
+                        success_count = progress.get("success_count", 0)
+                        total_count = progress.get("total_count", 0)
+                        if total_count > 0 and success_count == 0:
+                            job.status = JOB_STATUS_FAILED
+                            broadcast_payload["last_error"] = "All messages failed to send"
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_FAILED, result=result,
+                                error="All messages failed to send",
+                            )
+                        else:
+                            job.status = JOB_STATUS_COMPLETED
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_COMPLETED, result=result
+                            )
                     else:
                         await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
-                    await _create_job_notification(
-                        session, job, status=JOB_STATUS_COMPLETED, result=result
-                    )
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(
