@@ -26,12 +26,7 @@ function toastAccent(kind: string) {
 }
 
 function toastBg(kind: string) {
-  switch (kind) {
-    case 'error': return 'rgba(161, 87, 62, 0.06)'
-    case 'success': return 'rgba(54, 102, 78, 0.06)'
-    case 'notification': return 'rgba(71, 89, 119, 0.06)'
-    default: return 'rgba(71, 89, 119, 0.06)'
-  }
+  return 'var(--miniapp-surface)'
 }
 
 export function ToastContainer({
@@ -51,7 +46,7 @@ export function ToastContainer({
       aria-label={t('toast.notifications')}
       style={{
         position: 'fixed',
-        top: 70,
+        top: 90,
         right: 16,
         zIndex: 1300,
         display: 'flex',
@@ -105,7 +100,7 @@ export function ToastContainer({
           <div
             style={{
               fontSize: 12,
-              color: '#655d52',
+              color: 'var(--miniapp-text-primary)',
               lineHeight: 1.4,
               wordBreak: 'break-word',
               display: '-webkit-box',

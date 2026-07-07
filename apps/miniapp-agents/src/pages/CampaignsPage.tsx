@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatTime } from '../i18n/format'
 
@@ -30,7 +30,7 @@ type SelectedGroupChip = {
 
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 
-export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
@@ -74,6 +74,25 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
+
+  function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
+    setStatus(msg)
+    onSaved(msg, kind)
+  }
+
+  const isFormValid = useMemo(() => {
+    const filledMessages = bulkMessages.filter((m) => m.trim())
+    if (!filledMessages.length) return false
+    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) return false
+    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) return false
+    const threshold = Number.parseInt(bulkThreshold, 10)
+    if (!Number.isFinite(threshold) || threshold <= 0) return false
+    const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
+    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    return true
+  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts])
 
   // Effects
   useEffect(() => {
@@ -130,15 +149,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
   async function handleSend() {
     const filledMessages = bulkMessages.filter((m) => m.trim())
-    if (!filledMessages.length) { setStatus(t('campaigns.msgRequired')); return }
-    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) { setStatus(t('campaigns.sourceRequired')); return }
-    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) { setStatus(t('campaigns.targetRequired')); return }
+    const validationErrors: string[] = []
+    if (!filledMessages.length) validationErrors.push(t('campaigns.msgRequired'))
+    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) validationErrors.push(t('campaigns.sourceRequired'))
+    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) validationErrors.push(t('campaigns.targetRequired'))
     const threshold = Number.parseInt(bulkThreshold, 10)
-    if (!Number.isFinite(threshold) || threshold <= 0) { setStatus(t('campaigns.thresholdInvalid')); return }
+    if (!Number.isFinite(threshold) || threshold <= 0) validationErrors.push(t('campaigns.thresholdInvalid'))
     const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) { setStatus(t('campaigns.intervalInvalid')); return }
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) validationErrors.push(t('campaigns.intervalInvalid'))
     const intervalContacts = Number.parseFloat(bulkIntervalContacts)
-    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) { setStatus(t('campaigns.intervalInvalid')); return }
+    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) validationErrors.push(t('campaigns.intervalInvalid'))
+    if (validationErrors.length) { notify(validationErrors.join(' · ')); return }
     if (bulkSummary) {
       setBulkSaving(true)
       try {
@@ -160,7 +181,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         setBulkSummary(null); resetForm(); setStatus(null)
         onSaved(scheduledAt ? t('campaigns.scheduled') : t('campaigns.queued'))
         void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
-      } catch (error) { setStatus(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
+      } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
       finally { setBulkSaving(false) }
       return
     }
@@ -182,16 +203,16 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       } else { preflightPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
       const result = await agentsApi.preflightBulkMessage(account.id, preflightPayload)
       setBulkSummary(result)
-    } catch (error) { setStatus(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
+    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
     finally { setLoadingBulkSummary(false) }
   }
 
   return (
     <>
       <Card title={t('campaigns.sendMessage')} subtitle={t('campaigns.sendMessageSubtitle')}>
-        {status ? <Note>{status}</Note> : null}
+        {status ? <div data-form-error><Note>{status}</Note></div> : null}
         {!showSendForm ? (
-          <Button onClick={() => setShowSendForm(true)}>{t('campaigns.newMessage')}</Button>
+          <Button onClick={() => { resetForm(); setShowSendForm(true) }}>{t('campaigns.newMessage')}</Button>
         ) : null}
         {showSendForm ? (<>
         {/* Campaign selector */}
@@ -203,7 +224,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               <option value="">{t('campaigns.noCampaign')}</option>
               {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
-            <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setShowQuickCreate(true) }}
+            <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}
               style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }} title={t('campaigns.createCampaign')}>+</button>
           </div>
         </div>
@@ -256,12 +277,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
                         if (!file) return
-                        if (file.size > MAX_SIZE) { setStatus(`File too large (max 20MB)`); return }
+                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
                         setUploadingIdx(i)
                         try {
                           const data = await agentsApi.uploadAgentMedia(account.id, file)
                           const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
-                        } catch (err) { setStatus(err instanceof Error ? err.message : 'Upload failed') }
+                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
                         finally { setUploadingIdx(null) }
                       }} />
                     </label>
@@ -362,12 +383,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         const MAX_SIZE = 20 * 1024 * 1024
                         const file = e.target.files?.[0]
                         if (!file) return
-                        if (file.size > MAX_SIZE) { setStatus(`File too large (max 20MB)`); return }
+                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
                         setUploadingIdx(i)
                         try {
                           const data = await agentsApi.uploadAgentMedia(account.id, file)
                           const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
-                        } catch (err) { setStatus(err instanceof Error ? err.message : 'Upload failed') }
+                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
                         finally { setUploadingIdx(null) }
                       }} />
                     </label>
@@ -436,7 +457,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
-        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? t('campaigns.confirmSchedule') : t('campaigns.confirmSend')) : loadingBulkSummary ? t('campaigns.preparingSubmit') : t('campaigns.prepare')} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
+        <FormActions submitLabel="Save" submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
         </>) : null}
       </Card>
 
@@ -480,10 +501,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                 try {
                   const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
                   setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessages([quickMessage.trim()]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
-                } catch (e) { setStatus(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
+                } catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
                 finally { setQuickSaving(false) }
-              }}>{quickSaving ? t('campaigns.saving') : t('campaigns.save')}</Button>
-              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>{t('campaigns.cancel')}</Button>
+              }}>Save</Button>
+              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
             </div>
           </div>
         </div>

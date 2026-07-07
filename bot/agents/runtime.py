@@ -322,6 +322,7 @@ async def _resolve_selected_recipients(
     session,
     user_ids: list[int],
     recipients: list[int],
+    resolved_peers: dict[int, Any],
     recipient_identities: dict[int, dict[str, str | None]],
 ) -> None:
     from telethon.tl.types import InputPeerUser
@@ -348,25 +349,31 @@ async def _resolve_selected_recipients(
         if uid == agent.telegram_user_id:
             continue
 
-        peer = None
         raw = db_identities.get(uid, {})
+        peer = None
 
-        access_hash = raw.get("access_hash")
-        if access_hash:
+        try:
+            peer = await client.get_input_entity(uid)
+        except Exception:
             try:
-                peer = InputPeerUser(user_id=uid, access_hash=int(access_hash))
-            except Exception:
-                pass
-
-        if peer is None:
-            try:
+                await client.get_entity(uid)
                 peer = await client.get_input_entity(uid)
             except Exception:
-                logger.warning(
-                    "broadcast_resolve_user_failed",
-                    user_id=uid,
-                )
-                continue
+                access_hash = raw.get("access_hash")
+                if access_hash:
+                    try:
+                        peer = InputPeerUser(user_id=uid, access_hash=int(access_hash))
+                    except Exception:
+                        pass
+
+        if peer is None:
+            logger.warning(
+                "broadcast_resolve_user_failed",
+                user_id=uid,
+            )
+            continue
+
+        resolved_peers[uid] = peer
 
         username = raw.get("username")
         phone = raw.get("phone")
@@ -452,6 +459,7 @@ class GroupMemberBroadcastRuntime:
             await check_agent_health(client)
 
             recipients: list[int] = []
+            resolved_peers: dict[int, Any] = {}
             recipient_identities: dict[int, dict[str, str | None]] = {}
             if selected_user_ids:
                 group_entity = await AddContactRuntime().resolve_group_entity(
@@ -463,6 +471,7 @@ class GroupMemberBroadcastRuntime:
                     session=session,
                     user_ids=targeted_user_ids,
                     recipients=recipients,
+                    resolved_peers=resolved_peers,
                     recipient_identities=recipient_identities,
                 )
             else:
@@ -639,14 +648,15 @@ class GroupMemberBroadcastRuntime:
                         await session.commit()
 
                     sent_msg = None
+                    target_peer = resolved_peers.get(recipient_id, recipient_id)
                     for mi, msg in enumerate(messages):
                         media_url = media_urls[mi] if mi < len(media_urls) else None
                         if media_url:
                             sent_msg = await send_file_with_timeout(
-                                client, recipient_id, msg, media_url
+                                client, target_peer, msg, media_url
                             )
                         else:
-                            sent_msg = await send_message_with_timeout(client, recipient_id, msg)
+                            sent_msg = await send_message_with_timeout(client, target_peer, msg)
                         if mi < len(messages) - 1 and base_interval > 0:
                             jitter = random.uniform(-0.3, 0.3) * base_interval
                             msg_interval = max(0.3, base_interval + jitter)

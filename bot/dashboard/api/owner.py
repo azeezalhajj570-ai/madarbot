@@ -174,7 +174,7 @@ async def require_owner(
 async def owner_stats(
     _identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
-) -> dict[str, int]:
+) -> dict[str, Any]:
     return await OwnerService(session).stats()
 
 

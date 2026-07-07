@@ -100,7 +100,7 @@ services:
       DEFAULT_LANGUAGE: ar
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'dramatiq bot.agents.worker' || exit 1"]
+      test: ["CMD-SHELL", "pgrep -f 'dramatiq' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

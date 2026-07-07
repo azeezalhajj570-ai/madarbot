@@ -704,47 +704,6 @@ function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => st
   }))
 }
 
-function DismissibleStatus({
-  message,
-  onClose,
-}: {
-  message: string
-  onClose: () => void
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '12px 14px',
-        border: '1px solid var(--miniapp-border-soft)',
-        borderRadius: 12,
-        background: 'var(--miniapp-surface)',
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>{message}</div>
-      <button
-        type="button"
-        aria-label="Dismiss notification"
-        onClick={onClose}
-        style={{
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--miniapp-clay)',
-          cursor: 'pointer',
-          fontSize: 18,
-          lineHeight: 1,
-          padding: 0,
-        }}
-      >
-        ×
-      </button>
-    </div>
-  )
-}
-
 function NoAccountNotice({ onLink }: { onLink: () => void }) {
   const { t } = useTranslation()
   return (
@@ -1044,11 +1003,17 @@ export default function App() {
 
   function scrollToFirstError() {
     const main = document.querySelector('main')
-    if (main) main.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!main) return
+    const el = main.querySelector('[data-form-error], [aria-invalid="true"], input:invalid, textarea:invalid, select:invalid')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    main.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function pushToast(toast: Omit<Toast, 'id'> & { id?: string }) {
-    const id = toast.id || crypto.randomUUID()
+    const id = toast.id || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`)
     const entry: Toast = { ...toast, id }
     setToasts(prev => [entry, ...prev].slice(0, 3))
     const timer = setTimeout(() => {
@@ -1313,7 +1278,6 @@ export default function App() {
       </button>
     }>
       <Grid>
-        {status ? <DismissibleStatus message={status} onClose={() => setStatus(null)} /> : null}
         {session.error ? <Note tone="warning">{session.error}</Note> : null}
         {!appReady ? (
           <Card title={t('app.loading')} subtitle={t('app.preparing')}>
@@ -2528,7 +2492,6 @@ function TaskActivity({ account }: { account: Agent }) {
     setLoading(true)
     setStatusMsg(null)
     try {
-      await agentsApi.reconcileStaleJobs(1)
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
     } catch (error) {
