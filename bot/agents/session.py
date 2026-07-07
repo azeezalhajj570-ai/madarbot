@@ -279,6 +279,20 @@ class SessionManager:
             agent.phone_code_hash = None
             await session.commit()
 
+    async def get_session_state(
+        self, agent_id: int
+    ) -> dict[str, Any]:
+        state, retry_after = await self._get_state(agent_id)
+        expires_at = None
+        if state == "flood_wait" and retry_after is not None:
+            from datetime import datetime, timezone, timedelta
+            expires_at = (datetime.now(timezone.utc) + timedelta(seconds=retry_after)).isoformat()
+        return {
+            "session_state": state,
+            "retry_after": retry_after,
+            "flood_wait_until": expires_at,
+        }
+
     async def is_available(self, agent_id: int) -> bool:
         state, _retry_after = await self._get_state(agent_id)
         if state in {"banned", "flood_wait"}:

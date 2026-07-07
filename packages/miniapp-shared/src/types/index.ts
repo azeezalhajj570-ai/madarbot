@@ -176,6 +176,9 @@ export interface Agent {
   cooldown_minutes?: number | null
   safety_mode_enabled?: boolean
   safety_mode_until?: string | null
+  session_state?: 'healthy' | 'flood_wait' | 'banned' | 'unknown'
+  retry_after?: number | null
+  flood_wait_until?: string | null
 }
 
 export interface AgentJobRecord {

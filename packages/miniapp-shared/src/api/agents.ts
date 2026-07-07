@@ -103,6 +103,10 @@ export async function syncAgentWorkspace(agentId: number) {
   return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/sync-workspace`)
 }
 
+export async function fetchAgentStatus(agentId: number) {
+  return apiClient.get<Agent>(`${AGENTS_API_PREFIX}/${agentId}/status`)
+}
+
 export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
 }
