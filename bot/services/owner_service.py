@@ -12,7 +12,7 @@ from bot.db.models import (
     GroupAdminRole,
     GroupSetting,
     ModerationLog,
-    PluginEnabled,
+    User,
     Warning,
     SentBroadcastMessage,
 )
@@ -20,8 +20,21 @@ from bot.services.settings_service import SettingsService
 
 
 class OwnerService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, user_tg_id: int | None = None) -> None:
         self.session = session
+        self.user_tg_id = user_tg_id
+
+    async def _owned_group_ids(self) -> set[int]:
+        if self.user_tg_id is None:
+            return set()
+        rows = (
+            await self.session.execute(
+                select(Group.id)
+                .join(User, Group.owner_user_id == User.id)
+                .where(User.tg_user_id == self.user_tg_id)
+            )
+        ).all()
+        return {row[0] for row in rows}
 
     async def list_groups(self) -> list[dict[str, Any]]:
         admin_count_sq = (
@@ -55,22 +68,24 @@ class OwnerService:
             .scalar_subquery()
         )
 
-        rows = (
-            await self.session.execute(
-                select(
-                    Group.id,
-                    Group.title,
-                    Group.tg_group_id,
-                    Group.is_active,
-                    Group.created_at,
-                    admin_count_sq.label("admin_count"),
-                    warning_count_sq.label("warning_count"),
-                    plugin_count_sq.label("plugin_count"),
-                    agent_count_sq.label("agent_count"),
-                    last_activity_sq.label("last_activity_at"),
-                ).order_by(Group.is_active.desc(), Group.title.asc(), Group.id.asc())
+        owned_ids = await self._owned_group_ids()
+        base = (
+            select(
+                Group.id,
+                Group.title,
+                Group.tg_group_id,
+                Group.is_active,
+                Group.created_at,
+                admin_count_sq.label("admin_count"),
+                warning_count_sq.label("warning_count"),
+                plugin_count_sq.label("plugin_count"),
+                agent_count_sq.label("agent_count"),
+                last_activity_sq.label("last_activity_at"),
             )
-        ).all()
+        ).order_by(Group.is_active.desc(), Group.title.asc(), Group.id.asc())
+        if owned_ids:
+            base = base.where(Group.id.in_(owned_ids))
+        rows = (await self.session.execute(base)).all()
 
         return [
             {
@@ -91,6 +106,9 @@ class OwnerService:
         ]
 
     async def get_group_details(self, group_id: int) -> dict[str, Any] | None:
+        owned_ids = await self._owned_group_ids()
+        if owned_ids and group_id not in owned_ids:
+            return None
         group = (
             await self.session.execute(select(Group).where(Group.id == group_id))
         ).scalar_one_or_none()
@@ -224,87 +242,111 @@ class OwnerService:
     async def stats(self) -> dict[str, int]:
         from datetime import datetime, timedelta, timezone
 
-        total_groups = (await self.session.execute(select(func.count(Group.id)))).scalar_one()
+        owned_ids = await self._owned_group_ids()
+        if not owned_ids:
+            return {
+                "total_groups": 0, "active_groups": 0, "tracked_admins": 0, "moderation_actions": 0,
+                "open_warnings": 0, "enabled_plugins": 0, "linked_agents": 0, "pending_agent_jobs": 0,
+                "jobs_by_status": {}, "total_jobs": 0, "stuck_jobs": 0, "failure_rate_24h": 0.0,
+                "messages_sent_24h": 0, "active_agents": 0,
+            }
+
+        total_groups = (await self.session.execute(select(func.count(Group.id)).where(Group.id.in_(owned_ids)))).scalar_one()
         active_groups = (
             await self.session.execute(
-                select(func.count(Group.id)).where(Group.is_active.is_(True))
+                select(func.count(Group.id)).where(Group.is_active.is_(True), Group.id.in_(owned_ids))
             )
         ).scalar_one()
         total_users = (
-            await self.session.execute(select(func.count(func.distinct(GroupAdminRole.user_id))))
-        ).scalar_one()
-        moderation_actions = (
-            await self.session.execute(select(func.count(ModerationLog.id)))
-        ).scalar_one()
-        open_warnings = (
-            await self.session.execute(select(func.coalesce(func.sum(Warning.count), 0)))
-        ).scalar_one()
-        enabled_plugins = (
             await self.session.execute(
-                select(func.count(PluginEnabled.id)).where(PluginEnabled.enabled.is_(True))
+                select(func.count(func.distinct(GroupAdminRole.user_id)))
+                .where(GroupAdminRole.group_id.in_(owned_ids))
             )
         ).scalar_one()
-        linked_agents = (await self.session.execute(select(func.count(Agent.id)))).scalar_one()
+        moderation_actions = (
+            await self.session.execute(
+                select(func.count(ModerationLog.id))
+                .where(ModerationLog.group_id.in_(owned_ids))
+            )
+        ).scalar_one()
+        open_warnings = (
+            await self.session.execute(
+                select(func.coalesce(func.sum(Warning.count), 0))
+                .where(Warning.group_id.in_(owned_ids))
+            )
+        ).scalar_one()
+        linked_agents_sq = (
+            select(func.count(Agent.id))
+            .where(Agent.group_id.in_(owned_ids))
+        )
+        linked_agents = (await self.session.execute(linked_agents_sq)).scalar_one()
+        active_agents_sq = (
+            select(func.count(Agent.id))
+            .where(Agent.status == "active", Agent.group_id.in_(owned_ids))
+        )
+        active_agents = (await self.session.execute(active_agents_sq)).scalar_one()
+
+        # Jobs - scope via agent -> group
+        agent_id_sq = select(Agent.id).where(Agent.group_id.in_(owned_ids))
         pending_agent_jobs = (
             await self.session.execute(
                 select(func.count(AgentJob.id)).where(
-                    AgentJob.status.in_(("pending", "queued", "running"))
+                    AgentJob.status.in_(("pending", "queued", "running")),
+                    AgentJob.agent_id.in_(agent_id_sq),
                 )
             )
         ).scalar_one()
-
-        # Job breakdown by status
         status_counts = (
             await self.session.execute(
-                select(AgentJob.status, func.count(AgentJob.id)).group_by(AgentJob.status)
+                select(AgentJob.status, func.count(AgentJob.id))
+                .where(AgentJob.agent_id.in_(agent_id_sq))
+                .group_by(AgentJob.status)
             )
         ).all()
         jobs_by_status = {row.status: int(row[1]) for row in status_counts}
         total_jobs = sum(jobs_by_status.values()) if jobs_by_status else 0
 
-        # Stuck jobs
         threshold_hours = 2
         stuck_cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
         stuck = (
             await self.session.execute(
                 select(func.count(AgentJob.id)).where(
-                    AgentJob.status == "running", AgentJob.updated_at < stuck_cutoff
+                    AgentJob.status == "running",
+                    AgentJob.updated_at < stuck_cutoff,
+                    AgentJob.agent_id.in_(agent_id_sq),
                 )
             )
         ).scalar_one()
 
-        # Failure rate (24h)
         cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
         failed_24h = (
             await self.session.execute(
                 select(func.count(AgentJob.id)).where(
-                    AgentJob.status == "failed", AgentJob.updated_at > cutoff_24h
+                    AgentJob.status == "failed",
+                    AgentJob.updated_at > cutoff_24h,
+                    AgentJob.agent_id.in_(agent_id_sq),
                 )
             )
         ).scalar_one()
         completed_24h = (
             await self.session.execute(
                 select(func.count(AgentJob.id)).where(
-                    AgentJob.status == "completed", AgentJob.updated_at > cutoff_24h
+                    AgentJob.status == "completed",
+                    AgentJob.updated_at > cutoff_24h,
+                    AgentJob.agent_id.in_(agent_id_sq),
                 )
             )
         ).scalar_one()
         total_24h = int(failed_24h or 0) + int(completed_24h or 0)
         failure_rate = round(int(failed_24h or 0) / total_24h, 4) if total_24h > 0 else 0.0
 
-        # Messages sent 24h
         msgs_24h = (
             await self.session.execute(
-                select(func.count(SentBroadcastMessage.id)).where(
-                    SentBroadcastMessage.sent_at > cutoff_24h
+                select(func.count(SentBroadcastMessage.id))
+                .where(
+                    SentBroadcastMessage.sent_at > cutoff_24h,
+                    SentBroadcastMessage.agent_id.in_(agent_id_sq),
                 )
-            )
-        ).scalar_one()
-
-        # Active agents
-        active_agents = (
-            await self.session.execute(
-                select(func.count(Agent.id)).where(Agent.status == "active")
             )
         ).scalar_one()
 
@@ -314,7 +356,6 @@ class OwnerService:
             "tracked_admins": int(total_users or 0),
             "moderation_actions": int(moderation_actions or 0),
             "open_warnings": int(open_warnings or 0),
-            "enabled_plugins": int(enabled_plugins or 0),
             "linked_agents": int(linked_agents or 0),
             "pending_agent_jobs": int(pending_agent_jobs or 0),
             "jobs_by_status": jobs_by_status,
@@ -326,6 +367,9 @@ class OwnerService:
         }
 
     async def disable_group(self, group_id: int) -> dict[str, Any] | None:
+        owned_ids = await self._owned_group_ids()
+        if owned_ids and group_id not in owned_ids:
+            return None
         group = (
             await self.session.execute(select(Group).where(Group.id == group_id))
         ).scalar_one_or_none()
@@ -341,6 +385,7 @@ class OwnerService:
         }
 
     async def list_all_agents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        owned_ids = await self._owned_group_ids()
         stmt = (
             select(
                 Agent.id,
@@ -359,6 +404,8 @@ class OwnerService:
             .limit(limit)
             .offset(offset)
         )
+        if owned_ids:
+            stmt = stmt.where(Group.id.in_(owned_ids))
         rows = (await self.session.execute(stmt)).all()
         return [
             {

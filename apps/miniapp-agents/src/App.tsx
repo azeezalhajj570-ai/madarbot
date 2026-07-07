@@ -1119,15 +1119,25 @@ export default function App() {
     return () => clearInterval(interval)
   }, [appReady, selectedAccount, isWizardInProgress])
 
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
+
   useEffect(() => {
     if (!selectedAccount?.id) { setAgentStatus(null); return }
     let cancelled = false
     agentsApi.fetchAgentStatus(selectedAccount.id).then(s => { if (!cancelled) setAgentStatus(s) }).catch(() => { if (!cancelled) setAgentStatus(null) })
     const interval = setInterval(() => {
       agentsApi.fetchAgentStatus(selectedAccount.id).then(s => { if (!cancelled) setAgentStatus(s) }).catch(() => {})
-    }, 15_000)
+    }, 60_000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [selectedAccount?.id])
+
+  useEffect(() => {
+    if (!agentStatus?.flood_wait_until) { setRemainingSeconds(null); return }
+    const update = () => setRemainingSeconds(Math.max(0, Math.ceil((new Date(agentStatus.flood_wait_until!).getTime() - Date.now()) / 1000)))
+    update()
+    const interval = setInterval(update, 60_000)
+    return () => clearInterval(interval)
+  }, [agentStatus?.flood_wait_until])
 
   useEffect(() => {
     return () => {
@@ -1228,6 +1238,7 @@ export default function App() {
       : ''
     const sessionState = agentStatus?.session_state
     const retryAfter = agentStatus?.retry_after
+    const displaySec = sessionState === 'flood_wait' ? (remainingSeconds ?? (typeof retryAfter === 'number' ? retryAfter : null)) : null
     const statusColor = sessionState === 'healthy' ? 'var(--miniapp-sage)' : sessionState === 'flood_wait' ? 'var(--miniapp-clay)' : sessionState === 'banned' ? '#c0392b' : 'var(--miniapp-text-muted)'
     const statusLabel = sessionState === 'healthy' ? 'Connected' : sessionState === 'flood_wait' ? 'Flood wait' : sessionState === 'banned' ? 'Banned' : sessionState === 'unknown' ? 'Unknown' : null
     return (
@@ -1238,9 +1249,9 @@ export default function App() {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
               <span style={{ color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
-              {sessionState === 'flood_wait' && typeof retryAfter === 'number' && (
+              {displaySec !== null && (
                 <span style={{ color: 'var(--miniapp-text-muted)', fontWeight: 400 }}>
-                  &middot; {retryAfter >= 60 ? `${Math.ceil(retryAfter / 60)}m` : `${retryAfter}s`}
+                  &middot; {displaySec >= 60 ? `${Math.ceil(displaySec / 60)}m` : `${displaySec}s`}
                 </span>
               )}
             </span>
