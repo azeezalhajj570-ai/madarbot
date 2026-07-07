@@ -446,6 +446,13 @@ class ScraperService:
                         sender_raw_data,
                     ) = await entity_resolver.extract_message_sender_data(message)
 
+                    if sender_user_id is not None and int(sender_user_id) > 0:
+                        await self._ensure_sender_access_hash(
+                            client=managed_client,
+                            user_id=int(sender_user_id),
+                            sender_raw_data=sender_raw_data,
+                        )
+
                     msg_row = serializers.build_message_row_from_msg(
                         message,
                         scraped_group.id,
@@ -728,6 +735,13 @@ class ScraperService:
                             sender_raw_data,
                         ) = sender_data
 
+                        if sender_user_id is not None and int(sender_user_id) > 0:
+                            await self._ensure_sender_access_hash(
+                                client=managed_client,
+                                user_id=int(sender_user_id),
+                                sender_raw_data=sender_raw_data,
+                            )
+
                         msg_row = serializers.build_message_row_from_msg(
                             msg,
                             scraped_group.id,
@@ -1001,6 +1015,34 @@ class ScraperService:
             if should_disconnect:
                 with suppress(Exception):
                     await managed_client.disconnect()
+
+    async def _ensure_sender_access_hash(
+        self, *, client, user_id: int, sender_raw_data: dict
+    ) -> None:
+        if sender_raw_data.get("access_hash"):
+            return
+        cache = getattr(self, "_access_hash_cache", None)
+        if cache is None:
+            cache = {}
+            self._access_hash_cache = cache
+        uid = int(user_id)
+        if uid in cache:
+            if cache[uid]:
+                sender_raw_data["access_hash"] = cache[uid]
+            return
+        try:
+            full_user = await client.get_entity(uid)
+            ah = getattr(full_user, "access_hash", None)
+            if ah:
+                cache[uid] = int(ah)
+                sender_raw_data["access_hash"] = int(ah)
+            else:
+                cache[uid] = None
+            phone = getattr(full_user, "phone", None)
+            if phone and not sender_raw_data.get("phone"):
+                sender_raw_data["phone"] = str(phone)
+        except Exception:
+            cache[uid] = None
 
     async def _get_existing_admin_roles(self, scraped_group_id: int) -> dict[int, str]:
         result = await self.session.execute(

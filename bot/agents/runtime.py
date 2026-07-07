@@ -315,6 +315,70 @@ class AddContactRuntime:
             raise
 
 
+async def _resolve_selected_recipients(
+    *,
+    client,
+    agent: Agent,
+    session,
+    user_ids: list[int],
+    recipients: list[int],
+    recipient_identities: dict[int, dict[str, str | None]],
+) -> None:
+    from telethon.tl.types import InputPeerUser
+
+    db_identities: dict[int, dict[str, Any]] = {}
+    if session is not None and user_ids:
+        member_rows = (
+            (
+                await session.execute(
+                    select(ScrapedMember).where(
+                        ScrapedMember.tg_user_id.in_(user_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in member_rows:
+            uid = int(row.tg_user_id)
+            if uid not in db_identities and row.raw_data:
+                db_identities[uid] = dict(row.raw_data or {})
+
+    for uid in user_ids:
+        if uid == agent.telegram_user_id:
+            continue
+
+        peer = None
+        raw = db_identities.get(uid, {})
+
+        access_hash = raw.get("access_hash")
+        if access_hash:
+            try:
+                peer = InputPeerUser(user_id=uid, access_hash=int(access_hash))
+            except Exception:
+                pass
+
+        if peer is None:
+            try:
+                peer = await client.get_input_entity(uid)
+            except Exception:
+                logger.warning(
+                    "broadcast_resolve_user_failed",
+                    user_id=uid,
+                )
+                continue
+
+        username = raw.get("username")
+        phone = raw.get("phone")
+        if username or phone:
+            recipient_identities[uid] = {
+                "phone": str(phone).strip() if phone else None,
+                "username": str(username).strip().lower() if username else None,
+            }
+
+        recipients.append(uid)
+
+
 class GroupMemberBroadcastRuntime:
     def __init__(self, *, sleep=asyncio.sleep) -> None:
         self.sleep = sleep
@@ -382,41 +446,56 @@ class GroupMemberBroadcastRuntime:
                 return result
 
             source_group_id = int(normalized["source_group_id"])
-            selected_user_ids = {int(uid) for uid in normalized.get("selected_user_ids", [])}
+            targeted_user_ids = [int(uid) for uid in normalized.get("selected_user_ids", [])]
+            selected_user_ids = set(targeted_user_ids)
 
             await check_agent_health(client)
 
-            group_entity = await AddContactRuntime().resolve_group_entity(client, source_group_id)
             recipients: list[int] = []
             recipient_identities: dict[int, dict[str, str | None]] = {}
-            async for participant in iter_participants_with_timeout(client, group_entity):
-                pid = getattr(participant, "id", None)
-                if pid is None:
-                    continue
-                if bool(normalized.get("skip_bots", True)) and bool(
-                    getattr(participant, "bot", False)
-                ):
-                    continue
-                if bool(getattr(participant, "deleted", False)):
-                    continue
-                if agent.telegram_user_id is not None and int(pid) == int(agent.telegram_user_id):
-                    continue
-                if selected_user_ids and int(pid) not in selected_user_ids:
-                    continue
-                uid = int(pid)
-                recipients.append(uid)
-                participant_phone = getattr(participant, "phone", None)
-                participant_username = getattr(participant, "username", None)
-                if participant_phone or participant_username:
-                    recipient_identities[uid] = {
-                        "phone": str(participant_phone).strip() if participant_phone else None,
-                        "username": str(participant_username).strip().lower()
-                        if participant_username
-                        else None,
-                    }
+            if selected_user_ids:
+                group_entity = await AddContactRuntime().resolve_group_entity(
+                    client, source_group_id
+                )
+                await _resolve_selected_recipients(
+                    client=client,
+                    agent=agent,
+                    session=session,
+                    user_ids=targeted_user_ids,
+                    recipients=recipients,
+                    recipient_identities=recipient_identities,
+                )
+            else:
+                group_entity = await AddContactRuntime().resolve_group_entity(
+                    client, source_group_id
+                )
+                async for participant in iter_participants_with_timeout(client, group_entity):
+                    pid = getattr(participant, "id", None)
+                    if pid is None:
+                        continue
+                    if bool(normalized.get("skip_bots", True)) and bool(
+                        getattr(participant, "bot", False)
+                    ):
+                        continue
+                    if bool(getattr(participant, "deleted", False)):
+                        continue
+                    if agent.telegram_user_id is not None and int(pid) == int(agent.telegram_user_id):
+                        continue
+                    uid = int(pid)
+                    recipients.append(uid)
+                    participant_phone = getattr(participant, "phone", None)
+                    participant_username = getattr(participant, "username", None)
+                    if participant_phone or participant_username:
+                        recipient_identities[uid] = {
+                            "phone": str(participant_phone).strip() if participant_phone else None,
+                            "username": str(participant_username).strip().lower()
+                            if participant_username
+                            else None,
+                        }
 
             recipients_set = set(recipients)
             recipients = [r for r in recipients if r not in already_sent]
+            total_selected = len(selected_user_ids) if selected_user_ids else len(recipients_set)
             total_count = len(recipients_set)
 
             message_hash = hashlib.sha256(
@@ -662,6 +741,7 @@ class GroupMemberBroadcastRuntime:
                 "success_count": success_count,
                 "failure_count": failure_count,
                 "total_count": total_count,
+                "total_selected": total_selected,
                 "skipped_already_sent": skipped_count,
                 "dedup_skipped": dedup_skip_count,
                 "failures": failures,
