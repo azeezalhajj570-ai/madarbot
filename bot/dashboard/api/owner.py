@@ -172,28 +172,28 @@ async def require_owner(
 
 @router.get("/stats")
 async def owner_stats(
-    _identity: TelegramWebAppIdentity = Depends(require_owner),
+    identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    return await OwnerService(session).stats()
+    return await OwnerService(session, user_tg_id=identity.user_id).stats()
 
 
 @router.get("/groups")
 async def owner_groups(
-    _identity: TelegramWebAppIdentity = Depends(require_owner),
+    identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
-    return await OwnerService(session).list_groups()
+    return await OwnerService(session, user_tg_id=identity.user_id).list_groups()
 
 
 @router.get("/agents")
 async def owner_list_agents(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    _identity: TelegramWebAppIdentity = Depends(require_owner),
+    identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
-    return await OwnerService(session).list_all_agents(limit=limit, offset=offset)
+    return await OwnerService(session, user_tg_id=identity.user_id).list_all_agents(limit=limit, offset=offset)
 
 
 @router.get("/users")
@@ -217,10 +217,10 @@ async def owner_list_users(
 @router.get("/groups/{group_id}")
 async def owner_group_details(
     group_id: int,
-    _identity: TelegramWebAppIdentity = Depends(require_owner),
+    identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    payload = await OwnerService(session).get_group_details(group_id)
+    payload = await OwnerService(session, user_tg_id=identity.user_id).get_group_details(group_id)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     return payload
@@ -232,7 +232,7 @@ async def owner_disable_group(
     identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> OwnerGroupActionResponse:
-    group = await OwnerService(session).disable_group(group_id)
+    group = await OwnerService(session, user_tg_id=identity.user_id).disable_group(group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     await log_owner_action(
@@ -251,7 +251,7 @@ async def owner_leave_group(
     identity: TelegramWebAppIdentity = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> OwnerGroupActionResponse:
-    service = OwnerService(session)
+    service = OwnerService(session, user_tg_id=identity.user_id)
     payload = await service.get_group_details(group_id)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")

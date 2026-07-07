@@ -567,13 +567,24 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     if progress:
                         broadcast_payload["result"] = result
                         job.job_payload = broadcast_payload
-                        job.status = JOB_STATUS_COMPLETED
-                        await session.commit()
+                        success_count = progress.get("success_count", 0)
+                        total_count = progress.get("total_count", 0)
+                        if total_count > 0 and success_count == 0:
+                            job.status = JOB_STATUS_FAILED
+                            broadcast_payload["last_error"] = "All messages failed to send"
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_FAILED, result=result,
+                                error="All messages failed to send",
+                            )
+                        else:
+                            job.status = JOB_STATUS_COMPLETED
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_COMPLETED, result=result
+                            )
                     else:
                         await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
-                    await _create_job_notification(
-                        session, job, status=JOB_STATUS_COMPLETED, result=result
-                    )
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(
@@ -621,6 +632,23 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 await client.disconnect()
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
+            is_broadcast = job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE
+            if is_broadcast:
+                progress = (job.job_payload or {}).get("progress", {}) or {}
+                success_count = int(progress.get("success_count") or 0)
+                total_count = int(progress.get("total_count") or 0)
+                if total_count == 0:
+                    selected = (job.job_payload or {}).get("selected_user_ids") or []
+                    total_count = len(selected)
+                if total_count > 0 and success_count == 0:
+                    await _set_job_state(
+                        session,
+                        job_id,
+                        JOB_STATUS_FAILED,
+                        error=f"Flood wait for {exc.retry_after} seconds",
+                    )
+                    bound_logger.warning("agent_broadcast_flood_wait_failed", retry_after=exc.retry_after)
+                    return
             await _set_job_state(
                 session,
                 job_id,
