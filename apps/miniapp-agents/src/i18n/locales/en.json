@@ -746,5 +746,9 @@
     "contact": "Contact",
     "dataDeletion": "Data Deletion",
     "aup": "Acceptable Use"
+  },
+  "toast": {
+    "notifications": "Notifications",
+    "dismiss": "Dismiss"
   }
 }

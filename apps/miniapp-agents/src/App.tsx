@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
@@ -35,6 +35,7 @@ import type {
 import { useLanguage } from './i18n/useLanguage'
 import './i18n/rtl.css'
 import { LanguageSwitcher } from './components/LanguageSwitcher'
+import { ToastContainer, type Toast } from './components/ToastContainer'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
@@ -981,7 +982,18 @@ export default function App() {
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
   const [accounts, setAccounts] = useState<Agent[]>([])
   const [accountsLoading, setAccountsLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, _setStatus] = useState<string | null>(null)
+  const setStatus = useCallback((msg: string | null, kind?: 'error' | 'success' | 'info') => {
+    _setStatus(msg)
+    if (msg) {
+      pushToast({
+        kind: kind || 'info',
+        title: kind === 'error' ? 'Error' : kind === 'success' ? 'Success' : 'Notice',
+        body: msg,
+      })
+      if (kind === 'error') requestAnimationFrame(scrollToFirstError)
+    }
+  }, [])
   const [accountName, setAccountName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [isWizardOpen, setIsWizardOpen] = useState(false)
@@ -992,6 +1004,9 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [unseenNotifications, setUnseenNotifications] = useState(0)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const lastNotifIdRef = useRef(0)
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null)
   const [showSubscription, setShowSubscription] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -1025,6 +1040,33 @@ export default function App() {
     } finally {
       setAccountsLoading(false)
     }
+  }
+
+  function scrollToFirstError() {
+    const main = document.querySelector('main')
+    if (main) main.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function pushToast(toast: Omit<Toast, 'id'> & { id?: string }) {
+    const id = toast.id || crypto.randomUUID()
+    const entry: Toast = { ...toast, id }
+    setToasts(prev => [entry, ...prev].slice(0, 3))
+    const timer = setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+      toastTimersRef.current.delete(id)
+    }, 5000)
+    toastTimersRef.current.set(id, timer)
+  }
+
+  function dismissToast(id: string) {
+    const timer = toastTimersRef.current.get(id)
+    if (timer) { clearTimeout(timer); toastTimersRef.current.delete(id) }
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
+
+  function handleToastAction(toast: Toast) {
+    dismissToast(toast.id)
+    toast.onAction?.()
   }
 
   useEffect(() => {
@@ -1072,14 +1114,51 @@ export default function App() {
       setUnseenNotifications(0)
       return
     }
-    if (selectedAccount.auth_state === 'active' && selectedAccount.status === 'active') {
-      void agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
-        .then((payload) => setUnseenNotifications(payload.unseen_count))
-        .catch(() => setUnseenNotifications(0))
-    } else {
+    if (selectedAccount.auth_state !== 'active' || selectedAccount.status !== 'active') {
       setUnseenNotifications(0)
+      return
     }
+
+    void agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
+      .then((payload) => {
+        setUnseenNotifications(payload.unseen_count)
+        const ids = payload.items.map(n => n.id)
+        lastNotifIdRef.current = Math.max(0, ...ids)
+      })
+      .catch(() => setUnseenNotifications(0))
+
+    const interval = setInterval(async () => {
+      try {
+        const payload = await agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
+        setUnseenNotifications(payload.unseen_count)
+        const newNotifs = payload.items.filter(n => !n.is_seen && n.id > lastNotifIdRef.current)
+        if (newNotifs.length) {
+          lastNotifIdRef.current = Math.max(...newNotifs.map(n => n.id))
+          newNotifs.forEach(n => {
+            pushToast({
+              id: `notif-${n.id}`,
+              kind: 'notification',
+              title: n.title,
+              body: n.body,
+              notificationId: n.id,
+              onAction: () => setShowNotifications(true),
+            })
+          })
+        }
+      } catch {
+        // silent retry on next interval
+      }
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [appReady, selectedAccount, isWizardInProgress])
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach(timer => clearTimeout(timer))
+      toastTimersRef.current.clear()
+    }
+  }, [])
 
   function handleTabNavigate(page: AgentsPage) {
     const targetPath = page === 'settings' || !selectedAccount?.id
@@ -1392,6 +1471,7 @@ export default function App() {
           onCancel={() => setDeleteTarget(null)}
         />
       ) : null}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} onAction={handleToastAction} />
     </AppShell>
   )
 }
