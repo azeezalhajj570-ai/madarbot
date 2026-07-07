@@ -380,7 +380,7 @@ async def webapp_agent_member_search(
     page: int = Query(default=1, ge=1),
     order_by: str = Query(default="message_count"),
     exclude_admins: bool = Query(default=False),
-    exclude_bots: bool = Query(default=False),
+    exclude_bots: bool = Query(default=True),
     only_admins: bool = Query(default=False),
     only_bots: bool = Query(default=False),
     identity: TelegramWebAppIdentity = Depends(get_identity),
@@ -400,6 +400,7 @@ async def webapp_agent_member_search(
             exclude_bots=exclude_bots,
             only_admins=only_admins,
             only_bots=only_bots,
+            exclude_self=True,
         )
         return payload
     except ValueError as exc:

@@ -324,6 +324,7 @@ async def _resolve_selected_recipients(
     recipients: list[int],
     resolved_peers: dict[int, Any],
     recipient_identities: dict[int, dict[str, str | None]],
+    skip_bots: bool = True,
 ) -> None:
     from telethon.tl.types import InputPeerUser
 
@@ -342,8 +343,12 @@ async def _resolve_selected_recipients(
         )
         for row in member_rows:
             uid = int(row.tg_user_id)
-            if uid not in db_identities and row.raw_data:
-                db_identities[uid] = dict(row.raw_data or {})
+            if not row.raw_data:
+                continue
+            existing = db_identities.get(uid)
+            has_access_hash = bool(row.raw_data.get("access_hash"))
+            if existing is None or (has_access_hash and not existing.get("access_hash")):
+                db_identities[uid] = dict(row.raw_data)
 
     for uid in user_ids:
         if uid == agent.telegram_user_id:
@@ -351,6 +356,10 @@ async def _resolve_selected_recipients(
 
         raw = db_identities.get(uid, {})
         peer = None
+
+        if skip_bots and bool(raw.get("bot", False)):
+            logger.warning("broadcast_skip_bot", user_id=uid)
+            continue
 
         try:
             peer = await client.get_input_entity(uid)
@@ -453,54 +462,55 @@ class GroupMemberBroadcastRuntime:
                 return result
 
             source_group_id = int(normalized["source_group_id"])
-            targeted_user_ids = [int(uid) for uid in normalized.get("selected_user_ids", [])]
-            selected_user_ids = set(targeted_user_ids)
+            selected_user_ids = {int(uid) for uid in normalized.get("selected_user_ids", [])}
 
             await check_agent_health(client)
 
             recipients: list[int] = []
             resolved_peers: dict[int, Any] = {}
             recipient_identities: dict[int, dict[str, str | None]] = {}
+            group_entity = await AddContactRuntime().resolve_group_entity(
+                client, source_group_id
+            )
+            async for participant in iter_participants_with_timeout(client, group_entity):
+                pid = getattr(participant, "id", None)
+                if pid is None:
+                    continue
+                if bool(normalized.get("skip_bots", True)) and bool(
+                    getattr(participant, "bot", False)
+                ):
+                    continue
+                if bool(getattr(participant, "deleted", False)):
+                    continue
+                if agent.telegram_user_id is not None and int(pid) == int(agent.telegram_user_id):
+                    continue
+                if selected_user_ids and int(pid) not in selected_user_ids:
+                    continue
+                uid = int(pid)
+                recipients.append(uid)
+                participant_phone = getattr(participant, "phone", None)
+                participant_username = getattr(participant, "username", None)
+                if participant_phone or participant_username:
+                    recipient_identities[uid] = {
+                        "phone": str(participant_phone).strip() if participant_phone else None,
+                        "username": str(participant_username).strip().lower()
+                        if participant_username
+                        else None,
+                    }
+
             if selected_user_ids:
-                group_entity = await AddContactRuntime().resolve_group_entity(
-                    client, source_group_id
-                )
-                await _resolve_selected_recipients(
-                    client=client,
-                    agent=agent,
-                    session=session,
-                    user_ids=targeted_user_ids,
-                    recipients=recipients,
-                    resolved_peers=resolved_peers,
-                    recipient_identities=recipient_identities,
-                )
-            else:
-                group_entity = await AddContactRuntime().resolve_group_entity(
-                    client, source_group_id
-                )
-                async for participant in iter_participants_with_timeout(client, group_entity):
-                    pid = getattr(participant, "id", None)
-                    if pid is None:
-                        continue
-                    if bool(normalized.get("skip_bots", True)) and bool(
-                        getattr(participant, "bot", False)
-                    ):
-                        continue
-                    if bool(getattr(participant, "deleted", False)):
-                        continue
-                    if agent.telegram_user_id is not None and int(pid) == int(agent.telegram_user_id):
-                        continue
-                    uid = int(pid)
-                    recipients.append(uid)
-                    participant_phone = getattr(participant, "phone", None)
-                    participant_username = getattr(participant, "username", None)
-                    if participant_phone or participant_username:
-                        recipient_identities[uid] = {
-                            "phone": str(participant_phone).strip() if participant_phone else None,
-                            "username": str(participant_username).strip().lower()
-                            if participant_username
-                            else None,
-                        }
+                unfound = [uid for uid in selected_user_ids if uid not in recipients]
+                if unfound:
+                    await _resolve_selected_recipients(
+                        client=client,
+                        agent=agent,
+                        session=session,
+                        user_ids=unfound,
+                        recipients=recipients,
+                        resolved_peers=resolved_peers,
+                        recipient_identities=recipient_identities,
+                        skip_bots=bool(normalized.get("skip_bots", True)),
+                    )
 
             recipients_set = set(recipients)
             recipients = [r for r in recipients if r not in already_sent]
