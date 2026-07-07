@@ -139,6 +139,44 @@ curl -X POST "https://madar.hamedco.com/webapp/agents/{agent_id}/groups/{tg_grou
   -H "Authorization: Bearer <token>"
 ```
 
+## Agent Session States
+
+Session state is stored in Redis at `agent:{id}:state` with values: `healthy`, `flood_wait`, `banned`, `unknown`.
+
+State transitions:
+- **healthy** → session connected, listener running
+- **flood_wait** → Telegram rate-limited; retry_after stored as TTL on the key; listener retries every 5s but does NOT reset the timer
+- **banned** → terminal; listener stops permanently
+- **failed** → auth revoked; listener stops permanently
+
+Status endpoint: `GET /api/agents/{id}/status` returns `session_state`, `retry_after` (TTL in seconds), `flood_wait_until` (ISO timestamp).
+
+Frontend polls every 60s and shows a colored dot + countdown in the header.
+
+## Groups Visibility Filter
+
+`GET /api/agents/{id}/groups` returns groups where EITHER:
+- `scraped_groups.last_agent_id == agent.id` (agent synced this group)
+- `scraped_members.tg_user_id == agent.telegram_user_id` (agent is a scraped member)
+
+This replaced the old `last_agent_id`-only filter so agents see all their groups regardless of which agent last scraped them.
+
+## Owner Dashboard Scoping
+
+Owner endpoints (`/webapp/owner/groups`, `/webapp/owner/agents`, `/webapp/owner/stats`) now filter by the authenticated owner's groups:
+
+```
+User.tg_user_id == owner_tg_id  →  Group.owner_user_id == User.id  →  scoped results
+```
+
+Each bot owner only sees their own groups, agents, and statistics.
+
+## Broadcast Job Status
+
+- If `total_count > 0` and `success_count == 0` → status = `failed` (not `completed`)
+- If flood wait occurs with 0 messages sent → status = `failed` (not requeued as `pending`)
+- Fixes issue where jobs appeared "completed" but sent 0 messages
+
 ## MCP Server
 
 - Endpoint: `POST /mcp/` (JSON-RPC 2.0)

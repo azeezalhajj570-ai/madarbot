@@ -31,10 +31,13 @@ Verify:
 - [ ] bot healthy
 - [ ] Redis healthy
 - [ ] Postgres healthy
-- [ ] agent session connected
-- [ ] groups synced
+- [ ] agent session connected (state=healthy)
+- [ ] agents show correct group count in dashboard
+- [ ] owner dashboard shows scoped data (groups, agents, stats)
+- [ ] flood wait countdown decreases over time (not stuck)
 - [ ] no restart loop
 - [ ] lead_capture works
+- [ ] subscription endpoint returns 200
 
 ## Database Verification
 ```bash
@@ -53,12 +56,14 @@ Verify logs contain:
 - agent_listener_started
 - agent_groups_synced
 - agent_message_received_for_task
+- agent_groups_synced with per-agent count
 
 Verify no repeated:
 - connection failures
 - migration errors
 - crash loops
 - auth failures
+- request_validation_error on subscription endpoint (should be 200)
 
 ## Rollback Procedure
 If deploy fails:
