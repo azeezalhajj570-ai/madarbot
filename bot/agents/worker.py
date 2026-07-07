@@ -632,6 +632,23 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 await client.disconnect()
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
+            is_broadcast = job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE
+            if is_broadcast:
+                progress = (job.job_payload or {}).get("progress", {}) or {}
+                success_count = int(progress.get("success_count") or 0)
+                total_count = int(progress.get("total_count") or 0)
+                if total_count == 0:
+                    selected = (job.job_payload or {}).get("selected_user_ids") or []
+                    total_count = len(selected)
+                if total_count > 0 and success_count == 0:
+                    await _set_job_state(
+                        session,
+                        job_id,
+                        JOB_STATUS_FAILED,
+                        error=f"Flood wait for {exc.retry_after} seconds",
+                    )
+                    bound_logger.warning("agent_broadcast_flood_wait_failed", retry_after=exc.retry_after)
+                    return
             await _set_job_state(
                 session,
                 job_id,
