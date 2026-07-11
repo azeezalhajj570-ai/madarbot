@@ -1,7 +1,7 @@
 export interface AuthUser {
   id: number
   username: string
-  role: 'admin' | 'owner'
+  role: 'admin' | 'owner' | 'user'
   telegramId?: number
 }
 
