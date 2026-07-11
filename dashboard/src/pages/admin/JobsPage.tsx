@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react'
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import { fetchAdminOverview } from '../../lib/api'
+import { getStoredUser } from '../../lib/auth'
 import type { AdminOverview } from '../../lib/types'
 
 function timeAgo(iso: string | null | undefined): string {
@@ -19,6 +20,14 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminJobsPage() {
+  const user = getStoredUser()
+  if (user?.role !== 'admin' && user?.role !== 'owner') {
+    return (
+      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+      </PageShell>
+    )
+  }
   const [data, setData] = useState<AdminOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

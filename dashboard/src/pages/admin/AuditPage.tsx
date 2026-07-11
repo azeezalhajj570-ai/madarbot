@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 import { Badge, Button, Card, EmptyState, LoadingState } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerAuditLog } from '../../lib/api'
+import { getStoredUser } from '../../lib/auth'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -19,6 +20,14 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminAuditPage() {
+  const user = getStoredUser()
+  if (user?.role !== 'admin' && user?.role !== 'owner') {
+    return (
+      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+      </PageShell>
+    )
+  }
   const [page, setPage] = useState(0)
   const limit = 50
 

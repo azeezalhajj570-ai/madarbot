@@ -47,7 +47,7 @@ function LoginInner() {
           storeAuth(token, {
             id: me.user.id,
             username: me.user.username || me.user.first_name || 'telegram',
-            role: me.is_bot_owner ? 'owner' : 'admin',
+            role: me.is_bot_owner ? 'owner' : 'user',
             telegramId: me.user.id,
           })
           navigate('/')

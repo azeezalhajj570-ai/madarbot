@@ -10,8 +10,17 @@ import { PageShell } from '../../lib/page-shell'
 import {
   fetchOwnerPromoCodes, createOwnerPromoCode, updateOwnerPromoCode, deleteOwnerPromoCode,
 } from '../../lib/api'
+import { getStoredUser } from '../../lib/auth'
 
 export default function AdminPromoCodesPage() {
+  const user = getStoredUser()
+  if (user?.role !== 'admin' && user?.role !== 'owner') {
+    return (
+      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+      </PageShell>
+    )
+  }
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newPromo, setNewPromo] = useState({
