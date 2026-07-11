@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+import sqlalchemy as sa
 from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -400,6 +401,197 @@ async def test_ai_pilot(
         return {"status": "error", "error": str(exc)}
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
+
+
+@router.get("/admin-overview")
+async def admin_overview(
+    session: AsyncSession = Depends(get_session),
+    _: TelegramWebAppIdentity = Depends(_require_bot_owner),
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+
+    now = datetime.now(timezone.utc)
+
+    # ── System health (inline, no Redis dependency) ──────────────────────
+    checks: dict[str, Any] = {}
+    overall = "ok"
+
+    try:
+        import asyncio
+        start = asyncio.get_event_loop().time()
+        await session.execute(select(1))
+        db_latency = asyncio.get_event_loop().time() - start
+        checks["database"] = {"status": "ok", "latency_ms": round(db_latency * 1000, 1)}
+    except Exception as e:
+        checks["database"] = {"status": "down", "detail": str(e)}
+        overall = "down"
+
+    try:
+        from bot.dashboard.api.main import app
+        redis = getattr(app.state, "redis", None)
+        if redis is not None:
+            start = asyncio.get_event_loop().time()
+            await redis.ping()
+            redis_latency = asyncio.get_event_loop().time() - start
+            checks["redis"] = {"status": "ok", "latency_ms": round(redis_latency * 1000, 1)}
+        else:
+            checks["redis"] = {"status": "unknown"}
+    except Exception as e:
+        checks["redis"] = {"status": "down", "detail": str(e)}
+        if overall != "down":
+            overall = "degraded"
+
+    # Workers
+    try:
+        from bot.dashboard.api.main import app
+        redis = getattr(app.state, "redis", None)
+        for worker_key, worker_name in [("bot:worker:last_seen", "bot_worker"), ("agent:worker:last_seen", "agent_worker")]:
+            if redis is not None:
+                ts = await redis.get(worker_key)
+                if ts:
+                    last_seen_dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                    if (now - last_seen_dt).total_seconds() < 120:
+                        checks[worker_name] = {"status": "ok", "last_seen": ts}
+                    else:
+                        checks[worker_name] = {"status": "stale", "last_seen": ts}
+                        if overall == "ok":
+                            overall = "degraded"
+                else:
+                    checks[worker_name] = {"status": "unknown"}
+            else:
+                checks[worker_name] = {"status": "unknown"}
+    except Exception:
+        checks["bot_worker"] = checks.get("bot_worker", {"status": "unknown"})
+        checks["agent_worker"] = checks.get("agent_worker", {"status": "unknown"})
+
+    # Queue
+    try:
+        from bot.db.models import AgentJob as AJ
+        status_rows = (
+            await session.execute(
+                select(AJ.status, func.count(AJ.id)).group_by(AJ.status)
+            )
+        ).all()
+        jobs_by_status = {row.status: row[1] for row in status_rows}
+        pending = jobs_by_status.get("pending", 0) + jobs_by_status.get("queued", 0)
+        running = jobs_by_status.get("running", 0)
+        stuck_cutoff = now - timedelta(hours=get_settings().stuck_job_threshold_hours)
+        stuck = (
+            await session.execute(
+                select(func.count(AJ.id)).where(AJ.status == "running", AJ.updated_at < stuck_cutoff)
+            )
+        ).scalar_one()
+        checks["queue"] = {
+            "status": "ok" if pending < 50 else "degraded",
+            "pending": pending,
+            "running": running,
+            "stuck": int(stuck or 0),
+        }
+        if pending >= 50 and overall == "ok":
+            overall = "degraded"
+    except Exception:
+        checks["queue"] = {"status": "unknown"}
+
+    result["system_health"] = {"status": overall, **checks}
+
+    # ── Agents with stats ────────────────────────────────────────────────
+    from bot.db.models import Agent, SentBroadcastMessage
+
+    agents_rows = (await session.execute(select(Agent))).scalars().all()
+    agent_list = []
+    for a in agents_rows:
+        sent_count = (
+            await session.execute(
+                select(func.count(SentBroadcastMessage.id)).where(
+                    SentBroadcastMessage.sender_tg_user_id == a.telegram_user_id,
+                    SentBroadcastMessage.status == "sent",
+                )
+            )
+        ).scalar_one()
+        unique_contacts = (
+            await session.execute(
+                select(func.count(func.distinct(SentBroadcastMessage.tg_user_id))).where(
+                    SentBroadcastMessage.sender_tg_user_id == a.telegram_user_id,
+                    SentBroadcastMessage.status == "sent",
+                )
+            )
+        ).scalar_one()
+        jobs_count = (
+            await session.execute(
+                select(func.count(AJ.id)).where(AJ.agent_id == a.id)
+            )
+        ).scalar_one()
+        last_job = (
+            await session.execute(
+                select(AJ.created_at).where(AJ.agent_id == a.id).order_by(AJ.created_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+
+        agent_list.append({
+            "id": a.id,
+            "phone": a.phone_number or a.external_account_id,
+            "status": a.status,
+            "telegram_user_id": a.telegram_user_id,
+            "total_sent": int(sent_count or 0),
+            "unique_contacts": int(unique_contacts or 0),
+            "jobs_count": int(jobs_count or 0),
+            "last_job_at": last_job.isoformat() if last_job else None,
+        })
+    result["agents"] = agent_list
+
+    # ── Jobs summary ─────────────────────────────────────────────────────
+    from bot.db.models import AgentJob
+
+    total_jobs = (await session.execute(select(func.count(AJ.id)))).scalar_one()
+    job_status_rows = (
+        await session.execute(select(AJ.status, func.count(AJ.id)).group_by(AJ.status))
+    ).all()
+    by_status = {row.status: row[1] for row in job_status_rows}
+
+    result["jobs_summary"] = {
+        "total": int(total_jobs or 0),
+        "by_status": by_status,
+    }
+
+    # ── Recent jobs (last 10) ────────────────────────────────────────────
+    recent = (
+        await session.execute(
+            select(AJ.id, AJ.agent_id, AJ.job_type, AJ.status, AJ.created_at, AJ.updated_at)
+            .order_by(AJ.created_at.desc()).limit(10)
+        )
+    ).all()
+    result["recent_jobs"] = [
+        {
+            "job_id": row.id,
+            "agent_id": row.agent_id,
+            "job_type": row.job_type,
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in recent
+    ]
+
+    # ── Recent failures (last 24h) ───────────────────────────────────────
+    cutoff_24h = now - timedelta(hours=24)
+    failures = (
+        await session.execute(
+            select(AJ.id, AJ.agent_id, AJ.job_type, AJ.status, AJ.created_at)
+            .where(AJ.status.in_(["failed", "aborted"]), AJ.updated_at > cutoff_24h)
+            .order_by(AJ.updated_at.desc()).limit(10)
+        )
+    ).all()
+    result["recent_failures"] = [
+        {
+            "job_id": row.id,
+            "agent_id": row.agent_id,
+            "job_type": row.job_type,
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in failures
+    ]
+
+    return result
 
 
 __all__ = ["router"]

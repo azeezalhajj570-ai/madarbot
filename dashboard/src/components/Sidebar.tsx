@@ -1,26 +1,17 @@
 import { NavLink } from 'react-router-dom'
-import { Bot, Cpu, Crown, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Ticket, UserPlus, Users } from 'lucide-react'
+import { Activity, Bot, Cpu, Crown, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
 
 import { radius, spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 
-const OWNER_ONLY = new Set(['/owner', '/subscriptions'])
-
 const NAV = [
-  { to: '/', label: 'nav.workspace', icon: LayoutDashboard },
-  { to: '/jobs', label: 'nav.jobs', icon: UserPlus },
-  { to: '/members', label: 'nav.members', icon: Users },
-  { to: '/rules', label: 'nav.rules', icon: ShieldAlert },
-  { to: '/activity', label: 'nav.activity', icon: ScrollText },
-  { to: '/automation', label: 'nav.automation', icon: Cpu },
-  { to: '/faq', label: 'nav.faq', icon: HelpCircle },
-  { to: '/summaries', label: 'nav.summaries', icon: ScrollText },
-  { to: '/agents', label: 'nav.agents', icon: Bot },
-  { to: '/scraper', label: 'nav.scraper', icon: Search },
-  { to: '/subscriptions', label: 'nav.subscriptions', icon: Ticket },
-  { to: '/owner', label: 'nav.owner', icon: Crown },
-  { to: '/settings', label: 'nav.settings', icon: Settings },
+  { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
+  { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
+  { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
+  { to: '/admin/subscriptions', label: 'nav.admin.subscriptions', icon: Ticket },
+  { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
+  { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
 ]
 
 export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
@@ -54,17 +45,18 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           overflow: 'hidden',
         }}
       >
-        {/* Language toggle for sidebar */}
+        {/* Language toggle */}
         <div style={{ padding: `0 ${spacing.lg}px ${spacing.sm}px`, display: 'flex', justifyContent: 'flex-end' }}>
           <button className="lang-toggle" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}>
             {t('lang.switch')}
           </button>
         </div>
 
+        {/* Brand */}
         <div style={{ padding: `${spacing.xl}px ${spacing.lg}px`, borderBottom: `1px solid ${uiVars.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: radius.md, background: uiVars.primary, color: uiVars.primaryText, display: 'grid', placeItems: 'center' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.94 8.19l-2.02 9.52c-.15.68-.54.84-1.08.52l-3-2.21-1.45 1.4c-.16.16-.3.3-.61.3l.21-3.04 5.53-5c.24-.21-.05-.33-.37-.12L6.26 14.5l-2.95-.92c-.64-.2-.65-.64.14-.95l11.56-4.46c.53-.19.99.13.93.02z"/></svg>
+              <Shield size={16} />
             </div>
             <div>
               <div style={{ fontSize: 17, fontWeight: 800, color: uiVars.text }}>{t('app.name')}</div>
@@ -73,12 +65,22 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           </div>
         </div>
 
-        <nav style={{ flex: 1, padding: `${spacing.sm}px`, overflowY: 'auto', display: 'grid', gap: 2 }}>
-          {NAV.filter(({ to }) => !OWNER_ONLY.has(to) || user?.role === 'admin' || user?.role === 'owner').map(({ to, label, icon: Icon }) => (
+        {/* Navigation */}
+        <nav style={{ flex: 1, padding: `${spacing.sm}px`, overflowY: 'auto', display: 'grid', gap: 2, alignContent: 'start' }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: uiVars.textMuted,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            padding: `0 ${spacing.sm}px ${spacing.xs}px`,
+          }}>
+            Admin
+          </div>
+          {NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
               onClick={onNavClick}
               style={({ isActive }) => ({
                 display: 'flex',
@@ -98,6 +100,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           ))}
         </nav>
 
+        {/* User section */}
         <div style={{ padding: `${spacing.lg}px`, borderTop: `1px solid ${uiVars.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
             <div style={{ width: 32, height: 32, borderRadius: radius.md, background: uiVars.bgMuted, color: uiVars.primary, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800 }}>

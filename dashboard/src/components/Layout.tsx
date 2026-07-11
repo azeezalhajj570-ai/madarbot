@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { Bot, Cpu, Crown, HelpCircle, LayoutDashboard, LogOut, ScrollText, Search, Settings, ShieldAlert, Ticket, UserPlus, Users, Menu, X } from 'lucide-react'
+import { NavLink, Navigate, Outlet } from 'react-router-dom'
+import { Heart, Bot, ClipboardList, Tag, FileText, Menu, X, Shield } from 'lucide-react'
 
 import { spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { isAuthenticated } from '../lib/auth'
@@ -8,25 +8,15 @@ import { I18nProvider, useI18n } from '../lib/i18n'
 import Sidebar from './Sidebar'
 
 const NAV = [
-  { to: '/', label: 'nav.workspace', icon: LayoutDashboard },
-  { to: '/jobs', label: 'nav.jobs', icon: UserPlus },
-  { to: '/members', label: 'nav.members', icon: Users },
-  { to: '/rules', label: 'nav.rules', icon: ShieldAlert },
-  { to: '/activity', label: 'nav.activity', icon: ScrollText },
-  { to: '/automation', label: 'nav.automation', icon: Cpu },
-  { to: '/faq', label: 'nav.faq', icon: HelpCircle },
-  { to: '/summaries', label: 'nav.summaries', icon: ScrollText },
-  { to: '/agents', label: 'nav.agents', icon: Bot },
-  { to: '/scraper', label: 'nav.scraper', icon: Search },
-  { to: '/subscriptions', label: 'nav.subscriptions', icon: Ticket },
-  { to: '/owner', label: 'nav.owner', icon: Crown },
-  { to: '/settings', label: 'nav.settings', icon: Settings },
+  { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
+  { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
+  { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
+  { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
 ]
 
 function LayoutInner() {
   const { t, lang, setLang, dir } = useI18n()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const navigate = useNavigate()
 
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />
@@ -115,11 +105,10 @@ function LayoutInner() {
       {/* Mobile bottom nav */}
       <nav className="mobile-nav">
         <div className="mobile-nav-inner">
-          {NAV.slice(0, 6).map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
               className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
               onClick={() => setSidebarOpen(false)}
             >

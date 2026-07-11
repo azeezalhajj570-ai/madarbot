@@ -314,3 +314,52 @@ export interface WhatsAppNotificationSettings {
   destination_chat_id?: number
   destination_group_title?: string
 }
+
+// ─── Admin Overview ───────────────────────────────────────────────────────────
+
+export interface SystemHealthCheck {
+  status: string
+  latency_ms?: number
+  last_seen?: string
+  pending?: number
+  running?: number
+  stuck?: number
+  detail?: string
+}
+
+export interface AdminAgent {
+  id: number
+  phone: string
+  status: string
+  telegram_user_id?: number
+  total_sent: number
+  unique_contacts: number
+  jobs_count: number
+  last_job_at?: string
+}
+
+export interface AdminJob {
+  job_id: number
+  agent_id: number
+  job_type: string
+  status: string
+  created_at?: string
+}
+
+export interface AdminOverview {
+  system_health: {
+    status: string
+    database: SystemHealthCheck
+    redis: SystemHealthCheck
+    bot_worker: SystemHealthCheck
+    agent_worker: SystemHealthCheck
+    queue: SystemHealthCheck
+  }
+  agents: AdminAgent[]
+  jobs_summary: {
+    total: number
+    by_status: Record<string, number>
+  }
+  recent_jobs: AdminJob[]
+  recent_failures: AdminJob[]
+}
