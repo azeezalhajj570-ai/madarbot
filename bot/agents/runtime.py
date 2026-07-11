@@ -640,6 +640,7 @@ class GroupMemberBroadcastRuntime:
                         identity = recipient_identities.get(recipient_id, {})
                         pending_record = SentBroadcastMessage(
                             agent_id=agent.id,
+                            sender_tg_user_id=agent.telegram_user_id,
                             campaign_id=campaign_id,
                             job_id=payload.get("job_id"),
                             tg_user_id=recipient_id,
@@ -853,6 +854,7 @@ class GroupMemberBroadcastRuntime:
                 if session is not None:
                     pending_record = SentBroadcastMessage(
                         agent_id=agent.id,
+                        sender_tg_user_id=agent.telegram_user_id,
                         campaign_id=campaign_id,
                         job_id=payload.get("job_id"),
                         tg_user_id=None,

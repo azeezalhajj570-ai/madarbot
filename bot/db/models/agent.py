@@ -33,10 +33,16 @@ class SentBroadcastMessage(Base):
 
     __tablename__ = "sent_broadcast_messages"
 
-    __table_args__ = (Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),)
+    __table_args__ = (
+        Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),
+        Index("ix_sent_broadcast_sender_tg_user_id", "sender_tg_user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    sender_tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     campaign_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -72,7 +78,7 @@ class Agent(Base):
     group_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("groups.id", ondelete="SET NULL"), index=True, nullable=True
     )
-    phone_number: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True, unique=True)
     external_account_id: Mapped[str] = mapped_column(String(255), index=True)
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
     auth_state: Mapped[str] = mapped_column(String(32), default="active", index=True)

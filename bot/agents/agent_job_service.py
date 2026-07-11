@@ -355,7 +355,7 @@ class AgentJobService(AgentServiceSupport):
         sent_rows = (
             await self.session.execute(
                 select(SentBroadcastMessage.tg_user_id).where(
-                    SentBroadcastMessage.agent_id == agent.id,
+                    SentBroadcastMessage.sender_tg_user_id == agent.telegram_user_id,
                     group_filter,
                     SentBroadcastMessage.message_hash == message_hash,
                     SentBroadcastMessage.sent_at >= seven_days_ago,
