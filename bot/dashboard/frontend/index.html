@@ -7072,6 +7072,7 @@
         }
         const result = await apiRequest("/webapp/agents/auth/start", {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({
             group_id: groupId,
             phone_number: phoneNumber,
@@ -7083,6 +7084,7 @@
         const agentId = Number(fd.get("agent_id"));
         const result = await apiRequest(`/webapp/agents/${agentId}/auth/code`, {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({ code: String(fd.get("code") || "") }),
         });
         if (result.agent && result.agent.auth_state === "pending_2fa") {
@@ -7097,6 +7099,7 @@
         const agentId = Number(fd.get("agent_id"));
         const result = await apiRequest(`/webapp/agents/${agentId}/auth/password`, {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({ password: String(fd.get("password") || "") }),
         });
         await loadAgents(state.activeGroupId, true);
