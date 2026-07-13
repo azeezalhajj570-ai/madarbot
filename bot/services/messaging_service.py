@@ -1323,10 +1323,11 @@ class MessagingService:
         )
 
     def _hash_password(self, password: str) -> str:
-        secret = self.settings.dashboard_jwt_secret or self.settings.bot_token
+        secret = self.settings.dashboard_jwt_secret
         if not secret:
             raise RuntimeError(
-                "Cannot hash password: no dashboard_jwt_secret or bot_token configured"
+                "Cannot hash password: DASHBOARD_JWT_SECRET is not configured. "
+                "Set DASHBOARD_JWT_SECRET in your .env file."
             )
         return hashlib.sha256(secret.encode("utf-8") + password.encode("utf-8")).hexdigest()
 

@@ -36,6 +36,7 @@ MadarBot helps automate Telegram group operations by:
 | `docs/DEVELOPMENT_WORKFLOW.md` | Coding workflow, commit rules, PR rules, and best practices |
 | `docs/TESTING_STRATEGY.md` | Unit, integration, E2E, regression, DB, and smoke testing strategy |
 | `docs/DEPLOYMENT_CHECKLIST.md` | Deployment, verification, and rollback checklist |
+| `specs/` | Feature specifications (plans, specs, tasks per feature) |
 | `.env.example` | Environment variable template |
 | `.github/workflows/tests.yml` | CI workflow (lint, format, tests, builds) |
 
@@ -73,10 +74,10 @@ MadarBot helps automate Telegram group operations by:
 
 | Service | Image | Purpose |
 |---------|-------|---------|
-| `postgres` | postgres:16 | Primary database |
-| `redis` | redis:7 | Message queue (Dramatiq), caching |
+| `postgres` | postgres:16 | Primary database (`combot`) |
+| `redis` | redis:7 | Message queue (Dramatiq), caching, agent session state |
 | `backend` | madarbot-backend | FastAPI dashboard (port 8080 → 8000) |
-| `bot` | madarbot-bot | Telegram bot listener + agent sessions |
+| `bot` | madarbot-bot | Telegram bot + agent session listeners |
 | `agent_worker` | madarbot-agent_worker | Dramatiq async job processor |
 | `migrate` | madarbot-migrate | Alembic migration runner (exits after run) |
 | `miniapp_agents` | madarbot-miniapp_agents | React SPA served by nginx (port 80 → 5175) |
@@ -354,6 +355,52 @@ Serves the Vite-built React app from `/usr/share/nginx/html` and routes `/webapp
 | `Dockerfile.backend` | `backend` image (FastAPI dashboard + deps) |
 | `apps/miniapp-agents/Dockerfile` | `miniapp_agents` image (Vite build → nginx) |
 
+## Agent Session States
+
+Agent sessions are tracked in Redis with the following states, visible via the agent status indicator in the miniapp header:
+
+| State | Indicator | Meaning |
+|-------|-----------|---------|
+| `healthy` | Green dot | Session connected and listening |
+| `flood_wait` | Yellow dot + countdown | Telegram flood wait active (shows remaining time) |
+| `banned` | Red dot | Session banned by Telegram |
+| `unknown` | Grey dot | Session state not yet determined |
+
+Session state keys in Redis: `agent:{id}:state` (value) and `agent:{id}:retry_after` (TTL for flood wait countdown). The status is polled every 60s by the frontend.
+
+Flood wait handling:
+- On first occurrence, Redis key is set with TTL matching the flood wait duration
+- Subsequent retries by the listener do NOT reset the TTL — the countdown decreases monotonically
+- The backend returns `flood_wait_until` (ISO timestamp) and `retry_after` (remaining seconds from TTL)
+- The frontend computes remaining time locally from `flood_wait_until` and refreshes every 60s
+
+## Groups Visibility
+
+The miniapp groups list (`GET /api/agents/{id}/groups`) shows groups where the agent meets **either** condition:
+1. **Synced**: `scraped_groups.last_agent_id == agent.id` (agent synced the dialog)
+2. **Member**: `scraped_members.tg_user_id == agent.telegram_user_id` (agent is a scraped member)
+
+This ensures agents see all their groups regardless of which agent last scraped them.
+
+## Owner Dashboard Scoping
+
+The owner dashboard endpoints (`/webapp/owner/*`) now scope data to the authenticated owner's groups. Each owner sees only:
+- Groups they own (via `Group.owner_user_id` → `User.tg_user_id`)
+- Agents linked to their groups
+- Stats scoped to their groups and agents
+
+Owner identity is resolved from `bot_owner_ids` in settings (Telegram user IDs mapped to internal users via `users.tg_user_id`).
+
+## Task Status Rules
+
+Broadcast jobs follow strict status rules:
+
+| Condition | Status |
+|-----------|--------|
+| `success_count > 0` | `completed` |
+| `total_count > 0` and `success_count == 0` | `failed` |
+| Flood wait with 0 sent | `failed` (not `pending`+requeue) |
+
 ## AI Agent Runtime Expectations
 
 Agents should:
@@ -364,7 +411,7 @@ Agents should:
 - persist valid lead capture events
 - deduplicate leads safely
 - log structured operational events
-- retry transient failures
+- retry transient failures (except terminal errors)
 - avoid exposing secrets
 
 Important structured events include:
@@ -374,6 +421,8 @@ Important structured events include:
 - `agent_groups_synced`
 - `agent_listener_message_seen`
 - `agent_message_received_for_task`
+- `agent_session_unavailable` (flood wait)
+- `agent_broadcast_flood_wait_failed`
 
 ## Lead Capture Behavior
 

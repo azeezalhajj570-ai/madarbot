@@ -162,12 +162,27 @@ class LinkedAccountService(AgentServiceSupport):
         return agent
 
     async def unlink_agent(self, *, actor_user_id: int, agent_id: int) -> bool:
+        from bot.db.models.bulk_messaging import AgentBlacklistEntry
+
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
             return False
         await self.ensure_agent_owner(agent, actor_user_id)
         group_id = agent.group_id
         external_account_id = agent.external_account_id
+
+        bl_entries = (
+            (
+                await self.session.execute(
+                    select(AgentBlacklistEntry).where(AgentBlacklistEntry.agent_id == agent_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for entry in bl_entries:
+            await self.session.delete(entry)
+
         await self.session.delete(agent)
         await self.session.commit()
         await self.publish(

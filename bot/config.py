@@ -1,13 +1,24 @@
 from __future__ import annotations
-
 import json
 from functools import lru_cache
 from typing import Literal
 
+import bcrypt
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 AppKind = Literal["admin", "agents"]
+
+
+_BCRYPT_PREFIX = b"$2b$"
+
+
+def _ensure_bcrypt(password: str) -> str:
+    pwb = password.encode("utf-8")
+    if pwb.startswith(_BCRYPT_PREFIX):
+        return password
+    return bcrypt.hashpw(pwb, bcrypt.gensalt()).decode("utf-8")
 
 
 class DashboardBrowserUser(BaseModel):
@@ -17,6 +28,11 @@ class DashboardBrowserUser(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _hash_password(cls, v: str) -> str:
+        return _ensure_bcrypt(v)
 
 
 class Settings(BaseSettings):
@@ -79,6 +95,10 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
     scheduler_enabled: bool = Field(default=False, alias="SCHEDULER_ENABLED")
     scheduler_poll_interval: int = Field(default=30, alias="SCHEDULER_POLL_INTERVAL")
+    reconcile_enabled: bool = Field(default=True, alias="RECONCILE_ENABLED")
+    reconcile_poll_interval: int = Field(default=1800, alias="RECONCILE_POLL_INTERVAL")
+    stuck_job_threshold_hours: int = Field(default=2, alias="STUCK_JOB_THRESHOLD_HOURS")
+    stuck_job_max_retries: int = Field(default=3, alias="STUCK_JOB_MAX_RETRIES")
     default_language: str = Field(default="ar", alias="DEFAULT_LANGUAGE")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     aiogram_log_level: str = Field(default="WARNING", alias="AIROGRAM_LOG_LEVEL")

@@ -14,7 +14,7 @@ from telethon.tl.types import ChannelParticipantsAdmins
 
 from dataclasses import dataclass, field
 
-from bot.agents.exceptions import AgentSessionError
+from bot.agents.exceptions import AgentFloodWaitError, AgentSessionError
 from bot.agents.session import SessionManager
 from bot.config import get_settings
 from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
@@ -66,7 +66,7 @@ class ScraperService:
             try:
                 managed_client = await SessionManager().get_client(agent_id)
                 should_disconnect = True
-            except AgentSessionError:
+            except (AgentSessionError, AgentFloodWaitError):
                 logger.warning("scraper_session_failed", agent_id=agent_id)
                 return []
 
@@ -446,6 +446,13 @@ class ScraperService:
                         sender_raw_data,
                     ) = await entity_resolver.extract_message_sender_data(message)
 
+                    if sender_user_id is not None and int(sender_user_id) > 0:
+                        await self._ensure_sender_access_hash(
+                            client=managed_client,
+                            user_id=int(sender_user_id),
+                            sender_raw_data=sender_raw_data,
+                        )
+
                     msg_row = serializers.build_message_row_from_msg(
                         message,
                         scraped_group.id,
@@ -728,6 +735,13 @@ class ScraperService:
                             sender_raw_data,
                         ) = sender_data
 
+                        if sender_user_id is not None and int(sender_user_id) > 0:
+                            await self._ensure_sender_access_hash(
+                                client=managed_client,
+                                user_id=int(sender_user_id),
+                                sender_raw_data=sender_raw_data,
+                            )
+
                         msg_row = serializers.build_message_row_from_msg(
                             msg,
                             scraped_group.id,
@@ -1002,6 +1016,37 @@ class ScraperService:
                 with suppress(Exception):
                     await managed_client.disconnect()
 
+    async def _ensure_sender_access_hash(
+        self, *, client, user_id: int, sender_raw_data: dict
+    ) -> None:
+        if sender_raw_data.get("access_hash"):
+            return
+        cache = getattr(self, "_access_hash_cache", None)
+        if cache is None:
+            cache = {}
+            self._access_hash_cache = cache
+        uid = int(user_id)
+        if uid in cache:
+            if cache[uid]:
+                sender_raw_data["access_hash"] = cache[uid]
+            return
+        try:
+            full_user = await client.get_entity(uid)
+            ah = getattr(full_user, "access_hash", None)
+            if ah:
+                cache[uid] = int(ah)
+                sender_raw_data["access_hash"] = int(ah)
+            else:
+                cache[uid] = None
+            for attr in ["bot", "username", "first_name", "last_name", "phone", "premium"]:
+                val = getattr(full_user, attr, None)
+                if val is not None and attr not in sender_raw_data:
+                    sender_raw_data[attr] = (
+                        str(val) if not isinstance(val, (int, float, bool, str, type(None))) else val
+                    )
+        except Exception:
+            cache[uid] = None
+
     async def _get_existing_admin_roles(self, scraped_group_id: int) -> dict[int, str]:
         result = await self.session.execute(
             select(ScrapedMember).where(
@@ -1184,7 +1229,8 @@ class ScraperService:
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
         if query:
-            stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{query}%"))
+            escaped_query = query.replace("%", "\\%").replace("_", "\\_")
+            stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
         if sender_user_id is not None:
             stmt = stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
         if message_type:
@@ -1198,7 +1244,8 @@ class ScraperService:
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
         if query:
-            count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{query}%"))
+            escaped_query = query.replace("%", "\\%").replace("_", "\\_")
+            count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
         if sender_user_id is not None:
             count_stmt = count_stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
         if message_type:

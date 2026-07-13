@@ -85,23 +85,46 @@ class AgentRateLimiter:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return f"agent:{agent_id}:daily:{today}"
 
-    async def check_daily_limit(self, agent_id: int, max_per_day: int | None) -> tuple[bool, int]:
+    def _daily_contacts_key(self, agent_id: int) -> str:
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return f"agent:{agent_id}:daily_contacts:{today}"
+
+    async def check_daily_limit(
+        self, agent_id: int, max_per_day: int | None, user_id: int | None = None
+    ) -> tuple[bool, int]:
         if max_per_day is None or max_per_day <= 0:
             return True, 0
+        if user_id is not None:
+            contacts_key = self._daily_contacts_key(agent_id)
+            already_contacted = await self._redis.sismember(contacts_key, str(user_id))
+            if already_contacted:
+                count = await self._redis.scard(contacts_key)
+                return True, int(count)
+            count = await self._redis.scard(contacts_key)
+            return int(count) < max_per_day, int(count)
         key = self._daily_key(agent_id)
         count = await self._redis.incr(key)
         if count == 1:
             await self._redis.expire(key, 86400)
-        return count <= max_per_day, count
+        return int(count) <= max_per_day, int(count)
 
-    async def record_send(self, agent_id: int) -> int:
+    async def record_send(self, agent_id: int, user_id: int = 0) -> int:
         key = self._daily_key(agent_id)
-        count = await self._redis.incr(key)
-        if count == 1:
-            await self._redis.expire(key, 86400)
+        if user_id:
+            count = await self._redis.incr(key)
+            if count == 1:
+                await self._redis.expire(key, 86400)
+            contacts_key = self._daily_contacts_key(agent_id)
+            await self._redis.sadd(contacts_key, str(user_id))
+            await self._redis.expire(contacts_key, 86400)
+        else:
+            val = await self._redis.get(key)
+            count = int(val) if val else 0
         now = int(time.time())
         await self._redis.set(self._last_action_key(agent_id), str(now), ex=7200)
-        return count
+        return int(count)
 
     async def get_daily_count(self, agent_id: int) -> int:
         key = self._daily_key(agent_id)

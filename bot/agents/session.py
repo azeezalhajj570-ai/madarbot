@@ -14,6 +14,7 @@ from bot.agents.exceptions import (
     AgentSessionError,
     AgentSessionRevokedError,
 )
+from bot.agents.rpc_wrapper import call_with_retry
 from bot.config import get_settings
 from bot.db.models import Agent
 from bot.db.session import SessionLocal
@@ -106,13 +107,11 @@ class SessionManager:
     async def _get_state(self, agent_id: int) -> tuple[str, int | None]:
         client = await self._get_redis()
         raw_state = await client.get(self._state_key(agent_id))
-        raw_retry_after = await client.get(self._retry_key(agent_id))
         retry_after = None
-        if raw_retry_after not in {None, ""}:
-            try:
-                retry_after = int(raw_retry_after)
-            except (TypeError, ValueError):
-                retry_after = None
+        if raw_state == "flood_wait":
+            ttl = await client.ttl(self._state_key(agent_id))
+            if ttl and ttl > 0:
+                retry_after = ttl
         return str(raw_state or "unknown"), retry_after
 
     async def _load_agent(self, agent_id: int) -> Agent:
@@ -261,6 +260,12 @@ class SessionManager:
             return client
 
     async def mark_flood_wait(self, agent_id: int, retry_after: int) -> None:
+        client = await self._get_redis()
+        current = await client.get(self._state_key(agent_id))
+        if current == "flood_wait":
+            remaining = await client.ttl(self._state_key(agent_id))
+            if remaining and remaining > 0:
+                return  # Already in flood wait, don't reset the timer
         await self._set_state(agent_id, "flood_wait", retry_after=max(retry_after, 0))
 
     async def mark_banned(self, agent_id: int) -> None:
@@ -277,6 +282,20 @@ class SessionManager:
             agent.auth_state = "failed"
             agent.phone_code_hash = None
             await session.commit()
+
+    async def get_session_state(
+        self, agent_id: int
+    ) -> dict[str, Any]:
+        state, retry_after = await self._get_state(agent_id)
+        expires_at = None
+        if state == "flood_wait" and retry_after is not None:
+            from datetime import datetime, timezone, timedelta
+            expires_at = (datetime.now(timezone.utc) + timedelta(seconds=retry_after)).isoformat()
+        return {
+            "session_state": state,
+            "retry_after": retry_after,
+            "flood_wait_until": expires_at,
+        }
 
     async def is_available(self, agent_id: int) -> bool:
         state, _retry_after = await self._get_state(agent_id)
@@ -296,3 +315,29 @@ class SessionManager:
             "agent_session_availability_checked", available=True, state=state
         )
         return True
+
+    async def check_group_accessibility(
+        self, agent_id: int, group_ids: list[int]
+    ) -> dict[str, list[int]]:
+        client = await self.get_client(agent_id)
+        accessible: list[int] = []
+        inaccessible: list[int] = []
+        try:
+            from telethon.tl.types import InputPeerChannel  # noqa: F401  (runtime import in try-block)
+
+            for gid in group_ids:
+                try:
+                    entity = await call_with_retry(
+                        client,
+                        lambda: client.get_entity(gid),
+                        rpc_name="get_entity",
+                    )
+                    if entity is not None:
+                        accessible.append(gid)
+                    else:
+                        inaccessible.append(gid)
+                except Exception:
+                    inaccessible.append(gid)
+        finally:
+            pass
+        return {"accessible": accessible, "inaccessible": inaccessible}

@@ -13,7 +13,7 @@ from bot.agents.jobs import (
     normalize_group_member_broadcast_payload,
 )
 from bot.core.event_bus import EventBus
-from bot.db.models import Agent, AgentJob, ScrapedMember, SentBroadcastMessage
+from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, ScrapedMember, SentBroadcastMessage
 
 from .agent_notification_service import AgentNotificationService
 from .service_support import AgentServiceSupport
@@ -103,7 +103,7 @@ class AgentJobService(AgentServiceSupport):
                     exclusions = await self.compute_bulk_exclusions(
                         agent=agent,
                         source_group_id=normalized_payload.get("source_group_id", 0),
-                        message=normalized_payload["message"],
+                        messages=normalized_payload["messages"],
                         selected_user_ids=selected_ids,
                         campaign_id=campaign_id,
                     )
@@ -115,6 +115,7 @@ class AgentJobService(AgentServiceSupport):
                             "admins_excluded",
                             "bots_excluded",
                             "already_sent_excluded",
+                            "blacklisted_excluded",
                             "final_count",
                         )
                     }
@@ -268,7 +269,7 @@ class AgentJobService(AgentServiceSupport):
         *,
         agent: Agent,
         source_group_id: int,
-        message: str,
+        messages: list[str],
         selected_user_ids: list[int],
         campaign_id: int | None = None,
     ) -> dict[str, Any]:
@@ -289,8 +290,10 @@ class AgentJobService(AgentServiceSupport):
                 "admins_excluded": 0,
                 "bots_excluded": 0,
                 "already_sent_excluded": 0,
+                "blacklisted_excluded": 0,
                 "final_count": 0,
                 "filtered_user_ids": [],
+                "message_count": len(messages),
             }
 
         # Fetch scraped member data for selected users
@@ -341,7 +344,8 @@ class AgentJobService(AgentServiceSupport):
                 bots.add(uid)
 
         # Determine already-sent from sent_broadcast_messages
-        message_hash = hashlib.sha256(message.lower().strip().encode()).hexdigest()
+        combined = "||".join(m.lower().strip() for m in messages)
+        message_hash = hashlib.sha256(combined.encode()).hexdigest()
         already_sent_set: set[int] = set()
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         identity_filters = [SentBroadcastMessage.tg_user_id.in_(selected_user_ids)]
@@ -362,7 +366,7 @@ class AgentJobService(AgentServiceSupport):
         sent_rows = (
             await self.session.execute(
                 select(SentBroadcastMessage.tg_user_id).where(
-                    SentBroadcastMessage.agent_id == agent.id,
+                    SentBroadcastMessage.sender_tg_user_id == agent.telegram_user_id,
                     group_filter,
                     SentBroadcastMessage.message_hash == message_hash,
                     SentBroadcastMessage.sent_at >= seven_days_ago,
@@ -375,11 +379,38 @@ class AgentJobService(AgentServiceSupport):
             if row[0] is not None:
                 already_sent_set.add(int(row[0]))
 
-        # Build filtered list: exclude admins, bots, already-sent
+        # Determine blacklisted users
+        blacklisted_set: set[int] = set()
+        blacklist_rows = (
+            await self.session.execute(
+                select(AgentBlacklistEntry).where(
+                    AgentBlacklistEntry.agent_id == agent.id,
+                )
+            )
+        ).all()
+        for bl_entry in blacklist_rows:
+            entry = bl_entry[0] if hasattr(bl_entry, "__getitem__") else bl_entry
+            if entry.tg_user_id is not None and entry.tg_user_id in selected_user_ids:
+                blacklisted_set.add(int(entry.tg_user_id))
+            if entry.username:
+                uname = entry.username.strip().lower()
+                for uid in selected_user_ids:
+                    info = member_map.get(uid)
+                    if info and info.get("username") and info["username"].strip().lower() == uname:
+                        blacklisted_set.add(uid)
+            if entry.phone:
+                ph = entry.phone.strip()
+                for uid in selected_user_ids:
+                    info = member_map.get(uid)
+                    if info and info.get("phone") and info["phone"].strip() == ph:
+                        blacklisted_set.add(uid)
+
+        # Build filtered list: exclude admins, bots, already-sent, blacklisted
         excluded: set[int] = set()
         excluded.update(admins)
         excluded.update(bots)
         excluded.update(already_sent_set)
+        excluded.update(blacklisted_set)
         filtered = [uid for uid in selected_user_ids if uid not in excluded]
 
         return {
@@ -387,8 +418,148 @@ class AgentJobService(AgentServiceSupport):
             "admins_excluded": len(admins),
             "bots_excluded": len(bots),
             "already_sent_excluded": len(already_sent_set),
+            "blacklisted_excluded": len(blacklisted_set),
             "final_count": len(filtered),
             "filtered_user_ids": filtered,
+            "message_count": len(messages),
+        }
+
+    async def check_broadcast_accessibility(
+        self, *, actor_user_id: int, agent_id: int, group_ids: list[int]
+    ) -> dict[str, Any]:
+        from bot.agents.session import SessionManager
+        from bot.agents.exceptions import JobValidationError
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+        if agent.auth_state != "active":
+            raise ValueError("Agent is not authenticated")
+
+        session_manager = SessionManager()
+        try:
+            result = await session_manager.check_group_accessibility(agent.id, group_ids)
+        except Exception as exc:
+            raise JobValidationError(
+                f"Failed to check group accessibility: {exc}",
+                details={"agent_id": agent.id, "group_ids": group_ids},
+            ) from exc
+
+        if result["inaccessible"]:
+            raise JobValidationError(
+                f"Agent cannot access {len(result['inaccessible'])} group(s). "
+                f"Ensure the agent has joined these groups before creating a broadcast.",
+                details={
+                    "accessible_groups": result["accessible"],
+                    "inaccessible_groups": result["inaccessible"],
+                },
+            )
+
+        return {
+            "accessible_groups": result["accessible"],
+            "inaccessible_groups": result["inaccessible"],
+        }
+
+    async def get_job_health(self, *, actor_user_id: int, agent_id: int) -> dict[str, Any]:
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+
+        from datetime import datetime, timezone
+
+        running_result = await self.session.execute(
+            select(AgentJob)
+            .where(
+                AgentJob.agent_id == agent_id,
+                AgentJob.status.in_(["running", "pending", "queued"]),
+            )
+            .order_by(AgentJob.updated_at.desc())
+        )
+        jobs = list(running_result.scalars())
+
+        items = []
+        for job in jobs:
+            payload = dict(job.job_payload or {})
+            progress = payload.get("progress", {})
+            sent = progress.get("success_count", 0)
+            total = payload.get("total_recipients", 0) or len(payload.get("selected_user_ids", []))
+            elapsed = (datetime.now(timezone.utc) - job.updated_at).total_seconds()
+            last_checkpoint = progress.get("last_checkpoint_at")
+            is_stuck = False
+            if last_checkpoint:
+                try:
+                    cp_age = (
+                        datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint)
+                    ).total_seconds()
+                    is_stuck = cp_age > 7200
+                except (ValueError, TypeError):
+                    is_stuck = True
+
+            est_remaining = None
+            if sent > 0 and total > 0 and sent < total:
+                per_contact = elapsed / sent
+                est_remaining = (total - sent) * per_contact
+
+            items.append(
+                {
+                    "job_id": job.id,
+                    "agent_id": agent_id,
+                    "job_type": job.job_type,
+                    "status": job.status,
+                    "messages_sent": sent,
+                    "total_recipients": total,
+                    "elapsed_seconds": elapsed,
+                    "estimated_completion_seconds": est_remaining,
+                    "last_checkpoint_at": last_checkpoint,
+                    "is_possibly_stuck": is_stuck,
+                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                }
+            )
+
+        return {"running_jobs": items}
+
+    async def recover_job(
+        self, *, actor_user_id: int, agent_id: int, job_id: int
+    ) -> dict[str, Any]:
+        from bot.agents.jobs import JOB_STATUS_PENDING, JOB_STATUS_RUNNING
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+
+        job = (
+            await self.session.execute(
+                select(AgentJob).where(
+                    AgentJob.id == job_id,
+                    AgentJob.agent_id == agent_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if job is None:
+            raise ValueError("Job not found")
+
+        if job.status != JOB_STATUS_RUNNING:
+            raise ValueError(f"Job is not running (status={job.status})")
+
+        payload = dict(job.job_payload or {})
+        progress = payload.get("progress", {})
+        progress["retry_count"] = progress.get("retry_count", 0) + 1
+        payload["progress"] = progress
+        job.job_payload = payload
+        job.status = JOB_STATUS_PENDING
+        await self.session.commit()
+
+        from bot.agents.dispatch import dispatch_agent_job
+
+        await dispatch_agent_job(job.id)
+
+        return {
+            "job_id": job.id,
+            "status": JOB_STATUS_PENDING,
+            "retry_count": progress["retry_count"],
         }
 
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:
@@ -432,12 +603,6 @@ class AgentJobService(AgentServiceSupport):
                 raise ValueError(f"Threshold ({threshold}) exceeds daily limit ({max_per_day})")
             if threshold > 500:
                 raise ValueError(f"Maximum batch size is 500. Requested: {threshold}")
-
-            selected = list(payload.get("selected_user_ids") or [])
-            if len(selected) > threshold:
-                raise ValueError(
-                    f"Selected members ({len(selected)}) exceeds threshold ({threshold})"
-                )
 
         finally:
             await redis_client.aclose()

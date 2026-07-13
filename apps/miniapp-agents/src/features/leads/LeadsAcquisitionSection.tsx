@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { GroupAutocompleteField } from '../../components/GroupAutocompleteField'
@@ -38,11 +38,15 @@ function _formatKeywords(keywords: string[]): string {
 
 type LeadsTaskType = 'scrape' | 'lead_capture'
 
-export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [taskType, setTaskType] = useState<LeadsTaskType>('scrape')
   const [status, setStatus] = useState<string | null>(null)
+
+  function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
+    setStatus(msg); onSaved(msg, kind)
+  }
 
   // Scrape state
   const [scrapeGroupQuery, setScrapeGroupQuery] = useState('')
@@ -63,6 +67,11 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [leadAskContact, setLeadAskContact] = useState(false)
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
+
+  const canSubmit = useMemo(() => {
+    if (taskType === 'scrape') return !!scrapeSelectedGroup?.tg_group_id
+    return taskKeywords.length > 0
+  }, [taskType, scrapeSelectedGroup, taskKeywords])
 
   useEffect(() => {
     if (taskType !== 'scrape') { setScrapeGroups([]); return }
@@ -87,7 +96,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   }, [account.id, groupQuery, taskType])
 
   async function handleScrape() {
-    if (!scrapeSelectedGroup?.tg_group_id) { setStatus(t('leadsAcq.chooseGroupFirst')); return }
+    if (!scrapeSelectedGroup?.tg_group_id) { notify(t('leadsAcq.chooseGroupFirst')); return }
     setIsSaving(true)
     try {
       await agentsApi.createAgentJob(account.id, SCRAPE_TASK_KEY, {
@@ -102,14 +111,14 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
       setStatus(null)
       onSaved(t('leadsAcq.scrapeQueued', { title: scrapeSelectedGroup.title || String(scrapeSelectedGroup.tg_group_id) }))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('leadsAcq.failedQueue'))
+      notify(error instanceof Error ? error.message : t('leadsAcq.failedQueue'))
     } finally {
       setIsSaving(false)
     }
   }
 
   async function handleSaveLeadCapture() {
-    if (!taskKeywords.length) { setStatus(t('leadsAcq.atLeastOneKeyword')); return }
+    if (!taskKeywords.length) { notify(t('leadsAcq.atLeastOneKeyword')); return }
     setIsSaving(true)
     try {
       const config: Record<string, unknown> = {}
@@ -129,7 +138,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
       setStatus(null)
       onSaved(t('leadsAcq.leadCaptureCreated'))
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('leadsAcq.failedSaveLead'))
+      notify(error instanceof Error ? error.message : t('leadsAcq.failedSaveLead'))
     } finally {
       setIsSaving(false)
     }
@@ -166,8 +175,8 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
 
   return (
     <Card title={t('leadsAcq.title')} subtitle={t('leadsAcq.subtitle')}>
-      {status ? <Note>{status}</Note> : null}
-      {!isFormOpen ? <Button onClick={() => setIsFormOpen(true)}>{t('leadsAcq.newAcquisition')}</Button> : null}
+      {status ? <div data-form-error><Note>{status}</Note></div> : null}
+      {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>{t('leadsAcq.newAcquisition')}</Button> : null}
       {isFormOpen ? renderForm() : null}
     </Card>
   )
@@ -202,10 +211,10 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
               </div>
             ) : null}
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => void handleSubmit()} disabled={isSaving || !scrapeSelectedGroup}>
-                {isSaving ? t('leadsAcq.queuing') : t('leadsAcq.queueScrape')}
+              <Button onClick={() => void handleSubmit()} disabled={isSaving || !canSubmit}>
+                Save
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('leadsAcq.cancel')}</Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         ) : (
@@ -235,10 +244,10 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !taskKeywords.length}>
-                {isSaving ? t('leadsAcq.working') : t('leadsAcq.save')}
+              <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !canSubmit}>
+                Save
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('leadsAcq.cancel')}</Button>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         )}

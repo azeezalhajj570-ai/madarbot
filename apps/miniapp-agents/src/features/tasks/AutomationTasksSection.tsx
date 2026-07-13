@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -75,12 +75,15 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
   return `${summary}${mode}`
 }
 
-export function AutomationTasksSection({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+export function AutomationTasksSection({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
   const [tasks, setTasks] = useState<AutomationTask[]>([])
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
+  function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
+    setStatus(msg); onSaved(msg, kind)
+  }
   const [loading, setLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<AutomationTask | null>(null)
@@ -99,6 +102,15 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
 
+  const canSave = useMemo(() => {
+    if (!taskKeywords.length) return false
+    if (taskKey === 'notify_destination') {
+      const dest = taskDestinationMode === 'group' ? taskDestinationGroup?.tg_group_id : taskDestinationText.trim()
+      return !!dest
+    }
+    return true
+  }, [taskKeywords, taskKey, taskDestinationMode, taskDestinationGroup, taskDestinationText])
+
   async function refresh() {
     setLoading(true)
     try {
@@ -110,7 +122,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       setCatalog(nextCatalog)
       setStatus(null)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('automation.failedLoad'))
+      notify(error instanceof Error ? error.message : t('automation.failedLoad'))
     } finally {
       setLoading(false)
     }
@@ -148,6 +160,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setTaskDestinationGroup(null)
     setTaskGroupsQuery('')
     setTaskGroups([])
+    setStatus(null)
   }
 
   function openEditForm(task: AutomationTask) {
@@ -170,16 +183,18 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   }
 
   async function handleSave() {
-    if (!taskKeywords.length) { setStatus(t('automation.atLeastOneKeyword')); return }
+    const errors: string[] = []
+    if (!taskKeywords.length) errors.push(t('automation.atLeastOneKeyword'))
     const config: Record<string, unknown> = {}
     if (taskTemplate.trim()) config.message_template = taskTemplate.trim()
     if (taskKey === 'reply_message') config.reply_mode = taskReplyMode
     if (taskKey === 'notify_destination') {
       const dest = taskDestinationMode === 'group' ? String(taskDestinationGroup?.tg_group_id || '') : taskDestinationText.trim()
-      if (!dest) { setStatus(t('automation.destRequired')); return }
-      config.destination = dest
+      if (!dest) errors.push(t('automation.destRequired'))
+      else config.destination = dest
       config.delivery_mode = taskDeliveryMode
     }
+    if (errors.length) { notify(errors.join(' · ')); return }
     const payload = {
       task_key: taskKey,
       executor_type: 'agent',
@@ -202,7 +217,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       setIsFormOpen(false)
       await refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('automation.failedSave'))
+      notify(error instanceof Error ? error.message : t('automation.failedSave'))
     } finally {
       setIsSaving(false)
     }
@@ -217,7 +232,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       setDeleteTarget(null)
       await refresh()
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t('automation.failedDelete'))
+      notify(error instanceof Error ? error.message : t('automation.failedDelete'))
     } finally {
       setIsSaving(false)
     }
@@ -227,7 +242,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   return (
     <>
       <Card title={t('automation.title')} subtitle={t('automation.subtitle')}>
-        {status ? <Note>{status}</Note> : null}
+        {status ? <div data-form-error><Note>{status}</Note></div> : null}
         {!isFormOpen ? <Button onClick={() => { resetForm(); setIsFormOpen(true) }}>{t('automation.newTask')}</Button> : null}
         {isFormOpen ? (
           <div style={{ display: 'grid', gap: 12 }}>
@@ -281,7 +296,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
                 </SelectField>
               </>
             ) : null}
-            <FormActions submitLabel={editingTask ? t('automation.saveTask') : t('automation.createTask')} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
+            <FormActions submitLabel="Save" submitDisabled={!canSave || isSaving} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
           </div>
         ) : null}
       </Card>

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -33,6 +35,8 @@ from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
 from bot.db.session import engine
 from bot.agents.session import shutdown_client_pool
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+import sentry_sdk
 
 
 async def _backfill_lead_group_titles() -> None:
@@ -95,8 +99,47 @@ async def lifespan(app: FastAPI):
         scheduler_task = asyncio.create_task(scheduler_loop())
         logger.info("scheduler_loop_task_created")
 
+    reconcile_task = None
+    if settings.reconcile_enabled:
+        from bot.services.scheduler import reconcile_loop
+
+        reconcile_task = asyncio.create_task(reconcile_loop())
+        logger.info("reconcile_loop_task_created")
+
+    alert_task = None
+    if settings.sentry_dsn:
+        try:
+            from bot.monitoring.health_alerts import HealthAlertService
+
+            alert_service = HealthAlertService()
+
+            async def alert_loop():
+                while True:
+                    await asyncio.sleep(300)
+                    try:
+                        await alert_service.check_and_alert()
+                    except Exception:
+                        logger.exception("health_alert_check_failed")
+
+            alert_task = asyncio.create_task(alert_loop())
+            logger.info("health_alert_loop_task_created")
+        except Exception:
+            logger.exception("health_alert_loop_init_failed")
+
     yield
 
+    if alert_task:
+        alert_task.cancel()
+        try:
+            await alert_task
+        except asyncio.CancelledError:
+            pass
+    if reconcile_task:
+        reconcile_task.cancel()
+        try:
+            await reconcile_task
+        except asyncio.CancelledError:
+            pass
     if scheduler_task:
         scheduler_task.cancel()
         try:
@@ -119,6 +162,14 @@ app = FastAPI(
 )
 
 settings = get_settings()
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment="production",
+    )
+    logger.info("sentry_initialized for dashboard API")
+
 app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
 cors_origins = [
     origin
@@ -182,6 +233,21 @@ webapp_admin_dir = webapp_frontend_dir / "admin"
 webapp_admin_assets_dir = webapp_admin_dir / "assets"
 webapp_agents_dir = webapp_frontend_dir / "agents"
 webapp_agents_assets_dir = webapp_agents_dir / "assets"
+UPLOADS_DIR = Path(os.environ.get("UPLOADS_DIR", "/app/uploads"))
+
+
+def _ensure_uploads_dir() -> Path:
+    try:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        return UPLOADS_DIR
+    except OSError:
+        import tempfile
+
+        fallback = Path(tempfile.gettempdir()) / "madarbot-uploads"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 webapp_channels_dir = webapp_frontend_dir / "channels"
 webapp_channels_assets_dir = webapp_channels_dir / "assets"
 webapp_modbot_dir = webapp_frontend_dir / "modbot"
@@ -220,6 +286,8 @@ if browser_assets_dir.exists():
         "/dashboard/assets", StaticFiles(directory=str(browser_assets_dir)), name="dashboard-assets"
     )
 
+app.mount("/uploads", StaticFiles(directory=str(_ensure_uploads_dir())), name="media-uploads")
+
 app.include_router(owner_router)
 app.include_router(scraper_router)
 app.include_router(auth_router)
@@ -228,10 +296,10 @@ app.include_router(admin_router)
 app.include_router(admin_automation_router)
 app.include_router(admin_summaries_router)
 app.include_router(faq_router)
+app.include_router(subscription_router)
 app.include_router(agents_router)
 app.include_router(campaigns_router)
 app.include_router(messaging_router)
-app.include_router(subscription_router)
 app.include_router(group_subscription_router)
 app.include_router(internal_router)
 app.include_router(internal_router, prefix="/api/internal")
@@ -244,6 +312,13 @@ if settings.mcp_enabled:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import JSONResponse as StarletteJSONResponse
 
+    if not settings.mcp_auth_token:
+        logger.critical(
+            "MCP_ENABLED=true but MCP_AUTH_TOKEN is not configured. "
+            "Set MCP_AUTH_TOKEN in your .env file or set MCP_ENABLED=false."
+        )
+        raise SystemExit(1)
+
     class McpAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             path = request.url.path
@@ -252,8 +327,6 @@ if settings.mcp_enabled:
                 auth_header = request.headers.get("authorization", "")
                 if auth_header.startswith("Bearer "):
                     token = auth_header[7:]
-                if not token:
-                    token = request.query_params.get("token")
                 _, tg_user_id = await verify_mcp_auth_async(token)
                 if tg_user_id is None:
                     ok, _ = verify_mcp_auth(token)
@@ -261,7 +334,7 @@ if settings.mcp_enabled:
                         return StarletteJSONResponse(
                             status_code=401,
                             content={
-                                "error": "Invalid or missing MCP auth token. Pass via ?token=YOUR_TOKEN or Authorization: Bearer header"
+                                "error": "Invalid or missing MCP auth token. Pass via Authorization: Bearer header"
                             },
                         )
                 if tg_user_id is not None:
@@ -300,6 +373,11 @@ async def root() -> dict[str, str]:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -399,6 +477,14 @@ def _dashboard_shell() -> Response:
     if not index_file.exists():
         return HTMLResponse("<h3>Browser dashboard frontend not found</h3>", status_code=404)
     return FileResponse(index_file)
+
+
+@app.get("/dashboard/monitor", include_in_schema=False)
+async def dashboard_monitor():
+    monitor_file = webapp_frontend_dir / "monitor.html"
+    if not monitor_file.exists():
+        return HTMLResponse("<h3>Monitoring page not found</h3>", status_code=404)
+    return FileResponse(monitor_file)
 
 
 @app.get("/dashboard")

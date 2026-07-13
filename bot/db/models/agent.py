@@ -33,10 +33,16 @@ class SentBroadcastMessage(Base):
 
     __tablename__ = "sent_broadcast_messages"
 
-    __table_args__ = (Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),)
+    __table_args__ = (
+        Index("ix_sent_broadcast_campaign_user", "campaign_id", "tg_user_id"),
+        Index("ix_sent_broadcast_sender_tg_user_id", "sender_tg_user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    sender_tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     campaign_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -46,6 +52,8 @@ class SentBroadcastMessage(Base):
     tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    tg_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     tg_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     message_text: Mapped[str] = mapped_column(Text, nullable=False)
     message_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -70,21 +78,23 @@ class Agent(Base):
     group_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("groups.id", ondelete="SET NULL"), index=True, nullable=True
     )
-    phone_number: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True, unique=True)
     external_account_id: Mapped[str] = mapped_column(String(255), index=True)
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
     auth_state: Mapped[str] = mapped_column(String(32), default="active", index=True)
     session_string: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     phone_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     details: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    max_actions_per_hour: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    max_messages_per_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    min_delay_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_actions_per_hour: Mapped[Optional[int]] = mapped_column(Integer, default=50, nullable=True)
+    max_messages_per_day: Mapped[Optional[int]] = mapped_column(Integer, default=200, nullable=True)
+    min_delay_seconds: Mapped[Optional[float]] = mapped_column(Float, default=30.0, nullable=True)
+    cooldown_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=60, nullable=True)
     safety_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     safety_mode_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    auto_broadcast_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_broadcast_template: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

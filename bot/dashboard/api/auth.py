@@ -7,6 +7,7 @@ import json
 import time
 from typing import Any
 
+import bcrypt
 from fastapi import Header, HTTPException, Query, status
 
 from bot.config import DashboardBrowserUser, get_settings
@@ -24,7 +25,12 @@ class DashboardJWTError(ValueError):
 
 def _dashboard_jwt_secret() -> str:
     settings = get_settings()
-    return settings.dashboard_jwt_secret or settings.bot_token
+    secret = settings.dashboard_jwt_secret
+    if not secret:
+        raise RuntimeError(
+            "DASHBOARD_JWT_SECRET is not configured. Set DASHBOARD_JWT_SECRET in your .env file."
+        )
+    return secret
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -179,8 +185,11 @@ def authenticate_browser_user(identifier: str, password: str) -> DashboardBrowse
         normalized_username = str(user.username or "").strip().lower()
         if normalized_identifier not in {normalized_email, normalized_username}:
             continue
-        if hmac.compare_digest(user.password, password):
-            return user
+        try:
+            if bcrypt.checkpw(password.encode("utf-8"), user.password.encode("utf-8")):
+                return user
+        except ValueError:
+            continue
     return None
 
 

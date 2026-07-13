@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 
 import dramatiq
 from dramatiq.middleware.current_message import CurrentMessage
@@ -47,6 +49,21 @@ from bot.workers.app import redis_broker  # noqa: F401
 
 
 logger = structlog.get_logger(__name__)
+
+from bot.config import get_settings as _get_worker_settings
+
+_worker_settings = _get_worker_settings()
+if (
+    _worker_settings.bot_app_kind in ("admin", "agents")
+    and not _worker_settings.session_encryption_key
+):
+    logging.getLogger(__name__).critical(
+        "SESSION_ENCRYPTION_KEY is not configured. "
+        "Agent session strings would be stored in plaintext. Refusing to start worker. "
+        "Set SESSION_ENCRYPTION_KEY in your .env file."
+    )
+    sys.exit(1)
+
 _DEFAULT_SESSION_LOCAL = db_session.SessionLocal
 SessionLocal = _DEFAULT_SESSION_LOCAL
 
@@ -441,6 +458,58 @@ async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
         return {"sent": True, "message_id": sent.id, "chat_id": tg_user_id, "mode": "private"}
 
 
+async def _try_auto_broadcast_dispatch(
+    session,
+    agent: Agent,
+    job_payload: dict,
+    bound_logger,
+) -> None:
+    if not agent.auto_broadcast_enabled or not agent.auto_broadcast_template:
+        return
+    source_group_id = job_payload.get("source_group_id") or job_payload.get("group_id")
+    if not source_group_id:
+        bound_logger.debug("agent_auto_broadcast_skipped_no_group_id")
+        return
+    from bot.db.models.scraper import ScrapedMember
+    from sqlalchemy import func, select
+
+    member_count = await session.scalar(
+        select(func.count())
+        .select_from(ScrapedMember)
+        .where(ScrapedMember.scraped_group_id == int(source_group_id))
+    )
+    if not member_count or member_count == 0:
+        bound_logger.debug("agent_auto_broadcast_skipped_empty_group")
+        return
+
+    new_job = AgentJob(
+        agent_id=agent.id,
+        job_type=GROUP_MEMBER_BROADCAST_JOB_TYPE,
+        job_payload={
+            "source_group_id": int(source_group_id),
+            "messages": [agent.auto_broadcast_template],
+            "target_type": "members",
+            "threshold": 500,
+            "skip_bots": True,
+        },
+        status=JOB_STATUS_PENDING,
+    )
+    session.add(new_job)
+    await session.commit()
+    try:
+        from bot.agents.dispatch import dispatch_agent_job
+
+        await dispatch_agent_job(new_job.id)
+    except Exception:
+        bound_logger.exception("agent_auto_broadcast_dispatch_failed")
+    bound_logger.info(
+        "agent_auto_broadcast_dispatched",
+        group_id=source_group_id,
+        member_count=member_count,
+        new_job_id=new_job.id,
+    )
+
+
 async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     message = CurrentMessage.get_current_message()
     message_options = message.options or {} if message is not None else {}
@@ -492,6 +561,15 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     broadcast_payload = dict(job.job_payload or {})
                     broadcast_payload["job_id"] = job.id
                     broadcast_payload["campaign_id"] = job.campaign_id
+                    existing_progress = broadcast_payload.get("progress")
+                    if existing_progress and existing_progress.get("sent_users"):
+                        sent_count = len(existing_progress.get("sent_users", []))
+                        last_checkpoint = existing_progress.get("last_checkpoint_at")
+                        bound_logger.info(
+                            "agent_job_resuming_from_checkpoint",
+                            sent_count=sent_count,
+                            last_checkpoint_at=last_checkpoint,
+                        )
                     result = await broadcast_runtime.execute(
                         client=client, agent=agent, payload=broadcast_payload, session=session
                     )
@@ -506,6 +584,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             "failures": progress.get("failures", []),
                             "stopped_at": progress.get("stopped_at"),
                             "stop_reason": progress.get("stop_reason"),
+                            "last_checkpoint_at": progress.get("last_checkpoint_at"),
                             "target_type": progress.get("target_type")
                             or result.get("target_type", "members"),
                         }
@@ -529,13 +608,24 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     if progress:
                         broadcast_payload["result"] = result
                         job.job_payload = broadcast_payload
-                        job.status = JOB_STATUS_COMPLETED
-                        await session.commit()
+                        success_count = progress.get("success_count", 0)
+                        total_count = progress.get("total_count", 0)
+                        if total_count > 0 and success_count == 0:
+                            job.status = JOB_STATUS_FAILED
+                            broadcast_payload["last_error"] = "All messages failed to send"
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_FAILED, result=result,
+                                error="All messages failed to send",
+                            )
+                        else:
+                            job.status = JOB_STATUS_COMPLETED
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_COMPLETED, result=result
+                            )
                     else:
                         await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
-                    await _create_job_notification(
-                        session, job, status=JOB_STATUS_COMPLETED, result=result
-                    )
                     handled = True
                 elif job.job_type == ADD_CONTACT_JOB_TYPE:
                     result = await contact_runtime.execute(
@@ -575,6 +665,13 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         job_type=job.job_type,
                     )
                     await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    if job.job_type in {SCRAPER_MEMBERS_JOB_TYPE, SCRAPER_FULL_GROUP_JOB_TYPE}:
+                        await _try_auto_broadcast_dispatch(
+                            session=session,
+                            agent=agent,
+                            job_payload=dict(job.job_payload or {}),
+                            bound_logger=bound_logger,
+                        )
                     handled = True
                 if not handled:
                     await _set_job_state(
@@ -589,6 +686,23 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 await client.disconnect()
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
+            is_broadcast = job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE
+            if is_broadcast:
+                progress = (job.job_payload or {}).get("progress", {}) or {}
+                success_count = int(progress.get("success_count") or 0)
+                total_count = int(progress.get("total_count") or 0)
+                if total_count == 0:
+                    selected = (job.job_payload or {}).get("selected_user_ids") or []
+                    total_count = len(selected)
+                if total_count > 0 and success_count == 0:
+                    await _set_job_state(
+                        session,
+                        job_id,
+                        JOB_STATUS_FAILED,
+                        error=f"Flood wait for {exc.retry_after} seconds",
+                    )
+                    bound_logger.warning("agent_broadcast_flood_wait_failed", retry_after=exc.retry_after)
+                    return
             await _set_job_state(
                 session,
                 job_id,

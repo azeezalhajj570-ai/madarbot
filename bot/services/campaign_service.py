@@ -209,7 +209,7 @@ class CampaignService:
             job_payload = normalize_group_member_broadcast_payload(
                 {
                     "target_type": target_type,
-                    "message": campaign.message_template,
+                    "messages": [campaign.message_template],
                     "threshold": threshold,
                     "interval_seconds": interval_seconds,
                     "source_group_id": tg_group_id,

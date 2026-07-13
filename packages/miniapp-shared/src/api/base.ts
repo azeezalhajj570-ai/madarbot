@@ -205,7 +205,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 let miniappTokenPromise: Promise<string | null> | null = null
 
-async function ensureMiniappToken() {
+export async function ensureMiniappToken() {
   const cachedToken = readMiniappToken()
   if (cachedToken) {
     return cachedToken

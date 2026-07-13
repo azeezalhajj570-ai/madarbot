@@ -35,6 +35,9 @@ os.environ["DASHBOARD_URL"] = "https://dashboard.test"
 os.environ["WEBAPP_URL"] = "https://app.test"
 os.environ["DEFAULT_LANGUAGE"] = "ar"
 os.environ["BOT_OWNER_IDS"] = "6666,1001,9903,8113,8103"
+os.environ.setdefault("SESSION_ENCRYPTION_KEY", "test-session-encryption-key-not-real")
+os.environ.setdefault("DASHBOARD_JWT_SECRET", "test-dashboard-jwt-secret-not-real")
+os.environ.setdefault("MCP_AUTH_TOKEN", "test-mcp-auth-token-not-real")
 
 from bot.core.event_bus import EventBus
 from bot.core.menu_engine import MenuEngine

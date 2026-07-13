@@ -177,8 +177,8 @@ def legal_page(
     </a>
     <nav class="header-nav">
       <a href="{active_page}?lang={other_lang}">{other_label}</a>
-      <a href="/docs?lang={lang}">{tr('documentation', lang)}</a>
-      <a href="/webapp/agents">{tr('dashboard', lang)}</a>
+      <a href="/docs?lang={lang}">{tr("documentation", lang)}</a>
+      <a href="/webapp/agents">{tr("dashboard", lang)}</a>
     </nav>
   </div>
 </header>
@@ -186,22 +186,22 @@ def legal_page(
 <div class="content">
   <h1>{display_title}</h1>
   <p class="hero-desc">{display_desc}</p>
-  <div class="last-updated">{tr('last_updated', lang)}: {last_updated}</div>
+  <div class="last-updated">{tr("last_updated", lang)}: {last_updated}</div>
   {display_content}
   <div class="feedback">
-    <p class="feedback-label">{tr('was_helpful', lang)}</p>
+    <p class="feedback-label">{tr("was_helpful", lang)}</p>
     <div class="feedback-btns">
-      <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('thanks').classList.add('show')">{tr('yes', lang)}</button>
-      <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('thanks').classList.add('show')">{tr('no', lang)}</button>
+      <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('thanks').classList.add('show')">{tr("yes", lang)}</button>
+      <button class="feedback-btn" onclick="this.classList.add('voted');document.getElementById('thanks').classList.add('show')">{tr("no", lang)}</button>
     </div>
-    <p class="feedback-thanks" id="thanks">{tr('thanks_feedback', lang)} <a href="/legal/contact?lang={lang}">{tr('contact_for_help', lang)}</a>.</p>
+    <p class="feedback-thanks" id="thanks">{tr("thanks_feedback", lang)} <a href="/legal/contact?lang={lang}">{tr("contact_for_help", lang)}</a>.</p>
   </div>
   <nav class="nav-links">
 {nav}
   </nav>
 </div>
 </main>
-<footer>&copy; {last_updated.split()[-1] if last_updated else "2026"} MadarBot. {tr('all_rights', lang)}.</footer>
+<footer>&copy; {last_updated.split()[-1] if last_updated else "2026"} MadarBot. {tr("all_rights", lang)}.</footer>
 </body>
 </html>"""
 
@@ -253,7 +253,17 @@ TOS_AR = """
 
 @router.get("/tos", response_class=HTMLResponse)
 async def tos_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Terms of Service", "June 15, 2026", "Terms governing your use of the MadarBot platform.", TOS_EN, "/legal/tos", lang, title_ar="شروط الخدمة", description_ar="الشروط التي تحكم استخدامك لمنصة مداربوت.", content_ar=TOS_AR)
+    return legal_page(
+        "Terms of Service",
+        "June 15, 2026",
+        "Terms governing your use of the MadarBot platform.",
+        TOS_EN,
+        "/legal/tos",
+        lang,
+        title_ar="شروط الخدمة",
+        description_ar="الشروط التي تحكم استخدامك لمنصة مداربوت.",
+        content_ar=TOS_AR,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -287,7 +297,17 @@ PRIVACY_AR = """
 
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Privacy Policy", "June 15, 2026", "How MadarBot collects, uses, and protects your personal data.", PRIVACY_EN, "/legal/privacy", lang, title_ar="سياسة الخصوصية", description_ar="كيف يجمع مداربوت بياناتك الشخصية ويستخدمها ويحميها.", content_ar=PRIVACY_AR)
+    return legal_page(
+        "Privacy Policy",
+        "June 15, 2026",
+        "How MadarBot collects, uses, and protects your personal data.",
+        PRIVACY_EN,
+        "/legal/privacy",
+        lang,
+        title_ar="سياسة الخصوصية",
+        description_ar="كيف يجمع مداربوت بياناتك الشخصية ويستخدمها ويحميها.",
+        content_ar=PRIVACY_AR,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -300,7 +320,17 @@ COOKIES_AR = """<h2>ما هي ملفات الارتباط</h2><p>ملفات نص
 
 @router.get("/cookies", response_class=HTMLResponse)
 async def cookies_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Cookie Policy", "June 15, 2026", "How MadarBot uses cookies and tracking technologies.", COOKIES_EN, "/legal/cookies", lang, title_ar="سياسة ملفات الارتباط", description_ar="كيف يستخدم مداربوت ملفات الارتباط وتقنيات التتبع.", content_ar=COOKIES_AR)
+    return legal_page(
+        "Cookie Policy",
+        "June 15, 2026",
+        "How MadarBot uses cookies and tracking technologies.",
+        COOKIES_EN,
+        "/legal/cookies",
+        lang,
+        title_ar="سياسة ملفات الارتباط",
+        description_ar="كيف يستخدم مداربوت ملفات الارتباط وتقنيات التتبع.",
+        content_ar=COOKIES_AR,
+    )
 
 
 DISCLAIMER_EN = """<h2>General Disclaimer</h2><p>Service provided for informational and operational purposes. No warranties of completeness or accuracy.</p><h2>AI-Generated Content</h2><p>AI features use LLMs. Output may contain errors, hallucinations, or biases. Not professional advice. Verify before acting.</p><h2>Automation Disclaimer</h2><p>You are responsible for ensuring automation use complies with Telegram ToS, applicable laws, and group rules.</p><h2>Third-Party Content</h2><p>Not responsible for accuracy or legality of third-party content (scraped messages, AI provider output).</p><h2>Service Availability</h2><p>No guarantee of uninterrupted access. Not liable for downtime-related losses.</p>"""
@@ -309,7 +339,17 @@ DISCLAIMER_AR = """<h2>إخلاء عام</h2><p>الخدمة مقدمة لأغر
 
 @router.get("/disclaimer", response_class=HTMLResponse)
 async def disclaimer_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Disclaimer", "June 15, 2026", "Limitations and disclaimers regarding your use of MadarBot.", DISCLAIMER_EN, "/legal/disclaimer", lang, title_ar="إخلاء المسؤولية", description_ar="القيود وإخلاءات المسؤولية المتعلقة باستخدامك لمداربوت.", content_ar=DISCLAIMER_AR)
+    return legal_page(
+        "Disclaimer",
+        "June 15, 2026",
+        "Limitations and disclaimers regarding your use of MadarBot.",
+        DISCLAIMER_EN,
+        "/legal/disclaimer",
+        lang,
+        title_ar="إخلاء المسؤولية",
+        description_ar="القيود وإخلاءات المسؤولية المتعلقة باستخدامك لمداربوت.",
+        content_ar=DISCLAIMER_AR,
+    )
 
 
 REFUND_EN = """<h2>Subscription Plans</h2><p>Free, Pro, and Business tiers. Paid plans billed monthly/annually via Stripe.</p><h2>Cancellation</h2><p>Cancel anytime from Settings → Billing. Access continues until end of billing period. Account downgrades to Free tier after.</p><h2>Refund Policy</h2><div class="table-wrap"><table><thead><tr><th>Circumstance</th><th>Refund</th></tr></thead><tbody><tr><td>Technical service failure (48h+)</td><td>Pro-rated</td></tr><tr><td>Billing error</td><td>Full</td></tr><tr><td>Duplicate charge</td><td>Full</td></tr><tr><td>Annual plan cancellation (90 days)</td><td>Pro-rated minus 10%</td></tr></tbody></table></div><h2>Non-Refundable</h2><p>Change of mind, partial use, ToS violations, Telegram actions, promotional plans, failure to cancel before renewal.</p><h2>Process</h2><p>Contact us → Review within 5 business days → Refund within 10 business days.</p>"""
@@ -318,7 +358,17 @@ REFUND_AR = """<h2>خطط الاشتراك</h2><p>مستويات مجاني و P
 
 @router.get("/refund", response_class=HTMLResponse)
 async def refund_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Refund & Cancellation Policy", "June 15, 2026", "Our subscription cancellation and refund terms.", REFUND_EN, "/legal/refund", lang, title_ar="سياسة الاسترداد والإلغاء", description_ar="شروط إلغاء الاشتراك والاسترداد الخاصة بنا.", content_ar=REFUND_AR)
+    return legal_page(
+        "Refund & Cancellation Policy",
+        "June 15, 2026",
+        "Our subscription cancellation and refund terms.",
+        REFUND_EN,
+        "/legal/refund",
+        lang,
+        title_ar="سياسة الاسترداد والإلغاء",
+        description_ar="شروط إلغاء الاشتراك والاسترداد الخاصة بنا.",
+        content_ar=REFUND_AR,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -381,25 +431,39 @@ async function submitForm(e) {{
 
 def _contact_content(lang: str) -> str:
     return CONTACT_EN_CONTENT.format(
-        gt=tr("get_in_touch", lang), gtd=tr("get_in_touch_desc", lang),
-        es=tr("email_support", lang), esd=tr("email_support_desc", lang),
-        sum=tr("send_us_message", lang), sumd=tr("send_us_message_desc", lang),
-        nm=tr("name", lang), nmp=tr("name_placeholder", lang),
-        em=tr("email", lang), emp=tr("email_placeholder", lang),
-        sb=tr("subject", lang), sbp=tr("subject_placeholder", lang),
-        ms=tr("message", lang), msp=tr("message_placeholder", lang),
+        gt=tr("get_in_touch", lang),
+        gtd=tr("get_in_touch_desc", lang),
+        es=tr("email_support", lang),
+        esd=tr("email_support_desc", lang),
+        sum=tr("send_us_message", lang),
+        sumd=tr("send_us_message_desc", lang),
+        nm=tr("name", lang),
+        nmp=tr("name_placeholder", lang),
+        em=tr("email", lang),
+        emp=tr("email_placeholder", lang),
+        sb=tr("subject", lang),
+        sbp=tr("subject_placeholder", lang),
+        ms=tr("message", lang),
+        msp=tr("message_placeholder", lang),
         sm=tr("send_message", lang),
         snd_js=json.dumps(tr("sending", lang)),
         msgok_js=json.dumps(tr("msg_sent", lang)),
         msgerr_js=json.dumps(tr("msg_error", lang)),
         msgneterr_js=json.dumps(tr("msg_network_error", lang)),
         sm_js=json.dumps(tr("send_message", lang)),
-        rt=tr("response_times", lang), it=tr("inquiry_type", lang), er=tr("expected_response", lang),
-        gs=tr("general_support", lang), d12=tr("days_1_2", lang),
-        tp=tr("tech_pro", lang), d1=tr("days_1", lang),
-        br=tr("billing_refunds", lang), d25=tr("days_2_5", lang),
-        lpl=tr("legal_privacy_label", lang), d530=tr("days_5_30", lang),
-        ar=tr("abuse_reports", lang), d13=tr("days_1_3", lang),
+        rt=tr("response_times", lang),
+        it=tr("inquiry_type", lang),
+        er=tr("expected_response", lang),
+        gs=tr("general_support", lang),
+        d12=tr("days_1_2", lang),
+        tp=tr("tech_pro", lang),
+        d1=tr("days_1", lang),
+        br=tr("billing_refunds", lang),
+        d25=tr("days_2_5", lang),
+        lpl=tr("legal_privacy_label", lang),
+        d530=tr("days_5_30", lang),
+        ar=tr("abuse_reports", lang),
+        d13=tr("days_1_3", lang),
     )
 
 
@@ -407,9 +471,12 @@ def _contact_content(lang: str) -> str:
 async def contact_page(request: Request, lang: str = Query(default="en")) -> str:
     contact_content = _contact_content(lang)
     return legal_page(
-        "Contact Us", "June 15, 2026",
+        "Contact Us",
+        "June 15, 2026",
         "Get in touch with the MadarBot team for support, legal inquiries, or feedback.",
-        contact_content, "/legal/contact", lang,
+        contact_content,
+        "/legal/contact",
+        lang,
         title_ar="اتصل بنا",
         description_ar="تواصل مع فريق مداربوت للدعم أو الاستفسارات القانونية أو الملاحظات.",
         content_ar=contact_content,
@@ -429,16 +496,26 @@ async def contact_submit(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
-    if not data.name.strip() or not data.email.strip() or not data.subject.strip() or not data.message.strip():
+    if (
+        not data.name.strip()
+        or not data.email.strip()
+        or not data.subject.strip()
+        or not data.message.strip()
+    ):
         return JSONResponse({"detail": "All fields are required."}, status_code=422)
     if len(data.message) > 10000:
         return JSONResponse({"detail": "Message is too long."}, status_code=422)
-    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+    client_ip = request.headers.get(
+        "x-forwarded-for", request.client.host if request.client else None
+    )
     if client_ip and "," in client_ip:
         client_ip = client_ip.split(",")[0].strip()
     msg = ContactMessage(
-        name=data.name.strip(), email=data.email.strip().lower(),
-        subject=data.subject.strip(), message=data.message.strip(), ip_address=client_ip,
+        name=data.name.strip(),
+        email=data.email.strip().lower(),
+        subject=data.subject.strip(),
+        message=data.message.strip(),
+        ip_address=client_ip,
     )
     session.add(msg)
     await session.commit()
@@ -455,7 +532,17 @@ DATA_DEL_AR = """<h2>حقك في الحذف</h2><p>بموجب GDPR/CCPA، لدي
 
 @router.get("/data-deletion", response_class=HTMLResponse)
 async def data_deletion_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Data Deletion Request", "June 15, 2026", "How to request deletion of your personal data from MadarBot.", DATA_DEL_EN, "/legal/data-deletion", lang, title_ar="طلب حذف البيانات", description_ar="كيفية طلب حذف بياناتك الشخصية من مداربوت.", content_ar=DATA_DEL_AR)
+    return legal_page(
+        "Data Deletion Request",
+        "June 15, 2026",
+        "How to request deletion of your personal data from MadarBot.",
+        DATA_DEL_EN,
+        "/legal/data-deletion",
+        lang,
+        title_ar="طلب حذف البيانات",
+        description_ar="كيفية طلب حذف بياناتك الشخصية من مداربوت.",
+        content_ar=DATA_DEL_AR,
+    )
 
 
 AUP_EN = """<h2>Purpose</h2><p>This Acceptable Use Policy defines rules for using MadarBot. Violations may result in suspension or termination.</p><h2>Prohibited Activities</h2><h3>Illegal</h3><p>Fraud, phishing, illegal content, IP violations, unauthorized access, money laundering.</p><h3>Harmful</h3><p>Harassment, hate speech, malware, disinformation, doxxing.</p><h3>Spam & Abuse</h3><p>Unsolicited bulk messages, rate limit circumvention, fake accounts, flooding.</p><h3>Service Integrity</h3><p>Reverse engineering, infrastructure disruption, unauthorized automation, reselling.</p><h2>Scraping & Messaging Guidelines</h2><p>Only scrape groups you administer. Respect member privacy. Bulk messages must be relevant and expected.</p><h2>Enforcement</h2><p>Warning, feature suspension, account suspension, termination, legal reporting.</p><h2>Reporting</h2><p>Report violations via <a href="/legal/contact">Contact page</a>. Include user IDs, timestamps, evidence.</p>"""
@@ -464,4 +551,14 @@ AUP_AR = """<h2>الغرض</h2><p>تحدد سياسة الاستخدام الم�
 
 @router.get("/aup", response_class=HTMLResponse)
 async def aup_page(request: Request, lang: str = Query(default="en")) -> str:
-    return legal_page("Acceptable Use Policy", "June 15, 2026", "Rules and guidelines for acceptable use of the MadarBot platform.", AUP_EN, "/legal/aup", lang, title_ar="سياسة الاستخدام المقبول", description_ar="قواعد وإرشادات الاستخدام المقبول لمنصة مداربوت.", content_ar=AUP_AR)
+    return legal_page(
+        "Acceptable Use Policy",
+        "June 15, 2026",
+        "Rules and guidelines for acceptable use of the MadarBot platform.",
+        AUP_EN,
+        "/legal/aup",
+        lang,
+        title_ar="سياسة الاستخدام المقبول",
+        description_ar="قواعد وإرشادات الاستخدام المقبول لمنصة مداربوت.",
+        content_ar=AUP_AR,
+    )

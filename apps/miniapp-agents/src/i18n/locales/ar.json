@@ -4,6 +4,7 @@
     "leads": "العملاء",
     "campaigns": "الحملات",
     "tasks": "المهام",
+    "blacklist": "القائمة السوداء",
     "settings": "الإعدادات"
   },
   "app": {
@@ -273,7 +274,7 @@
     "sendLogs": "سجلات الإرسال",
     "logsEmptyNoProgress": "لا توجد سجلات إرسال لهذه المهمة. قد تكون الرسائل قيد المعالجة.",
     "logsEmptyWithProgress": "لا توجد سجلات إرسال فردية. تقدم المهمة: {sent} أُرسلت، {failed} فشلت من أصل {total}.",
-    "scheduledFor": "مجدول في {{date}}"
+    "scheduledFor": "مجدول في {date}"
   },
   "analytics": {
     "title": "الإحصائيات",
@@ -328,8 +329,8 @@
     "pending": "معلقة",
     "conversionRate": "نسبة التحويل",
     "conversionBreakdown": "{interested} مهتم + {converted} تم تحويلهم من أصل {total} عميل",
-    "hours": "{{count}} ساعة",
-    "days": "{{count}} أيام"
+    "hours": "{count} ساعة",
+    "days": "{count} أيام"
   },
   "time": {
     "justNow": "الآن",
@@ -478,8 +479,11 @@
     "sourceGroup": "المجموعة المصدر",
     "searchDestGroup": "ابحث عن مجموعة وجهة",
     "searchDestHint": "ابحث للعثور على مجموعة وجهة.",
-    "message": "الرسالة",
+    "message": "الرسائل",
     "messagePlaceholder": "مرحباً، هذا آخر تحديث لدينا.",
+    "addMessage": "إضافة رسالة",
+    "summaryMessages": "رسائل لكل جهة اتصال: {count}",
+    "summaryTotalSends": "{contacts} جهة اتصال × {msgs} رسائل = {total} إجمالي الإرسال",
     "selectMembers": "اختيار الأعضاء",
     "searchMembersPlaceholder": "ابحث بالاسم أو اسم المستخدم أو المعرف",
     "chooseSourceFirst": "اختر مجموعة مصدر أولاً",
@@ -502,8 +506,16 @@
     "next": "التالي",
     "page": "الصفحة {page}",
     "targetGroups": "المجموعات المستهدفة",
-    "threshold": "الحد الأدنى",
-    "intervalSeconds": "الفاصل الزمني (ثوانٍ)",
+    "threshold": "حجم الدفعة",
+    "thresholdHint": "الحد الأقصى للرسائل في كل عملية إرسال (حتى 500)",
+    "intervalSeconds": "التأخير بين الرسائل",
+    "intervalHint": "عدد الثواني للانتظار بين كل رسالة (مثال: 5)",
+    "intervalContacts": "التأخير بين جهات الاتصال",
+    "intervalContactsHint": "عدد الثواني للانتظار بعد كل الرسائل قبل جهة الاتصال التالية (مثال: 30)",
+    "messagesPerDay": "الحد الأقصى لجهات الاتصال الجديدة يومياً",
+    "messagesPerDayHint": "حد يومي لجهات الاتصال الجديدة الفريدة (الافتراضي 30)",
+    "deliverySettings": "إعدادات الإرسال",
+    "selectAll": "تحديد الكل",
     "sendNow": "إرسال الآن",
     "schedule": "جدولة",
     "scheduleDatetime": "تاريخ ووقت الجدولة",
@@ -511,6 +523,7 @@
     "summaryAdminsExcluded": "المشرفون المستبعدون: {count}",
     "summaryBotsExcluded": "البوتات المستبعدة: {count}",
     "summaryAlreadySent": "المرسلة سابقاً المستبعدة: {count}",
+    "summaryBlacklisted": "المحظورون المستبعدون: {count}",
     "summaryFinal": "النهائي {type}: {count}",
     "preparingSummary": "جارٍ تجهيز الملخص...",
     "confirmSchedule": "تأكيد وجدولة",
@@ -547,7 +560,7 @@
     "summaryTitle": "ملخص الإرسال",
     "matched": "متطابق",
     "recipients": "مستلمين",
-    "userFallback": "المستخدم {{userId}}",
+    "userFallback": "المستخدم {userId}",
     "scrapeFailed": "فشل استخراج البيانات"
   },
   "multiGroup": {
@@ -616,9 +629,9 @@
     "findGroup": "ابحث عن مجموعة للاستخراج",
     "groupPlaceholder": "اكتب اسم أو معرف المجموعة",
     "searchingDb": "جارٍ البحث في قاعدة البيانات...",
-    "groupFallback": "المجموعة {{tgGroupId}}",
+    "groupFallback": "المجموعة {tgGroupId}",
     "noTgId": "لا يوجد معرف",
-    "membersCount": "{{count}} عضو",
+    "membersCount": "{count} عضو",
     "maxMembers": "الحد الأقصى لاستخراج الأعضاء",
     "maxMessages": "الحد الأقصى لاستخراج الرسائل",
     "maxAgeDays": "الحد الأقصى لعمر الرسالة بالأيام",
@@ -636,7 +649,7 @@
     "save": "حفظ",
     "working": "جارٍ العمل...",
     "chooseGroupFirst": "اختر مجموعة أولاً",
-    "scrapeQueued": "تمت إضافة مهمة استخراج لـ {{title}} إلى قائمة الانتظار.",
+    "scrapeQueued": "تمت إضافة مهمة استخراج لـ {title} إلى قائمة الانتظار.",
     "failedQueue": "فشل إضافة مهمة الاستخراج",
     "atLeastOneKeyword": "مطلوب كلمة مفتاحية واحدة على الأقل",
     "leadCaptureCreated": "تم إنشاء مهمة التقاط العملاء",
@@ -672,7 +685,7 @@
     "saveTask": "حفظ المهمة",
     "configuredTitle": "المهام المكوَّنة",
     "configuredSubtitle": "قواعد الأتمتة الحالية لهذه المجموعة.",
-    "groupsLabel": "المجموعات: {{titles}}",
+    "groupsLabel": "المجموعات: {titles}",
     "edit": "تعديل",
     "delete": "حذف",
     "deleteModalTitle": "حذف المهمة",
@@ -689,9 +702,39 @@
     "noDest": "لا توجد وجهة",
     "noTemplate": "لا يوجد قالب رسالة",
     "noKeyword": "لا توجد كلمة مفتاحية",
-    "conditionLabel": "عندما تحتوي الرسالة على: {{keyword}}",
+    "conditionLabel": "عندما تحتوي الرسالة على: {keyword}",
     "privateSuffix": " · خاص",
-    "groupFallback": "المجموعة {{tgGroupId}}"
+    "groupFallback": "المجموعة {tgGroupId}"
+  },
+  "blacklist": {
+    "title": "القائمة السوداء",
+    "subtitle": "إدارة الأعضاء المحظورين من الرسائل الجماعية.",
+    "loading": "جارٍ تحميل القائمة السوداء...",
+    "empty": "لا توجد إدخالات محظورة بعد.",
+    "loadError": "فشل تحميل القائمة السوداء.",
+    "deleteError": "فشل حذف الإدخال.",
+    "addError": "فشل إضافة الإدخال.",
+    "updateError": "فشل تحديث الإدخال.",
+    "addEntry": "إضافة إدخال",
+    "edit": "تعديل",
+    "editing": "تعديل الإدخال {id}",
+    "entryType": "النوع",
+    "typeUserId": "معرف المستخدم",
+    "typeUsername": "اسم المستخدم",
+    "typePhone": "رقم الهاتف",
+    "values": "القيم",
+    "valuePlaceholder": "أدخل قيمة هذا الإدخال",
+    "placeholder": {
+      "user_id": "123456789\n987654321\n(معرف مستخدم واحد أو أكثر، واحد في كل سطر)",
+      "username": "@johndoe\n@janedoe\n(اسم مستخدم واحد أو أكثر، واحد في كل سطر)",
+      "phone": "+966501234567\n+966507654321\n(رقم هاتف واحد أو أكثر، واحد في كل سطر)"
+    },
+    "reason": "السبب",
+    "reasonPlaceholder": "لماذا تم حظر هذا المستخدم؟",
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ...",
+    "remove": "إزالة",
+    "cancel": "إلغاء"
   },
   "legal": {
     "docs": "التوثيق",
@@ -703,5 +746,9 @@
     "contact": "اتصل بنا",
     "dataDeletion": "حذف البيانات",
     "aup": "الاستخدام المقبول"
+  },
+  "toast": {
+    "notifications": "الإشعارات",
+    "dismiss": "إغلاق"
   }
 }

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatTime } from '../i18n/format'
 
 import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
 import { GroupDestinationField } from '../components/GroupDestinationField'
+import { BlacklistSection } from '../features/blacklist/BlacklistSection'
 
 import {
   agentsApi,
@@ -12,7 +13,6 @@ import {
   Card,
   InputField,
   Note,
-  TextAreaField,
 } from '@miniapp/shared'
 import type {
   Agent,
@@ -30,7 +30,7 @@ type SelectedGroupChip = {
 
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 
-export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string) => void }) {
+export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
@@ -44,9 +44,12 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [quickMessage, setQuickMessage] = useState('')
   const [quickSaving, setQuickSaving] = useState(false)
   const [bulkTargetType, setBulkTargetType] = useState<'members' | 'groups'>('members')
-  const [bulkMessage, setBulkMessage] = useState('')
+  const [bulkMessages, setBulkMessages] = useState<string[]>([''])
+  const [bulkMediaUrls, setBulkMediaUrls] = useState<(string | null)[]>([null])
   const [bulkThreshold, setBulkThreshold] = useState('25')
   const [bulkIntervalSeconds, setBulkIntervalSeconds] = useState('5')
+  const [bulkIntervalContacts, setBulkIntervalContacts] = useState('5')
+  const [messagesPerDay, setMessagesPerDay] = useState(String(account.max_messages_per_day ?? 30))
   const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
   const [bulkSourceGroup, setBulkSourceGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
@@ -70,6 +73,26 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
+
+  function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
+    setStatus(msg)
+    onSaved(msg, kind)
+  }
+
+  const isFormValid = useMemo(() => {
+    const filledMessages = bulkMessages.filter((m) => m.trim())
+    if (!filledMessages.length) return false
+    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) return false
+    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) return false
+    const threshold = Number.parseInt(bulkThreshold, 10)
+    if (!Number.isFinite(threshold) || threshold <= 0) return false
+    const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
+    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    return true
+  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts])
 
   // Effects
   useEffect(() => {
@@ -111,31 +134,44 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   useEffect(() => {
     if (qsSelectedCampaignId === '') return
     const campaign = campaigns.find((c) => c.id === qsSelectedCampaignId)
-    if (campaign?.message_template) setBulkMessage(campaign.message_template)
+    if (campaign?.message_template) setBulkMessages([campaign.message_template])
   }, [qsSelectedCampaignId])
 
   function resetForm() {
-    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessage('')
-    setBulkThreshold('25'); setBulkIntervalSeconds('1')
+    setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages(['']); setBulkMediaUrls([null])
+    setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
-    setExcludeAdmins(false); setExcludeBots(false); setBulkSummary(null)
+    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null)
     setQsSelectedCampaignId(''); setStatus(null)
   }
 
   async function handleSend() {
-    if (!bulkMessage.trim()) { setStatus(t('campaigns.msgRequired')); return }
-    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) { setStatus(t('campaigns.sourceRequired')); return }
-    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) { setStatus(t('campaigns.targetRequired')); return }
+    const filledMessages = bulkMessages.filter((m) => m.trim())
+    const validationErrors: string[] = []
+    if (!filledMessages.length) validationErrors.push(t('campaigns.msgRequired'))
+    if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) validationErrors.push(t('campaigns.sourceRequired'))
+    if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) validationErrors.push(t('campaigns.targetRequired'))
     const threshold = Number.parseInt(bulkThreshold, 10)
-    if (!Number.isFinite(threshold) || threshold <= 0) { setStatus(t('campaigns.thresholdInvalid')); return }
+    if (!Number.isFinite(threshold) || threshold <= 0) validationErrors.push(t('campaigns.thresholdInvalid'))
     const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) { setStatus(t('campaigns.intervalInvalid')); return }
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) validationErrors.push(t('campaigns.intervalInvalid'))
+    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) validationErrors.push(t('campaigns.intervalInvalid'))
+    if (validationErrors.length) { notify(validationErrors.join(' · ')); return }
     if (bulkSummary) {
       setBulkSaving(true)
       try {
-        const jobPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds }
+        const jobPayload: Record<string, unknown> = {
+          target_type: bulkTargetType,
+          messages: filledMessages,
+          media_urls: bulkMediaUrls,
+          threshold,
+          interval_seconds: intervalSeconds,
+          interval_between_contacts: intervalContacts,
+          messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined
+        }
         if (bulkTargetType === 'members') {
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
@@ -145,29 +181,38 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         setBulkSummary(null); resetForm(); setStatus(null)
         onSaved(scheduledAt ? t('campaigns.scheduled') : t('campaigns.queued'))
         void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
-      } catch (error) { setStatus(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
+      } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
       finally { setBulkSaving(false) }
       return
     }
     setLoadingBulkSummary(true); setStatus(null)
     try {
-      const preflightPayload: Record<string, unknown> = { target_type: bulkTargetType, message: bulkMessage.trim(), threshold, interval_seconds: intervalSeconds }
+      const preflightPayload: Parameters<typeof agentsApi.preflightBulkMessage>[1] = {
+        target_type: bulkTargetType,
+        messages: filledMessages,
+        media_urls: bulkMediaUrls,
+        threshold,
+        interval_seconds: intervalSeconds,
+        interval_between_contacts: intervalContacts,
+        messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined
+      }
       if (bulkTargetType === 'members') {
-        preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id; preflightPayload.source_group_title = bulkSourceGroup!.title
+        preflightPayload.source_group_id = bulkSourceGroup!.tg_group_id;
+        preflightPayload.source_group_title = bulkSourceGroup!.title
         preflightPayload.selected_user_ids = bulkSelectedMembers.map((m) => m.user_id)
       } else { preflightPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
       const result = await agentsApi.preflightBulkMessage(account.id, preflightPayload)
       setBulkSummary(result)
-    } catch (error) { setStatus(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
+    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
     finally { setLoadingBulkSummary(false) }
   }
 
   return (
     <>
       <Card title={t('campaigns.sendMessage')} subtitle={t('campaigns.sendMessageSubtitle')}>
-        {status ? <Note>{status}</Note> : null}
+        {status ? <div data-form-error><Note>{status}</Note></div> : null}
         {!showSendForm ? (
-          <Button onClick={() => setShowSendForm(true)}>{t('campaigns.newMessage')}</Button>
+          <Button onClick={() => { resetForm(); setShowSendForm(true) }}>{t('campaigns.newMessage')}</Button>
         ) : null}
         {showSendForm ? (<>
         {/* Campaign selector */}
@@ -179,7 +224,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               <option value="">{t('campaigns.noCampaign')}</option>
               {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
-            <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setShowQuickCreate(true) }}
+            <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}
               style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }} title={t('campaigns.createCampaign')}>+</button>
           </div>
         </div>
@@ -210,10 +255,58 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
               }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
             />
             {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
-            <TextAreaField label={t('campaigns.message')} value={bulkMessage} onChange={setBulkMessage} rows={4} placeholder={t('campaigns.messagePlaceholder')} />
+            <div style={{ display: 'grid', gap: 8 }}>
+              {bulkMessages.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea value={msg} onChange={(e) => {
+                      const next = [...bulkMessages]
+                      next[i] = e.target.value
+                      setBulkMessages(next)
+                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                    {bulkMessages.length > 1 ? (
+                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
+                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                    ) : null}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
+                      <span>{uploadingIdx === i ? '⏳ Uploading...' : (bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media')}</span>
+                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const MAX_SIZE = 20 * 1024 * 1024
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
+                        setUploadingIdx(i)
+                        try {
+                          const data = await agentsApi.uploadAgentMedia(account.id, file)
+                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
+                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
+                        finally { setUploadingIdx(null) }
+                      }} />
+                    </label>
+                    {bulkMediaUrls[i] ? (
+                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
+                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
+                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
+            </div>
             <InputField label={t('campaigns.selectMembers')} value={bulkMemberQuery} onChange={setBulkMemberQuery} placeholder={bulkSourceGroup ? t('campaigns.searchMembersPlaceholder') : t('campaigns.chooseSourceFirst')} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               {bulkSelectedMembers.length ? <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '8px 10px', fontSize: 16, lineHeight: '18px', cursor: 'pointer' }}>✕ {bulkSelectedMembers.length}</button> : null}
+              {bulkMemberResults.length > 0 ? (
+                <Button tone="secondary" onClick={() => {
+                  const existingIds = new Set(bulkSelectedMembers.map((m) => m.user_id))
+                  const newMembers = bulkMemberResults.filter((m) => !existingIds.has(m.user_id))
+                  setBulkSelectedMembers((c) => [...c, ...newMembers])
+                  setBulkMemberResults((r) => r.filter((m) => existingIds.has(m.user_id)))
+                }}>{t('campaigns.selectAll')} ({bulkMemberResults.length})</Button>
+              ) : null}
               {bulkSelectedMembers.map((member) => (
                 <span key={member.user_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 999, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', fontSize: 12.5 }}>
                   {member.full_name || member.username || t('campaigns.userFallback', { userId: member.user_id })}
@@ -268,14 +361,73 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           <>
             <MultiGroupSelect query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} selected={bulkSelectedTargetGroups}
               onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
-            <TextAreaField label={t('campaigns.message')} value={bulkMessage} onChange={setBulkMessage} rows={4} placeholder={t('campaigns.messagePlaceholder')} />
+            <div style={{ display: 'grid', gap: 8 }}>
+              {bulkMessages.map((msg, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea value={msg} onChange={(e) => {
+                      const next = [...bulkMessages]
+                      next[i] = e.target.value
+                      setBulkMessages(next)
+                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
+                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
+                    {bulkMessages.length > 1 ? (
+                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
+                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+                    ) : null}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
+                      <span>{uploadingIdx === i ? '⏳ Uploading...' : (bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media')}</span>
+                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
+                        const MAX_SIZE = 20 * 1024 * 1024
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
+                        setUploadingIdx(i)
+                        try {
+                          const data = await agentsApi.uploadAgentMedia(account.id, file)
+                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
+                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
+                        finally { setUploadingIdx(null) }
+                      }} />
+                    </label>
+                    {bulkMediaUrls[i] ? (
+                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
+                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
+                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
+            </div>
           </>
         )}
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-          <div style={{ flex: 1 }}><InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" /></div>
+        <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.deliverySettings')}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.thresholdHint')}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalHint')}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+            <div style={{ flex: 1 }}>
+              <InputField label={t('campaigns.intervalContacts')} value={bulkIntervalContacts} onChange={setBulkIntervalContacts} type="number" />
+              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalContactsHint')}</div>
+            </div>
+          </div>
+          <div>
+            <InputField label={t('campaigns.messagesPerDay')} value={messagesPerDay} onChange={setMessagesPerDay} type="number" />
+            <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.messagesPerDayHint')}</div>
+          </div>
         </div>
-        <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
 
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
           {(['now', 'schedule'] as const).map((m) => (
@@ -298,12 +450,14 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
             <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>
             <div>{t('campaigns.summaryTotal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.matched'), count: bulkSummary.total })}</div>
-            {bulkSummary.target_type !== 'groups' ? (<>{bulkSummary.admins_excluded > 0 ? <div>{t('campaigns.summaryAdminsExcluded', { count: bulkSummary.admins_excluded })}</div> : null}{bulkSummary.bots_excluded > 0 ? <div>{t('campaigns.summaryBotsExcluded', { count: bulkSummary.bots_excluded })}</div> : null}{bulkSummary.already_sent_excluded > 0 ? <div>{t('campaigns.summaryAlreadySent', { count: bulkSummary.already_sent_excluded })}</div> : null}</>) : null}
+            {bulkSummary.message_count > 1 ? <div>{t('campaigns.summaryMessages', { count: bulkSummary.message_count })}</div> : null}
+            {bulkSummary.target_type !== 'groups' ? (<>{bulkSummary.admins_excluded > 0 ? <div>{t('campaigns.summaryAdminsExcluded', { count: bulkSummary.admins_excluded })}</div> : null}{bulkSummary.bots_excluded > 0 ? <div>{t('campaigns.summaryBotsExcluded', { count: bulkSummary.bots_excluded })}</div> : null}{bulkSummary.already_sent_excluded > 0 ? <div>{t('campaigns.summaryAlreadySent', { count: bulkSummary.already_sent_excluded })}</div> : null}{bulkSummary.blacklisted_excluded > 0 ? <div>{t('campaigns.summaryBlacklisted', { count: bulkSummary.blacklisted_excluded })}</div> : null}</>) : null}
             <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>{t('campaigns.summaryFinal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.recipients'), count: bulkSummary.final_count })}</div>
+            {bulkSummary.message_count > 0 ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.summaryTotalSends', { contacts: bulkSummary.final_count, msgs: bulkSummary.message_count, total: bulkSummary.final_count * (bulkSummary.message_count || 1) })}</div> : null}
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
-        <FormActions submitLabel={bulkSummary ? (bulkScheduleMode === 'schedule' ? t('campaigns.confirmSchedule') : t('campaigns.confirmSend')) : loadingBulkSummary ? t('campaigns.preparingSubmit') : t('campaigns.prepare')} submitDisabled={bulkSummary !== null && bulkSummary.final_count === 0} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
+        <FormActions submitLabel="Save" submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
         </>) : null}
       </Card>
 
@@ -346,15 +500,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                 if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
                 try {
                   const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
-                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessage(quickMessage.trim()); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
-                } catch (e) { setStatus(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
+                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessages([quickMessage.trim()]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
+                } catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
                 finally { setQuickSaving(false) }
-              }}>{quickSaving ? t('campaigns.saving') : t('campaigns.save')}</Button>
-              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>{t('campaigns.cancel')}</Button>
+              }}>Save</Button>
+              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
             </div>
           </div>
         </div>
       ) : null}
+
+      <BlacklistSection account={account} />
     </>
   )
 }

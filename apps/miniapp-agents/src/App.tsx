@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
@@ -35,6 +35,7 @@ import type {
 import { useLanguage } from './i18n/useLanguage'
 import './i18n/rtl.css'
 import { LanguageSwitcher } from './components/LanguageSwitcher'
+import { ToastContainer, type Toast } from './components/ToastContainer'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
@@ -703,47 +704,6 @@ function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => st
   }))
 }
 
-function DismissibleStatus({
-  message,
-  onClose,
-}: {
-  message: string
-  onClose: () => void
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '12px 14px',
-        border: '1px solid var(--miniapp-border-soft)',
-        borderRadius: 12,
-        background: 'var(--miniapp-surface)',
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>{message}</div>
-      <button
-        type="button"
-        aria-label="Dismiss notification"
-        onClick={onClose}
-        style={{
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--miniapp-clay)',
-          cursor: 'pointer',
-          fontSize: 18,
-          lineHeight: 1,
-          padding: 0,
-        }}
-      >
-        ×
-      </button>
-    </div>
-  )
-}
-
 function NoAccountNotice({ onLink }: { onLink: () => void }) {
   const { t } = useTranslation()
   return (
@@ -981,7 +941,18 @@ export default function App() {
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
   const [accounts, setAccounts] = useState<Agent[]>([])
   const [accountsLoading, setAccountsLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, _setStatus] = useState<string | null>(null)
+  const setStatus = useCallback((msg: string | null, kind?: 'error' | 'success' | 'info') => {
+    _setStatus(msg)
+    if (msg) {
+      pushToast({
+        kind: kind || 'info',
+        title: kind === 'error' ? 'Error' : kind === 'success' ? 'Success' : 'Notice',
+        body: msg,
+      })
+      if (kind === 'error') requestAnimationFrame(scrollToFirstError)
+    }
+  }, [])
   const [accountName, setAccountName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [isWizardOpen, setIsWizardOpen] = useState(false)
@@ -992,10 +963,14 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [unseenNotifications, setUnseenNotifications] = useState(0)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const lastNotifIdRef = useRef(0)
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null)
   const [showSubscription, setShowSubscription] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [subscriptionExpanded, setSubscriptionExpanded] = useState(false)
+  const [agentStatus, setAgentStatus] = useState<{ session_state?: string; retry_after?: number | null; flood_wait_until?: string | null } | null>(null)
   const effectiveGroupId = session.selectedGroupId ?? session.groups[0]?.id ?? null
 
   useEffect(() => {
@@ -1025,6 +1000,39 @@ export default function App() {
     } finally {
       setAccountsLoading(false)
     }
+  }
+
+  function scrollToFirstError() {
+    const main = document.querySelector('main')
+    if (!main) return
+    const el = main.querySelector('[data-form-error], [aria-invalid="true"], input:invalid, textarea:invalid, select:invalid')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    main.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function pushToast(toast: Omit<Toast, 'id'> & { id?: string }) {
+    const id = toast.id || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`)
+    const entry: Toast = { ...toast, id }
+    setToasts(prev => [entry, ...prev].slice(0, 3))
+    const timer = setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+      toastTimersRef.current.delete(id)
+    }, 5000)
+    toastTimersRef.current.set(id, timer)
+  }
+
+  function dismissToast(id: string) {
+    const timer = toastTimersRef.current.get(id)
+    if (timer) { clearTimeout(timer); toastTimersRef.current.delete(id) }
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
+
+  function handleToastAction(toast: Toast) {
+    dismissToast(toast.id)
+    toast.onAction?.()
   }
 
   useEffect(() => {
@@ -1072,14 +1080,71 @@ export default function App() {
       setUnseenNotifications(0)
       return
     }
-    if (selectedAccount.auth_state === 'active' && selectedAccount.status === 'active') {
-      void agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
-        .then((payload) => setUnseenNotifications(payload.unseen_count))
-        .catch(() => setUnseenNotifications(0))
-    } else {
+    if (selectedAccount.auth_state !== 'active' || selectedAccount.status !== 'active') {
       setUnseenNotifications(0)
+      return
     }
+
+    void agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
+      .then((payload) => {
+        setUnseenNotifications(payload.unseen_count)
+        const ids = payload.items.map(n => n.id)
+        lastNotifIdRef.current = Math.max(0, ...ids)
+      })
+      .catch(() => setUnseenNotifications(0))
+
+    const interval = setInterval(async () => {
+      try {
+        const payload = await agentsApi.fetchAgentNotifications(selectedAccount.id, 50)
+        setUnseenNotifications(payload.unseen_count)
+        const newNotifs = payload.items.filter(n => !n.is_seen && n.id > lastNotifIdRef.current)
+        if (newNotifs.length) {
+          lastNotifIdRef.current = Math.max(...newNotifs.map(n => n.id))
+          newNotifs.forEach(n => {
+            pushToast({
+              id: `notif-${n.id}`,
+              kind: 'notification',
+              title: n.title,
+              body: n.body,
+              notificationId: n.id,
+              onAction: () => setShowNotifications(true),
+            })
+          })
+        }
+      } catch {
+        // silent retry on next interval
+      }
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [appReady, selectedAccount, isWizardInProgress])
+
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!selectedAccount?.id) { setAgentStatus(null); return }
+    let cancelled = false
+    agentsApi.fetchAgentStatus(selectedAccount.id).then(s => { if (!cancelled) setAgentStatus(s) }).catch(() => { if (!cancelled) setAgentStatus(null) })
+    const interval = setInterval(() => {
+      agentsApi.fetchAgentStatus(selectedAccount.id).then(s => { if (!cancelled) setAgentStatus(s) }).catch(() => {})
+    }, 60_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [selectedAccount?.id])
+
+  useEffect(() => {
+    if (!agentStatus?.flood_wait_until) { setRemainingSeconds(null); return }
+    const update = () => setRemainingSeconds(Math.max(0, Math.ceil((new Date(agentStatus.flood_wait_until!).getTime() - Date.now()) / 1000)))
+    update()
+    const interval = setInterval(update, 60_000)
+    return () => clearInterval(interval)
+  }, [agentStatus?.flood_wait_until])
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach(timer => clearTimeout(timer))
+      toastTimersRef.current.clear()
+    }
+  }, [])
 
   function handleTabNavigate(page: AgentsPage) {
     const targetPath = page === 'settings' || !selectedAccount?.id
@@ -1171,13 +1236,28 @@ export default function App() {
     const label = selectedAccount
       ? `${selectedAccount.phone_number || accountLabel(selectedAccount)}`
       : ''
-    if (subscription?.status === 'active') {
-      const planLabel = subscription.plan === 'business' ? 'Business' : 'Pro'
-      return (
+    const sessionState = agentStatus?.session_state
+    const retryAfter = agentStatus?.retry_after
+    const displaySec = sessionState === 'flood_wait' ? (remainingSeconds ?? (typeof retryAfter === 'number' ? retryAfter : null)) : null
+    const statusColor = sessionState === 'healthy' ? 'var(--miniapp-sage)' : sessionState === 'flood_wait' ? 'var(--miniapp-clay)' : sessionState === 'banned' ? '#c0392b' : 'var(--miniapp-text-muted)'
+    const statusLabel = sessionState === 'healthy' ? 'Connected' : sessionState === 'flood_wait' ? 'Flood wait' : sessionState === 'banned' ? 'Banned' : sessionState === 'unknown' ? 'Unknown' : null
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {label}
-          <Badge tone="success">{planLabel}</Badge>
-          {subscription.plan === 'pro' && (
+          {sessionState && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+              <span style={{ color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
+              {displaySec !== null && (
+                <span style={{ color: 'var(--miniapp-text-muted)', fontWeight: 400 }}>
+                  &middot; {displaySec >= 60 ? `${Math.ceil(displaySec / 60)}m` : `${displaySec}s`}
+                </span>
+              )}
+            </span>
+          )}
+          {subscription?.status === 'active' && <Badge tone="success">{subscription.plan === 'business' ? 'Business' : 'Pro'}</Badge>}
+          {subscription?.status === 'active' && subscription.plan === 'pro' && (
             <button
               onClick={() => setShowSubscription(true)}
               style={{
@@ -1195,10 +1275,9 @@ export default function App() {
             </button>
           )}
         </div>
-      )
-    }
-    return label
-  }, [selectedAccount, subscription, t])
+      </div>
+    )
+  }, [selectedAccount, subscription, t, agentStatus])
 
   return (
     <AppShell title={t('app.title')} subtitle={headerSubtitle} actions={
@@ -1234,7 +1313,6 @@ export default function App() {
       </button>
     }>
       <Grid>
-        {status ? <DismissibleStatus message={status} onClose={() => setStatus(null)} /> : null}
         {session.error ? <Note tone="warning">{session.error}</Note> : null}
         {!appReady ? (
           <Card title={t('app.loading')} subtitle={t('app.preparing')}>
@@ -1392,6 +1470,7 @@ export default function App() {
           onCancel={() => setDeleteTarget(null)}
         />
       ) : null}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} onAction={handleToastAction} />
     </AppShell>
   )
 }
@@ -2291,7 +2370,7 @@ function AccountLeadsPage({ account }: { account: Agent }) {
                 </div>
               ) : null}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#9b9186' }}>
-                {lead.source_group_title ? <span>{t('leads.groupLabel', { group: lead.source_group_title })}</span> : null}
+                {lead.source_group_title ? <span>{t('leads.groupLabel', { title: lead.source_group_title })}</span> : null}
                 {lead.lead_label ? <span>{t('leads.leadLabel', { label: lead.lead_label })}</span> : null}
                 {lead.captured_at ? <span>{formatDate(lead.captured_at)}</span> : null}
               </div>
@@ -2401,11 +2480,11 @@ function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, 
   const diff = Date.now() - new Date(dateStr).getTime()
   const sec = Math.floor(diff / 1000)
   if (sec < 5) return t('time.justNow')
-  if (sec < 60) return t('time.secondsAgo', { sec })
+  if (sec < 60) return t('time.secondsAgo', { n: sec })
   const min = Math.floor(sec / 60)
-  if (min < 60) return t('time.minutesAgo', { min })
+  if (min < 60) return t('time.minutesAgo', { n: min })
   const hours = Math.floor(min / 60)
-  if (hours < 24) return t('time.hoursAgo', { hours })
+  if (hours < 24) return t('time.hoursAgo', { n: hours })
   return formatDateTime(dateStr)
 }
 
@@ -2448,7 +2527,6 @@ function TaskActivity({ account }: { account: Agent }) {
     setLoading(true)
     setStatusMsg(null)
     try {
-      await agentsApi.reconcileStaleJobs(1)
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
     } catch (error) {

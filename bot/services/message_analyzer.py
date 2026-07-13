@@ -73,14 +73,15 @@ async def _call_gemini(messages_text: str, settings: Any) -> list[dict]:
     prompt = SYSTEM_PROMPT + f"\n\nMessages to analyze:\n\n{messages_text}"
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        f"{settings.gemini_model}:generateContent"
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"response_mime_type": "application/json"},
     }
+    headers = {"x-goog-api-key": settings.gemini_api_key}
     async with httpx.AsyncClient(timeout=settings.ai_request_timeout_seconds) as client:
-        resp = await client.post(url, json=payload)
+        resp = await client.post(url, json=payload, headers=headers)
     if resp.status_code >= 400:
         raise RuntimeError(f"gemini_error_{resp.status_code}")
     data = resp.json()
@@ -253,12 +254,13 @@ async def analyze_group_messages(
         if isinstance(keywords, str):
             keywords = [k.strip() for k in keywords.split(",") if k.strip()]
 
+        escaped_q = question[:30].replace("%", "\\%").replace("_", "\\_")
         existing = (
             (
                 await session.execute(
                     select(FAQEntry).where(
                         FAQEntry.group_id == managed_group_id,
-                        FAQEntry.question.ilike(f"%{question[:30]}%"),
+                        FAQEntry.question.ilike(f"%{escaped_q}%"),
                     )
                 )
             ).scalar_one_or_none()

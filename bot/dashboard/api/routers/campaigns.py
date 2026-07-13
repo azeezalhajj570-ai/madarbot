@@ -12,7 +12,7 @@ from bot.db.session import get_session
 from bot.services.campaign_service import CampaignService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
-from ..dependencies import get_identity
+from ..dependencies import ensure_agent_admin, get_identity
 
 router = APIRouter(tags=["campaigns"])
 
@@ -29,7 +29,7 @@ async def create_campaign(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     service = _service(session)
     campaign = await service.create_campaign(
         agent_id=agent_id,
@@ -54,7 +54,7 @@ async def list_campaigns(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     return await _service(session).list_campaigns(
         agent_id=agent_id,
         status=status,
@@ -71,7 +71,7 @@ async def get_campaign(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     campaign = await _service(session).get_campaign(campaign_id, agent_id)
     result = _service(session)._to_dict(campaign)
     result["recent_jobs"] = [
@@ -96,7 +96,7 @@ async def update_campaign(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     service = _service(session)
     campaign = await service.update_campaign(
         campaign_id=campaign_id,
@@ -119,7 +119,7 @@ async def delete_campaign(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     await _service(session).delete_campaign(campaign_id, agent_id)
     return {"status": "deleted"}
 
@@ -133,7 +133,7 @@ async def send_campaign(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     return await _service(session).launch_campaign(
         campaign_id=campaign_id,
         agent_id=agent_id,
@@ -156,7 +156,7 @@ async def get_campaign_send_logs(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    _ = identity
+    await ensure_agent_admin(agent_id, session, identity)
     from sqlalchemy import desc, func, select
     from bot.db.models import SentBroadcastMessage
 

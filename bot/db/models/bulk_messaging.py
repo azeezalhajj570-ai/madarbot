@@ -14,7 +14,7 @@ from typing import Optional
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.db.base import Base
 
@@ -87,6 +87,28 @@ class BulkMessageRecipient(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class AgentBlacklistEntry(Base):
+    """Per-agent member blacklist for bulk messaging.
+
+    Members matching any of tg_user_id / username / phone are excluded
+    from bulk message delivery for the given agent.
+    """
+
+    __tablename__ = "agent_blacklist"
+    __table_args__ = (UniqueConstraint("agent_id", "tg_user_id", name="uq_blacklist_agent_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    tg_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False, default="admin_blocked")
+    # admin_blocked, user_opt_out, bounced, spam_report
+    created_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    agent: Mapped["Agent"] = relationship(backref="blacklist_entries")
 
 
 class MessagingSuppression(Base):

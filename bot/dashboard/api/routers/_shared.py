@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from bot.db.models import Agent
 
@@ -106,15 +106,48 @@ class BulkMemberAddRequest(BaseModel):
     send_invite_link_on_privacy_restricted: bool = Field(default=False)
 
 
+class BlacklistAddEntry(BaseModel):
+    tg_user_id: int | None = Field(default=None, ge=1)
+    username: str | None = Field(default=None, min_length=1, max_length=255)
+    phone: str | None = Field(default=None, min_length=1, max_length=32)
+    reason: str = Field(default="admin_blocked", min_length=1, max_length=255)
+
+
+class BlacklistAddRequest(BaseModel):
+    entries: list[BlacklistAddEntry] = Field(min_length=1, max_length=500)
+
+
+class BlacklistResolveRequest(BaseModel):
+    phones: list[str] = Field(min_length=1, max_length=500)
+
+
+class BlacklistResolveResult(BaseModel):
+    phone: str
+    tg_user_id: int | None = None
+    resolved: bool = False
+
+
 class BulkPreflightRequest(BaseModel):
     target_type: str = Field(default="members", pattern="^(members|groups)$")
     source_group_id: int = Field(default=0)
     source_group_title: str = ""
-    message: str = Field(min_length=1)
+    message: str = ""
+    messages: list[str] = Field(default_factory=list)
     selected_user_ids: list[int] = Field(default_factory=list)
     target_group_ids: list[int] = Field(default_factory=list)
     threshold: int = Field(default=25, ge=1, le=500)
     interval_seconds: float = Field(default=15, ge=0)
+    interval_between_contacts: float = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _normalize_messages(self) -> BulkPreflightRequest:
+        if self.messages:
+            self.messages = [m.strip() for m in self.messages if m.strip()]
+        if not self.messages and self.message.strip():
+            self.messages = [self.message.strip()]
+        if not self.messages:
+            raise ValueError("At least one message is required")
+        return self
 
 
 class AgentSafetyUpdateRequest(BaseModel):
@@ -271,8 +304,30 @@ def tally_recent_activity(rows: list[Any]) -> dict[str, int]:
     return dict(sorted(message_activity.items()))
 
 
+class JobHealthItem(BaseModel):
+    job_id: int
+    agent_id: int
+    job_type: str
+    status: str
+    messages_sent: int = 0
+    total_recipients: int = 0
+    elapsed_seconds: float = 0.0
+    estimated_completion_seconds: float | None = None
+    last_checkpoint_at: str | None = None
+    is_possibly_stuck: bool = False
+    created_at: str | None = None
+
+
+class JobHealthResponse(BaseModel):
+    running_jobs: list[JobHealthItem]
+
+
 __all__ = [
     "AccessGateUpdateRequest",
+    "BlacklistAddEntry",
+    "BlacklistAddRequest",
+    "BlacklistResolveRequest",
+    "BlacklistResolveResult",
     "BulkMemberAddRequest",
     "AgentJobCreateRequest",
     "AgentSafetyUpdateRequest",

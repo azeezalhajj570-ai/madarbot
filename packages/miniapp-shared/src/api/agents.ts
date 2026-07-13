@@ -1,7 +1,8 @@
-import { apiClient } from './base'
+import { apiClient, ensureMiniappToken } from './base'
 import type {
   Agent,
   AgentAnalytics,
+  AgentBlacklistEntry,
   AgentGroupMember,
   AgentGroupMemberMessagesPage,
   AgentGroupMembersPage,
@@ -13,6 +14,9 @@ import type {
   AgentJobRecord,
   AgentManagedGroup,
   AutomationTask,
+  BlacklistAddEntry,
+  BlacklistListResponse,
+  BlacklistResolveResponse,
   BulkPreflightResult,
   Campaign,
   CampaignList,
@@ -99,6 +103,10 @@ export async function syncAgentWorkspace(agentId: number) {
   return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/sync-workspace`)
 }
 
+export async function fetchAgentStatus(agentId: number) {
+  return apiClient.get<Agent>(`${AGENTS_API_PREFIX}/${agentId}/status`)
+}
+
 export async function fetchAgentGroups(agentId: number, query?: string) {
   return apiClient.get<AgentManagedGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { q: query })
 }
@@ -107,11 +115,14 @@ export async function preflightBulkMessage(agentId: number, payload: {
   target_type?: string
   source_group_id?: number
   source_group_title?: string
-  message: string
+  messages: string[]
+  media_urls?: (string | null)[]
   selected_user_ids?: number[]
   target_group_ids?: number[]
   threshold?: number
   interval_seconds?: number
+  interval_between_contacts?: number
+  messages_per_day?: number
 }) {
   return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
 }
@@ -250,6 +261,7 @@ export interface MCPTokenData {
 
 export async function updateAgentSafety(agentId: number, payload: {
   max_actions_per_hour?: number
+  max_messages_per_day?: number
   min_delay_seconds?: number
   cooldown_minutes?: number
   safety_mode_enabled?: boolean
@@ -345,4 +357,44 @@ export async function sendCampaign(agentId: number, campaignId: number, payload?
 
 export async function getCampaignSendLogs(agentId: number, campaignId: number, options?: { status?: string; page?: number; page_size?: number }) {
   return apiClient.get<CampaignSendLogList>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/send-logs`, options)
+}
+
+export async function fetchBlacklist(agentId: number) {
+  return apiClient.get<BlacklistListResponse>(`/webapp/agents/${agentId}/blacklist`)
+}
+
+export async function addBlacklistEntries(agentId: number, entries: BlacklistAddEntry[]) {
+  return apiClient.post<{ entries: AgentBlacklistEntry[] }>(`/webapp/agents/${agentId}/blacklist`, { entries })
+}
+
+export async function deleteBlacklistEntry(agentId: number, entryId: number) {
+  return apiClient.delete(`/webapp/agents/${agentId}/blacklist/${entryId}`)
+}
+
+export async function resolveBlacklistPhones(agentId: number, phones: string[]) {
+  return apiClient.post<BlacklistResolveResponse>(`/webapp/agents/${agentId}/blacklist/resolve`, { phones })
+}
+
+export async function uploadAgentMedia(agentId: number, file: File) {
+  const token = await ensureMiniappToken()
+  const headers: Record<string, string> = {
+    'X-App-Boundary': 'agents',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else {
+    const initData = window.Telegram?.WebApp?.initData?.trim()
+    if (initData) {
+      headers['X-Telegram-Init-Data'] = initData
+    }
+  }
+
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`/webapp/agents/${agentId}/media/upload`, { method: 'POST', headers, body: form })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text.slice(0, 100) || `Upload failed with status ${res.status}`)
+  }
+  return res.json() as Promise<{ url: string }>
 }

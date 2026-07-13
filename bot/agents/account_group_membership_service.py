@@ -19,6 +19,8 @@ from bot.db.models import (
     ScrapedMessage,
     User,
 )
+from bot.db.models.agent import SentBroadcastMessage
+from bot.db.models.bulk_messaging import AgentBlacklistEntry
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scraper_service import ScraperService
 
@@ -79,7 +81,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 if word in {"-", "_", ".", ","} and len(query_words) > 1:
                     continue
 
-                pattern = f"%{word}%"
+                safe_word = word.replace("%", "\\%").replace("_", "\\_")
+                pattern = f"%{safe_word}%"
                 word_conditions.append(
                     or_(
                         ScrapedGroup.title.ilike(pattern),
@@ -91,7 +94,18 @@ class AccountGroupMembershipService(AgentServiceSupport):
             if normalized_query and not word_conditions:
                 return []
 
-            filters = [ScrapedGroup.last_agent_id == agent_id, ScrapedGroup.group_type != "channel"]
+            agent_group_ids_subq = (
+                select(ScrapedMember.scraped_group_id)
+                .where(ScrapedMember.tg_user_id == agent.telegram_user_id)
+                .distinct()
+            )
+            filters = [
+                or_(
+                    ScrapedGroup.id.in_(agent_group_ids_subq),
+                    ScrapedGroup.last_agent_id == agent.id,
+                ),
+                ScrapedGroup.group_type != "channel",
+            ]
             filters.extend(word_conditions)
             stmt = (
                 select(ScrapedGroup)
@@ -374,6 +388,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         exclude_bots: bool = True,
         only_admins: bool = False,
         only_bots: bool = False,
+        exclude_self: bool = True,
         order_by: str = "message_count",
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
@@ -410,8 +425,11 @@ class AccountGroupMembershipService(AgentServiceSupport):
             filters.append(ScrapedMember.role.in_(["admin", "creator"]))
         if only_bots:
             filters.append(ScrapedMember.is_bot.is_(True))
+        if exclude_self and agent.telegram_user_id is not None:
+            filters.append(ScrapedMember.tg_user_id != agent.telegram_user_id)
         if normalized_query:
-            pattern = f"%{normalized_query.lower()}%"
+            safe_query = normalized_query.replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{safe_query.lower()}%"
             filters.append(
                 or_(
                     func.lower(func.coalesce(ScrapedMember.username, "")).like(pattern),
@@ -422,24 +440,52 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 )
             )
 
+        blacklisted_tg_subq = (
+            select(AgentBlacklistEntry.tg_user_id).where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.tg_user_id.isnot(None),
+            )
+        ).subquery()
+        filters.append(ScrapedMember.tg_user_id.notin_(select(blacklisted_tg_subq)))
+
+        blacklisted_username_subq = (
+            select(func.lower(AgentBlacklistEntry.username)).where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.username.isnot(None),
+            )
+        ).subquery()
+        filters.append(
+            func.lower(func.coalesce(ScrapedMember.username, "")).notin_(
+                select(blacklisted_username_subq)
+            )
+        )
+
+        blacklisted_phone_subq = (
+            select(AgentBlacklistEntry.phone).where(
+                AgentBlacklistEntry.agent_id == agent.id,
+                AgentBlacklistEntry.phone.isnot(None),
+            )
+        ).subquery()
+        filters.append(
+            func.coalesce(ScrapedMember.phone, "").notin_(select(blacklisted_phone_subq))
+        )
+
+        already_sent_subq = (
+            select(SentBroadcastMessage.tg_user_id).where(
+                SentBroadcastMessage.agent_id == agent.id,
+                SentBroadcastMessage.tg_group_id == canonical_id,
+                SentBroadcastMessage.status == "sent",
+                SentBroadcastMessage.tg_user_id.isnot(None),
+            )
+        ).subquery()
+        filters.append(ScrapedMember.tg_user_id.notin_(select(already_sent_subq)))
+
         try:
-            total = (
-                int(scraped_group.member_count or 0)
-                if scraped_group is not None
-                and not normalized_query
-                and not exclude_bots
-                and not exclude_admins
-                and not only_admins
-                and not only_bots
-                and scraped_group.member_count is not None
-                else int(
-                    (
-                        await self.session.execute(
-                            select(func.count(ScrapedMember.id)).where(*filters)
-                        )
-                    ).scalar_one()
-                    or 0
-                )
+            total = int(
+                (
+                    await self.session.execute(select(func.count(ScrapedMember.id)).where(*filters))
+                ).scalar_one()
+                or 0
             )
 
             base_query = select(
@@ -694,9 +740,10 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if agent is None:
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
-        await self._ensure_agent_group_visible(agent=agent, tg_group_id=tg_group_id)
-        if agent.auth_state != "active" or not agent.session_string:
+        session_string = agent.session_string
+        if agent.auth_state != "active" or not session_string:
             raise ValueError("Link an active agent first to scrape group members")
+        await self._ensure_agent_group_visible(agent=agent, tg_group_id=tg_group_id)
         results = await ScraperService(self.session).scrape_full_group(
             agent_id=agent.id,
             tg_group_id=tg_group_id,
@@ -761,8 +808,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if not settings.telegram_api_id or not settings.telegram_api_hash:
             return []
 
+        sess_str = agent.session_string
         client = TelegramClient(
-            StringSession(agent.session_string),
+            StringSession(sess_str),
             settings.telegram_api_id,
             settings.telegram_api_hash,
         )
@@ -815,7 +863,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         if agent is None:
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
-        if agent.auth_state != "active" or not agent.session_string:
+        session_string = agent.session_string
+        if agent.auth_state != "active" or not session_string:
             raise ValueError("Link an active agent first")
 
         from bot.agents.session import SessionManager
@@ -828,9 +877,15 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 tg_group_id=tg_group_id,
                 session=self.session,
             )
-            entity = await entity_resolver.resolve_group_entity(
-                client, int(tg_group_id), self.session
-            )
+            try:
+                entity = await entity_resolver.resolve_group_entity(
+                    client, int(tg_group_id), self.session
+                )
+            except ValueError:
+                raise ValueError(
+                    "This agent account cannot access this group. "
+                    "Make sure the account is a member of the group and the group is not deleted or private."
+                )
             canonical_id = canonical_tg_group_id(int(tg_group_id))
 
             from telethon.tl.functions.channels import GetParticipantsRequest

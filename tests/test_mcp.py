@@ -91,61 +91,87 @@ class TestMcpHealth:
 
 
 class TestMcpReadonly:
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_delete_account_blocked_in_readonly(self):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_update_account_blocked_in_readonly(self):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_delete_task_blocked_in_readonly(self):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_delete_lead_blocked_in_readonly(self):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_mark_notifications_blocked_in_readonly(self):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_cancel_subscription_blocked_in_readonly(self):
         pass
 
 
 class TestMcpConfirmation:
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_delete_account_requires_confirmation(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_delete_lead_requires_confirmation(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_cancel_subscription_requires_confirmation(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
 
 class TestMcpSafety:
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_safety_mode_cannot_be_disabled(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_reject_high_action_limits(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_reject_high_message_limits(self, monkeypatch: pytest.MonkeyPatch):
         pass
 
 
 class TestMcpScrapeLimits:
-    @pytest.mark.skip(reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead")
+    @pytest.mark.skip(
+        reason="MCP tool functions are now nested in register functions; access via server.tool_manager instead"
+    )
     async def test_scrape_limit_enforced(self, monkeypatch: pytest.MonkeyPatch):
         pass
 

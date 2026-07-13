@@ -171,10 +171,14 @@ export interface Agent {
   auth_state: 'active' | 'pending_code' | 'pending_2fa' | 'failed'
   metadata?: Record<string, unknown>
   max_actions_per_hour?: number | null
+  max_messages_per_day?: number | null
   min_delay_seconds?: number | null
   cooldown_minutes?: number | null
   safety_mode_enabled?: boolean
   safety_mode_until?: string | null
+  session_state?: 'healthy' | 'flood_wait' | 'banned' | 'unknown'
+  retry_after?: number | null
+  flood_wait_until?: string | null
 }
 
 export interface AgentJobRecord {
@@ -205,6 +209,7 @@ export interface AgentJobRecord {
     admins_excluded: number
     bots_excluded: number
     already_sent_excluded: number
+    blacklisted_excluded: number
     final_count: number
   }
 }
@@ -261,8 +266,42 @@ export interface BulkPreflightResult {
   admins_excluded: number
   bots_excluded: number
   already_sent_excluded: number
+  blacklisted_excluded: number
   final_count: number
   filtered_user_ids: number[]
+  message_count?: number
+}
+
+export interface AgentBlacklistEntry {
+  id: number
+  agent_id: number
+  tg_user_id?: number | null
+  username?: string | null
+  phone?: string | null
+  reason?: string | null
+  created_by?: number | null
+  created_at?: string
+}
+
+export interface BlacklistListResponse {
+  entries: AgentBlacklistEntry[]
+  total: number
+}
+
+export interface BlacklistAddEntry {
+  tg_user_id?: number | null
+  username?: string | null
+  phone?: string | null
+  reason?: string | null
+}
+
+export interface BlacklistResolveResponse {
+  resolved: Array<{
+    input: string
+    tg_user_id?: number | null
+    username?: string | null
+    phone?: string | null
+  }>
 }
 
 export interface Campaign {
@@ -493,6 +532,7 @@ export interface AgentAnalytics {
   }
   safety: {
     max_actions_per_hour?: number | null
+    max_messages_per_day?: number | null
     min_delay_seconds?: number | null
     cooldown_minutes?: number | null
     safety_mode_enabled?: boolean
