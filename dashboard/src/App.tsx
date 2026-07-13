@@ -9,6 +9,7 @@ import AdminJobsPage from './pages/admin/JobsPage'
 import AdminSubscriptionsPage from './pages/admin/SubscriptionsPage'
 import AdminPromoCodesPage from './pages/admin/PromoCodesPage'
 import AdminAuditPage from './pages/admin/AuditPage'
+import AdminBulkAddPage from './pages/admin/BulkAddPage'
 
 const queryClient = new QueryClient()
 
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/admin/jobs" element={<AdminJobsPage />} />
             <Route path="/admin/subscriptions" element={<AdminSubscriptionsPage />} />
             <Route path="/admin/promo-codes" element={<AdminPromoCodesPage />} />
+            <Route path="/admin/bulk-add" element={<AdminBulkAddPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
             <Route path="*" element={<Navigate to="/admin/health" replace />} />
           </Route>
