@@ -880,6 +880,9 @@ class BulkAddMembersRuntime:
 
                 from bot.agents.group_membership import (
                     ERROR_USER_ALREADY_IN_GROUP,
+                    ERROR_USER_PRIVACY_RESTRICTED,
+                    export_group_invite_link,
+                    send_invite_link_to_user,
                 )
 
                 add_result = await add_user_to_group(client, target_tg_group_id, user_id)
@@ -912,26 +915,72 @@ class BulkAddMembersRuntime:
                         )
                         await session.commit()
                 else:
-                    failure_count += 1
-                    result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
-                    if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
-                        skip_count += 1
-                        failure_count -= 1
-                        result_entry["status"] = "skipped"
-                        result_entry["reason"] = "already_in_target_group"
+                    send_invite_link = bool(
+                        normalized.get("send_invite_link_on_privacy_restricted", False)
+                    )
+                    if (
+                        send_invite_link
+                        and add_result.error_code == ERROR_USER_PRIVACY_RESTRICTED
+                    ):
+                        invite_link = await export_group_invite_link(client, target_tg_group_id)
+                        if invite_link:
+                            dm_sent = await send_invite_link_to_user(client, user_id, invite_link)
+                            if dm_sent:
+                                success_count += 1
+                                result_entry["status"] = "success"
+                                result_entry["method"] = "invite_link"
+                                if session is not None:
+                                    session.add(
+                                        MembershipAuditLog(
+                                            group_id=target_tg_group_id,
+                                            user_id=user_id,
+                                            requested_by=agent.linked_by_user_id or 0,
+                                            action="add",
+                                            result="invite_link_sent",
+                                        )
+                                    )
+                                    await session.commit()
+                            else:
+                                failure_count += 1
+                                result_entry["status"] = "failed"
+                                result_entry["method"] = "invite_link_dm_failed"
+                                result_entry["error_code"] = "INVITE_LINK_DM_FAILED"
+                                if session is not None:
+                                    session.add(
+                                        MembershipAuditLog(
+                                            group_id=target_tg_group_id,
+                                            user_id=user_id,
+                                            requested_by=agent.linked_by_user_id or 0,
+                                            action="add",
+                                            result="invite_link_dm_failed",
+                                        )
+                                    )
+                                    await session.commit()
+                        else:
+                            failure_count += 1
+                            result_entry["status"] = "failed"
+                            result_entry["method"] = "invite_link_export_failed"
+                    else:
+                        failure_count += 1
+                        result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
+                        if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
+                            skip_count += 1
+                            failure_count -= 1
+                            result_entry["status"] = "skipped"
+                            result_entry["reason"] = "already_in_target_group"
 
-                    if add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0:
-                        payload["progress"] = {
-                            "total_count": total_count,
-                            "success_count": success_count,
-                            "failure_count": failure_count,
-                            "skip_count": skip_count,
-                            "results": results,
-                            "stopped_at": index,
-                            "stop_reason": "flood_wait",
-                            "retry_after": add_result.flood_wait_seconds,
-                        }
-                        raise Exception(f"Flood wait: {add_result.flood_wait_seconds}s")
+                        if add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0:
+                            payload["progress"] = {
+                                "total_count": total_count,
+                                "success_count": success_count,
+                                "failure_count": failure_count,
+                                "skip_count": skip_count,
+                                "results": results,
+                                "stopped_at": index,
+                                "stop_reason": "flood_wait",
+                                "retry_after": add_result.flood_wait_seconds,
+                            }
+                            raise Exception(f"Flood wait: {add_result.flood_wait_seconds}s")
 
                     if session is not None:
                         session.add(

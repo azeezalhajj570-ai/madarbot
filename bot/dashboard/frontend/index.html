@@ -2478,6 +2478,13 @@
             <input id="bulk-add-interval-seconds" name="interval_seconds" type="number" min="1" step="1" value="${escapeHtml(String(draft.interval_seconds || "20"))}" data-action="bulk-add-draft-field" />
             <div class="field-hint">${escapeHtml(t("bulkAddMembersHint"))}</div>
           </div>
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" name="send_invite_link_on_privacy_restricted" value="1" ${draft.send_invite_link ? "checked" : ""} data-action="bulk-add-draft-field" />
+              <span>${escapeHtml(t("sendInviteLinkLabel") || "Send invite link if user has privacy restrictions")}</span>
+            </label>
+            <div class="field-hint">${escapeHtml(t("sendInviteLinkHint") || "If a user cannot be added directly, send them an invite link via DM instead")}</div>
+          </div>
         </form>
       `;
     }
@@ -6315,7 +6322,11 @@
       } else if (target.dataset.action === "bulk-draft-field") {
         state.ui.bulkMessageDraft[target.name] = target.value;
       } else if (target.dataset.action === "bulk-add-draft-field") {
-        state.ui.bulkAddMembersDraft[target.name] = target.value;
+        if (target.type === "checkbox") {
+          state.ui.bulkAddMembersDraft[target.name] = target.checked;
+        } else {
+          state.ui.bulkAddMembersDraft[target.name] = target.value;
+        }
       } else if (target.dataset.action === "bulk-user-query") {
         state.ui.bulkMessageDraft.user_query = target.value;
         state.ui.bulkMessageDraft.page = 1;
@@ -6941,12 +6952,14 @@
           pushToast(t("intervalValidation"), "warning");
           return;
         }
+        const sendInviteLink = Boolean(fd.get("send_invite_link_on_privacy_restricted"));
         await apiRequest(`/webapp/agents/${agentId}/member-adds`, {
           method: "POST",
           body: JSON.stringify({
             target_tg_group_id: Number(targetGroupId),
             interval_seconds: intervalSeconds,
             user_ids: selectedUserIds,
+            send_invite_link_on_privacy_restricted: sendInviteLink,
           }),
         });
         await loadAgents(state.activeGroupId, true);
@@ -6959,6 +6972,7 @@
           user_query: "",
           loading: false,
           error: "",
+          send_invite_link: false,
         };
         state.ui.bulkAddMembersOpen = false;
         closeModal();

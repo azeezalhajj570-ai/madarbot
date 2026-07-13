@@ -135,8 +135,11 @@ def normalize_member_add_payload(payload: dict[str, Any] | None) -> dict[str, An
     if interval_seconds < 0:
         raise ValueError("interval_seconds must be a non-negative number")
 
+    send_invite_link = bool(normalized.get("send_invite_link_on_privacy_restricted", False))
+
     return {
         "target_tg_group_id": target_tg_group_id,
         "user_ids": user_ids,
         "interval_seconds": interval_seconds,
+        "send_invite_link_on_privacy_restricted": send_invite_link,
     }
