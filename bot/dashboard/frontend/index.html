@@ -2566,15 +2566,29 @@
           </div>
           <div class="table-wrap">
           <table>
-            <thead><tr><th>Job ID</th><th>Type</th><th>Status</th><th>Created</th><th>Result</th><th class="row-actions-cell">${escapeHtml(t("actions"))}</th></tr></thead>
+            <thead><tr><th>ID</th><th>Status</th><th>Target</th><th>Users</th><th>Results</th><th>Created</th><th class="row-actions-cell">${escapeHtml(t("actions"))}</th></tr></thead>
             <tbody>
-              ${jobs.map((job) => `
+              ${jobs.map((job) => {
+                const p = job.job_payload || {};
+                const targetId = p.target_tg_group_id || p.target_group_id || "";
+                const targetName = job.target_group_title || job.source_group_title || targetId;
+                const userCount = (p.user_ids || []).length || (p.selected_user_ids || []).length || p.selected_count || "";
+                const prog = job.progress || {};
+                const success = prog.success_count ?? 0;
+                const fail = prog.failure_count ?? 0;
+                const skip = prog.skip_count ?? 0;
+                const total = prog.total_count ?? 0;
+                const resultStr = total > 0
+                  ? `${success} added · ${skip} skipped · ${fail} failed`
+                  : job.status;
+                return `
                 <tr>
                   <td class="mono">${escapeHtml(job.id)}</td>
-                  <td>${escapeHtml(job.job_type)}</td>
                   <td>${escapeHtml(job.status)}</td>
+                  <td>${escapeHtml(String(targetName))}</td>
+                  <td>${escapeHtml(String(userCount))}</td>
+                  <td class="mono"><span data-action="view-job-result" data-agent-id="${agentId}" data-job-id="${escapeHtml(String(job.id))}" style="color:var(--accent,#4a90d9);text-decoration:underline;cursor:pointer">${escapeHtml(resultStr)}</span></td>
                   <td>${escapeHtml(job.created_at ? relativeTime(job.created_at) : "Recent")}</td>
-                  <td class="mono">${escapeHtml(truncate(stringifyJobResult(job), 140))}</td>
                   <td class="row-actions-cell">
                     ${rowActionsMarkup(`agent-job-${agentId}-${job.id}`, [
                       `<button class="row-action" type="button" data-action="view-job-result" data-agent-id="${agentId}" data-job-id="${escapeHtml(String(job.id || ""))}">View Result</button>`,
@@ -2587,7 +2601,7 @@
                     ])}
                   </td>
                 </tr>
-              `).join("") || `<tr><td colspan="6">${emptyState("No jobs found.")}</td></tr>`}
+              `}).join("") || `<tr><td colspan="7">${emptyState("No jobs found.")}</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -5139,16 +5153,27 @@
         body: `
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Agent</th><th>Job ID</th><th>Status</th><th>User</th><th>Target Group</th><th>Result</th><th class="row-actions-cell">${escapeHtml(t("actions"))}</th></tr></thead>
+              <thead><tr><th>Agent</th><th>Job ID</th><th>Status</th><th>Users</th><th>Target Group</th><th>Results</th><th class="row-actions-cell">${escapeHtml(t("actions"))}</th></tr></thead>
               <tbody>
-                ${rowsPage.items.map(({ agent, job }) => `
+                ${rowsPage.items.map(({ agent, job }) => {
+                  const p = job.job_payload || {};
+                  const userCount = (p.user_ids || []).length || (p.selected_user_ids || []).length || p.selected_count || "";
+                  const prog = job.progress || {};
+                  const success = prog.success_count ?? 0;
+                  const fail = prog.failure_count ?? 0;
+                  const skip = prog.skip_count ?? 0;
+                  const total = prog.total_count ?? 0;
+                  const resultStr = total > 0
+                    ? `${success} added · ${skip} skipped · ${fail} failed`
+                    : escapeHtml(truncate(stringifyJobResult(job), 140));
+                  return `
                   <tr>
                     <td>${escapeHtml("@" + ((agent.metadata && agent.metadata.username) || agent.external_account_id || ("agent-" + agent.id)))}</td>
                     <td class="mono">${escapeHtml(String(job.id || ""))}</td>
-                    <td>${escapeHtml(String(job.status || ""))}${job.status === "running" && job.progress ? ` (${job.progress.success_count || 0}/${job.progress.total_count || "?"})` : ""}</td>
-                    <td class="mono">${escapeHtml(String(job.job_payload?.user_id || ""))}</td>
-                    <td class="mono">${escapeHtml(String(job.job_payload?.target_tg_group_id || job.job_payload?.target_group_id || ""))}</td>
-                    <td class="mono">${escapeHtml(truncate(stringifyJobResult(job), 140))}</td>
+                    <td>${escapeHtml(String(job.status || ""))}${job.status === "running" && prog ? ` (${prog.success_count || 0}/${prog.total_count || "?"})` : ""}</td>
+                    <td>${escapeHtml(String(userCount))}</td>
+                    <td>${escapeHtml(job.target_group_title || String(p.target_tg_group_id || p.target_group_id || ""))}</td>
+                    <td class="mono"><span data-action="view-job-result" data-agent-id="${agent.id}" data-job-id="${escapeHtml(String(job.id))}" style="color:var(--accent,#4a90d9);text-decoration:underline;cursor:pointer">${resultStr}</span></td>
                     <td class="row-actions-cell">
                       ${rowActionsMarkup(`bulk-add-job-${agent.id}-${job.id}`, [
                         `<button class="row-action" type="button" data-action="view-job-result" data-agent-id="${agent.id}" data-job-id="${escapeHtml(String(job.id || ""))}">View Result</button>`,
@@ -5735,6 +5760,16 @@
         pushToast("Scheduled message deleted.", "success");
       } else if (action === "open-agent-link") {
         agentLinkModal(1);
+      } else if (action === "sync-agent-workspace") {
+        const agentId = Number(target.dataset.agentId || 0);
+        if (!agentId) return;
+        pushToast("Syncing workspace...", "neutral");
+        try {
+          await apiRequest(`/webapp/agents/${agentId}/sync-workspace`, { method: "POST" });
+          pushToast("Workspace synced successfully.", "success");
+        } catch (error) {
+          pushToast(error instanceof Error ? error.message : "Sync failed.", "error");
+        }
       } else if (action === "view-agent-groups") {
         await showAgentGroups(Number(target.dataset.agentId));
       } else if (action === "view-agent-group-members") {

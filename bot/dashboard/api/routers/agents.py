@@ -197,6 +197,9 @@ async def webapp_agent_jobs(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
+    from sqlalchemy import select
+    from bot.db.models.scraper import ScrapedGroup
+
     agent = await ensure_agent_admin(agent_id, session, identity)
     rows = await AgentJobService(session).list_agent_jobs(
         actor_user_id=identity.user_id,
@@ -204,6 +207,27 @@ async def webapp_agent_jobs(
         limit=limit,
         job_type=job_type,
     )
+
+    tg_ids = set()
+    for job in rows:
+        p = job.job_payload or {}
+        tgid = p.get("target_tg_group_id") or 0
+        if tgid:
+            tg_ids.add(int(tgid))
+        for gid in (p.get("target_group_ids") or []):
+            if gid:
+                tg_ids.add(int(gid))
+
+    group_titles: dict[int, str] = {}
+    if tg_ids:
+        groups = (
+            await session.execute(
+                select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(list(tg_ids)))
+            )
+        ).scalars().all()
+        for g in groups:
+            group_titles[int(g.tg_group_id)] = g.title or ""
+
     return [
         {
             "id": job.id,
@@ -221,6 +245,10 @@ async def webapp_agent_jobs(
             "target_group_ids": (job.job_payload or {}).get("target_group_ids") or [],
             "selected_count": len((job.job_payload or {}).get("selected_user_ids") or []),
             "exclusion_counts": (job.job_payload or {}).get("exclusion_counts"),
+            "target_tg_group_id": (job.job_payload or {}).get("target_tg_group_id"),
+            "target_group_title": group_titles.get(
+                int((job.job_payload or {}).get("target_tg_group_id") or 0)
+            ) or "",
         }
         for job in rows
     ]
