@@ -72,6 +72,7 @@ export default function AdminBulkAddPage() {
   const [submitting, setSubmitting] = useState(false)
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [searching, setSearching] = useState(false)
+  const [scraping, setScraping] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -144,6 +145,20 @@ export default function AdminBulkAddPage() {
     )
   }
 
+  async function scrapeSourceGroup() {
+    if (!selectedAgentId || !selectedSourceGroupId) return
+    setScraping(true)
+    try {
+      await api.post(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups/${selectedSourceGroupId}/scrape-members`)
+      setSearchQuery((prev) => prev || ' ')
+      setTimeout(() => setSearchQuery((prev) => prev.trim() || ''), 100)
+    } catch (err: any) {
+      setError(err?.message || 'Scrape failed')
+    } finally {
+      setScraping(false)
+    }
+  }
+
   async function handleSubmit() {
     if (!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length) return
     setSubmitting(true)
@@ -196,17 +211,28 @@ export default function AdminBulkAddPage() {
             {/* Source group select */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Source Group</label>
-              <select
-                value={selectedSourceGroupId ?? ''}
-                onChange={(e) => setSelectedSourceGroupId(e.target.value ? Number(e.target.value) : null)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
-                disabled={!sourceGroups.length}
-              >
-                <option value="">{sourceGroups.length ? 'Select source group...' : 'No groups'}</option>
-                {sourceGroups.map((g) => (
-                  <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select
+                  value={selectedSourceGroupId ?? ''}
+                  onChange={(e) => setSelectedSourceGroupId(e.target.value ? Number(e.target.value) : null)}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                  disabled={!sourceGroups.length}
+                >
+                  <option value="">{sourceGroups.length ? 'Select source group...' : 'No groups'}</option>
+                  {sourceGroups.map((g) => (
+                    <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
+                  ))}
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={scrapeSourceGroup}
+                  disabled={!selectedSourceGroupId || scraping}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {scraping ? 'Scraping...' : 'Scrape'}
+                </Button>
+              </div>
             </div>
 
             {/* Target group select */}
