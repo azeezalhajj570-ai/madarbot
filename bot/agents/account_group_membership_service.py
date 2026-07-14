@@ -149,17 +149,34 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 ).all()
             }
 
+            agent_tg_id = agent.telegram_user_id
+            admin_group_ids: set[int] = set()
+            if agent_tg_id is not None and scraped_rows:
+                tg_ids = [int(r.tg_group_id) for r in scraped_rows]
+                admin_rows = (
+                    await self.session.execute(
+                        select(ScrapedMember.tg_group_id).where(
+                            ScrapedMember.tg_user_id == agent_tg_id,
+                            ScrapedMember.tg_group_id.in_(tg_ids),
+                            ScrapedMember.role.in_(["admin", "creator"]),
+                        )
+                    )
+                ).all()
+                admin_group_ids = {int(r.tg_group_id) for r in admin_rows}
+
             results = []
             for row in scraped_rows:
+                tg_group_id = int(row.tg_group_id)
                 results.append(
                     {
                         "id": row.id,
-                        "tg_group_id": int(row.tg_group_id),
+                        "tg_group_id": tg_group_id,
                         "title": row.title or str(row.tg_group_id),
                         "username": row.username,
                         "group_type": row.group_type,
                         "member_count": member_counts.get(int(row.id), int(row.member_count or 0)),
                         "messages_count": message_counts.get(int(row.id), 0),
+                        "can_add_members": tg_group_id in admin_group_ids,
                     }
                 )
             return results

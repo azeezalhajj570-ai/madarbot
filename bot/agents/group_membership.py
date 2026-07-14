@@ -18,13 +18,14 @@ from telethon.errors import (
     UserPrivacyRestrictedError,
 )
 from telethon.tl.functions.channels import InviteToChannelRequest
-from telethon.tl.functions.messages import AddChatUserRequest
+from telethon.tl.functions.messages import AddChatUserRequest, ExportChatInviteRequest
 from telethon.tl.types import Channel
 
 
 ERROR_USER_ALREADY_IN_GROUP: Final = "USER_ALREADY_IN_GROUP"
 ERROR_USERBOT_NOT_IN_GROUP: Final = "USERBOT_NOT_IN_GROUP"
 ERROR_USER_PRIVACY_RESTRICTED: Final = "USER_PRIVACY_RESTRICTED"
+ERROR_INVITE_LINK_DM_FAILED: Final = "INVITE_LINK_DM_FAILED"
 ERROR_FLOOD_WAIT: Final = "FLOOD_WAIT"
 ERROR_PEER_NOT_FOUND: Final = "PEER_NOT_FOUND"
 ERROR_UNKNOWN: Final = "UNKNOWN"
@@ -120,3 +121,35 @@ async def add_user_to_group(
 
     bound_logger.info("agent_add_user_to_group_succeeded")
     return AddUserResult(success=True)
+
+
+async def export_group_invite_link(client: TelegramClient, group_id: int) -> str | None:
+    try:
+        result = await client(ExportChatInviteRequest(peer=group_id))
+        link = getattr(result, "link", None)
+        if link:
+            logger.bind(group_id=group_id).info("agent_group_invite_link_exported")
+            return str(link)
+        logger.bind(group_id=group_id).warning("agent_group_invite_link_missing")
+        return None
+    except FloodWaitError as exc:
+        logger.bind(group_id=group_id, flood_wait=exc.seconds).warning(
+            "agent_group_invite_link_flood_wait"
+        )
+        return None
+    except (ChatAdminRequiredError, RPCError) as exc:
+        logger.bind(group_id=group_id, error=str(exc)).warning(
+            "agent_group_invite_link_export_failed"
+        )
+        return None
+
+
+async def send_invite_link_to_user(
+    client: TelegramClient, user_id: int, invite_link: str
+) -> bool:
+    try:
+        await client.send_message(user_id, f"Join our group here: {invite_link}")
+        return True
+    except Exception:
+        logger.bind(user_id=user_id).warning("agent_invite_link_dm_failed")
+        return False

@@ -106,6 +106,33 @@
       color: rgba(255,255,255,0.08);
       font-size: 12px;
     }
+    .progress-bar-wrap {
+      background: rgba(255,255,255,0.06);
+      border-radius: 8px;
+      height: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-bar {
+      background: var(--accent, #5b8def);
+      height: 100%;
+      border-radius: 8px;
+      transition: width 0.5s ease;
+    }
+    .progress-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #f5f5f5;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .summary-line {
+      padding: 8px 0;
+    }
     @media (max-width: 640px) {
       #site-footer { padding: 16px 16px; gap: 8px 14px; }
     }
@@ -2450,6 +2477,13 @@
             <label class="field-label" for="bulk-add-interval-seconds">${escapeHtml(t("intervalSeconds"))}</label>
             <input id="bulk-add-interval-seconds" name="interval_seconds" type="number" min="1" step="1" value="${escapeHtml(String(draft.interval_seconds || "20"))}" data-action="bulk-add-draft-field" />
             <div class="field-hint">${escapeHtml(t("bulkAddMembersHint"))}</div>
+          </div>
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" name="send_invite_link_on_privacy_restricted" value="1" ${draft.send_invite_link ? "checked" : ""} data-action="bulk-add-draft-field" />
+              <span>${escapeHtml(t("sendInviteLinkLabel") || "Send invite link if user has privacy restrictions")}</span>
+            </label>
+            <div class="field-hint">${escapeHtml(t("sendInviteLinkHint") || "If a user cannot be added directly, send them an invite link via DM instead")}</div>
           </div>
         </form>
       `;
@@ -5111,7 +5145,7 @@
                   <tr>
                     <td>${escapeHtml("@" + ((agent.metadata && agent.metadata.username) || agent.external_account_id || ("agent-" + agent.id)))}</td>
                     <td class="mono">${escapeHtml(String(job.id || ""))}</td>
-                    <td>${escapeHtml(String(job.status || ""))}</td>
+                    <td>${escapeHtml(String(job.status || ""))}${job.status === "running" && job.progress ? ` (${job.progress.success_count || 0}/${job.progress.total_count || "?"})` : ""}</td>
                     <td class="mono">${escapeHtml(String(job.job_payload?.user_id || ""))}</td>
                     <td class="mono">${escapeHtml(String(job.job_payload?.target_tg_group_id || job.job_payload?.target_group_id || ""))}</td>
                     <td class="mono">${escapeHtml(truncate(stringifyJobResult(job), 140))}</td>
@@ -5732,6 +5766,89 @@
           pushToast("Job result unavailable.", "warning");
           return;
         }
+
+        if (String(job.job_type || "") === "member_add") {
+          const payload = job.job_payload || {};
+          const progress = payload.progress || {};
+          const result = payload.result || {};
+          const results = result.results || progress.results || [];
+          const totalCount = result.total_count || progress.total_count || results.length || payload.user_ids?.length || 0;
+          const successCount = result.success_count || progress.success_count || 0;
+          const failureCount = result.failure_count || progress.failure_count || 0;
+          const skipCount = result.skip_count || progress.skip_count || 0;
+          const isRunning = job.status === "running" || job.status === "pending" || job.status === "queued";
+          const completed = progress.completed || (successCount + failureCount + skipCount);
+          const remaining = totalCount - completed;
+
+          let detailRows = "";
+          if (results.length) {
+            detailRows = results.map((r) => {
+              const statusLabel = r.status === "success" ? "✅ Added"
+                : r.status === "skipped" ? "⏭ Skipped" + (r.reason ? ` (${r.reason})` : "")
+                : r.status === "failed" && r.method === "invite_link" ? "🔗 Invite link sent"
+                : r.method === "invite_link_dm_failed" ? "❌ Invite DM failed"
+                : "❌ Failed";
+              const extra = r.error_code ? escapeHtml(String(r.error_code)) : "";
+              const extra2 = r.flood_wait_seconds ? ` (flood ${r.flood_wait_seconds}s)` : "";
+              return `<tr><td class="mono">${escapeHtml(String(r.user_id))}</td><td>${statusLabel}</td><td class="mono">${extra}${extra2}</td></tr>`;
+            }).join("");
+          }
+
+          let progressBar = "";
+          if (isRunning || remaining > 0) {
+            const pct = totalCount > 0 ? Math.round((completed / totalCount) * 100) : 0;
+            progressBar = `
+              <div class="progress-bar-wrap" style="margin:12px 0">
+                <div class="progress-bar" style="width:${pct}%"></div>
+                <span class="progress-label">${completed} / ${totalCount} (${pct}%)</span>
+              </div>`;
+          }
+
+          const summary = `✅ ${successCount} added, ⏭ ${skipCount} skipped, ❌ ${failureCount} failed`;
+          const subtitle = isRunning ? `⏳ Running — ${completed} of ${totalCount} processed` : `✅ Completed — ${summary}`;
+
+          openModal({
+            title: `Member Add Job #${jobId}`,
+            subtitle,
+            body: `
+              ${progressBar}
+              <div class="summary-line" style="margin:8px 0;font-weight:600">${summary}</div>
+              ${results.length ? `
+                <div class="table-wrap" style="max-height:400px;overflow-y:auto">
+                  <table>
+                    <thead><tr><th>User ID</th><th>Status</th><th>Details</th></tr></thead>
+                    <tbody>${detailRows}</tbody>
+                  </table>
+                </div>` : `<div class="muted">No per-user results yet.</div>`}
+            `,
+            footer: modalFooterMarkup({
+              start: `<button class="ghost-button" type="button" data-action="close-modal">${escapeHtml(t("cancel"))}</button>`,
+              end: `<button class="button" type="button" data-action="close-modal">Done</button>`,
+            }),
+            className: "modal-wide",
+          });
+
+          if (isRunning && remaining > 0) {
+            setTimeout(async () => {
+              const freshJobs = await apiRequest(`/webapp/agents/${agentId}/jobs`);
+              state.cache.agentJobs[agentId] = freshJobs;
+              const freshJob = freshJobs.find((e) => Number(e.id) === jobId);
+              if (freshJob && (freshJob.status === "running" || freshJob.status === "pending" || freshJob.status === "queued")) {
+                document.querySelector(".modal .summary-line")?.remove();
+                const pct = totalCount > 0 ? Math.round(((progress.success_count || 0) + (progress.failure_count || 0) + (progress.skip_count || 0)) / totalCount * 100) : 0;
+                const bar = document.querySelector(".modal .progress-bar");
+                const label = document.querySelector(".modal .progress-label");
+                if (bar) bar.style.width = pct + "%";
+                if (label) label.textContent = `${progress.success_count || 0} / ${totalCount} (${pct}%)`;
+              } else if (freshJob) {
+                closeModal();
+                showBulkAddMemberJobs(false);
+              }
+            }, 5000);
+          }
+          return;
+        }
+
         openModal({
           title: `Job ${jobId} Result`,
           subtitle: String(job.job_type || "job"),
@@ -6205,7 +6322,11 @@
       } else if (target.dataset.action === "bulk-draft-field") {
         state.ui.bulkMessageDraft[target.name] = target.value;
       } else if (target.dataset.action === "bulk-add-draft-field") {
-        state.ui.bulkAddMembersDraft[target.name] = target.value;
+        if (target.type === "checkbox") {
+          state.ui.bulkAddMembersDraft[target.name] = target.checked;
+        } else {
+          state.ui.bulkAddMembersDraft[target.name] = target.value;
+        }
       } else if (target.dataset.action === "bulk-user-query") {
         state.ui.bulkMessageDraft.user_query = target.value;
         state.ui.bulkMessageDraft.page = 1;
@@ -6831,12 +6952,14 @@
           pushToast(t("intervalValidation"), "warning");
           return;
         }
+        const sendInviteLink = Boolean(fd.get("send_invite_link_on_privacy_restricted"));
         await apiRequest(`/webapp/agents/${agentId}/member-adds`, {
           method: "POST",
           body: JSON.stringify({
             target_tg_group_id: Number(targetGroupId),
             interval_seconds: intervalSeconds,
             user_ids: selectedUserIds,
+            send_invite_link_on_privacy_restricted: sendInviteLink,
           }),
         });
         await loadAgents(state.activeGroupId, true);
@@ -6849,6 +6972,7 @@
           user_query: "",
           loading: false,
           error: "",
+          send_invite_link: false,
         };
         state.ui.bulkAddMembersOpen = false;
         closeModal();
@@ -7072,6 +7196,7 @@
         }
         const result = await apiRequest("/webapp/agents/auth/start", {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({
             group_id: groupId,
             phone_number: phoneNumber,
@@ -7083,6 +7208,7 @@
         const agentId = Number(fd.get("agent_id"));
         const result = await apiRequest(`/webapp/agents/${agentId}/auth/code`, {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({ code: String(fd.get("code") || "") }),
         });
         if (result.agent && result.agent.auth_state === "pending_2fa") {
@@ -7097,6 +7223,7 @@
         const agentId = Number(fd.get("agent_id"));
         const result = await apiRequest(`/webapp/agents/${agentId}/auth/password`, {
           method: "POST",
+          boundary: "agents",
           body: JSON.stringify({ password: String(fd.get("password") || "") }),
         });
         await loadAgents(state.activeGroupId, true);

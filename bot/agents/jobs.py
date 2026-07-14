@@ -4,6 +4,7 @@ from typing import Any
 
 GROUP_MEMBER_BROADCAST_JOB_TYPE = "group_member_broadcast"
 ADD_CONTACT_JOB_TYPE = "add_contact"
+MEMBER_ADD_JOB_TYPE = "member_add"
 SCRAPER_GROUP_INFO_JOB_TYPE = "scraper_group_info"
 SCRAPER_MEMBERS_JOB_TYPE = "scraper_members"
 SCRAPER_MESSAGES_JOB_TYPE = "scraper_messages"
@@ -155,3 +156,44 @@ def normalize_group_member_broadcast_payload(payload: dict[str, Any] | None) -> 
         result["target_group_ids"] = target_group_ids
 
     return result
+
+
+def normalize_member_add_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    target_tg_group_id = normalized.get("target_tg_group_id")
+    if target_tg_group_id is None:
+        raise ValueError("target_tg_group_id is required")
+    try:
+        target_tg_group_id = int(target_tg_group_id)
+    except (TypeError, ValueError):
+        raise ValueError("target_tg_group_id must be a valid integer")
+    if target_tg_group_id == 0:
+        raise ValueError("target_tg_group_id must be non-zero")
+
+    user_ids: list[int] = []
+    for value in list(normalized.get("user_ids") or []):
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in user_ids:
+            user_ids.append(uid)
+    if not user_ids:
+        raise ValueError("At least one valid user_id is required")
+
+    interval_raw = normalized.get("interval_seconds", 20)
+    try:
+        interval_seconds = float(interval_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("interval_seconds must be a non-negative number") from exc
+    if interval_seconds < 0:
+        raise ValueError("interval_seconds must be a non-negative number")
+
+    send_invite_link = bool(normalized.get("send_invite_link_on_privacy_restricted", False))
+
+    return {
+        "target_tg_group_id": target_tg_group_id,
+        "user_ids": user_ids,
+        "interval_seconds": interval_seconds,
+        "send_invite_link_on_privacy_restricted": send_invite_link,
+    }

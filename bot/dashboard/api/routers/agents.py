@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +23,8 @@ from bot.agents.jobs import (
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
     JOB_STATUS_SCHEDULED,
+    MEMBER_ADD_JOB_TYPE,
+    normalize_member_add_payload,
 )
 from bot.db.models import AgentJob
 from bot.db.session import get_session
@@ -36,7 +36,6 @@ from ..dependencies import (
     get_identity,
     require_active_subscription,
     require_business_plan,
-    require_bot_owner,
 )
 from .auth_boundary import require_agents_boundary, require_any_boundary
 from ._shared import (
@@ -45,8 +44,7 @@ from ._shared import (
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
-    BlacklistAddRequest,
-    BlacklistResolveRequest,
+    BulkMemberAddRequest,
     BulkPreflightRequest,
     AgentSafetyUpdateRequest,
     AgentUpdateRequest,
@@ -347,33 +345,6 @@ async def webapp_sync_workspace(
 
 
 @router.get(
-    "/api/agents/{agent_id}/status",
-    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
-)
-@router.get(
-    "/webapp/agents/{agent_id}/status",
-    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
-)
-async def webapp_agent_status(
-    agent_id: int,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    agent = await ensure_agent_admin(agent_id, session, identity)
-    from bot.agents.session import SessionManager
-    session_state = await SessionManager().get_session_state(agent.id)
-    return {
-        "id": agent.id,
-        "phone_number": agent.phone_number,
-        "status": agent.status,
-        "auth_state": agent.auth_state,
-        "safety_mode_enabled": agent.safety_mode_enabled,
-        "safety_mode_until": agent.safety_mode_until.isoformat() if agent.safety_mode_until else None,
-        **session_state,
-    }
-
-
-@router.get(
     "/api/agents/{agent_id}/groups",
     dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
 )
@@ -407,7 +378,7 @@ async def webapp_agent_member_search(
     page: int = Query(default=1, ge=1),
     order_by: str = Query(default="message_count"),
     exclude_admins: bool = Query(default=False),
-    exclude_bots: bool = Query(default=True),
+    exclude_bots: bool = Query(default=False),
     only_admins: bool = Query(default=False),
     only_bots: bool = Query(default=False),
     identity: TelegramWebAppIdentity = Depends(get_identity),
@@ -427,7 +398,6 @@ async def webapp_agent_member_search(
             exclude_bots=exclude_bots,
             only_admins=only_admins,
             only_bots=only_bots,
-            exclude_self=True,
         )
         return payload
     except ValueError as exc:
@@ -681,18 +651,12 @@ async def webapp_bulk_preflight(
                 "admins_excluded": 0,
                 "bots_excluded": 0,
                 "already_sent_excluded": 0,
-                "blacklisted_excluded": 0,
                 "filtered_user_ids": [],
-                "message_count": len(normalized.get("messages", [])),
             }
-        if payload.selected_user_ids and len(payload.selected_user_ids) > payload.threshold:
-            raise ValueError(
-                f"Selected members ({len(payload.selected_user_ids)}) exceeds threshold ({payload.threshold})"
-            )
         exclusions = await AgentJobService(session).compute_bulk_exclusions(
             agent=agent,
             source_group_id=payload.source_group_id,
-            messages=payload.messages,
+            message=payload.message,
             selected_user_ids=payload.selected_user_ids,
         )
         return {**exclusions, "target_type": "members"}
@@ -706,6 +670,59 @@ async def webapp_bulk_preflight(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.post(
+    "/api/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_bulk_add_members(
+    agent_id: int,
+    payload: BulkMemberAddRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    if agent.auth_state != "active":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Agent is not authenticated",
+        )
+    try:
+        normalized = normalize_member_add_payload(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    try:
+        job = await AgentJobService(session).create_job(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            job_type=MEMBER_ADD_JOB_TYPE,
+            job_payload=normalized,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    from bot.agents.dispatch import dispatch_agent_job
+
+    await dispatch_agent_job(job.id)
+    return {
+        "status": "ok",
+        "job": {
+            "id": job.id,
+            "agent_id": agent.id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "user_count": len(normalized.get("user_ids", [])),
+            "target_tg_group_id": normalized.get("target_tg_group_id"),
+        },
+    }
 
 
 @router.post(
@@ -877,71 +894,6 @@ async def webapp_retry_agent_job(
 
     await dispatch_agent_job(job.id)
     return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_QUEUED}
-
-
-@router.get("/api/agents/{agent_id}/jobs/health", dependencies=[Depends(require_agents_boundary)])
-@router.get(
-    "/webapp/agents/{agent_id}/jobs/health",
-    dependencies=[Depends(require_agents_boundary)],
-)
-async def webapp_agent_jobs_health(
-    agent_id: int,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.exceptions import JobValidationError
-
-    await ensure_agent_admin(agent_id, session, identity)
-    try:
-        result = await AgentJobService(session).get_job_health(
-            actor_user_id=identity.user_id,
-            agent_id=agent_id,
-        )
-        return result
-    except JobValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"message": str(exc), **exc.details},
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-
-
-@router.post(
-    "/api/agents/{agent_id}/jobs/{job_id}/recover",
-    dependencies=[Depends(require_agents_boundary)],
-)
-@router.post(
-    "/webapp/agents/{agent_id}/jobs/{job_id}/recover",
-    dependencies=[Depends(require_agents_boundary)],
-)
-async def webapp_recover_agent_job(
-    agent_id: int,
-    job_id: int,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.exceptions import JobValidationError
-
-    await ensure_agent_admin(agent_id, session, identity)
-    try:
-        result = await AgentJobService(session).recover_job(
-            actor_user_id=identity.user_id,
-            agent_id=agent_id,
-            job_id=job_id,
-        )
-        return {"status": "ok", **result}
-    except JobValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"message": str(exc), **exc.details},
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
 
 
 @router.delete("/api/agents/{agent_id}", dependencies=[Depends(require_agents_boundary)])
@@ -1159,7 +1111,6 @@ async def webapp_agent_analytics(
         },
         "safety": {
             "max_actions_per_hour": agent.max_actions_per_hour,
-            "max_messages_per_day": agent.max_messages_per_day,
             "min_delay_seconds": agent.min_delay_seconds,
             "cooldown_minutes": agent.cooldown_minutes,
             "safety_mode_enabled": agent.safety_mode_enabled,
@@ -1175,171 +1126,11 @@ async def webapp_agent_analytics(
 async def webapp_reconcile_stale_jobs(
     max_hours: int = Query(default=2, ge=1, le=168),
     mark_failed: bool = Query(default=False),
-    _: TelegramWebAppIdentity = Depends(require_bot_owner),
 ) -> dict[str, Any]:
     """Reconcile stale pending/queued agent jobs older than max_hours."""
     from bot.agents.dispatch import reconcile_stale_jobs
 
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
-
-
-@router.get("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
-@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
-async def webapp_agent_blacklist(
-    agent_id: int,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.agent_blacklist_service import AgentBlacklistService
-
-    agent = await ensure_agent_admin(agent_id, session, identity)
-    try:
-        return await AgentBlacklistService(session).list_blacklist(
-            actor_user_id=identity.user_id,
-            agent_id=agent.id,
-            page=page,
-            page_size=page_size,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-
-
-@router.post("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
-async def webapp_agent_blacklist_add(
-    agent_id: int,
-    payload: BlacklistAddRequest,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.agent_blacklist_service import AgentBlacklistService
-
-    agent = await ensure_agent_admin(agent_id, session, identity)
-    try:
-        entries = [e.model_dump() for e in payload.entries]
-        created = await AgentBlacklistService(session).add_entries(
-            actor_user_id=identity.user_id,
-            agent_id=agent.id,
-            entries=entries,
-        )
-        return {
-            "status": "ok",
-            "entries": created,
-            "count": len(created),
-        }
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-    except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This user is already blacklisted",
-        ) from exc
-
-
-@router.delete(
-    "/api/agents/{agent_id}/blacklist/{entry_id}",
-    dependencies=[Depends(require_agents_boundary)],
-)
-@router.delete(
-    "/webapp/agents/{agent_id}/blacklist/{entry_id}",
-    dependencies=[Depends(require_agents_boundary)],
-)
-async def webapp_agent_blacklist_delete(
-    agent_id: int,
-    entry_id: int,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.agent_blacklist_service import AgentBlacklistService
-
-    agent = await ensure_agent_admin(agent_id, session, identity)
-    try:
-        deleted = await AgentBlacklistService(session).delete_entry(
-            actor_user_id=identity.user_id,
-            agent_id=agent.id,
-            entry_id=entry_id,
-        )
-        if not deleted:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
-        return {"status": "ok", "deleted": True}
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-
-
-@router.post(
-    "/api/agents/{agent_id}/blacklist/resolve",
-    dependencies=[Depends(require_agents_boundary)],
-)
-@router.post(
-    "/webapp/agents/{agent_id}/blacklist/resolve",
-    dependencies=[Depends(require_agents_boundary)],
-)
-async def webapp_agent_blacklist_resolve(
-    agent_id: int,
-    payload: BlacklistResolveRequest,
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    from bot.agents.agent_blacklist_service import AgentBlacklistService
-
-    agent = await ensure_agent_admin(agent_id, session, identity)
-    try:
-        results = await AgentBlacklistService(session).resolve_phones(
-            actor_user_id=identity.user_id,
-            agent_id=agent.id,
-            phones=payload.phones,
-        )
-        return {"status": "ok", "results": results}
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-
-
-@router.post(
-    "/api/agents/{agent_id}/media/upload",
-    dependencies=[Depends(require_agents_boundary)],
-)
-@router.post(
-    "/webapp/agents/{agent_id}/media/upload",
-    dependencies=[Depends(require_agents_boundary)],
-)
-async def upload_agent_media(
-    agent_id: int,
-    file: UploadFile = File(...),
-    session: AsyncSession = Depends(get_session),
-    identity: TelegramWebAppIdentity = Depends(get_identity),
-) -> dict[str, str]:
-    import uuid
-
-    from bot.dashboard.api.main import UPLOADS_DIR
-
-    await ensure_agent_admin(agent_id, session, identity)
-
-    ext = ""
-    if file.filename:
-        _, ext = os.path.splitext(file.filename)
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    dest = UPLOADS_DIR / unique_name
-
-    MAX_SIZE = 20 * 1024 * 1024
-    content = await file.read()
-    if len(content) > MAX_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large ({len(content)} bytes). Max {MAX_SIZE // (1024 * 1024)}MB.",
-        )
-    dest.write_bytes(content)
-
-    return {"url": f"http://backend:8080/uploads/{unique_name}"}
 
 
 __all__ = ["router"]

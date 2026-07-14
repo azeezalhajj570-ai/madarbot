@@ -99,6 +99,13 @@ class AgentJobCreateRequest(BaseModel):
     scheduled_at: datetime | None = None
 
 
+class BulkMemberAddRequest(BaseModel):
+    target_tg_group_id: int = Field(...)
+    interval_seconds: int = Field(default=20, ge=1, le=3600)
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+    send_invite_link_on_privacy_restricted: bool = Field(default=False)
+
+
 class BlacklistAddEntry(BaseModel):
     tg_user_id: int | None = Field(default=None, ge=1)
     username: str | None = Field(default=None, min_length=1, max_length=255)
@@ -321,6 +328,7 @@ __all__ = [
     "BlacklistAddRequest",
     "BlacklistResolveRequest",
     "BlacklistResolveResult",
+    "BulkMemberAddRequest",
     "AgentJobCreateRequest",
     "AgentSafetyUpdateRequest",
     "AgentLinkRequest",

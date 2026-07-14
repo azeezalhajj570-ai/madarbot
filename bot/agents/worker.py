@@ -20,6 +20,7 @@ from bot.agents.exceptions import (
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    MEMBER_ADD_JOB_TYPE,
     JOB_STATUS_PENDING,
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
@@ -35,6 +36,7 @@ from bot.agents.jobs import (
 from bot.agents.runtime import (
     AddContactRuntime,
     AgentTaskRuntime,
+    BulkAddMembersRuntime,
     GroupMemberBroadcastRuntime,
     ScraperRuntime,
 )
@@ -171,6 +173,44 @@ def _build_job_notification(
                 "contact_save_failed",
                 "Failed to save contact",
                 f"Could not save {full_name} ({user_id}) to contacts: {error}",
+                notification_payload,
+            )
+        return None
+
+    if job.job_type == MEMBER_ADD_JOB_TYPE:
+        success_count = int(result_payload.get("success_count") or 0)
+        failure_count = int(result_payload.get("failure_count") or 0)
+        skip_count = int(result_payload.get("skip_count") or 0)
+        total_count = int(result_payload.get("total_count") or 0)
+        target_tg_group_id = int(payload.get("target_tg_group_id") or 0)
+        notification_payload = {
+            "job_type": job.job_type,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "skip_count": skip_count,
+            "total_count": total_count,
+            "target_tg_group_id": target_tg_group_id,
+        }
+        if status == JOB_STATUS_COMPLETED:
+            body = f"Added {success_count} out of {total_count} users to the target group."
+            parts = []
+            if skip_count:
+                parts.append(f"{skip_count} skipped")
+            if failure_count:
+                parts.append(f"{failure_count} failed")
+            if parts:
+                body += f" {', '.join(parts)}."
+            return (
+                "member_add_completed",
+                "Bulk add members completed",
+                body,
+                notification_payload,
+            )
+        if status == JOB_STATUS_FAILED:
+            return (
+                "member_add_failed",
+                "Bulk add members failed",
+                _trim_message(error or "Could not add members to the target group."),
                 notification_payload,
             )
         return None
@@ -485,6 +525,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     broadcast_runtime = GroupMemberBroadcastRuntime()
     scraper_runtime = ScraperRuntime()
     contact_runtime = AddContactRuntime()
+    member_add_runtime = BulkAddMembersRuntime()
 
     async with _session_local_factory()() as session:
         job = (
@@ -590,6 +631,19 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     result = await contact_runtime.execute(
                         client=client, agent=agent, payload=dict(job.job_payload or {})
                     )
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    handled = True
+                elif job.job_type == MEMBER_ADD_JOB_TYPE:
+                    member_add_payload = dict(job.job_payload or {})
+                    member_add_payload["job_id"] = job.id
+                    result = await member_add_runtime.execute(
+                        client=client, agent=agent, payload=member_add_payload, session=session
+                    )
+                    progress = result.pop("_progress", None) if isinstance(result, dict) else None
+                    if progress:
+                        member_add_payload["progress"] = progress
+                        job.job_payload = member_add_payload
+                        await session.commit()
                     await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
                     handled = True
                 elif job.job_type == "send_lead_message":

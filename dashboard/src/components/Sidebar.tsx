@@ -9,6 +9,7 @@ const NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
+  { to: '/admin/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
   { to: '/admin/subscriptions', label: 'nav.admin.subscriptions', icon: Ticket },
   { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
   { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
