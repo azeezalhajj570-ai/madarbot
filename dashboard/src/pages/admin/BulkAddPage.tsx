@@ -1,11 +1,47 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, ExternalLink } from 'lucide-react'
+import { RefreshCw, Plus, Send } from 'lucide-react'
 
-import { Button, Card, EmptyState } from '../../components/ui/primitives'
+import { Badge, Button, Card, EmptyState, Table } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
-import { fetchAdminOverview } from '../../lib/api'
+import api, {
+  fetchAdminOverview,
+  fetchAgents,
+} from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
-import type { AdminOverview } from '../../lib/types'
+import type { AdminOverview, Agent, AgentJobRecord } from '../../lib/types'
+
+interface AgentGroup {
+  id: number
+  tg_group_id: number
+  title: string
+  username?: string
+  group_type?: string
+  member_count?: number
+  messages_count?: number
+  can_add_members: boolean
+}
+
+interface MemberItem {
+  user_id: number
+  username?: string
+  full_name?: string
+  role?: string
+  is_bot?: boolean
+}
+
+const AGENTS_API_PREFIX = '/api/agents'
+
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const diff = Date.now() - new Date(iso).getTime()
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
 
 export default function AdminBulkAddPage() {
   const user = getStoredUser()
@@ -21,6 +57,19 @@ export default function AdminBulkAddPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
+  const [groups, setGroups] = useState<AgentGroup[]>([])
+  const [targetGroups, setTargetGroups] = useState<AgentGroup[]>([])
+  const [selectedTargetGroupId, setSelectedTargetGroupId] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [members, setMembers] = useState<MemberItem[]>([])
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
+  const [intervalSeconds, setIntervalSeconds] = useState(20)
+  const [sendInviteLink, setSendInviteLink] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [jobs, setJobs] = useState<AgentJobRecord[]>([])
+  const [searching, setSearching] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -41,55 +90,229 @@ export default function AdminBulkAddPage() {
     return () => clearInterval(id)
   }, [refresh])
 
+  useEffect(() => {
+    fetchAgents().then(setAgents).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!selectedAgentId) {
+      setGroups([])
+      setTargetGroups([])
+      setMembers([])
+      return
+    }
+    api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`).then(({ data }) => {
+      setGroups(data)
+      setTargetGroups(data.filter((g) => g.can_add_members))
+    }).catch(() => {
+      setGroups([])
+      setTargetGroups([])
+    })
+  }, [selectedAgentId])
+
+  useEffect(() => {
+    if (!selectedAgentId || !selectedTargetGroupId) {
+      setMembers([])
+      return
+    }
+    setSearching(true)
+    const params: Record<string, unknown> = { tg_group_id: selectedTargetGroupId, limit: 50 }
+    if (searchQuery.trim()) params.q = searchQuery.trim()
+    api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${selectedAgentId}/member-search`, { params })
+      .then(({ data }) => setMembers(data.members || []))
+      .catch(() => setMembers([]))
+      .finally(() => setSearching(false))
+  }, [selectedAgentId, selectedTargetGroupId, searchQuery])
+
+  useEffect(() => {
+    if (!selectedAgentId) { setJobs([]); return }
+    api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/jobs`)
+      .then(({ data }) => setJobs(data.filter((j) => j.job_type === 'member_add')))
+      .catch(() => setJobs([]))
+  }, [selectedAgentId])
+
+  function toggleUser(userId: number) {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    )
+  }
+
+  async function handleSubmit() {
+    if (!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length) return
+    setSubmitting(true)
+    try {
+      await api.post(`${AGENTS_API_PREFIX}/${selectedAgentId}/member-adds`, {
+        target_tg_group_id: selectedTargetGroupId,
+        interval_seconds: intervalSeconds,
+        user_ids: selectedUserIds,
+        send_invite_link_on_privacy_restricted: sendInviteLink,
+      })
+      setSelectedUserIds([])
+      const { data: freshJobs } = await api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/jobs`)
+      setJobs(freshJobs.filter((j) => j.job_type === 'member_add'))
+    } catch (err: any) {
+      setError(err?.message || 'Failed to create job')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <PageShell eyebrow="Admin" titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
       {error && (
-        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
+        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)', marginBottom: 16 }}>
+          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>{error}</div>
         </Card>
       )}
 
-      <Card title="Bulk Add Members" subtitle="Invite multiple users to groups via linked agent accounts.">
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-text-muted, #71717a)', lineHeight: 1.6 }}>
-            <p>Bulk Add Members lets agents add multiple users from a source group to a target group where the agent is admin.</p>
-            <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-              <li>Select a source group and search for members</li>
-              <li>Pick target group where your agent has invite rights</li>
-              <li>Set interval between adds to avoid flood-waits</li>
-              <li>Optionally send invite links to privacy-restricted users</li>
-            </ul>
-          </div>
-
-          <div>
-            <a href="/webapp" target="_blank" rel="noopener noreferrer">
-              <Button variant="primary">
-                <ExternalLink size={14} /> Open Dashboard
-              </Button>
-            </a>
-          </div>
-
-          {data && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Agents</div>
-                <div style={{ fontSize: 20, fontWeight: 800 }}>{data.agents.length}</div>
-              </div>
-              <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Total Jobs</div>
-                <div style={{ fontSize: 20, fontWeight: 800 }}>{data.jobs_summary.total}</div>
-              </div>
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
+        {/* Left: Form */}
+        <Card title="New Bulk Add Job" subtitle="Select agent, target group, and members to invite.">
+          <div style={{ display: 'grid', gap: 14 }}>
+            {/* Agent select */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Agent</label>
+              <select
+                value={selectedAgentId ?? ''}
+                onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+              >
+                <option value="">Select agent...</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.external_account_id || `Agent ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
 
-          <div>
-            <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>Last refreshed: {lastRefresh.toLocaleTimeString()}</span>
-            <Button variant="outline" size="sm" onClick={refresh} style={{ marginLeft: 8 }}>
+            {/* Target group select */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Target Group</label>
+              <select
+                value={selectedTargetGroupId ?? ''}
+                onChange={(e) => setSelectedTargetGroupId(e.target.value ? Number(e.target.value) : null)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                disabled={!targetGroups.length}
+              >
+                <option value="">{targetGroups.length ? 'Select target group...' : 'No groups with add permission'}</option>
+                {targetGroups.map((g) => (
+                  <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Member search */}
+            {selectedTargetGroupId && (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Search Members</label>
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by username or name..."
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                />
+                <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6, border: '1px solid var(--ui-border, #e4e4e7)', borderRadius: 6 }}>
+                  {searching ? (
+                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>Searching...</div>
+                  ) : members.length === 0 ? (
+                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>No members found. Select a group and search.</div>
+                  ) : (
+                    members.map((m) => {
+                      const isSelected = selectedUserIds.includes(m.user_id)
+                      return (
+                        <div
+                          key={m.user_id}
+                          onClick={() => toggleUser(m.user_id)}
+                          style={{
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--ui-primary-soft, #eff6ff)' : 'transparent',
+                            borderBottom: '1px solid var(--ui-border, #e4e4e7)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleUser(m.user_id)} />
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `User ${m.user_id}`}</span>
+                          {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{m.username}</span>}
+                          <span style={{ fontSize: 11, color: 'var(--ui-text-muted, #71717a)', marginLeft: 'auto' }}>{m.user_id}</span>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)', marginTop: 4 }}>{selectedUserIds.length} selected</div>
+              </div>
+            )}
+
+            {/* Interval */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Interval (seconds)</label>
+              <input
+                type="number"
+                value={intervalSeconds}
+                onChange={(e) => setIntervalSeconds(Math.max(1, Number(e.target.value)))}
+                min={1}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+              />
+            </div>
+
+            {/* Invite link checkbox */}
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={sendInviteLink} onChange={(e) => setSendInviteLink(e.target.checked)} />
+                <span style={{ fontSize: 13 }}>Send invite link if user has privacy restrictions</span>
+              </label>
+            </div>
+
+            {/* Submit */}
+            <Button
+              variant="primary"
+              onClick={handleSubmit}
+              disabled={!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length || submitting}
+            >
+              <Send size={14} /> {submitting ? 'Queuing...' : `Queue Member Add (${selectedUserIds.length} users)`}
+            </Button>
+          </div>
+        </Card>
+
+        {/* Right: Recent Jobs */}
+        <Card title="Recent Member Add Jobs" subtitle="Latest bulk-add jobs for the selected agent.">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Button variant="outline" size="sm" onClick={() => {
+              if (!selectedAgentId) return
+              api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/jobs`)
+                .then(({ data }) => setJobs(data.filter((j) => j.job_type === 'member_add')))
+            }}>
               <RefreshCw size={14} /> Refresh
             </Button>
           </div>
-        </div>
-      </Card>
+          {jobs.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)', padding: 12 }}>No member_add jobs yet.</div>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <Table
+                columns={['ID', 'Status', 'Target', 'Users', 'Created']}
+                rows={jobs.slice(0, 20).map((j) => {
+                  const p = j.job_payload || {}
+                  const progress = p.progress as Record<string, number> | undefined
+                  const userCount = (p.user_ids as number[])?.length || 0
+                  const done = progress ? (progress.success_count || 0) + (progress.failure_count || 0) + (progress.skip_count || 0) : 0
+                  return [
+                    String(j.id),
+                    <Badge tone={j.status === 'completed' ? 'success' : j.status === 'running' ? 'warning' : 'default'}>{j.status}{progress ? ` (${done}/${userCount})` : ''}</Badge>,
+                    String(p.target_tg_group_id ?? '—'),
+                    String(userCount),
+                    j.created_at ? timeAgo(j.created_at) : '—',
+                  ]
+                })}
+              />
+            </div>
+          )}
+        </Card>
+      </div>
     </PageShell>
   )
 }
