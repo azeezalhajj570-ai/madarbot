@@ -73,6 +73,7 @@ export default function AdminBulkAddPage() {
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [searching, setSearching] = useState(false)
   const [scraping, setScraping] = useState(false)
+  const [syncingGroups, setSyncingGroups] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -209,13 +210,19 @@ export default function AdminBulkAddPage() {
                 </select>
                 <Button variant="outline" size="sm" onClick={async () => {
                   if (!selectedAgentId) return
+                  setSyncingGroups(true)
+                  setError(null)
                   try {
                     const { data: freshGroups } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
                     setSourceGroups(freshGroups)
                     setTargetGroups(freshGroups.filter((g) => g.can_add_members))
-                  } catch {}
-                }} style={{ whiteSpace: 'nowrap' }}>
-                  <RefreshCw size={14} /> Sync
+                  } catch (err: any) {
+                    setError(err?.message || 'Failed to sync groups')
+                  } finally {
+                    setSyncingGroups(false)
+                  }
+                }} disabled={!selectedAgentId || syncingGroups} style={{ whiteSpace: 'nowrap' }}>
+                  <RefreshCw size={14} /> {syncingGroups ? 'Syncing...' : 'Sync'}
                 </Button>
               </div>
             </div>
