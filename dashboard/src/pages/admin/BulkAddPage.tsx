@@ -194,18 +194,30 @@ export default function AdminBulkAddPage() {
             {/* Agent select */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Agent</label>
-              <select
-                value={selectedAgentId ?? ''}
-                onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
-              >
-                <option value="">Select agent...</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.external_account_id || `Agent ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select
+                  value={selectedAgentId ?? ''}
+                  onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                >
+                  <option value="">Select agent...</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.external_account_id || `Agent ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  if (!selectedAgentId) return
+                  try {
+                    const { data: freshGroups } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
+                    setSourceGroups(freshGroups)
+                    setTargetGroups(freshGroups.filter((g) => g.can_add_members))
+                  } catch {}
+                }} style={{ whiteSpace: 'nowrap' }}>
+                  <RefreshCw size={14} /> Sync
+                </Button>
+              </div>
             </div>
 
             {/* Source group select */}
@@ -343,17 +355,43 @@ export default function AdminBulkAddPage() {
           ) : (
             <div style={{ maxHeight: 400, overflowY: 'auto' }}>
               <Table
-                columns={['ID', 'Status', 'Target', 'Users', 'Created']}
+                columns={['ID', 'Status', 'Target', 'Users', 'Results', 'Created']}
                 rows={jobs.slice(0, 20).map((j) => {
                   const p = j.job_payload || {}
+                  const result = p.result as Record<string, number> | undefined
                   const progress = p.progress as Record<string, number> | undefined
                   const userCount = (p.user_ids as number[])?.length || 0
-                  const done = progress ? (progress.success_count || 0) + (progress.failure_count || 0) + (progress.skip_count || 0) : 0
+                  const successCount = result?.success_count ?? progress?.success_count ?? 0
+                  const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
+                  const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
+                  const totalProcessed = successCount + failureCount + skipCount
+
+                  let statusBadge = <Badge tone="default">{j.status}</Badge>
+                  if (j.status === 'completed') {
+                    if (totalProcessed === 0) {
+                      statusBadge = <Badge tone="warning">completed (no results)</Badge>
+                    } else {
+                      statusBadge = <Badge tone="success">completed</Badge>
+                    }
+                  } else if (j.status === 'running') {
+                    statusBadge = <Badge tone="warning">running ({totalProcessed}/{userCount})</Badge>
+                  } else if (j.status === 'failed') {
+                    statusBadge = <Badge tone="destructive">failed</Badge>
+                  }
+
+                  const isComplete = j.status === 'completed' && totalProcessed > 0
+                  const resultSummary = isComplete
+                    ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed`
+                    : j.status === 'running'
+                    ? `${totalProcessed} / ${userCount}`
+                    : '—'
+
                   return [
                     String(j.id),
-                    <Badge tone={j.status === 'completed' ? 'success' : j.status === 'running' ? 'warning' : 'default'}>{j.status}{progress ? ` (${done}/${userCount})` : ''}</Badge>,
+                    statusBadge,
                     String(p.target_tg_group_id ?? '—'),
                     String(userCount),
+                    <span style={{ fontSize: 12 }}>{resultSummary}</span>,
                     j.created_at ? timeAgo(j.created_at) : '—',
                   ]
                 })}
