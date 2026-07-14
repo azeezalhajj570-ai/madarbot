@@ -60,7 +60,9 @@ export default function AdminBulkAddPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
   const [groups, setGroups] = useState<AgentGroup[]>([])
+  const [sourceGroups, setSourceGroups] = useState<AgentGroup[]>([])
   const [targetGroups, setTargetGroups] = useState<AgentGroup[]>([])
+  const [selectedSourceGroupId, setSelectedSourceGroupId] = useState<number | null>(null)
   const [selectedTargetGroupId, setSelectedTargetGroupId] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<MemberItem[]>([])
@@ -97,32 +99,37 @@ export default function AdminBulkAddPage() {
   useEffect(() => {
     if (!selectedAgentId) {
       setGroups([])
+      setSourceGroups([])
       setTargetGroups([])
+      setSelectedSourceGroupId(null)
+      setSelectedTargetGroupId(null)
       setMembers([])
       return
     }
     api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`).then(({ data }) => {
       setGroups(data)
+      setSourceGroups(data)
       setTargetGroups(data.filter((g) => g.can_add_members))
     }).catch(() => {
       setGroups([])
+      setSourceGroups([])
       setTargetGroups([])
     })
   }, [selectedAgentId])
 
   useEffect(() => {
-    if (!selectedAgentId || !selectedTargetGroupId) {
+    if (!selectedAgentId || !selectedSourceGroupId) {
       setMembers([])
       return
     }
     setSearching(true)
-    const params: Record<string, unknown> = { tg_group_id: selectedTargetGroupId, limit: 50 }
+    const params: Record<string, unknown> = { tg_group_id: selectedSourceGroupId, limit: 50 }
     if (searchQuery.trim()) params.q = searchQuery.trim()
     api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${selectedAgentId}/member-search`, { params })
       .then(({ data }) => setMembers(data.members || []))
       .catch(() => setMembers([]))
       .finally(() => setSearching(false))
-  }, [selectedAgentId, selectedTargetGroupId, searchQuery])
+  }, [selectedAgentId, selectedSourceGroupId, searchQuery])
 
   useEffect(() => {
     if (!selectedAgentId) { setJobs([]); return }
@@ -186,6 +193,22 @@ export default function AdminBulkAddPage() {
               </select>
             </div>
 
+            {/* Source group select */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Source Group</label>
+              <select
+                value={selectedSourceGroupId ?? ''}
+                onChange={(e) => setSelectedSourceGroupId(e.target.value ? Number(e.target.value) : null)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                disabled={!sourceGroups.length}
+              >
+                <option value="">{sourceGroups.length ? 'Select source group...' : 'No groups'}</option>
+                {sourceGroups.map((g) => (
+                  <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Target group select */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Target Group</label>
@@ -203,7 +226,7 @@ export default function AdminBulkAddPage() {
             </div>
 
             {/* Member search */}
-            {selectedTargetGroupId && (
+            {selectedSourceGroupId && (
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Search Members</label>
                 <input
