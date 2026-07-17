@@ -29,6 +29,7 @@ import type {
   WhatsAppAutomation,
   WhatsAppNotificationSettings,
   SettingsSchemaCatalog,
+  AdminOverview,
 } from '../lib/types'
 
 function resolveApiBaseUrl() {
@@ -431,6 +432,11 @@ export async function updateSummarySettings(groupId: number, settings: any): Pro
 }
 
 // ─── Owner endpoints ─────────────────────────────────────────────────────────
+
+export async function fetchAdminOverview(): Promise<AdminOverview> {
+  const { data } = await api.get<AdminOverview>('/api/internal/admin-overview')
+  return data
+}
 
 export async function fetchOwnerStats(): Promise<DashboardStats> {
   const { data } = await api.get<DashboardStats>(`${OWNER_API_PREFIX}/stats`)
