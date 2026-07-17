@@ -364,7 +364,7 @@ export async function fetchBlacklist(agentId: number) {
 }
 
 export async function addBlacklistEntries(agentId: number, entries: BlacklistAddEntry[]) {
-  return apiClient.post<{ entries: AgentBlacklistEntry[] }>(`/webapp/agents/${agentId}/blacklist`, { entries })
+  return apiClient.post<AgentBlacklistEntry[]>(`/webapp/agents/${agentId}/blacklist`, { entries })
 }
 
 export async function deleteBlacklistEntry(agentId: number, entryId: number) {

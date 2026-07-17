@@ -84,7 +84,8 @@ export function BlacklistSection({ account }: Props) {
     return lines.map(line => {
       const entry: Record<string, unknown> = { reason: reasonVal }
       if (entryType === 'user_id') {
-        entry.tg_user_id = Number(line.replace(/\D/g, ''))
+        const id = Number(line.replace(/\D/g, ''))
+        if (id > 0) entry.tg_user_id = id
       } else if (entryType === 'username') {
         entry.username = line.replace(/^@/, '')
       } else {
@@ -106,7 +107,7 @@ export function BlacklistSection({ account }: Props) {
 
       const built = buildEntries()
       const result = await agentsApi.addBlacklistEntries(account.id, built as any)
-      setEntries(prev => [...result.entries, ...prev])
+      setEntries(prev => [...result, ...prev])
       resetForm()
       setShowForm(false)
     } catch (err: any) {

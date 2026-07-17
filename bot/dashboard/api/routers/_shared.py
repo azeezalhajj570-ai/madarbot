@@ -107,7 +107,7 @@ class BulkMemberAddRequest(BaseModel):
 
 
 class BlacklistAddEntry(BaseModel):
-    tg_user_id: int | None = Field(default=None, ge=1)
+    tg_user_id: int | None = Field(default=None, ge=0)
     username: str | None = Field(default=None, min_length=1, max_length=255)
     phone: str | None = Field(default=None, min_length=1, max_length=32)
     reason: str = Field(default="admin_blocked", min_length=1, max_length=255)

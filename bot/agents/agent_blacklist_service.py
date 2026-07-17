@@ -76,15 +76,28 @@ class AgentBlacklistService(AgentServiceSupport):
             raise ValueError("Agent not found")
         await self.ensure_agent_owner(agent, actor_user_id)
 
+        existing_rows = (
+            await self.session.execute(
+                select(AgentBlacklistEntry.tg_user_id).where(
+                    AgentBlacklistEntry.agent_id == agent.id,
+                    AgentBlacklistEntry.tg_user_id.isnot(None),
+                )
+            )
+        ).scalars().all()
+        existing_tg_ids: set[int] = {int(uid) for uid in existing_rows if uid is not None}
+
         created: list[dict[str, Any]] = []
         for entry_data in entries:
-            tg_user_id = entry_data.get("tg_user_id")
+            tg_user_id = entry_data.get("tg_user_id") or None
             username = str(entry_data.get("username") or "").strip() or None
             phone_raw = entry_data.get("phone")
             phone = normalize_optional_agent_phone_number(phone_raw) if phone_raw else None
             reason = str(entry_data.get("reason") or "admin_blocked").strip()
 
             if tg_user_id is None and not username and not phone:
+                continue
+
+            if tg_user_id is not None and int(tg_user_id) in existing_tg_ids:
                 continue
 
             if username:
@@ -120,6 +133,7 @@ class AgentBlacklistService(AgentServiceSupport):
             "agent_blacklist_entries_added",
             agent_id=agent.id,
             count=len(created),
+            skipped=len(entries) - len(created),
             actor_user_id=actor_user_id,
         )
         return created

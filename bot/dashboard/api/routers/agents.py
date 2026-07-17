@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 logger = logging.getLogger(__name__)
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import ChatAdminRequiredError
 
@@ -44,6 +45,8 @@ from ._shared import (
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
+    BlacklistAddRequest,
+    BlacklistResolveRequest,
     BulkMemberAddRequest,
     BulkPreflightRequest,
     AgentSafetyUpdateRequest,
@@ -1159,6 +1162,102 @@ async def webapp_reconcile_stale_jobs(
     from bot.agents.dispatch import reconcile_stale_jobs
 
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
+
+
+@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+async def webapp_get_blacklist(
+    agent_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=500),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AgentBlacklistService(session).list_blacklist(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+async def webapp_add_blacklist_entries(
+    agent_id: int,
+    payload: BlacklistAddRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AgentBlacklistService(session).add_entries(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            entries=[e.model_dump() for e in payload.entries],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="One or more entries already exist in the blacklist",
+        )
+
+
+@router.delete(
+    "/webapp/agents/{agent_id}/blacklist/{entry_id}",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_delete_blacklist_entry(
+    agent_id: int,
+    entry_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        deleted = await AgentBlacklistService(session).delete_entry(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            entry_id=entry_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+    return {"status": "ok"}
+
+
+@router.post(
+    "/webapp/agents/{agent_id}/blacklist/resolve",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_resolve_blacklist_phones(
+    agent_id: int,
+    payload: BlacklistResolveRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    from bot.agents.agent_blacklist_service import AgentBlacklistService
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AgentBlacklistService(session).resolve_phones(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            phones=payload.phones,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 __all__ = ["router"]
