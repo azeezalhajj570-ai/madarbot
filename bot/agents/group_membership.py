@@ -18,8 +18,8 @@ from telethon.errors import (
     UserPrivacyRestrictedError,
 )
 from telethon.tl.functions.channels import InviteToChannelRequest
-from telethon.tl.functions.messages import AddChatUserRequest, ExportChatInviteRequest
-from telethon.tl.types import Channel
+from telethon.tl.functions.messages import AddChatUserRequest, ExportChatInviteRequest, GetDialogsRequest
+from telethon.tl.types import Channel, InputPeerEmpty, InputUser
 
 
 ERROR_USER_ALREADY_IN_GROUP: Final = "USER_ALREADY_IN_GROUP"
@@ -28,6 +28,7 @@ ERROR_USER_PRIVACY_RESTRICTED: Final = "USER_PRIVACY_RESTRICTED"
 ERROR_INVITE_LINK_DM_FAILED: Final = "INVITE_LINK_DM_FAILED"
 ERROR_FLOOD_WAIT: Final = "FLOOD_WAIT"
 ERROR_PEER_NOT_FOUND: Final = "PEER_NOT_FOUND"
+ERROR_IS_BOT: Final = "IS_BOT"
 ERROR_UNKNOWN: Final = "UNKNOWN"
 
 logger = structlog.get_logger(__name__)
@@ -61,10 +62,33 @@ def _failure(
     )
 
 
+async def _resolve_group_from_dialogs(
+    client: TelegramClient, group_id: int
+) -> object | None:
+    peer_channel_id = int(group_id)
+    if peer_channel_id < 0:
+        peer_channel_id = -peer_channel_id
+    if str(peer_channel_id).startswith("100"):
+        peer_channel_id = int(str(peer_channel_id)[3:])
+    try:
+        result = await client(GetDialogsRequest(
+            offset_date=None, offset_id=0,
+            offset_peer=InputPeerEmpty(),
+            limit=500, hash=0,
+        ))
+        for chat in result.chats:
+            if chat.id == peer_channel_id:
+                return chat
+    except Exception:
+        pass
+    return None
+
+
 async def add_user_to_group(
     client: TelegramClient,
     group_id: int,
     user_id: int,
+    access_hash: int | None = None,
 ) -> AddUserResult:
     bound_logger = logger.bind(
         group_id=group_id,
@@ -75,14 +99,24 @@ async def add_user_to_group(
 
     user_peer = None
     try:
-        user_peer = await client.get_entity(user_id)
+        if access_hash is not None:
+            user_peer = await client.get_entity(InputUser(user_id, access_hash))
+        else:
+            user_peer = await client.get_entity(user_id)
     except ValueError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except PeerIdInvalidError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
 
+    if getattr(user_peer, "bot", False):
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_IS_BOT)
+
     try:
         group_entity = await client.get_entity(group_id)
+    except ValueError:
+        group_entity = await _resolve_group_from_dialogs(client, group_id)
+        if group_entity is None:
+            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except (ChatAdminRequiredError, UserNotParticipantError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USERBOT_NOT_IN_GROUP)
     except FloodWaitError as exc:

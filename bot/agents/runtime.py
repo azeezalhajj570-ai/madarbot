@@ -829,9 +829,9 @@ class GroupMemberBroadcastRuntime:
                     payload["progress"]["retry_after"] = int(cd_remaining)
                     raise Exception(f"Agent cooldown: {cd_remaining}s")
 
-            max_per_hour = getattr(agent, "max_actions_per_hour", None)
-            if max_per_hour is not None and max_per_hour > 0:
-                allowed, hour_count = await limiter.check_and_increment(agent.id, max_per_hour)
+                max_per_hour = agent_max_per_hour
+                if max_per_hour is not None and max_per_hour > 0:
+                    allowed, hour_count = await limiter.check_and_increment(agent_id_val, max_per_hour)
                 if not allowed:
                     payload["progress"]["stopped_at"] = index
                     payload["progress"]["stop_reason"] = "hourly_limit"
@@ -845,9 +845,9 @@ class GroupMemberBroadcastRuntime:
                     payload["progress"]["stop_reason"] = "daily_limit"
                     raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
 
-            min_delay = getattr(agent, "min_delay_seconds", None)
-            if min_delay is not None and min_delay > 0:
-                wait = await limiter.enforce_delay(agent.id, float(min_delay))
+                min_delay = agent_min_delay
+                if min_delay is not None and min_delay > 0:
+                    wait = await limiter.enforce_delay(agent_id_val, float(min_delay))
                 if wait > 0:
                     await self.sleep(wait)
 
@@ -1087,6 +1087,7 @@ class BulkAddMembersRuntime:
         from bot.agents.jobs import normalize_member_add_payload
         from bot.db.models.audit import MembershipAuditLog
         from bot.db.models.group import GroupMember
+        from bot.db.models.scraper import ScrapedMember
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
         from redis.asyncio import Redis
@@ -1099,6 +1100,20 @@ class BulkAddMembersRuntime:
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         limiter = AgentRateLimiter(redis_client)
 
+        access_hashes: dict[int, int] = {}
+        if session is not None:
+            rows = (
+                await session.execute(
+                    select(ScrapedMember.tg_user_id, ScrapedMember.raw_data).where(
+                        ScrapedMember.tg_user_id.in_(user_ids)
+                    )
+                )
+            ).all()
+            for tg_user_id, raw in rows:
+                ah = raw.get("access_hash") if raw else None
+                if ah is not None:
+                    access_hashes[tg_user_id] = int(ah)
+
         progress = dict(payload.get("progress") or {})
         success_count = progress.get("success_count", 0)
         failure_count = progress.get("failure_count", 0)
@@ -1106,11 +1121,20 @@ class BulkAddMembersRuntime:
         total_count = len(user_ids)
         results: list[dict[str, Any]] = list(progress.get("results", []))
 
+        agent_id_val = agent.id
+        agent_group_id = agent.group_id
+        agent_cooldown = getattr(agent, "cooldown_minutes", None)
+        agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
+        agent_max_per_day = getattr(agent, "max_messages_per_day", None)
+        agent_min_delay = getattr(agent, "min_delay_seconds", None)
+        agent_linked_by = agent.linked_by_user_id
+        agent_telegram_user_id = agent.telegram_user_id
+
         try:
             for index, user_id in enumerate(user_ids):
-                cooldown_mins = getattr(agent, "cooldown_minutes", None)
+                cooldown_mins = agent_cooldown
                 if cooldown_mins is not None and cooldown_mins > 0:
-                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent.id, cooldown_mins)
+                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent_id_val, cooldown_mins)
                     if in_cooldown:
                         payload["progress"] = {
                             "total_count": total_count,
@@ -1124,9 +1148,9 @@ class BulkAddMembersRuntime:
                         }
                         raise Exception(f"Agent cooldown: {cd_remaining}s")
 
-                max_per_hour = getattr(agent, "max_actions_per_hour", None)
+                max_per_hour = agent_max_per_hour
                 if max_per_hour is not None and max_per_hour > 0:
-                    allowed, hour_count = await limiter.check_and_increment(agent.id, max_per_hour)
+                    allowed, hour_count = await limiter.check_and_increment(agent_id_val, max_per_hour)
                     if not allowed:
                         payload["progress"] = {
                             "total_count": total_count,
@@ -1139,9 +1163,9 @@ class BulkAddMembersRuntime:
                         }
                         raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
 
-                max_per_day = getattr(agent, "max_messages_per_day", None) or 500
+                max_per_day = agent_max_per_day or 500
                 if max_per_day > 0:
-                    allowed, day_count = await limiter.check_daily_limit(agent.id, max_per_day)
+                    allowed, day_count = await limiter.check_daily_limit(agent_id_val, max_per_day)
                     if not allowed:
                         payload["progress"] = {
                             "total_count": total_count,
@@ -1154,19 +1178,26 @@ class BulkAddMembersRuntime:
                         }
                         raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
 
-                min_delay = getattr(agent, "min_delay_seconds", None)
+                min_delay = agent_min_delay
                 if min_delay is not None and min_delay > 0:
-                    wait = await limiter.enforce_delay(agent.id, float(min_delay))
+                    wait = await limiter.enforce_delay(agent_id_val, float(min_delay))
                     if wait > 0:
                         await self.sleep(wait)
 
                 import random
 
                 if session is not None:
+                    from bot.db.models.group import Group as OrmGroup
+                    target_group_row = (
+                        await session.execute(
+                            select(OrmGroup.id).where(OrmGroup.tg_group_id == target_tg_group_id)
+                        )
+                    ).scalar_one_or_none()
+                    target_group_id = target_group_row or 0
                     existing = (
                         await session.execute(
                             select(GroupMember).where(
-                                GroupMember.group_id == (agent.group_id or 0),
+                                GroupMember.group_id == target_group_id,
                                 GroupMember.tg_user_id == user_id,
                             )
                         )
@@ -1177,13 +1208,14 @@ class BulkAddMembersRuntime:
                         continue
 
                 from bot.agents.group_membership import (
+                    ERROR_IS_BOT,
                     ERROR_USER_ALREADY_IN_GROUP,
                     ERROR_USER_PRIVACY_RESTRICTED,
                     export_group_invite_link,
                     send_invite_link_to_user,
                 )
 
-                add_result = await add_user_to_group(client, target_tg_group_id, user_id)
+                add_result = await add_user_to_group(client, target_tg_group_id, user_id, access_hash=access_hashes.get(user_id))
 
                 result_entry: dict[str, Any] = {
                     "user_id": user_id,
@@ -1196,7 +1228,7 @@ class BulkAddMembersRuntime:
                     if session is not None:
                         session.add(
                             GroupMember(
-                                group_id=agent.group_id or 0,
+                                group_id=target_group_id or agent_group_id or 0,
                                 tg_user_id=user_id,
                                 role="member",
                                 source="membership_add",
@@ -1206,12 +1238,15 @@ class BulkAddMembersRuntime:
                             MembershipAuditLog(
                                 group_id=target_tg_group_id,
                                 user_id=user_id,
-                                requested_by=agent.linked_by_user_id or 0,
+                                requested_by=agent_linked_by or 0,
                                 action="add",
                                 result="success",
                             )
                         )
-                        await session.commit()
+                        try:
+                            await session.commit()
+                        except Exception:
+                            await session.rollback()
                 else:
                     send_invite_link = bool(
                         normalized.get("send_invite_link_on_privacy_restricted", False)
@@ -1232,7 +1267,7 @@ class BulkAddMembersRuntime:
                                         MembershipAuditLog(
                                             group_id=target_tg_group_id,
                                             user_id=user_id,
-                                            requested_by=agent.linked_by_user_id or 0,
+                                            requested_by=agent_linked_by or 0,
                                             action="add",
                                             result="invite_link_sent",
                                         )
@@ -1248,7 +1283,7 @@ class BulkAddMembersRuntime:
                                         MembershipAuditLog(
                                             group_id=target_tg_group_id,
                                             user_id=user_id,
-                                            requested_by=agent.linked_by_user_id or 0,
+                                            requested_by=agent_linked_by or 0,
                                             action="add",
                                             result="invite_link_dm_failed",
                                         )
@@ -1266,6 +1301,12 @@ class BulkAddMembersRuntime:
                             failure_count -= 1
                             result_entry["status"] = "skipped"
                             result_entry["reason"] = "already_in_target_group"
+
+                        if add_result.error_code == ERROR_IS_BOT:
+                            skip_count += 1
+                            failure_count -= 1
+                            result_entry["status"] = "skipped"
+                            result_entry["reason"] = "is_bot"
 
                         if add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0:
                             payload["progress"] = {
@@ -1285,7 +1326,7 @@ class BulkAddMembersRuntime:
                             MembershipAuditLog(
                                 group_id=target_tg_group_id,
                                 user_id=user_id,
-                                requested_by=agent.linked_by_user_id or 0,
+                                requested_by=agent_linked_by or 0,
                                 action="add",
                                 result=str(add_result.error_code or "unknown"),
                                 flood_wait_sec=add_result.flood_wait_seconds,

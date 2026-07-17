@@ -176,7 +176,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "group_type": row.group_type,
                         "member_count": member_counts.get(int(row.id), int(row.member_count or 0)),
                         "messages_count": message_counts.get(int(row.id), 0),
-                        "can_add_members": tg_group_id in admin_group_ids,
+                        "can_add_members": tg_group_id in admin_group_ids or row.last_agent_id == agent.id,
                     }
                 )
             return results
@@ -495,6 +495,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 ScrapedMember.role,
                 ScrapedMember.is_bot,
                 ScrapedMember.phone,
+                ScrapedMember.raw_data,
             )
 
             if order_by == "message_count":
@@ -614,7 +615,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "is_admin": role in {"admin", "creator"},
                 "is_creator": role == "creator",
                 "message_count": message_counts.get(int(member.tg_user_id), 0),
-                "is_bot": bool(member.is_bot) if hasattr(member, "is_bot") else False,
+                "is_bot": bool((member.raw_data or {}).get("bot", member.is_bot)),
                 "sent_by_agent": int(member.tg_user_id) in sent_to,
             }
 
