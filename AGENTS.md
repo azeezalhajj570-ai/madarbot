@@ -1,5 +1,12 @@
 # MadarBot — AI Agent Operating Guide
 
+## Branching and Git Rules
+
+- **Never commit directly to `main`.** Always create a feature branch for changes.
+- Use `git checkout -b feature/<description>` or `fix/<description>` for new work.
+- Push your branch and open a pull request — direct pushes to `main` are blocked by a pre-push hook.
+- Pre-push hook: `.git/hooks/pre-push` rejects pushes to `refs/heads/main`.
+
 ## Repository Structure
 
 ```
