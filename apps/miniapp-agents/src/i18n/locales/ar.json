@@ -653,7 +653,11 @@
     "failedQueue": "فشل إضافة مهمة الاستخراج",
     "atLeastOneKeyword": "مطلوب كلمة مفتاحية واحدة على الأقل",
     "leadCaptureCreated": "تم إنشاء مهمة التقاط العملاء",
-    "failedSaveLead": "فشل حفظ التقاط العملاء"
+    "failedSaveLead": "فشل حفظ التقاط العملاء",
+    "autoRespond": "الرد التلقائي عند التشغيل",
+    "respondPublic": "عام (رد في المجموعة)",
+    "respondPrivate": "خاص (رسالة مباشرة)",
+    "respondPrivateWithForward": "خاص مع إعادة التوجيه"
   },
   "automation": {
     "title": "مهام الأتمتة",

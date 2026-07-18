@@ -138,9 +138,25 @@ async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict
         "capture_type": "lead_capture",
         "message_text": str(event.payload.get("text") or ""),
     }
-    return {
-        "metadata": metadata,
-    }
+    result: dict[str, Any] = {"metadata": metadata}
+
+    auto_respond = config.get("auto_respond", False)
+    if auto_respond:
+        ack_template = str(config.get("ack_template") or "").strip()
+        if ack_template:
+            result["text"] = ack_template
+            mode = config.get("respond_mode", "public")
+            if mode == "public":
+                result["reply_to_message_id"] = event.payload.get("message_id")
+            elif mode in ("private", "private_with_forward"):
+                result["chat_id"] = event.user_id
+            if mode == "private_with_forward":
+                result["forward_message"] = {
+                    "from_chat": event.payload.get("chat_id") or event.group_id,
+                    "message_id": event.payload.get("message_id"),
+                }
+
+    return result
 
 
 async def escalation_alert_handler(config: dict[str, Any], event: TaskEvent) -> dict[str, Any]:
@@ -376,6 +392,16 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "type": "boolean",
                     "required": False,
                     "description": "Append a prompt asking for contact details.",
+                },
+                "auto_respond": {
+                    "type": "boolean",
+                    "required": False,
+                    "description": "Automatically reply when a lead is captured.",
+                },
+                "respond_mode": {
+                    "type": "string",
+                    "required": False,
+                    "description": "Reply mode: public (in-group reply), private (DM), private_with_forward (DM + forward original).",
                 },
             },
             handler=lead_capture_handler,

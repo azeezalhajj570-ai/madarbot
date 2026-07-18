@@ -65,6 +65,8 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [leadAckTemplate, setLeadAckTemplate] = useState('')
   const [leadLabel, setLeadLabel] = useState('')
   const [leadAskContact, setLeadAskContact] = useState(false)
+  const [leadAutoRespond, setLeadAutoRespond] = useState(false)
+  const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
 
@@ -125,6 +127,10 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
       if (leadAckTemplate.trim()) config.ack_template = leadAckTemplate.trim()
       if (leadLabel.trim()) config.lead_label = leadLabel.trim()
       if (leadAskContact) config.ask_contact = true
+      if (leadAutoRespond) {
+        config.auto_respond = true
+        config.respond_mode = leadRespondMode
+      }
       await agentsApi.createGroupTask(account.group_id || 196, {
         task_key: 'lead_capture',
         executor_type: 'agent',
@@ -168,6 +174,8 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
     setLeadAckTemplate('')
     setLeadLabel('')
     setLeadAskContact(false)
+    setLeadAutoRespond(false)
+    setLeadRespondMode('public')
     setTaskGroupsQuery('')
     setTaskGroups([])
     setStatus(null)
@@ -240,6 +248,21 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
               <input type="checkbox" checked={leadAskContact} onChange={(e) => setLeadAskContact(e.target.checked)} style={{ accentColor: 'var(--miniapp-accent)' }} />
               {t('leadsAcq.askContact')}
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={leadAutoRespond} onChange={(e) => setLeadAutoRespond(e.target.checked)} />
+              {t('leadsAcq.autoRespond')}
+            </label>
+            {leadAutoRespond && (
+              <select
+                value={leadRespondMode}
+                onChange={(e) => setLeadRespondMode(e.target.value as 'public' | 'private' | 'private_with_forward')}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+              >
+                <option value="public">{t('leadsAcq.respondPublic')}</option>
+                <option value="private">{t('leadsAcq.respondPrivate')}</option>
+                <option value="private_with_forward">{t('leadsAcq.respondPrivateWithForward')}</option>
+              </select>
+            )}
             <GroupAutocompleteField label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
