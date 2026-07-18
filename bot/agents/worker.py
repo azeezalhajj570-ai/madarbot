@@ -65,6 +65,30 @@ if (
     sys.exit(1)
 
 _DEFAULT_SESSION_LOCAL = db_session.SessionLocal
+
+
+def _start_agent_worker_heartbeat() -> None:
+    import threading
+    import time
+
+    import redis as sync_redis
+
+    redis_url = _worker_settings.redis_url
+
+    def _loop() -> None:
+        r = sync_redis.from_url(redis_url)
+        while True:
+            try:
+                r.set("agent:worker:last_seen", str(time.time()))
+            except Exception:
+                pass
+            time.sleep(60)
+
+    t = threading.Thread(target=_loop, daemon=True, name="agent-worker-heartbeat")
+    t.start()
+
+
+_start_agent_worker_heartbeat()
 SessionLocal = _DEFAULT_SESSION_LOCAL
 
 

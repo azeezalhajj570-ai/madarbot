@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 from types import SimpleNamespace
 
 from aiogram import Bot, Dispatcher
@@ -98,6 +99,17 @@ async def run_bot() -> None:
     await _configure_bot_commands(bot, settings.bot_app_kind)
     await _configure_chat_menu_button(bot, settings)
     redis = Redis.from_url(settings.redis_url)
+
+    async def _bot_worker_heartbeat() -> None:
+        import time
+        while True:
+            try:
+                await redis.set("bot:worker:last_seen", str(time.time()))
+            except Exception:
+                logger.exception("bot_worker_heartbeat_failed")
+            await asyncio.sleep(60)
+
+    heartbeat_task = asyncio.create_task(_bot_worker_heartbeat(), name="bot-worker-heartbeat")
     dispatcher = Dispatcher(storage=RedisStorage(redis=redis))
     if settings.log_raw_updates:
         dispatcher.update.outer_middleware(UpdateLoggingMiddleware())
@@ -130,6 +142,9 @@ async def run_bot() -> None:
             redis=redis,
         )
     finally:
+        heartbeat_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await heartbeat_task
         if agent_listener_manager is not None:
             await agent_listener_manager.stop()
         await dispatcher.storage.close()
