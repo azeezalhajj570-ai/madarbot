@@ -69,6 +69,12 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
     const delivery = t(`automation.${DELIVERY_LABELS[mode] || 'deliveryText'}`)
     return `${destination} · ${delivery}`
   }
+  if (task.task_key === 'lead_capture') {
+    const template = String(task.config.ack_template || '').trim()
+    const summary = template ? template : t('automation.noTemplate')
+    const mode = task.config.auto_respond ? ` · auto: ${String(task.config.respond_mode || 'public')}` : ''
+    return `${summary}${mode}`
+  }
   const template = String(task.config.message_template || '').trim()
   const summary = template ? template : t('automation.noTemplate')
   const mode = task.config.reply_mode === 'private' ? t('automation.privateSuffix') : ''
@@ -101,6 +107,10 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [taskDestinationGroup, setTaskDestinationGroup] = useState<SelectedGroupChip | null>(null)
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
+
+  const [leadAutoRespond, setLeadAutoRespond] = useState(false)
+  const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
+  const [leadRespondDelay, setLeadRespondDelay] = useState('3')
 
   const canSave = useMemo(() => {
     if (!taskKeywords.length) return false
@@ -160,6 +170,9 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setTaskDestinationGroup(null)
     setTaskGroupsQuery('')
     setTaskGroups([])
+    setLeadAutoRespond(false)
+    setLeadRespondMode('public')
+    setLeadRespondDelay('3')
     setStatus(null)
   }
 
@@ -170,7 +183,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setTaskKey(task.task_key)
     setTaskKeywords(_parseKeywords(task.conditions.text_contains))
     setPendingKeyword('')
-    setTaskTemplate(String(task.config.message_template || ''))
+    setTaskTemplate(String(task.config.ack_template || task.config.message_template || ''))
     setTaskReplyMode(String(task.config.reply_mode || 'public'))
     setTaskDeliveryMode(String(task.config.delivery_mode || 'text'))
     setTaskDestinationMode(matchingDestinationGroup ? 'group' : 'text')
@@ -179,6 +192,9 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setTaskDestinationGroup(matchingDestinationGroup ? { tg_group_id: Number(matchingDestinationGroup.tg_group_id), title: String(matchingDestinationGroup.title || matchingDestinationGroup.tg_group_id || t('automation.groupFallback', { tgGroupId: matchingDestinationGroup.tg_group_id })) } : null)
     setTaskGroupsQuery('')
     setTaskGroups(mapTaskGroups(t, task))
+    setLeadAutoRespond(Boolean(task.config.auto_respond))
+    setLeadRespondMode(String(task.config.respond_mode || 'public') as 'public' | 'private' | 'private_with_forward')
+    setLeadRespondDelay(String(task.config.respond_delay_seconds ?? 3))
     setIsFormOpen(true)
   }
 
@@ -186,13 +202,24 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     const errors: string[] = []
     if (!taskKeywords.length) errors.push(t('automation.atLeastOneKeyword'))
     const config: Record<string, unknown> = {}
-    if (taskTemplate.trim()) config.message_template = taskTemplate.trim()
+    if (taskTemplate.trim()) {
+      if (taskKey === 'lead_capture') {
+        config.ack_template = taskTemplate.trim()
+      } else {
+        config.message_template = taskTemplate.trim()
+      }
+    }
     if (taskKey === 'reply_message') config.reply_mode = taskReplyMode
     if (taskKey === 'notify_destination') {
       const dest = taskDestinationMode === 'group' ? String(taskDestinationGroup?.tg_group_id || '') : taskDestinationText.trim()
       if (!dest) errors.push(t('automation.destRequired'))
       else config.destination = dest
       config.delivery_mode = taskDeliveryMode
+    }
+    if (taskKey === 'lead_capture' && leadAutoRespond) {
+      config.auto_respond = true
+      config.respond_mode = leadRespondMode
+      config.respond_delay_seconds = Math.max(0, Number(leadRespondDelay) || 3)
     }
     if (errors.length) { notify(errors.join(' · ')); return }
     const payload = {
@@ -270,6 +297,38 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
                 <option value="public">{t('automation.replyPublic')}</option>
                 <option value="private">{t('automation.replyPrivate')}</option>
               </SelectField>
+            ) : null}
+            {taskKey === 'lead_capture' ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={leadAutoRespond} onChange={(e) => setLeadAutoRespond(e.target.checked)} />
+                  {t('leadsAcq.autoRespond')}
+                </label>
+                {leadAutoRespond && (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <select
+                      value={leadRespondMode}
+                      onChange={(e) => setLeadRespondMode(e.target.value as 'public' | 'private' | 'private_with_forward')}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                    >
+                      <option value="public">{t('leadsAcq.respondPublic')}</option>
+                      <option value="private">{t('leadsAcq.respondPrivate')}</option>
+                      <option value="private_with_forward">{t('leadsAcq.respondPrivateWithForward')}</option>
+                    </select>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.respondDelay')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="3600"
+                        value={leadRespondDelay}
+                        onChange={(e) => setLeadRespondDelay(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
             ) : null}
             <GroupAutocompleteField label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
