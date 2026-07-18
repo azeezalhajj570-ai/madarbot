@@ -3,7 +3,7 @@
 ## Branching and Git Rules
 
 - **Never commit directly to `main`.** Always create a feature branch for changes.
-- Use `git checkout -b feature/<description>` or `fix/<description>` for new work.
+- **Every branch must reference an issue.** Use naming: `feature/<issue>-<description>` or `fix/<issue>-<description>` (e.g. `feature/42-add-login`).
 - Push your branch and open a pull request — direct pushes to `main` are blocked by a pre-push hook.
 - Pre-push hook: `.git/hooks/pre-push` rejects pushes to `refs/heads/main`.
 
