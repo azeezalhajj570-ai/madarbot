@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     scraper_history_pause_seconds: float = Field(default=0.2, alias="SCRAPER_HISTORY_PAUSE_SECONDS")
     scraper_flood_wait_cap_seconds: int = Field(default=300, alias="SCRAPER_FLOOD_WAIT_CAP_SECONDS")
     run_schema_bootstrap: bool = Field(default=False, alias="RUN_SCHEMA_BOOTSTRAP")
+    db_pool_size: int = Field(default=0, alias="DB_POOL_SIZE")
     session_encryption_key: str | None = Field(default=None, alias="SESSION_ENCRYPTION_KEY")
     stripe_api_key: str | None = Field(default=None, alias="STRIPE_API_KEY")
     stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")

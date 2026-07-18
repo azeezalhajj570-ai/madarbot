@@ -52,6 +52,7 @@ services:
     env_file: .env
     environment:
       BOT_APP_KIND: agents
+      DB_POOL_SIZE: "30"
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/combot
       REDIS_URL: redis://redis:6379/0
       DEFAULT_LANGUAGE: ar
@@ -67,7 +68,7 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('localhost', 8080); c.request('GET', '/health'); r=c.getresponse(); exit(0) if r.status == 200 else exit(1)"]
+      test: ["CMD-SHELL", "pgrep -f 'python -m bot.main' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

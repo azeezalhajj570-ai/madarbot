@@ -359,6 +359,33 @@ async def webapp_mark_agent_notifications_seen(
     return {"status": "ok", "updated": updated}
 
 
+@router.get(
+    "/api/agents/{agent_id}/status",
+    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
+)
+@router.get(
+    "/webapp/agents/{agent_id}/status",
+    dependencies=[Depends(require_any_boundary(["admin", "agents"]))],
+)
+async def webapp_agent_status(
+    agent_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    from bot.agents.session import SessionManager
+    session_state = await SessionManager().get_session_state(agent.id)
+    return {
+        "id": agent.id,
+        "phone_number": agent.phone_number,
+        "status": agent.status,
+        "auth_state": agent.auth_state,
+        "safety_mode_enabled": agent.safety_mode_enabled,
+        "safety_mode_until": agent.safety_mode_until.isoformat() if agent.safety_mode_until else None,
+        **session_state,
+    }
+
+
 @router.post(
     "/api/agents/{agent_id}/sync-workspace", dependencies=[Depends(require_agents_boundary)]
 )
@@ -687,7 +714,7 @@ async def webapp_bulk_preflight(
         exclusions = await AgentJobService(session).compute_bulk_exclusions(
             agent=agent,
             source_group_id=payload.source_group_id,
-            message=payload.message,
+            messages=payload.messages,
             selected_user_ids=payload.selected_user_ids,
         )
         return {**exclusions, "target_type": "members"}
