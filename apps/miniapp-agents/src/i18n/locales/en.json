@@ -653,7 +653,11 @@
     "failedQueue": "Failed to queue scrape job",
     "atLeastOneKeyword": "At least one keyword is required",
     "leadCaptureCreated": "Lead capture task created",
-    "failedSaveLead": "Failed to save lead capture"
+    "failedSaveLead": "Failed to save lead capture",
+    "autoRespond": "Auto-respond when triggered",
+    "respondPublic": "Public (reply in group)",
+    "respondPrivate": "Private (direct message)",
+    "respondPrivateWithForward": "Private with forward"
   },
   "automation": {
     "title": "Automation Tasks",

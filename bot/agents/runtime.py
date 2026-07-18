@@ -1527,6 +1527,19 @@ class AgentTaskRuntime:
             if task_key == "lead_capture":
                 await self._capture_lead(agent=agent, session=session, event=event, result=result)
 
+            forward_info = result.get("forward_message")
+            if forward_info and isinstance(forward_info, dict):
+                forward_chat_id = result.get("chat_id") or event.user_id
+                if forward_chat_id:
+                    try:
+                        await client.forward_messages(
+                            entity=forward_chat_id,
+                            messages=forward_info["message_id"],
+                            from_peer=forward_info["from_chat"],
+                        )
+                    except Exception:
+                        logger.exception("lead_capture_forward_failed")
+
             chat_id = result.get("chat_id") or event.payload.get("chat_id") or event.group_id
             text = result.get("text", "")
             if text:
