@@ -1501,7 +1501,6 @@ class AgentTaskRuntime:
                         await bot.session.close()
 
             result = await definition.handler(task_config, event)
-            logger.info("lead_capture_debug", task_key=task_key, auto_respond=task_config.get("auto_respond"), has_text=bool(result.get("text")), chat_id=result.get("chat_id"), has_forward="forward_message" in result, respond_delay=result.get("respond_delay_seconds"))
             if not isinstance(result, dict):
                 return True
 
