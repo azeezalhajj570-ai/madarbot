@@ -1540,6 +1540,11 @@ class AgentTaskRuntime:
                     except Exception:
                         logger.exception("lead_capture_forward_failed")
 
+            respond_delay = result.get("respond_delay_seconds", 0)
+            if respond_delay and isinstance(respond_delay, (int, float)) and respond_delay > 0:
+                import asyncio
+                await asyncio.sleep(respond_delay)
+
             chat_id = result.get("chat_id") or event.payload.get("chat_id") or event.group_id
             text = result.get("text", "")
             if text:

@@ -657,7 +657,8 @@
     "autoRespond": "Auto-respond when triggered",
     "respondPublic": "Public (reply in group)",
     "respondPrivate": "Private (direct message)",
-    "respondPrivateWithForward": "Private with forward"
+    "respondPrivateWithForward": "Private with forward",
+    "respondDelay": "Delay before responding (seconds)"
   },
   "automation": {
     "title": "Automation Tasks",

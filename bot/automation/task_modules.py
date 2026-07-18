@@ -146,6 +146,9 @@ async def lead_capture_handler(config: dict[str, Any], event: TaskEvent) -> dict
         if ack_template:
             result["text"] = ack_template
             mode = config.get("respond_mode", "public")
+            respond_delay = int(config.get("respond_delay_seconds") or 3)
+            if respond_delay > 0:
+                result["respond_delay_seconds"] = respond_delay
             if mode == "public":
                 result["reply_to_message_id"] = event.payload.get("message_id")
             elif mode in ("private", "private_with_forward"):
@@ -402,6 +405,11 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "type": "string",
                     "required": False,
                     "description": "Reply mode: public (in-group reply), private (DM), private_with_forward (DM + forward original).",
+                },
+                "respond_delay_seconds": {
+                    "type": "integer",
+                    "required": False,
+                    "description": "Seconds to wait before sending the auto-reply.",
                 },
             },
             handler=lead_capture_handler,
