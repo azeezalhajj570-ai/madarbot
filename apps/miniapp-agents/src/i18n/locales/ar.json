@@ -657,7 +657,8 @@
     "autoRespond": "الرد التلقائي عند التشغيل",
     "respondPublic": "عام (رد في المجموعة)",
     "respondPrivate": "خاص (رسالة مباشرة)",
-    "respondPrivateWithForward": "خاص مع إعادة التوجيه"
+    "respondPrivateWithForward": "خاص مع إعادة التوجيه",
+    "respondDelay": "التأخير قبل الرد (بالثواني)"
   },
   "automation": {
     "title": "مهام الأتمتة",

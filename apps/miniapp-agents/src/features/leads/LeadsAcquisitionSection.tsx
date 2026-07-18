@@ -67,6 +67,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [leadAskContact, setLeadAskContact] = useState(false)
   const [leadAutoRespond, setLeadAutoRespond] = useState(false)
   const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
+  const [leadRespondDelay, setLeadRespondDelay] = useState('3')
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
 
@@ -130,6 +131,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
       if (leadAutoRespond) {
         config.auto_respond = true
         config.respond_mode = leadRespondMode
+        config.respond_delay_seconds = Math.max(0, Number(leadRespondDelay) || 3)
       }
       await agentsApi.createGroupTask(account.group_id || 196, {
         task_key: 'lead_capture',
@@ -176,6 +178,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
     setLeadAskContact(false)
     setLeadAutoRespond(false)
     setLeadRespondMode('public')
+    setLeadRespondDelay('3')
     setTaskGroupsQuery('')
     setTaskGroups([])
     setStatus(null)
@@ -262,6 +265,19 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
                 <option value="private">{t('leadsAcq.respondPrivate')}</option>
                 <option value="private_with_forward">{t('leadsAcq.respondPrivateWithForward')}</option>
               </select>
+            )}
+            {leadAutoRespond && (
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.respondDelay')}</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="3600"
+                  value={leadRespondDelay}
+                  onChange={(e) => setLeadRespondDelay(e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                />
+              </label>
             )}
             <GroupAutocompleteField label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
