@@ -661,8 +661,12 @@
     "respondDelay": "التأخير قبل الرد (بالثواني)",
     "maxNewContactsPerDay": "الحد الأقصى لجهات الاتصال الجديدة يومياً",
     "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد",
-    "cooldownMinutes": "فترة التهدئة (بالدقائق)",
-    "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (24 ساعة)"
+    "cooldownMinutes": "مدة الانتظار قبل الرد على نفس جهة الاتصال (بالدقائق)",
+    "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (30 يوماً)",
+    "interContactCooldown": "التأخير بين جهات الاتصال (بالدقائق)",
+    "interContactCooldownPlaceholder": "اتركه فارغاً للافتراضي (12 دقيقة)",
+    "respondMaxAge": "الحد الأقصى لعمر الرسالة (بالدقائق)",
+    "respondMaxAgePlaceholder": "اتركه فارغاً للافتراضي (30 دقيقة)"
   },
   "automation": {
     "title": "مهام الأتمتة",

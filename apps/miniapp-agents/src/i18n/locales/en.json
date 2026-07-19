@@ -661,8 +661,12 @@
     "respondDelay": "Delay before responding (seconds)",
     "maxNewContactsPerDay": "Max new contacts per day",
     "maxNewContactsPerDayPlaceholder": "Leave empty for no limit",
-    "cooldownMinutes": "Cooldown (minutes)",
-    "cooldownMinutesPlaceholder": "Leave empty for default (24 hours)"
+    "cooldownMinutes": "Per-contact reply cooldown",
+    "cooldownMinutesPlaceholder": "Leave empty for default (30 days)",
+    "interContactCooldown": "Delay between contacts (minutes)",
+    "interContactCooldownPlaceholder": "Leave empty for default (12 min)",
+    "respondMaxAge": "Max message age (minutes)",
+    "respondMaxAgePlaceholder": "Leave empty for default (30 min)"
   },
   "automation": {
     "title": "Automation Tasks",

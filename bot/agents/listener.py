@@ -799,7 +799,7 @@ class AgentListenerManager:
 
         # Skip users who already got a lead capture reply recently
         if user_id is not None:
-            cooldown_seconds = (int(task_config.get("cooldown_minutes") or 1440)) * 60
+            cooldown_seconds = (int(task_config.get("cooldown_minutes") or 43200)) * 60
             if cooldown_seconds > 0:
                 last_reply = (
                     await session.execute(
@@ -857,17 +857,77 @@ class AgentListenerManager:
                                     pass
                         return
 
+        # Skip if agent replied to any other contact recently (inter-contact cooldown)
+        inter_cooldown = (int(task_config.get("inter_contact_cooldown_minutes") or 12)) * 60
+        if inter_cooldown > 0:
+            last_any_reply = (
+                await session.execute(
+                    select(SentBroadcastMessage)
+                    .where(
+                        SentBroadcastMessage.agent_id == agent_id,
+                        SentBroadcastMessage.status == "sent",
+                    )
+                    .order_by(desc(SentBroadcastMessage.sent_at))
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if last_any_reply is not None:
+                elapsed = (datetime.now(timezone.utc) - last_any_reply.sent_at).total_seconds()
+                if elapsed < inter_cooldown:
+                    logger.info(
+                        "direct_lead_capture_skipped",
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        skip_reason="inter_contact_cooldown",
+                        last_reply_at=last_any_reply.sent_at.isoformat(),
+                        elapsed_seconds=elapsed,
+                    )
+                    if job_id is not None:
+                        try:
+                            job = (
+                                await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                            ).scalar_one_or_none()
+                            if job is not None:
+                                job.status = "completed"
+                                payload = dict(job.job_payload or {})
+                                payload["result"] = {
+                                    "sent": False,
+                                    "handled_by_listener": True,
+                                    "reason": "inter_contact_cooldown",
+                                }
+                                payload["progress"] = {
+                                    "total_count": 0,
+                                    "success_count": 0,
+                                    "failure_count": 0,
+                                }
+                                payload["message"] = text[:200]
+                                job.job_payload = payload
+                                await session.commit()
+                        except Exception:
+                            logger.exception(
+                                "direct_lead_capture_job_update_failed",
+                                agent_id=agent_id,
+                                job_id=job_id,
+                            )
+                            try:
+                                await session.rollback()
+                            except Exception:
+                                pass
+                    return
+
         # Skip the auto-respond if the original message is too old
-        if isinstance(message_date, datetime):
+        max_age_minutes = int(task_config.get("respond_max_age_minutes") or 0)
+        if max_age_minutes > 0 and isinstance(message_date, datetime):
+            max_age_seconds = max_age_minutes * 60
             age_seconds = (datetime.now(timezone.utc) - message_date).total_seconds()
-            if age_seconds > _DIRECT_RESPOND_MAX_AGE_SECONDS:
+            if age_seconds > max_age_seconds:
                 logger.warning(
                     "direct_lead_capture_stale",
                     agent_id=agent_id,
                     user_id=user_id,
                     message_id=event_payload.get("message_id"),
                     age_seconds=age_seconds,
-                    max_age_seconds=_DIRECT_RESPOND_MAX_AGE_SECONDS,
+                    max_age_seconds=max_age_seconds,
                 )
                 if job_id is not None:
                     try:
