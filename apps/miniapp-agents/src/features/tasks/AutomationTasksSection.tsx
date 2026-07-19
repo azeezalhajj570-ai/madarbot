@@ -75,7 +75,7 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
     const mode = task.config.auto_respond ? ` · auto: ${String(task.config.respond_mode || 'public')}` : ''
     const limit = task.config.max_new_contacts_per_day ? ` · limit: ${task.config.max_new_contacts_per_day}/day` : ''
     const cooldown = task.config.cooldown_minutes ? ` · cooldown: ${task.config.cooldown_minutes}m` : ''
-    const interCooldown = task.config.inter_contact_cooldown_seconds ? ` · gap: ${task.config.inter_contact_cooldown_seconds}s` : ''
+    const interCooldown = task.config.inter_contact_cooldown_minutes ? ` · gap: ${task.config.inter_contact_cooldown_minutes}m` : ''
     return `${summary}${mode}${limit}${cooldown}${interCooldown}`
   }
   const template = String(task.config.message_template || '').trim()
@@ -116,7 +116,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [leadRespondDelay, setLeadRespondDelay] = useState('3')
   const [leadMaxNewContacts, setLeadMaxNewContacts] = useState('')
   const [leadCooldownMinutes, setLeadCooldownMinutes] = useState('43200')
-  const [leadInterContactCooldown, setLeadInterContactCooldown] = useState('720')
+  const [leadInterContactCooldown, setLeadInterContactCooldown] = useState('12')
 
   const canSave = useMemo(() => {
     if (!taskKeywords.length) return false
@@ -181,7 +181,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadRespondDelay('3')
     setLeadMaxNewContacts('')
     setLeadCooldownMinutes('43200')
-    setLeadInterContactCooldown('720')
+    setLeadInterContactCooldown('12')
     setStatus(null)
   }
 
@@ -206,7 +206,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadRespondDelay(String(task.config.respond_delay_seconds ?? 3))
     setLeadMaxNewContacts(task.config.max_new_contacts_per_day != null ? String(task.config.max_new_contacts_per_day) : '')
     setLeadCooldownMinutes(task.config.cooldown_minutes != null ? String(task.config.cooldown_minutes) : '43200')
-    setLeadInterContactCooldown(task.config.inter_contact_cooldown_seconds != null ? String(task.config.inter_contact_cooldown_seconds) : '720')
+    setLeadInterContactCooldown(task.config.inter_contact_cooldown_minutes != null ? String(task.config.inter_contact_cooldown_minutes) : '12')
     setIsFormOpen(true)
   }
 
@@ -237,7 +237,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       const cooldown = Number(leadCooldownMinutes)
       if (cooldown > 0) config.cooldown_minutes = cooldown
       const interCooldown = Number(leadInterContactCooldown)
-      if (interCooldown > 0) config.inter_contact_cooldown_seconds = interCooldown
+      if (interCooldown > 0) config.inter_contact_cooldown_minutes = interCooldown
     }
     if (errors.length) { notify(errors.join(' · ')); return }
     const payload = {

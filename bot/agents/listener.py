@@ -858,7 +858,7 @@ class AgentListenerManager:
                         return
 
         # Skip if agent replied to any other contact recently (inter-contact cooldown)
-        inter_cooldown = int(task_config.get("inter_contact_cooldown_seconds") or 0)
+        inter_cooldown = (int(task_config.get("inter_contact_cooldown_minutes") or 12)) * 60
         if inter_cooldown > 0:
             last_any_reply = (
                 await session.execute(

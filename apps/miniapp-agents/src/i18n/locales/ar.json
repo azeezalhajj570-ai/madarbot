@@ -663,7 +663,7 @@
     "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد",
     "cooldownMinutes": "فترة التهدئة (بالدقائق)",
     "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (30 يوماً)",
-    "interContactCooldown": "التأخير بين جهات الاتصال (بالثواني)",
+    "interContactCooldown": "التأخير بين جهات الاتصال (بالدقائق)",
     "interContactCooldownPlaceholder": "اتركه فارغاً للافتراضي (12 دقيقة)"
   },
   "automation": {

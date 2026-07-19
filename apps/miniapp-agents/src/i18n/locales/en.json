@@ -663,7 +663,7 @@
     "maxNewContactsPerDayPlaceholder": "Leave empty for no limit",
     "cooldownMinutes": "Cooldown (minutes)",
     "cooldownMinutesPlaceholder": "Leave empty for default (30 days)",
-    "interContactCooldown": "Delay between contacts (seconds)",
+    "interContactCooldown": "Delay between contacts (minutes)",
     "interContactCooldownPlaceholder": "Leave empty for default (12 min)"
   },
   "automation": {
