@@ -208,12 +208,10 @@ export function LoadingState() {
 }
 
 export function SectionHeader({
-  eyebrow: _eyebrow,
   title,
   subtitle,
   actions,
 }: {
-  eyebrow?: string
   title: ReactNode
   subtitle?: ReactNode
   actions?: ReactNode
@@ -254,19 +252,19 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
 
 export function Select({
   children,
-  uiSize,
+  size: selectSize,
   ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode; uiSize?: 'sm' | 'default' }) {
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode; size?: 'sm' | 'default' }) {
   return (
     <select
       {...props}
       style={{
         width: '100%',
-        minHeight: uiSize === 'sm' ? 32 : 44,
+        minHeight: selectSize === 'sm' ? 32 : 44,
         borderRadius: radius.md,
         border: `1px solid ${uiVars.border}`,
-        padding: uiSize === 'sm' ? '0 8px' : '0 14px',
-        fontSize: uiSize === 'sm' ? 13 : 15,
+        padding: selectSize === 'sm' ? '0 8px' : '0 14px',
+        fontSize: selectSize === 'sm' ? 13 : 15,
         background: uiVars.surfaceStrong,
         color: uiVars.text,
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
@@ -329,6 +327,7 @@ export function FieldRow({
 }) {
   return (
     <div
+      className="field-row"
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -479,14 +478,14 @@ export function InlineMessage({
   tone = 'neutral',
   children,
 }: {
-  tone?: 'neutral' | 'success' | 'warning' | 'danger'
+  tone?: 'neutral' | 'success' | 'warning' | 'destructive'
   children: ReactNode
 }) {
   const toneStyle: Record<string, CSSProperties> = {
     neutral: { background: uiVars.bgMuted, color: uiVars.textMuted },
     success: { background: uiVars.successSoft, color: uiVars.success },
     warning: { background: uiVars.warningSoft, color: uiVars.warning },
-    danger: { background: uiVars.dangerSoft, color: uiVars.danger },
+    destructive: { background: uiVars.dangerSoft, color: uiVars.danger },
   }
 
   return (
@@ -511,55 +510,100 @@ export function ActionBar({
   )
 }
 
-export function Table({
+export interface ColumnDef<Row = any> {
+  key: string
+  label: string
+  hideOnMobile?: boolean
+  render: (row: Row, index: number) => ReactNode
+}
+
+export function Table<Row>({
   columns,
-  rows,
+  data,
+  keyExtractor = (_, i) => i,
 }: {
-  columns: string[]
-  rows: ReactNode[][]
+  columns: ColumnDef<Row>[]
+  data: Row[]
+  keyExtractor?: (row: Row, index: number) => string | number
 }) {
+  const visibleColumns = columns.filter(c => !c.hideOnMobile)
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th
-                key={column}
-                style={{
-                  textAlign: 'left',
-                  fontSize: typeScale.body,
-                  color: uiVars.textMuted,
-                  padding: '0 0 12px',
-                  fontWeight: 700,
-                }}
-              >
-                {column}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={cellIndex}
+    <div>
+      <div className="table-desktop-view" style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
                   style={{
-                    padding: '14px 0',
-                    borderTop: `1px solid ${uiVars.border}`,
+                    textAlign: 'left',
                     fontSize: typeScale.body,
-                    lineHeight: '20px',
-                    verticalAlign: 'top',
+                    color: uiVars.textMuted,
+                    padding: '0 0 12px',
+                    fontWeight: 700,
                   }}
                 >
-                  {cell}
-                </td>
+                  {col.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map((row, i) => (
+              <tr key={keyExtractor(row, i)}>
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    style={{
+                      padding: '14px 0',
+                      borderTop: `1px solid ${uiVars.border}`,
+                      fontSize: typeScale.body,
+                      lineHeight: '20px',
+                      verticalAlign: 'top',
+                    }}
+                  >
+                    {col.render(row, i)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="table-mobile-view" style={{ display: 'none' }}>
+        {data.map((row, i) => (
+          <div
+            key={keyExtractor(row, i)}
+            style={{
+              background: uiVars.surfaceAlt,
+              borderRadius: radius.lg,
+              padding: spacing.md,
+              display: 'grid',
+              gap: spacing.sm,
+              marginBottom: spacing.sm,
+            }}
+          >
+            {visibleColumns.map((col) => (
+              <div key={col.key} style={{ display: 'grid', gap: 2 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: uiVars.textMuted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {col.label}
+                </div>
+                <div style={{ fontSize: 14 }}>{col.render(row, i)}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

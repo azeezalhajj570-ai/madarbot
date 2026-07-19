@@ -288,7 +288,7 @@ export default function ScraperPage() {
 
   return (
     <PageShell
-      eyebrow="Scraper"
+     
       titleKey="page.scraper"
       descriptionKey="page.scraper.desc"
       loading={groupsLoading}
@@ -305,8 +305,8 @@ export default function ScraperPage() {
         </div>
       )}
     >
-      {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
-      {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
+      {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
+      {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {scrapeFeedback ? <InlineMessage tone="success">{scrapeFeedback}</InlineMessage> : null}
 
       {selectedGroupId == null ? (
@@ -414,7 +414,7 @@ export default function ScraperPage() {
             {conversationsLoading ? (
               <EmptyState title="Loading conversations" subtitle="Fetching conversation list." />
             ) : conversationsError ? (
-              <InlineMessage tone="danger">{conversationsError}</InlineMessage>
+              <InlineMessage tone="destructive">{conversationsError}</InlineMessage>
             ) : conversations.length === 0 ? (
               <EmptyState
                 title="No conversations"

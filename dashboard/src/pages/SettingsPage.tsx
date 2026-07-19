@@ -188,7 +188,7 @@ export default function SettingsPage() {
 
   return (
     <PageShell
-      eyebrow="Settings"
+     
       titleKey="page.settings"
       descriptionKey="page.settings.desc"
       loading={loading}
@@ -203,9 +203,9 @@ export default function SettingsPage() {
         </div>
       )}
     >
-      {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
+      {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">Editing settings for {currentGroup.title}.</InlineMessage> : null}
-      {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
+      {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       <Card>

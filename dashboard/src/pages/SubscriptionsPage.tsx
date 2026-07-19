@@ -97,113 +97,15 @@ export default function SubscriptionsPage() {
 
   if (user?.role !== 'owner' && user?.role !== 'admin') {
     return (
-      <PageShell eyebrow="Owner" titleKey="page.subscriptions" descriptionKey="page.subscriptions.desc">
+      <PageShell titleKey="page.subscriptions" descriptionKey="page.subscriptions.desc">
         <EmptyState title="Access denied" subtitle="This area is available to owner accounts only." />
       </PageShell>
     )
   }
 
-  const subRows = (subs || []).map((sub: any) => [
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
-        <Users size={16} />
-      </div>
-      <div>
-        <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-        <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
-      </div>
-    </div>,
-    <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
-      {sub.message || 'No message provided'}
-    </div>,
-    <Badge tone={
-      sub.status === 'approved' ? 'success' : 
-      sub.status === 'pending' ? 'warning' : 
-      sub.status === 'declined' ? 'destructive' : 'neutral'
-    }>
-      {sub.status}
-    </Badge>,
-    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-      {new Date(sub.created_at).toLocaleDateString()}
-    </div>,
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      {sub.status === 'pending' ? (
-        <>
-          <div style={{ width: 100 }}>
-            <Select 
-              uiSize="sm" 
-              value={approvalPlans[sub.id] || 'pro'} 
-              onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
-            >
-              <option value="pro">Pro</option>
-              <option value="business">Business</option>
-            </Select>
-          </div>
-          <Button 
-            size="sm" 
-            variant="default" 
-            onClick={() => subMutation.mutate({ 
-              id: sub.id, 
-              action: 'approve', 
-              plan: approvalPlans[sub.id] || 'pro' 
-            })}
-            disabled={subMutation.isPending}
-          >
-            Approve
-          </Button>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
-            disabled={subMutation.isPending}
-          >
-            Decline
-          </Button>
-        </>
-      ) : (
-        <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-          {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
-        </span>
-      )}
-    </div>
-  ])
-
-  const promoRows = (promos || []).map((p: any) => [
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
-        <Ticket size={16} />
-      </div>
-      <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</div>
-    </div>,
-    <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge>,
-    <div style={{ fontWeight: 600 }}>{p.duration_days} days</div>,
-    <div style={{ fontSize: 13 }}>
-      {p.used_count} / {p.max_uses || '∞'}
-    </div>,
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <ToggleRow
-        title=""
-        subtitle=""
-        checked={p.is_active}
-        onCheckedChange={(checked) => updatePromoMutation.mutate({ id: p.id, payload: { is_active: checked } })}
-        disabled={updatePromoMutation.isPending}
-      />
-    </div>,
-    <div style={{ display: 'flex', gap: 8 }}>
-      <Button 
-        size="sm" 
-        variant="outline" 
-        onClick={() => { if(confirm('Are you sure you want to delete this promo code?')) deletePromoMutation.mutate(p.id) }}
-        disabled={deletePromoMutation.isPending}
-      >
-        <Trash2 size={14} />
-      </Button>
-    </div>
-  ])
-
   return (
     <PageShell 
-      eyebrow="Owner" 
+      
       titleKey="page.subscriptions" 
       descriptionKey="page.subscriptions.desc"
     >
@@ -232,10 +134,84 @@ export default function SubscriptionsPage() {
         <Card title="Subscription Requests" subtitle="Users requesting access to the premium agent features.">
           {subsLoading ? (
             <LoadingState />
-          ) : subRows.length > 0 ? (
-            <Table 
-              columns={['Requester', 'Message', 'Status', 'Requested', 'Actions']} 
-              rows={subRows} 
+          ) : (subs || []).length > 0 ? (
+            <Table
+              columns={[
+                { key: 'requester', label: 'Requester', render: (sub: any) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
+                      <Users size={16} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+                    </div>
+                  </div>
+                )},
+                { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
+                  <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
+                    {sub.message || 'No message provided'}
+                  </div>
+                )},
+                { key: 'status', label: 'Status', render: (sub: any) => (
+                  <Badge tone={
+                    sub.status === 'approved' ? 'success' : 
+                    sub.status === 'pending' ? 'warning' : 
+                    sub.status === 'declined' ? 'destructive' : 'neutral'
+                  }>
+                    {sub.status}
+                  </Badge>
+                )},
+                { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
+                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                    {new Date(sub.created_at).toLocaleDateString()}
+                  </div>
+                )},
+                { key: 'actions', label: 'Actions', render: (sub: any) => (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {sub.status === 'pending' ? (
+                      <>
+                        <div style={{ width: 100 }}>
+                          <Select 
+                            size="sm" 
+                            value={approvalPlans[sub.id] || 'pro'} 
+                            onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
+                          >
+                            <option value="pro">Pro</option>
+                            <option value="business">Business</option>
+                          </Select>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="default" 
+                          onClick={() => subMutation.mutate({ 
+                            id: sub.id, 
+                            action: 'approve', 
+                            plan: approvalPlans[sub.id] || 'pro' 
+                          })}
+                          disabled={subMutation.isPending}
+                        >
+                          Approve
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
+                          disabled={subMutation.isPending}
+                        >
+                          Decline
+                        </Button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                        {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
+                      </span>
+                    )}
+                  </div>
+                )},
+              ]}
+              data={subs || []}
+              keyExtractor={(sub: any) => sub.id}
             />
           ) : (
             <EmptyState title="No requests" subtitle="Manual subscription requests will appear here." />
@@ -255,10 +231,54 @@ export default function SubscriptionsPage() {
           
           {promosLoading ? (
             <LoadingState />
-          ) : promoRows.length > 0 ? (
-            <Table 
-              columns={['Code', 'Plan', 'Duration', 'Usage', 'Active', 'Actions']} 
-              rows={promoRows} 
+          ) : (promos || []).length > 0 ? (
+            <Table
+              columns={[
+                { key: 'code', label: 'Code', render: (p: any) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
+                      <Ticket size={16} />
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</div>
+                  </div>
+                )},
+                { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p: any) => (
+                  <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge>
+                )},
+                { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p: any) => (
+                  <div style={{ fontWeight: 600 }}>{p.duration_days} days</div>
+                )},
+                { key: 'usage', label: 'Usage', render: (p: any) => (
+                  <div style={{ fontSize: 13 }}>
+                    {p.used_count} / {p.max_uses || '∞'}
+                  </div>
+                )},
+                { key: 'active', label: 'Active', render: (p: any) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <ToggleRow
+                      title=""
+                      subtitle=""
+                      checked={p.is_active}
+                      onCheckedChange={(checked) => updatePromoMutation.mutate({ id: p.id, payload: { is_active: checked } })}
+                      disabled={updatePromoMutation.isPending}
+                    />
+                  </div>
+                )},
+                { key: 'actions', label: 'Actions', render: (p: any) => (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => { if(confirm('Are you sure you want to delete this promo code?')) deletePromoMutation.mutate(p.id) }}
+                      disabled={deletePromoMutation.isPending}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                )},
+              ]}
+              data={promos || []}
+              keyExtractor={(p: any) => p.id}
             />
           ) : (
             <EmptyState title="No codes" subtitle="Create your first promotion code to attract users." />

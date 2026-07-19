@@ -17,7 +17,7 @@ export default function MembersPage() {
   const [filter, setFilter] = useState('all')
   const [sheetOpen, setSheetOpen] = useState(false)
 
-  const rows = useMemo(() => {
+  const filteredMembers = useMemo(() => {
     return MEMBERS.filter((member) => {
       const matchesQuery =
         !query ||
@@ -25,23 +25,11 @@ export default function MembersPage() {
         member.username.toLowerCase().includes(query.toLowerCase())
       const matchesFilter = filter === 'all' ? true : member.role === filter
       return matchesQuery && matchesFilter
-    }).map((member) => [
-      member.name,
-      member.username,
-      <Badge tone={member.role === 'banned' ? 'destructive' : member.role === 'admin' || member.role === 'owner' ? 'warning' : 'default'}>
-        {member.role}
-      </Badge>,
-      member.joinedAt,
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant="outline">Warn</Button>
-        <Button variant="outline">Mute</Button>
-        <Button variant="destructive">Ban</Button>
-      </div>,
-    ])
+    })
   }, [filter, query])
 
   return (
-    <PageShell eyebrow="Members" titleKey="page.members" descriptionKey="page.members.desc" actions={<Button onClick={() => setSheetOpen(true)}>Bulk actions</Button>}>
+    <PageShell titleKey="page.members" descriptionKey="page.members.desc" actions={<Button onClick={() => setSheetOpen(true)}>Bulk actions</Button>}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 12 }}>
         <Input placeholder="Search members" value={query} onChange={(e) => setQuery(e.target.value)} />
         <Select value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -51,7 +39,27 @@ export default function MembersPage() {
         </Select>
       </div>
       <Card>
-        <Table columns={['Name', 'Username', 'Role', 'Joined', 'Actions']} rows={rows} />
+        <Table
+          columns={[
+            { key: 'name', label: 'Name', render: (member: any) => member.name },
+            { key: 'username', label: 'Username', render: (member: any) => member.username },
+            { key: 'role', label: 'Role', render: (member: any) => (
+              <Badge tone={member.role === 'banned' ? 'destructive' : member.role === 'admin' || member.role === 'owner' ? 'warning' : 'default'}>
+                {member.role}
+              </Badge>
+            )},
+            { key: 'joined', label: 'Joined', hideOnMobile: true, render: (member: any) => member.joinedAt },
+            { key: 'actions', label: 'Actions', hideOnMobile: true, render: () => (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button variant="outline">Warn</Button>
+                <Button variant="outline">Mute</Button>
+                <Button variant="destructive">Ban</Button>
+              </div>
+            )},
+          ]}
+          data={filteredMembers}
+          keyExtractor={(_: any, i: number) => i}
+        />
       </Card>
       <Sheet
         open={sheetOpen}

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Plus, Send } from 'lucide-react'
 
-import { Badge, Button, Card, EmptyState, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, EmptyState, Table } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import api, {
   fetchAdminOverview,
@@ -47,7 +47,7 @@ export default function AdminBulkAddPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -181,14 +181,14 @@ export default function AdminBulkAddPage() {
   }
 
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
+    <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
       {error && (
         <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)', marginBottom: 16 }}>
           <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>{error}</div>
         </Card>
       )}
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid-2col" style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         {/* Left: Form */}
         <Card title="New Bulk Add Job" subtitle="Select agent, target group, and members to invite.">
           <div style={{ display: 'grid', gap: 14 }}>
@@ -361,47 +361,51 @@ export default function AdminBulkAddPage() {
             <div style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)', padding: 12 }}>No member_add jobs yet.</div>
           ) : (
             <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-              <Table
-                columns={['ID', 'Status', 'Target', 'Users', 'Results', 'Created']}
-                rows={jobs.slice(0, 20).map((j) => {
-                  const p = j.job_payload || {}
-                  const result = p.result as Record<string, number> | undefined
-                  const progress = p.progress as Record<string, number> | undefined
-                  const userCount = (p.user_ids as number[])?.length || 0
-                  const successCount = result?.success_count ?? progress?.success_count ?? 0
-                  const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
-                  const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
-                  const totalProcessed = successCount + failureCount + skipCount
-
-                  let statusBadge = <Badge tone="default">{j.status}</Badge>
-                  if (j.status === 'completed') {
-                    if (totalProcessed === 0) {
-                      statusBadge = <Badge tone="warning">completed (no results)</Badge>
-                    } else {
-                      statusBadge = <Badge tone="success">completed</Badge>
+              <Table<AgentJobRecord>
+                columns={[
+                  { key: 'id', label: 'ID', hideOnMobile: true, render: (j) => String(j.id) },
+                  {
+                    key: 'status', label: 'Status', render: (j) => {
+                      const p = j.job_payload || {}
+                      const result = p.result as Record<string, number> | undefined
+                      const progress = p.progress as Record<string, number> | undefined
+                      const userCount = (p.user_ids as number[])?.length || 0
+                      const successCount = result?.success_count ?? progress?.success_count ?? 0
+                      const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
+                      const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
+                      const totalProcessed = successCount + failureCount + skipCount
+                      if (j.status === 'completed') {
+                        if (totalProcessed === 0) return <Badge tone="warning">completed (no results)</Badge>
+                        return <Badge tone="success">completed</Badge>
+                      }
+                      if (j.status === 'running') return <Badge tone="warning">running ({totalProcessed}/{userCount})</Badge>
+                      if (j.status === 'failed') return <Badge tone="destructive">failed</Badge>
+                      return <Badge tone="default">{j.status}</Badge>
                     }
-                  } else if (j.status === 'running') {
-                    statusBadge = <Badge tone="warning">running ({totalProcessed}/{userCount})</Badge>
-                  } else if (j.status === 'failed') {
-                    statusBadge = <Badge tone="destructive">failed</Badge>
-                  }
-
-                  const isComplete = j.status === 'completed' && totalProcessed > 0
-                  const resultSummary = isComplete
-                    ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed`
-                    : j.status === 'running'
-                    ? `${totalProcessed} / ${userCount}`
-                    : '—'
-
-                  return [
-                    String(j.id),
-                    statusBadge,
-                    String(p.target_tg_group_id ?? '—'),
-                    String(userCount),
-                    <span style={{ fontSize: 12 }}>{resultSummary}</span>,
-                    j.created_at ? timeAgo(j.created_at) : '—',
-                  ]
-                })}
+                  },
+                  { key: 'target', label: 'Target', hideOnMobile: true, render: (j) => { const p = j.job_payload || {}; return String(p.target_tg_group_id ?? '—') } },
+                  { key: 'users', label: 'Users', render: (j) => { const p = j.job_payload || {}; return String((p.user_ids as number[])?.length || 0) } },
+                  {
+                    key: 'results', label: 'Results', render: (j) => {
+                      const p = j.job_payload || {}
+                      const result = p.result as Record<string, number> | undefined
+                      const progress = p.progress as Record<string, number> | undefined
+                      const successCount = result?.success_count ?? progress?.success_count ?? 0
+                      const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
+                      const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
+                      const totalProcessed = successCount + failureCount + skipCount
+                      const userCount = (p.user_ids as number[])?.length || 0
+                      const isComplete = j.status === 'completed' && totalProcessed > 0
+                      const resultSummary = isComplete
+                        ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed`
+                        : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
+                      return <span style={{ fontSize: 12 }}>{resultSummary}</span>
+                    }
+                  },
+                  { key: 'created', label: 'Created', hideOnMobile: true, render: (j) => j.created_at ? timeAgo(j.created_at) : '—' },
+                ]}
+                data={jobs.slice(0, 20)}
+                keyExtractor={(j) => j.id}
               />
             </div>
           )}

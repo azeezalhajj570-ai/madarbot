@@ -20,7 +20,7 @@ export default function ActivityPage() {
   const filtered = useMemo(() => EVENTS.filter((event) => (tab === 'all' ? true : event.type === tab)), [tab])
 
   return (
-    <PageShell eyebrow="Activity" titleKey="page.activity" descriptionKey="page.activity.desc">
+    <PageShell titleKey="page.activity" descriptionKey="page.activity.desc">
       <Tabs value={tab} onChange={setTab} items={[{ value: 'all', label: 'All' }, { value: 'moderation', label: 'Moderation' }, { value: 'system', label: 'System' }, { value: 'report', label: 'Reports' }]} />
       <Card>
         <div style={{ display: 'grid' }}>

@@ -23,7 +23,7 @@ export default function AdminAuditPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -37,12 +37,12 @@ export default function AdminAuditPage() {
   })
 
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.audit" descriptionKey="page.admin.audit.desc" loading={false}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+    <PageShell titleKey="page.admin.audit" descriptionKey="page.admin.audit.desc" loading={false}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>
           Showing {page * limit + 1}–{(page + 1) * limit}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
           <Button variant="outline" size="sm" disabled={!entries || entries.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>

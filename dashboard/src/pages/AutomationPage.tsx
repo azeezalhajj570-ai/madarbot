@@ -14,7 +14,7 @@ export default function AutomationPage() {
   const [open, setOpen] = useState(false)
 
   return (
-    <PageShell eyebrow="Automation" titleKey="page.automation" descriptionKey="page.automation.desc" actions={<Button onClick={() => setOpen(true)}>New task</Button>}>
+    <PageShell titleKey="page.automation" descriptionKey="page.automation.desc" actions={<Button onClick={() => setOpen(true)}>New task</Button>}>
       <div style={{ display: 'grid', gap: 16 }}>
         {TASKS.map((task) => (
           <Card key={task.id}>

@@ -4,9 +4,9 @@ import { useI18n } from '../lib/i18n'
 import { useState } from 'react'
 
 const JOBS = [
-  ['job-101', 'Invest Community', 'Trading AR', '120', <Badge tone="success">running</Badge>],
-  ['job-102', 'Alpha Signals', 'Owner Lab', '84', <Badge tone="warning">queued</Badge>],
-  ['job-103', 'Owner Lab', 'Invest Community', '31', <Badge tone="destructive">failed</Badge>],
+  { id: 'job-101', source: 'Invest Community', target: 'Trading AR', total: '120', status: <Badge tone="success">running</Badge> },
+  { id: 'job-102', source: 'Alpha Signals', target: 'Owner Lab', total: '84', status: <Badge tone="warning">queued</Badge> },
+  { id: 'job-103', source: 'Owner Lab', target: 'Invest Community', total: '31', status: <Badge tone="destructive">failed</Badge> },
 ]
 
 export default function BulkJobsPage() {
@@ -14,9 +14,19 @@ export default function BulkJobsPage() {
   const [open, setOpen] = useState(false)
 
   return (
-    <PageShell eyebrow="Jobs" titleKey="page.jobs" descriptionKey="page.jobs.desc" actions={<Button onClick={() => setOpen(true)}>New job</Button>}>
+    <PageShell titleKey="page.jobs" descriptionKey="page.jobs.desc" actions={<Button onClick={() => setOpen(true)}>New job</Button>}>
       <Card>
-        <Table columns={['ID', 'Source', 'Target', 'Total', 'Status']} rows={JOBS} />
+        <Table
+          columns={[
+            { key: 'id', label: 'ID', hideOnMobile: true, render: (j: any) => j.id },
+            { key: 'source', label: 'Source', hideOnMobile: true, render: (j: any) => j.source },
+            { key: 'target', label: 'Target', render: (j: any) => j.target },
+            { key: 'total', label: 'Total', render: (j: any) => j.total },
+            { key: 'status', label: 'Status', render: (j: any) => j.status },
+          ]}
+          data={JOBS}
+          keyExtractor={(j: any) => j.id}
+        />
       </Card>
       <Sheet
         open={open}

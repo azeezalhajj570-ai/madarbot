@@ -75,7 +75,7 @@ export default function SummariesPage() {
 
   return (
     <PageShell
-      eyebrow="Summaries"
+     
       titleKey="page.summaries"
       descriptionKey="page.summaries.desc"
       loading={loading}
@@ -90,9 +90,9 @@ export default function SummariesPage() {
         </div>
       )}
     >
-      {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
+      {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">Viewing summaries for {currentGroup.title}.</InlineMessage> : null}
-      {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
+      {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {settings ? (

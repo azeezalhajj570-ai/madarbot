@@ -23,7 +23,7 @@ export default function AdminJobsPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -59,7 +59,7 @@ export default function AdminJobsPage() {
   const totalContacts = data?.agents?.reduce((s, a) => s + a.unique_contacts, 0) || 0
 
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.jobs" descriptionKey="page.admin.jobs.desc" loading={loading}>
+    <PageShell titleKey="page.admin.jobs" descriptionKey="page.admin.jobs.desc" loading={loading}>
       {error && (
         <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
           <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>

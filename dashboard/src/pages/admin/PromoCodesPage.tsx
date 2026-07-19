@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 
 import {
-  Badge, Button, Card, EmptyState, Table, LoadingState,
+  Badge, Button, Card, ColumnDef, EmptyState, Table, LoadingState,
   Dialog, Field, Input, FieldRow, Select, ToggleRow,
 } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
@@ -16,7 +16,7 @@ export default function AdminPromoCodesPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -55,32 +55,8 @@ export default function AdminPromoCodesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] }),
   })
 
-  const promoRows = (promos || []).map((p: any) => [
-    <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span>,
-    <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge>,
-    <span style={{ fontWeight: 600 }}>{p.duration_days} days</span>,
-    <span>{p.used_count} / {p.max_uses || '∞'}</span>,
-    <ToggleRow
-      title=""
-      subtitle=""
-      checked={p.is_active}
-      onCheckedChange={(checked) => updateMutation.mutate({ id: p.id, payload: { is_active: checked } })}
-      disabled={updateMutation.isPending}
-    />,
-    <div style={{ display: 'flex', gap: 8 }}>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => { if (confirm('Delete this promo code?')) deleteMutation.mutate(p.id) }}
-        disabled={deleteMutation.isPending}
-      >
-        <Trash2 size={14} />
-      </Button>
-    </div>,
-  ])
-
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.promocodes" descriptionKey="page.admin.promocodes.desc" loading={false}>
+    <PageShell titleKey="page.admin.promocodes" descriptionKey="page.admin.promocodes.desc" loading={false}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus size={16} style={{ marginRight: 8 }} />
@@ -91,10 +67,32 @@ export default function AdminPromoCodesPage() {
       <Card title="Promotion Codes" subtitle="Codes users can redeem for trial or paid periods.">
         {isLoading ? (
           <LoadingState />
-        ) : promoRows.length > 0 ? (
+        ) : promos && promos.length > 0 ? (
           <Table
-            columns={['Code', 'Plan', 'Duration', 'Usage', 'Active', 'Actions']}
-            rows={promoRows}
+            columns={[
+              { key: 'code', label: 'Code', render: (p: any) => <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span> },
+              { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p: any) => <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge> },
+              { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p: any) => <span style={{ fontWeight: 600 }}>{p.duration_days} days</span> },
+              { key: 'usage', label: 'Usage', render: (p: any) => <span>{p.used_count} / {p.max_uses || '∞'}</span> },
+              { key: 'active', label: 'Active', render: (p: any) => (
+                <ToggleRow title="" subtitle="" checked={p.is_active}
+                  onCheckedChange={(checked) => updateMutation.mutate({ id: p.id, payload: { is_active: checked } })}
+                  disabled={updateMutation.isPending}
+                />
+              )},
+              { key: 'actions', label: 'Actions', hideOnMobile: true, render: (p: any) => (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button size="sm" variant="outline"
+                    onClick={() => { if (confirm('Delete this promo code?')) deleteMutation.mutate(p.id) }}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              )},
+            ]}
+            data={promos}
+            keyExtractor={(p: any) => p.id}
           />
         ) : (
           <EmptyState title="No codes" subtitle="Create your first promotion code." />

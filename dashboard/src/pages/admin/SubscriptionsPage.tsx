@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Clock } from 'lucide-react'
 
-import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table, LoadingState, Select } from '../../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, ContentGrid, EmptyState, MetricCard, Table, LoadingState, Select } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerSubscriptions, updateOwnerSubscription, fetchOwnerStats } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
@@ -23,7 +23,7 @@ export default function AdminSubscriptionsPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -53,68 +53,8 @@ export default function AdminSubscriptionsPage() {
   const pendingCount = subs?.filter(s => s.status === 'pending').length || 0
   const approvedCount = subs?.filter(s => s.status === 'approved').length || 0
 
-  const subRows = (subs || []).map((sub: any) => [
-    <div>
-      <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-      <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
-    </div>,
-    <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: sub.message ? 'normal' : 'italic' }}>
-      {sub.message || 'No message provided'}
-    </div>,
-    <Badge tone={
-      sub.status === 'approved' ? 'success' :
-      sub.status === 'pending' ? 'warning' :
-      sub.status === 'declined' ? 'destructive' : 'neutral'
-    }>
-      {sub.status}
-    </Badge>,
-    <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
-      {new Date(sub.created_at).toLocaleDateString()}
-    </div>,
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      {sub.status === 'pending' ? (
-        <>
-          <div style={{ width: 100 }}>
-            <Select
-              uiSize="sm"
-              value={approvalPlans[sub.id] || 'pro'}
-              onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
-            >
-              <option value="pro">Pro</option>
-              <option value="business">Business</option>
-            </Select>
-          </div>
-          <Button
-            size="sm"
-            variant="default"
-            onClick={() => subMutation.mutate({
-              id: sub.id,
-              action: 'approve',
-              plan: approvalPlans[sub.id] || 'pro',
-            })}
-            disabled={subMutation.isPending}
-          >
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
-            disabled={subMutation.isPending}
-          >
-            Decline
-          </Button>
-        </>
-      ) : (
-        <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
-          {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
-        </span>
-      )}
-    </div>,
-  ])
-
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.subscriptions" descriptionKey="page.admin.subscriptions.desc" loading={false}>
+    <PageShell titleKey="page.admin.subscriptions" descriptionKey="page.admin.subscriptions.desc" loading={false}>
       <ContentGrid columns="repeat(auto-fit, minmax(200px, 1fr))">
         <MetricCard label="Active Subs" value={String(stats?.active_subscriptions ?? approvedCount)} hint="Approved accounts" icon={<CheckCircle2 size={20} />} />
         <MetricCard label="Pending Requests" value={String(stats?.pending_requests ?? pendingCount)} hint="Awaiting review" icon={<Clock size={20} />} />
@@ -123,10 +63,65 @@ export default function AdminSubscriptionsPage() {
       <Card title="Subscription Requests" subtitle="Users requesting access to premium features.">
         {isLoading ? (
           <LoadingState />
-        ) : subRows.length > 0 ? (
+        ) : subs && subs.length > 0 ? (
           <Table
-            columns={['Requester', 'Message', 'Status', 'Requested', 'Actions']}
-            rows={subRows}
+            columns={[
+              { key: 'requester', label: 'Requester', render: (sub: any) => (
+                <div>
+                  <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+                </div>
+              )},
+              { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
+                <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: sub.message ? 'normal' : 'italic' }}>
+                  {sub.message || 'No message provided'}
+                </div>
+              )},
+              { key: 'status', label: 'Status', render: (sub: any) => (
+                <Badge tone={sub.status === 'approved' ? 'success' : sub.status === 'pending' ? 'warning' : sub.status === 'declined' ? 'destructive' : 'neutral'}>
+                  {sub.status}
+                </Badge>
+              )},
+              { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+                  {new Date(sub.created_at).toLocaleDateString()}
+                </div>
+              )},
+              { key: 'actions', label: 'Actions', render: (sub: any) => (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {sub.status === 'pending' ? (
+                    <>
+                      <div style={{ width: 100 }}>
+                        <Select size="sm" value={approvalPlans[sub.id] || 'pro'}
+                          onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
+                        >
+                          <option value="pro">Pro</option>
+                          <option value="business">Business</option>
+                        </Select>
+                      </div>
+                      <Button size="sm" variant="default"
+                        onClick={() => subMutation.mutate({ id: sub.id, action: 'approve', plan: approvalPlans[sub.id] || 'pro' })}
+                        disabled={subMutation.isPending}
+                      >
+                        Approve
+                      </Button>
+                      <Button size="sm" variant="outline"
+                        onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
+                        disabled={subMutation.isPending}
+                      >
+                        Decline
+                      </Button>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+                      {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
+                    </span>
+                  )}
+                </div>
+              )},
+            ]}
+            data={subs}
+            keyExtractor={(sub: any) => sub.id}
           />
         ) : (
           <EmptyState title="No requests" subtitle="Manual subscription requests will appear here." />

@@ -26,7 +26,7 @@ export function PageShell({
   const resolvedDesc = descriptionKey ? t(descriptionKey) : description
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: spacing.xl }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: spacing.xl }}>
       <PageFrame>
         <div
           style={{
