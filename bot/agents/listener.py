@@ -15,7 +15,7 @@ from bot.agents.exceptions import AgentBannedError, AgentSessionRevokedError
 from bot.agents.session import SessionManager
 from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
-from bot.db.models import Agent, AgentJob, Group, GroupSetting, ModerationLog, SentBroadcastMessage
+from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, Group, GroupAdminRole, GroupSetting, ModerationLog, SentBroadcastMessage
 from bot.db.session import SessionLocal
 from bot.services.agent_lead_service import AgentLeadService
 from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
@@ -279,6 +279,7 @@ class AgentListenerManager:
             ]
             if part
         )
+        is_bot = bool(getattr(sender, "bot", False))
         if self.log_message_events:
             logger.info(
                 "agent_listener_message_seen",
@@ -325,7 +326,9 @@ class AgentListenerManager:
             first_name=first_name,
             full_name=full_name,
             username=username,
+            is_bot=is_bot,
         )
+
         await self._handle_group_mention(
             agent_id=agent_id,
             client=client,
@@ -629,6 +632,7 @@ class AgentListenerManager:
         first_name: str = "",
         full_name: str = "",
         username: str = "",
+        is_bot: bool = False,
     ) -> bool:
         async with self.session_factory() as session:
             group = await self._resolve_listener_group(session, agent_id=agent_id, chat_id=chat_id)
@@ -698,6 +702,8 @@ class AgentListenerManager:
                         },
                         message_date=message_date,
                         user_id=user_id,
+                        group=group,
+                        is_bot=is_bot,
                     )
             return True
 
@@ -713,6 +719,8 @@ class AgentListenerManager:
         event_payload: dict[str, Any],
         message_date: Any | None,
         user_id: int | None,
+        group: Any | None = None,
+        is_bot: bool = False,
     ) -> None:
         """Send a lead_capture auto-respond directly from the listener's client.
 
@@ -726,6 +734,57 @@ class AgentListenerManager:
             await session.execute(select(Agent).where(Agent.id == agent_id))
         ).scalar_one_or_none()
         if agent is None:
+            return
+
+        text = str(handler_result.get("text") or "")
+
+        # Skip blacklisted users, group admins, and bots
+        skip_reason = await self._get_lead_capture_skip_reason(
+            session=session,
+            agent_id=agent_id,
+            group=group,
+            user_id=user_id,
+            username=str(event_payload.get("username") or ""),
+            is_bot=is_bot,
+        )
+        if skip_reason:
+            logger.info(
+                "direct_lead_capture_skipped",
+                agent_id=agent_id,
+                user_id=user_id,
+                skip_reason=skip_reason,
+            )
+            if job_id is not None:
+                try:
+                    job = (
+                        await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                    ).scalar_one_or_none()
+                    if job is not None:
+                        job.status = "completed"
+                        payload = dict(job.job_payload or {})
+                        payload["result"] = {
+                            "sent": False,
+                            "handled_by_listener": True,
+                            "reason": skip_reason,
+                        }
+                        payload["progress"] = {
+                            "total_count": 0,
+                            "success_count": 0,
+                            "failure_count": 0,
+                        }
+                        payload["message"] = text[:200]
+                        job.job_payload = payload
+                        await session.commit()
+                except Exception:
+                    logger.exception(
+                        "direct_lead_capture_job_update_failed",
+                        agent_id=agent_id,
+                        job_id=job_id,
+                    )
+                    try:
+                        await session.rollback()
+                    except Exception:
+                        pass
             return
 
         # Skip the auto-respond if the original message is too old
@@ -972,6 +1031,68 @@ class AgentListenerManager:
                     await session.rollback()
                 except Exception:
                     pass
+
+    async def _get_lead_capture_skip_reason(
+        self,
+        *,
+        session: Any,
+        agent_id: int,
+        group: Any | None,
+        user_id: int | None,
+        username: str,
+        is_bot: bool,
+    ) -> str | None:
+        """Return a reason to skip lead_capture auto-respond, or None if allowed."""
+        if is_bot:
+            return "bot"
+        if user_id is None:
+            return None
+
+        # Check per-agent blacklist by tg_user_id or username
+        try:
+            from sqlalchemy import or_
+
+            normalized_username = username.lstrip("@").strip().lower()
+            filters = [AgentBlacklistEntry.agent_id == agent_id]
+            identity_filters = [AgentBlacklistEntry.tg_user_id == user_id]
+            if normalized_username:
+                identity_filters.append(
+                    AgentBlacklistEntry.username == normalized_username
+                )
+            entry = (
+                await session.execute(
+                    select(AgentBlacklistEntry).where(
+                        *filters,
+                        or_(*identity_filters),
+                    )
+                )
+            ).scalar_one_or_none()
+            if entry is not None:
+                return "blacklist"
+        except Exception:
+            logger.exception(
+                "lead_capture_blacklist_check_failed", agent_id=agent_id, user_id=user_id
+            )
+
+        # Check group admin roles
+        try:
+            if group is not None and getattr(group, "id", None) is not None:
+                admin_role = (
+                    await session.execute(
+                        select(GroupAdminRole).where(
+                            GroupAdminRole.group_id == group.id,
+                            GroupAdminRole.user_id == user_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if admin_role is not None:
+                    return "admin"
+        except Exception:
+            logger.exception(
+                "lead_capture_admin_check_failed", agent_id=agent_id, user_id=user_id
+            )
+
+        return None
 
     async def _resolve_listener_group(
         self, session: Any, *, agent_id: int, chat_id: int
