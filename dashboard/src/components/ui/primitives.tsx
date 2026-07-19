@@ -329,6 +329,7 @@ export function FieldRow({
 }) {
   return (
     <div
+      className="field-row"
       style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,

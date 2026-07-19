@@ -38,11 +38,11 @@ export default function AdminAuditPage() {
 
   return (
     <PageShell eyebrow="Admin" titleKey="page.admin.audit" descriptionKey="page.admin.audit.desc" loading={false}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>
           Showing {page * limit + 1}–{(page + 1) * limit}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
           <Button variant="outline" size="sm" disabled={!entries || entries.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>

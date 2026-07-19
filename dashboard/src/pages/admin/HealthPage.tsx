@@ -81,8 +81,8 @@ export default function AdminHealthPage() {
       )}
 
       <Card>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 16, fontWeight: 800 }}>System Status</span>
             {sh && <HealthBadge status={sh.status} />}
             <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{okCount}/{checks.length} healthy</span>

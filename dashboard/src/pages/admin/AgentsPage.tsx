@@ -66,8 +66,8 @@ export default function AdminAgentsPage() {
         </Card>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Active</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{activeCount}</div>

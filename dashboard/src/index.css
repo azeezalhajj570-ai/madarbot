@@ -251,4 +251,20 @@ textarea {
   .mobile-nav-item {
     font-size: 9px;
   }
+
+  .dashboard-auth-shell > div:first-child {
+    padding: 24px !important;
+  }
+
+  .dashboard-auth-shell > div:last-child {
+    padding: 16px !important;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-2col {
+    grid-template-columns: 1fr !important;
+  }
 }

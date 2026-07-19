@@ -188,7 +188,7 @@ export default function AdminBulkAddPage() {
         </Card>
       )}
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid-2col" style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         {/* Left: Form */}
         <Card title="New Bulk Add Job" subtitle="Select agent, target group, and members to invite.">
           <div style={{ display: 'grid', gap: 14 }}>
