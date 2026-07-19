@@ -411,6 +411,11 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "required": False,
                     "description": "Seconds to wait before sending the auto-reply.",
                 },
+                "max_new_contacts_per_day": {
+                    "type": "integer",
+                    "required": False,
+                    "description": "Maximum number of new contacts that can be captured per day via this task. 0 or empty means unlimited.",
+                },
             },
             handler=lead_capture_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),

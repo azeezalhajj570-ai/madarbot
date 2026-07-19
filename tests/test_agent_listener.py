@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -61,6 +63,7 @@ async def test_agent_listener_dispatches_messages_for_selected_agent_group(
     manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
     handled = await manager._dispatch_agent_message(
         agent.id,
+        client=None,
         chat_id=group.tg_group_id,
         group_title=group.title,
         text="support needed",
@@ -146,6 +149,7 @@ async def test_agent_listener_ignores_messages_for_unselected_group(
     manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
     handled = await manager._dispatch_agent_message(
         agent.id,
+        client=None,
         chat_id=other_group.tg_group_id,
         group_title=other_group.title,
         text="support needed",
@@ -495,6 +499,7 @@ async def test_agent_listener_dispatches_remote_group_binding_stored_on_home_gro
     manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
     handled = await manager._dispatch_agent_message(
         agent.id,
+        client=None,
         chat_id=remote_group.tg_group_id,
         group_title=remote_group.title,
         text="support needed",
@@ -521,3 +526,171 @@ async def test_agent_listener_dispatches_remote_group_binding_stored_on_home_gro
     assert jobs[0].job_payload["event"]["group_id"] == home_group.id
     assert jobs[0].job_payload["event"]["payload"]["chat_id"] == remote_group.tg_group_id
     dispatch_mock.assert_called_once_with(jobs[0].id)
+
+
+@pytest.mark.asyncio
+async def test_agent_listener_cleans_up_and_sleeps_before_reconnect(
+    fake_bot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleep_delays: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleep_delays.append(delay)
+        await asyncio.sleep(0)
+
+    client_state = {"iterations": 0, "connected": True, "handlers": []}
+
+    class FakeClient:
+        def add_event_handler(self, handler: Callable, event=None) -> None:
+            client_state["handlers"].append(handler)
+
+        def remove_event_handler(self, handler: Callable) -> None:
+            if handler in client_state["handlers"]:
+                client_state["handlers"].remove(handler)
+
+        async def disconnect(self) -> None:
+            client_state["connected"] = False
+
+        def is_connected(self) -> bool:
+            return client_state["connected"]
+
+        async def run_until_disconnected(self) -> None:
+            client_state["iterations"] += 1
+            client_state["connected"] = False
+
+    class FakeSessionManager:
+        async def get_client(self, agent_id: int) -> FakeClient:
+            client_state["connected"] = True
+            return FakeClient()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    class FakeSessionFactory:
+        def __call__(self):
+            return FakeSession()
+
+    manager = AgentListenerManager(
+        bot=fake_bot,
+        session_manager=FakeSessionManager(),
+        session_factory=FakeSessionFactory(),
+        sleep=fake_sleep,
+    )
+
+    # Stop the infinite loop after the first disconnect/sleep cycle.
+    async def stop_after_first_sleep() -> None:
+        while not sleep_delays:
+            await asyncio.sleep(0)
+        manager._stopping = True
+
+    asyncio.create_task(stop_after_first_sleep())
+    await asyncio.wait_for(manager._run_agent_listener(1), timeout=5)
+
+    assert client_state["iterations"] >= 1
+    assert not client_state["handlers"]
+    assert not client_state["connected"]
+    assert sleep_delays
+    assert sleep_delays[0] >= 5
+
+
+@pytest.mark.asyncio
+async def test_agent_listener_handles_lead_capture_auto_respond_directly(
+    db_session,
+    session_factory,
+    fake_bot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bot.db.models import AgentJob
+    from sqlalchemy import select
+
+    owner = User(tg_user_id=9210, username="owner9210", full_name="Owner 9210", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(
+        tg_group_id=-1009210, title="Lead Capture Group", owner_user_id=owner.id, is_active=True
+    )
+    db_session.add(group)
+    await db_session.flush()
+    db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=99010,
+        external_account_id="lead-agent",
+        status="active",
+        auth_state="active",
+        session_string="session-lead",
+        details={},
+    )
+    db_session.add(agent)
+    await db_session.commit()
+
+    await TaskService(db_session, dispatch_agent_job=lambda _job_id: None).save_assignment(
+        actor_user_id=owner.tg_user_id,
+        group_id=group.id,
+        task_key="lead_capture",
+        executor_type="agent",
+        agent_id=agent.id,
+        conditions={"text_contains": "support"},
+        config={
+            "ack_template": "Thanks, we will contact you soon.",
+            "auto_respond": True,
+            "respond_mode": "private_with_forward",
+            "respond_delay_seconds": 0,
+        },
+    )
+
+    sent_messages: list[dict[str, Any]] = []
+    forwarded_messages: list[dict[str, Any]] = []
+
+    class FakeClient:
+        async def send_message(self, chat_id: int, text: str, reply_to=None):
+            sent_messages.append({"chat_id": chat_id, "text": text, "reply_to": reply_to})
+            return type("Sent", (), {"id": 1001})()
+
+        async def forward_messages(self, entity, messages, from_peer):
+            forwarded_messages.append({"entity": entity, "messages": messages, "from_peer": from_peer})
+            return type("Forwarded", (), {"id": 1002})()
+
+    monkeypatch.setattr("bot.agents.listener.SessionLocal", session_factory)
+
+    from datetime import datetime, timezone
+
+    manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
+    handled = await manager._dispatch_agent_message(
+        agent.id,
+        client=FakeClient(),
+        chat_id=group.tg_group_id,
+        group_title=group.title,
+        text="support needed",
+        message_id=601,
+        message_date=datetime.now(timezone.utc),
+        user_id=owner.tg_user_id,
+        first_name="Owner",
+        full_name="Owner 9210",
+        username="owner9210",
+    )
+
+    async with session_factory() as verification_session:
+        jobs = (
+            (
+                await verification_session.execute(
+                    select(AgentJob).where(AgentJob.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert handled is True
+    assert len(jobs) == 1
+    assert jobs[0].status == "completed"
+    assert len(forwarded_messages) == 1
+    assert forwarded_messages[0]["entity"] == owner.tg_user_id
+    assert len(sent_messages) == 1
+    assert sent_messages[0]["text"] == "Thanks, we will contact you soon."
+    assert sent_messages[0]["chat_id"] == owner.tg_user_id

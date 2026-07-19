@@ -658,7 +658,9 @@
     "respondPublic": "عام (رد في المجموعة)",
     "respondPrivate": "خاص (رسالة مباشرة)",
     "respondPrivateWithForward": "خاص مع إعادة التوجيه",
-    "respondDelay": "التأخير قبل الرد (بالثواني)"
+    "respondDelay": "التأخير قبل الرد (بالثواني)",
+    "maxNewContactsPerDay": "الحد الأقصى لجهات الاتصال الجديدة يومياً",
+    "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد"
   },
   "automation": {
     "title": "مهام الأتمتة",

@@ -4,6 +4,7 @@ import asyncio
 import re
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
@@ -13,8 +14,9 @@ from bot.agents.exceptions import AgentBannedError, AgentSessionRevokedError
 from bot.agents.session import SessionManager
 from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
-from bot.db.models import Agent, Group, GroupSetting, ModerationLog
+from bot.db.models import Agent, AgentJob, Group, GroupSetting, ModerationLog
 from bot.db.session import SessionLocal
+from bot.services.agent_lead_service import AgentLeadService
 from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
 from bot.services.scraper_service import ScraperService
 from bot.services.task_assignment_store import TASKS_SETTING_KEY
@@ -24,6 +26,8 @@ from bot.workers.tasks import schedule_bot_message_delete, schedule_task_follow_
 
 logger = structlog.get_logger(__name__)
 _URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.IGNORECASE)
+_DIRECT_SEND_TIMEOUT_SECONDS = 30
+_DIRECT_RESPOND_MAX_AGE_SECONDS = 30 * 60
 
 
 def _message_contains_link(text: str) -> bool:
@@ -155,14 +159,20 @@ class AgentListenerManager:
             logger.warning("agent_listener_telethon_unavailable", agent_id=agent_id)
             return
 
+        reconnect_delay = 5
+        max_reconnect_delay = 60
         while not self._stopping:
             client = None
+            handler = None
+            connected_at = None
             try:
+                connected_at = asyncio.get_running_loop().time()
                 client = await self.session_manager.get_client(agent_id)
 
                 async def _handle(event) -> None:
                     await self._handle_telethon_message(agent_id, event, client)
 
+                handler = _handle
                 client.add_event_handler(_handle, events.NewMessage(incoming=True))
                 logger.info("agent_listener_started", agent_id=agent_id)
 
@@ -179,16 +189,22 @@ class AgentListenerManager:
                 await client.run_until_disconnected()
                 logger.warning("agent_listener_disconnected", agent_id=agent_id)
             except asyncio.CancelledError:
+                if client is not None and handler is not None:
+                    with suppress(Exception):
+                        client.remove_event_handler(handler)
                 if client is not None:
                     with suppress(Exception):
                         await client.disconnect()
                 raise
             except Exception as exc:
                 logger.exception("agent_listener_failed", agent_id=agent_id)
-                if client is not None:
-                    with suppress(Exception):
-                        await client.disconnect()
                 if _is_terminal_listener_error(exc):
+                    if client is not None and handler is not None:
+                        with suppress(Exception):
+                            client.remove_event_handler(handler)
+                    if client is not None:
+                        with suppress(Exception):
+                            await client.disconnect()
                     if isinstance(exc, AgentSessionRevokedError):
                         await self.session_manager.mark_failed(agent_id)
                     elif isinstance(exc, AgentBannedError):
@@ -200,8 +216,39 @@ class AgentListenerManager:
                     )
                     return
                 if self._stopping:
+                    if client is not None and handler is not None:
+                        with suppress(Exception):
+                            client.remove_event_handler(handler)
+                    if client is not None:
+                        with suppress(Exception):
+                            await client.disconnect()
                     return
-                await self.sleep(5)
+
+            # Clean up handler and disconnect after normal disconnect or non-terminal error
+            if client is not None and handler is not None:
+                with suppress(Exception):
+                    client.remove_event_handler(handler)
+            if client is not None:
+                with suppress(Exception):
+                    await client.disconnect()
+
+            # Backoff: wait before reconnecting so a concurrent worker can finish using the
+            # same Telegram session. Reset delay after a stable connection.
+            if connected_at is not None:
+                connected_duration = asyncio.get_running_loop().time() - connected_at
+                if connected_duration >= 60:
+                    reconnect_delay = 5
+                else:
+                    reconnect_delay = min(reconnect_delay * 2, max_reconnect_delay)
+            logger.info(
+                "agent_listener_reconnecting",
+                agent_id=agent_id,
+                delay_seconds=reconnect_delay,
+                connected_duration=(
+                    asyncio.get_running_loop().time() - connected_at if connected_at else None
+                ),
+            )
+            await self.sleep(reconnect_delay)
 
     async def _handle_telethon_message(
         self, agent_id: int, event: Any, client: Any | None = None
@@ -219,6 +266,7 @@ class AgentListenerManager:
         with suppress(Exception):
             sender = await event.get_sender()
         message_id = getattr(event, "message", None) and getattr(event.message, "id", None)
+        message_date = getattr(event.message, "date", None)
         chat_title = str(getattr(chat, "title", None) or "")
         username = str(getattr(sender, "username", None) or "")
         first_name = str(getattr(sender, "first_name", None) or "")
@@ -266,10 +314,12 @@ class AgentListenerManager:
         )
         await self._dispatch_agent_message(
             agent_id,
+            client=client,
             chat_id=chat_id,
             group_title=chat_title,
             text=text,
             message_id=message_id,
+            message_date=message_date,
             user_id=int(sender_id) if sender_id is not None else None,
             first_name=first_name,
             full_name=full_name,
@@ -568,10 +618,12 @@ class AgentListenerManager:
         self,
         agent_id: int,
         *,
+        client: Any,
         chat_id: int,
         group_title: str,
         text: str,
         message_id: int | None,
+        message_date: Any | None = None,
         user_id: int | None,
         first_name: str = "",
         full_name: str = "",
@@ -601,7 +653,7 @@ class AgentListenerManager:
                     )
                 ).scalar_one_or_none()
                 source_title = source_title_row or str(chat_id)
-            await TaskService(
+            results = await TaskService(
                 session,
                 dispatch_agent_job=dispatch_agent_job,
                 dispatch_follow_up=schedule_task_follow_up,
@@ -616,6 +668,7 @@ class AgentListenerManager:
                     "group_title": source_title,
                     "text": text,
                     "message_id": message_id,
+                    "message_date": message_date,
                     "first_name": first_name,
                     "full_name": full_name,
                     "username": username,
@@ -624,7 +677,243 @@ class AgentListenerManager:
                     "lang": get_settings().default_language,
                 },
             )
+            for result in results or []:
+                if result.get("_listener_handled") and result.get("_handler_result"):
+                    await self._handle_direct_lead_capture(
+                        agent_id=agent_id,
+                        client=client,
+                        session=session,
+                        job_id=result.get("job_id"),
+                        handler_result=result["_handler_result"],
+                        task_config=result.get("_task_config") or {},
+                        event_payload={
+                            "chat_id": chat_id,
+                            "group_title": source_title,
+                            "text": text,
+                            "message_id": message_id,
+                            "first_name": first_name,
+                            "full_name": full_name,
+                            "username": username,
+                        },
+                        message_date=message_date,
+                        user_id=user_id,
+                    )
             return True
+
+    async def _handle_direct_lead_capture(
+        self,
+        *,
+        agent_id: int,
+        client: Any,
+        session: Any,
+        job_id: int | None,
+        handler_result: dict[str, Any],
+        task_config: dict[str, Any],
+        event_payload: dict[str, Any],
+        message_date: Any | None,
+        user_id: int | None,
+    ) -> None:
+        """Send a lead_capture auto-respond directly from the listener's client.
+
+        This keeps the worker from taking over the same Telegram session and knocking
+        the listener offline, so subsequent messages are not missed.
+        """
+        if client is None:
+            return
+
+        agent = (
+            await session.execute(select(Agent).where(Agent.id == agent_id))
+        ).scalar_one_or_none()
+        if agent is None:
+            return
+
+        # Skip the auto-respond if the original message is too old
+        if isinstance(message_date, datetime):
+            age_seconds = (datetime.now(timezone.utc) - message_date).total_seconds()
+            if age_seconds > _DIRECT_RESPOND_MAX_AGE_SECONDS:
+                logger.warning(
+                    "direct_lead_capture_stale",
+                    agent_id=agent_id,
+                    user_id=user_id,
+                    message_id=event_payload.get("message_id"),
+                    age_seconds=age_seconds,
+                    max_age_seconds=_DIRECT_RESPOND_MAX_AGE_SECONDS,
+                )
+                if job_id is not None:
+                    try:
+                        job = (
+                            await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                        ).scalar_one_or_none()
+                        if job is not None:
+                            job.status = "completed"
+                            payload = dict(job.job_payload or {})
+                            payload["result"] = {
+                                "sent": False,
+                                "handled_by_listener": True,
+                                "reason": "stale",
+                            }
+                            job.job_payload = payload
+                            await session.commit()
+                    except Exception:
+                        logger.exception(
+                            "direct_lead_capture_job_update_failed",
+                            agent_id=agent_id,
+                            job_id=job_id,
+                        )
+                        try:
+                            await session.rollback()
+                        except Exception:
+                            pass
+                return
+
+        # Enforce daily limit on new contacts
+        max_new_contacts = int(task_config.get("max_new_contacts_per_day") or 0)
+        if max_new_contacts > 0 and self.redis is not None and user_id is not None:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            key = f"agent:{agent_id}:new_contacts:{today}"
+            already_counted = await self.redis.sismember(key, str(user_id))
+            if not already_counted:
+                count = await self.redis.scard(key)
+                if int(count) >= max_new_contacts:
+                    logger.warning(
+                        "direct_lead_capture_daily_limit_reached",
+                        agent_id=agent_id,
+                        user_id=user_id,
+                        max_new_contacts=max_new_contacts,
+                        daily_count=count,
+                    )
+                    if job_id is not None:
+                        try:
+                            job = (
+                                await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                            ).scalar_one_or_none()
+                            if job is not None:
+                                job.status = "completed"
+                                payload = dict(job.job_payload or {})
+                                payload["result"] = {
+                                    "sent": False,
+                                    "handled_by_listener": True,
+                                    "reason": "daily_limit_reached",
+                                }
+                                job.job_payload = payload
+                                await session.commit()
+                        except Exception:
+                            logger.exception(
+                                "direct_lead_capture_job_update_failed",
+                                agent_id=agent_id,
+                                job_id=job_id,
+                            )
+                            try:
+                                await session.rollback()
+                            except Exception:
+                                pass
+                    return
+            await self.redis.sadd(key, str(user_id))
+            await self.redis.expire(key, 86400)
+
+        # Capture the lead first
+        try:
+            metadata = dict(handler_result.get("metadata") or {})
+            lead_service = AgentLeadService(session)
+            await lead_service.capture_lead(
+                agent_id=agent.id,
+                group_id=agent.group_id or 0,
+                tg_user_id=user_id,
+                username=str(event_payload.get("username") or ""),
+                first_name=str(event_payload.get("first_name") or ""),
+                last_name=str(event_payload.get("full_name") or "").split()[-1]
+                if event_payload.get("full_name")
+                else None,
+                source_group_tg_id=event_payload.get("chat_id") or 0,
+                source_group_title=str(event_payload.get("group_title") or ""),
+                source_message_id=event_payload.get("message_id"),
+                message_text=str(event_payload.get("text") or ""),
+                lead_label=str(metadata.get("lead_label") or "general"),
+                confidence=0.6,
+            )
+        except Exception:
+            logger.exception("direct_lead_capture_persistence_failed", agent_id=agent_id)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+
+        # Forward the original message if requested
+        forward_info = handler_result.get("forward_message")
+        if isinstance(forward_info, dict):
+            forward_chat_id = handler_result.get("chat_id") or user_id
+            if forward_chat_id:
+                try:
+                    await asyncio.wait_for(
+                        client.forward_messages(
+                            entity=forward_chat_id,
+                            messages=forward_info["message_id"],
+                            from_peer=forward_info["from_chat"],
+                        ),
+                        timeout=_DIRECT_SEND_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "direct_lead_capture_forward_timeout",
+                        agent_id=agent_id,
+                        timeout_seconds=_DIRECT_SEND_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    logger.exception("direct_lead_capture_forward_failed", agent_id=agent_id)
+
+        # Optional delay before the ack message
+        respond_delay = handler_result.get("respond_delay_seconds", 0)
+        if respond_delay and isinstance(respond_delay, (int, float)) and respond_delay > 0:
+            await self.sleep(respond_delay)
+
+        # Send the ack message
+        chat_id = handler_result.get("chat_id") or event_payload.get("chat_id") or 0
+        text = handler_result.get("text", "")
+        if text and chat_id:
+            try:
+                await asyncio.wait_for(
+                    client.send_message(
+                        int(chat_id),
+                        str(text),
+                        reply_to=handler_result.get("reply_to_message_id"),
+                    ),
+                    timeout=_DIRECT_SEND_TIMEOUT_SECONDS,
+                )
+                logger.info(
+                    "direct_lead_capture_reply_sent",
+                    agent_id=agent_id,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    message_id=event_payload.get("message_id"),
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "direct_lead_capture_reply_timeout",
+                    agent_id=agent_id,
+                    chat_id=chat_id,
+                    timeout_seconds=_DIRECT_SEND_TIMEOUT_SECONDS,
+                )
+            except Exception:
+                logger.exception("direct_lead_capture_reply_failed", agent_id=agent_id)
+
+        # Mark the tracking job as completed
+        if job_id is not None:
+            try:
+                job = (
+                    await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                ).scalar_one_or_none()
+                if job is not None:
+                    job.status = "completed"
+                    payload = dict(job.job_payload or {})
+                    payload["result"] = {"sent": True, "handled_by_listener": True}
+                    job.job_payload = payload
+                    await session.commit()
+            except Exception:
+                logger.exception("direct_lead_capture_job_update_failed", agent_id=agent_id, job_id=job_id)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
 
     async def _resolve_listener_group(
         self, session: Any, *, agent_id: int, chat_id: int
