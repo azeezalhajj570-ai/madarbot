@@ -680,6 +680,7 @@
     "destVisible": "اختيار مجموعة ظاهرة",
     "destManual": "معرف / اسم مستخدم يدوي",
     "destGroup": "مجموعة الوجهة",
+    "destGroupPlaceholder": "ابحث عن مجموعة وجهة",
     "destination": "الوجهة",
     "destPlaceholder": "-1001234567890 أو @channel",
     "deliveryMode": "وضع التسليم",

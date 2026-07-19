@@ -680,6 +680,7 @@
     "destVisible": "Select visible group",
     "destManual": "Manual ID / username",
     "destGroup": "Destination group",
+    "destGroupPlaceholder": "Search destination group",
     "destination": "Destination",
     "destPlaceholder": "-1001234567890 or @channel",
     "deliveryMode": "Delivery mode",
