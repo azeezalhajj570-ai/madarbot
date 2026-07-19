@@ -75,7 +75,8 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
     const mode = task.config.auto_respond ? ` · auto: ${String(task.config.respond_mode || 'public')}` : ''
     const limit = task.config.max_new_contacts_per_day ? ` · limit: ${task.config.max_new_contacts_per_day}/day` : ''
     const cooldown = task.config.cooldown_minutes ? ` · cooldown: ${task.config.cooldown_minutes}m` : ''
-    return `${summary}${mode}${limit}${cooldown}`
+    const interCooldown = task.config.inter_contact_cooldown_seconds ? ` · gap: ${task.config.inter_contact_cooldown_seconds}s` : ''
+    return `${summary}${mode}${limit}${cooldown}${interCooldown}`
   }
   const template = String(task.config.message_template || '').trim()
   const summary = template ? template : t('automation.noTemplate')
@@ -114,7 +115,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
   const [leadRespondDelay, setLeadRespondDelay] = useState('3')
   const [leadMaxNewContacts, setLeadMaxNewContacts] = useState('')
-  const [leadCooldownMinutes, setLeadCooldownMinutes] = useState('1440')
+  const [leadCooldownMinutes, setLeadCooldownMinutes] = useState('43200')
+  const [leadInterContactCooldown, setLeadInterContactCooldown] = useState('720')
 
   const canSave = useMemo(() => {
     if (!taskKeywords.length) return false
@@ -178,7 +180,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadRespondMode('public')
     setLeadRespondDelay('3')
     setLeadMaxNewContacts('')
-    setLeadCooldownMinutes('1440')
+    setLeadCooldownMinutes('43200')
+    setLeadInterContactCooldown('720')
     setStatus(null)
   }
 
@@ -202,7 +205,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadRespondMode(String(task.config.respond_mode || 'public') as 'public' | 'private' | 'private_with_forward')
     setLeadRespondDelay(String(task.config.respond_delay_seconds ?? 3))
     setLeadMaxNewContacts(task.config.max_new_contacts_per_day != null ? String(task.config.max_new_contacts_per_day) : '')
-    setLeadCooldownMinutes(task.config.cooldown_minutes != null ? String(task.config.cooldown_minutes) : '1440')
+    setLeadCooldownMinutes(task.config.cooldown_minutes != null ? String(task.config.cooldown_minutes) : '43200')
+    setLeadInterContactCooldown(task.config.inter_contact_cooldown_seconds != null ? String(task.config.inter_contact_cooldown_seconds) : '720')
     setIsFormOpen(true)
   }
 
@@ -232,6 +236,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       if (maxNew > 0) config.max_new_contacts_per_day = maxNew
       const cooldown = Number(leadCooldownMinutes)
       if (cooldown > 0) config.cooldown_minutes = cooldown
+      const interCooldown = Number(leadInterContactCooldown)
+      if (interCooldown > 0) config.inter_contact_cooldown_seconds = interCooldown
     }
     if (errors.length) { notify(errors.join(' · ')); return }
     const payload = {
@@ -357,6 +363,17 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
                         value={leadCooldownMinutes}
                         onChange={(e) => setLeadCooldownMinutes(e.target.value)}
                         placeholder={t('leadsAcq.cooldownMinutesPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.interContactCooldown')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={leadInterContactCooldown}
+                        onChange={(e) => setLeadInterContactCooldown(e.target.value)}
+                        placeholder={t('leadsAcq.interContactCooldownPlaceholder')}
                         style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
                       />
                     </label>

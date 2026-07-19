@@ -421,6 +421,11 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "required": False,
                     "description": "Minutes to wait before sending another auto-reply to the same contact. 0 or empty means no cooldown.",
                 },
+                "inter_contact_cooldown_seconds": {
+                    "type": "integer",
+                    "required": False,
+                    "description": "Seconds to wait before replying to another contact after sending a reply. 0 to disable.",
+                },
             },
             handler=lead_capture_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),

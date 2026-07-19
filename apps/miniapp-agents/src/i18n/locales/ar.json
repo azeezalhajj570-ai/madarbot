@@ -662,7 +662,9 @@
     "maxNewContactsPerDay": "الحد الأقصى لجهات الاتصال الجديدة يومياً",
     "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد",
     "cooldownMinutes": "فترة التهدئة (بالدقائق)",
-    "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (24 ساعة)"
+    "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (30 يوماً)",
+    "interContactCooldown": "التأخير بين جهات الاتصال (بالثواني)",
+    "interContactCooldownPlaceholder": "اتركه فارغاً للافتراضي (12 دقيقة)"
   },
   "automation": {
     "title": "مهام الأتمتة",
