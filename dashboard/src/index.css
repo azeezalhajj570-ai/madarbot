@@ -177,7 +177,8 @@ textarea {
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .dashboard-layout {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
     padding-bottom: var(--mobile-nav-height);
   }
 
@@ -217,6 +218,7 @@ textarea {
   }
 
   .dashboard-main {
+    min-height: 0 !important;
     padding: 12px !important;
     padding-top: 56px !important;
   }
