@@ -664,7 +664,9 @@
     "cooldownMinutes": "فترة التهدئة (بالدقائق)",
     "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (30 يوماً)",
     "interContactCooldown": "التأخير بين جهات الاتصال (بالدقائق)",
-    "interContactCooldownPlaceholder": "اتركه فارغاً للافتراضي (12 دقيقة)"
+    "interContactCooldownPlaceholder": "اتركه فارغاً للافتراضي (12 دقيقة)",
+    "respondMaxAge": "الحد الأقصى لعمر الرسالة (بالدقائق)",
+    "respondMaxAgePlaceholder": "اتركه فارغاً للافتراضي (30 دقيقة)"
   },
   "automation": {
     "title": "مهام الأتمتة",

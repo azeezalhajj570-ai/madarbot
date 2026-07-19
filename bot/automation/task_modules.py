@@ -426,6 +426,11 @@ def build_builtin_task_definitions() -> list[TaskDefinition]:
                     "required": False,
                     "description": "Minutes to wait before replying to another contact after sending a reply. 0 to disable.",
                 },
+                "respond_max_age_minutes": {
+                    "type": "integer",
+                    "required": False,
+                    "description": "Maximum age of the original message in minutes. Messages older than this will not get a reply. 0 means no limit.",
+                },
             },
             handler=lead_capture_handler,
             trigger_rule=TaskTrigger(event_name="message.received"),

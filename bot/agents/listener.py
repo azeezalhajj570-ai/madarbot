@@ -916,16 +916,18 @@ class AgentListenerManager:
                     return
 
         # Skip the auto-respond if the original message is too old
-        if isinstance(message_date, datetime):
+        max_age_minutes = int(task_config.get("respond_max_age_minutes") or 0)
+        if max_age_minutes > 0 and isinstance(message_date, datetime):
+            max_age_seconds = max_age_minutes * 60
             age_seconds = (datetime.now(timezone.utc) - message_date).total_seconds()
-            if age_seconds > _DIRECT_RESPOND_MAX_AGE_SECONDS:
+            if age_seconds > max_age_seconds:
                 logger.warning(
                     "direct_lead_capture_stale",
                     agent_id=agent_id,
                     user_id=user_id,
                     message_id=event_payload.get("message_id"),
                     age_seconds=age_seconds,
-                    max_age_seconds=_DIRECT_RESPOND_MAX_AGE_SECONDS,
+                    max_age_seconds=max_age_seconds,
                 )
                 if job_id is not None:
                     try:
