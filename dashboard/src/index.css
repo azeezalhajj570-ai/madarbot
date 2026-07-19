@@ -267,4 +267,28 @@ textarea {
   .grid-2col {
     grid-template-columns: 1fr !important;
   }
+
+  .dashboard-main table th,
+  .dashboard-main table td {
+    padding: 6px 4px !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
+
+  .dashboard-main table {
+    min-width: 0 !important;
+  }
+
+  .dashboard-main input,
+  .dashboard-main select,
+  .dashboard-main textarea {
+    min-height: 40px !important;
+    font-size: 14px !important;
+  }
+
+  .dashboard-main [style*="gap: 12px"],
+  .dashboard-main [style*="gap: 14px"],
+  .dashboard-main [style*="gap: 16px"] {
+    gap: 8px !important;
+  }
 }
