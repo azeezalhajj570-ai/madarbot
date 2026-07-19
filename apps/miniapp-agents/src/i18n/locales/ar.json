@@ -660,7 +660,9 @@
     "respondPrivateWithForward": "خاص مع إعادة التوجيه",
     "respondDelay": "التأخير قبل الرد (بالثواني)",
     "maxNewContactsPerDay": "الحد الأقصى لجهات الاتصال الجديدة يومياً",
-    "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد"
+    "maxNewContactsPerDayPlaceholder": "اتركه فارغاً لعدم وجود حد",
+    "cooldownMinutes": "فترة التهدئة (بالدقائق)",
+    "cooldownMinutesPlaceholder": "اتركه فارغاً للافتراضي (24 ساعة)"
   },
   "automation": {
     "title": "مهام الأتمتة",
