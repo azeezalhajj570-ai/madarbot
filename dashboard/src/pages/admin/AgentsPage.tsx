@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 
-import { Badge, Button, Card, EmptyState, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, EmptyState, Table } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
-import type { AdminOverview } from '../../lib/types'
+import type { AdminAgent, AdminOverview } from '../../lib/types'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -23,7 +23,7 @@ export default function AdminAgentsPage() {
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
+      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
         <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
@@ -59,7 +59,7 @@ export default function AdminAgentsPage() {
   const totalContacts = agents.reduce((s, a) => s + a.unique_contacts, 0)
 
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin.agents" descriptionKey="page.admin.agents.desc" loading={loading}>
+    <PageShell titleKey="page.admin.agents" descriptionKey="page.admin.agents.desc" loading={loading}>
       {error && (
         <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
           <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
@@ -97,16 +97,17 @@ export default function AdminAgentsPage() {
 
       <Card title="Linked Agents">
         {agents.length > 0 ? (
-          <Table
-            columns={['Phone', 'Status', 'Sent', 'Contacts', 'Jobs', 'Last Activity']}
-            rows={agents.map(a => [
-              <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span>,
-              <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge>,
-              String(a.total_sent),
-              String(a.unique_contacts),
-              String(a.jobs_count),
-              timeAgo(a.last_job_at),
-            ])}
+          <Table<AdminAgent>
+            columns={[
+              { key: 'phone', label: 'Phone', render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
+              { key: 'status', label: 'Status', render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
+              { key: 'sent', label: 'Sent', hideOnMobile: true, render: (a) => String(a.total_sent) },
+              { key: 'contacts', label: 'Contacts', hideOnMobile: true, render: (a) => String(a.unique_contacts) },
+              { key: 'jobs', label: 'Jobs', hideOnMobile: true, render: (a) => String(a.jobs_count) },
+              { key: 'lastActivity', label: 'Last Activity', render: (a) => timeAgo(a.last_job_at) },
+            ]}
+            data={agents}
+            keyExtractor={(a) => a.id}
           />
         ) : (
           <EmptyState title="No agents" subtitle="No linked Telegram accounts found." />

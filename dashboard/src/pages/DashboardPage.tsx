@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import * as api from '../lib/api'
-import type { AdminOverview, OwnerSubscriptionRequest, PromotionCode } from '../lib/types'
+import type { AdminAgent, AdminOverview, OwnerSubscriptionRequest, PromotionCode } from '../lib/types'
 
 const REFRESH_INTERVAL = 30_000
 
@@ -79,7 +79,7 @@ export default function DashboardPage() {
   const totalContacts = agents.reduce((s, a) => s + a.unique_contacts, 0)
 
   return (
-    <PageShell eyebrow="Admin" titleKey="page.admin" descriptionKey="page.admin.desc" loading={loading}>
+    <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={loading}>
       {error && (
         <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
           <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
@@ -133,16 +133,17 @@ export default function DashboardPage() {
       {/* Section 2: Agents */}
       <Card title={`Agents (${activeCount} active${failedCount ? `, ${failedCount} failed` : ''})`}>
         {agents.length > 0 ? (
-          <Table
-            columns={['Phone', 'Status', 'Sent', 'Contacts', 'Jobs', 'Last Activity']}
-            rows={agents.map(a => [
-              <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span>,
-              <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge>,
-              String(a.total_sent),
-              String(a.unique_contacts),
-              String(a.jobs_count),
-              timeAgo(a.last_job_at),
-            ])}
+          <Table<AdminAgent>
+            columns={[
+              { key: 'phone', label: 'Phone', render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
+              { key: 'status', label: 'Status', render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
+              { key: 'sent', label: 'Sent', hideOnMobile: true, render: (a) => String(a.total_sent) },
+              { key: 'contacts', label: 'Contacts', hideOnMobile: true, render: (a) => String(a.unique_contacts) },
+              { key: 'jobs', label: 'Jobs', hideOnMobile: true, render: (a) => String(a.jobs_count) },
+              { key: 'last_activity', label: 'Last Activity', render: (a) => timeAgo(a.last_job_at) },
+            ]}
+            data={agents}
+            keyExtractor={(a) => a.id}
           />
         ) : (
           <EmptyState title="No agents" subtitle="No linked Telegram accounts found." />
@@ -209,22 +210,31 @@ export default function DashboardPage() {
       {/* Section 5: Subscriptions */}
       <Card title={`Subscriptions (${subs.filter(s => s.status === 'pending').length} pending)`}>
         {subs.length > 0 ? (
-          <Table
-            columns={['User', 'Message', 'Status', 'Plan', 'Requested']}
-            rows={subs.map(s => [
-              <div>
-                <div style={{ fontWeight: 700 }}>{s.fullName || 'Telegram User'}</div>
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{s.username || 'no_username'} · {s.tgUserId}</div>
-              </div>,
-              <div style={{ maxWidth: 200, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: s.message ? 'normal' : 'italic' }}>
-                {s.message || '—'}
-              </div>,
-              <Badge tone={s.status === 'approved' ? 'success' : s.status === 'pending' ? 'warning' : 'destructive'}>
-                {s.status}
-              </Badge>,
-              s.plan ? <Badge tone={s.plan === 'business' ? 'success' : 'neutral'}>{s.plan}</Badge> : '—',
-              <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{timeAgo(s.createdAt)}</span>,
-            ])}
+          <Table<OwnerSubscriptionRequest>
+            columns={[
+              { key: 'user', label: 'User', render: (s) => (
+                <div>
+                  <div style={{ fontWeight: 700 }}>{s.fullName || 'Telegram User'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{s.username || 'no_username'} · {s.tgUserId}</div>
+                </div>
+              )},
+              { key: 'message', label: 'Message', hideOnMobile: true, render: (s) => (
+                <div style={{ maxWidth: 200, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: s.message ? 'normal' : 'italic' }}>
+                  {s.message || '—'}
+                </div>
+              )},
+              { key: 'status', label: 'Status', render: (s) => (
+                <Badge tone={s.status === 'approved' ? 'success' : s.status === 'pending' ? 'warning' : 'destructive'}>
+                  {s.status}
+                </Badge>
+              )},
+              { key: 'plan', label: 'Plan', render: (s) => s.plan ? <Badge tone={s.plan === 'business' ? 'success' : 'neutral'}>{s.plan}</Badge> : '—' },
+              { key: 'requested', label: 'Requested', hideOnMobile: true, render: (s) => (
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{timeAgo(s.createdAt)}</span>
+              )},
+            ]}
+            data={subs}
+            keyExtractor={(s) => s.id}
           />
         ) : (
           <EmptyState title="No subscriptions" subtitle="No subscription requests found." />
@@ -234,16 +244,17 @@ export default function DashboardPage() {
       {/* Section 6: Promo Codes */}
       <Card title={`Promo Codes (${promos.length} total)`}>
         {promos.length > 0 ? (
-          <Table
-            columns={['Code', 'Plan', 'Duration', 'Usage', 'Active', 'Expires']}
-            rows={promos.map(p => [
-              <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span>,
-              <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge>,
-              <span style={{ fontWeight: 600 }}>{p.duration_days}d</span>,
-              <span>{p.used_count} / {p.max_uses || '∞'}</span>,
-              <Badge tone={p.is_active ? 'success' : 'neutral'}>{p.is_active ? 'yes' : 'no'}</Badge>,
-              <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{p.expiry_date ? new Date(p.expiry_date).toLocaleDateString() : '—'}</span>,
-            ])}
+          <Table<PromotionCode>
+            columns={[
+              { key: 'code', label: 'Code', render: (p) => <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span> },
+              { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p) => <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge> },
+              { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p) => <span style={{ fontWeight: 600 }}>{p.duration_days}d</span> },
+              { key: 'usage', label: 'Usage', render: (p) => <span>{p.used_count} / {p.max_uses || '∞'}</span> },
+              { key: 'active', label: 'Active', render: (p) => <Badge tone={p.is_active ? 'success' : 'neutral'}>{p.is_active ? 'yes' : 'no'}</Badge> },
+              { key: 'expires', label: 'Expires', hideOnMobile: true, render: (p) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{p.expiry_date ? new Date(p.expiry_date).toLocaleDateString() : '—'}</span> },
+            ]}
+            data={promos}
+            keyExtractor={(p) => p.id}
           />
         ) : (
           <EmptyState title="No promo codes" subtitle="No promotion codes have been created." />

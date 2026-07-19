@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Users, Bot, MessageSquare, TrendingUp } from 'lucide-react'
 
-import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, ContentGrid, EmptyState, MetricCard, Table } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import { fetchOwnerStats, fetchOwnerGroups } from '../lib/api'
 
@@ -30,15 +30,20 @@ export default function HomePage() {
       <Card title="Your Groups">
         {groups && groups.length > 0 ? (
           <Table
-            columns={['Group', 'Members', 'Health', 'Status']}
-            rows={groups.map((g: any) => [
-              <div style={{ fontWeight: 700 }}>{g.title || `Group #${g.tg_group_id}`}</div>,
-              String(g.member_count ?? '—'),
-              <Badge tone={g.health_score >= 80 ? 'success' : g.health_score >= 60 ? 'warning' : 'destructive'}>
-                {g.health_score ?? '—'}
-              </Badge>,
-              <Badge tone={g.status === 'active' ? 'success' : 'neutral'}>{g.status || 'active'}</Badge>,
-            ])}
+            columns={[
+              { key: 'group', label: 'Group', render: (g: any) => <div style={{ fontWeight: 700 }}>{g.title || `Group #${g.tg_group_id}`}</div> },
+              { key: 'members', label: 'Members', hideOnMobile: true, render: (g: any) => String(g.member_count ?? '—') },
+              { key: 'health', label: 'Health', render: (g: any) => (
+                <Badge tone={g.health_score >= 80 ? 'success' : g.health_score >= 60 ? 'warning' : 'destructive'}>
+                  {g.health_score ?? '—'}
+                </Badge>
+              )},
+              { key: 'status', label: 'Status', render: (g: any) => (
+                <Badge tone={g.status === 'active' ? 'success' : 'neutral'}>{g.status || 'active'}</Badge>
+              )},
+            ]}
+            data={groups}
+            keyExtractor={(g: any) => g.tg_group_id}
           />
         ) : (
           <EmptyState title="No groups yet" subtitle="Groups will appear here once you connect your bot." />

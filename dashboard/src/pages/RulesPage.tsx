@@ -242,7 +242,7 @@ export default function RulesPage() {
 
   return (
     <PageShell
-      eyebrow="AI Pilot"
+     
       titleKey="page.rules"
       descriptionKey="page.rules.desc"
       loading={loading}
@@ -257,7 +257,7 @@ export default function RulesPage() {
         </div>
       )}
     >
-      {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
+      {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {!groupsLoading && groups.length === 0 ? (
         <Card>
           <div style={{ textAlign: 'center', padding: 32 }}>
@@ -273,7 +273,7 @@ export default function RulesPage() {
       {!currentGroup && groups.length > 0 ? (
         <InlineMessage tone="neutral">Select a group from the dropdown above to manage AI Pilot settings.</InlineMessage>
       ) : null}
-      {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
+      {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {pluginCategories.length > 0 && pluginCategories.map(([category, entries]) => (

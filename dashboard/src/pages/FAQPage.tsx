@@ -222,9 +222,9 @@ export default function FAQPage() {
         </div>
       )}
     >
-      {groupsError ? <InlineMessage tone="danger">{groupsError}</InlineMessage> : null}
+      {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">{t('faq.managing')} {currentGroup.title}.</InlineMessage> : null}
-      {error ? <InlineMessage tone="danger">{error}</InlineMessage> : null}
+      {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {settings ? (

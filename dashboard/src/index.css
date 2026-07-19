@@ -291,4 +291,18 @@ textarea {
   .dashboard-main [style*="gap: 16px"] {
     gap: 8px !important;
   }
+
+  .table-desktop-view {
+    display: none;
+  }
+
+  .table-mobile-view {
+    display: grid !important;
+  }
+}
+
+@media (min-width: 601px) {
+  .table-mobile-view {
+    display: none !important;
+  }
 }
