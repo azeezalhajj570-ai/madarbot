@@ -638,11 +638,20 @@ class AgentListenerManager:
             group = await self._resolve_listener_group(session, agent_id=agent_id, chat_id=chat_id)
             if group is None:
                 return False
+            # Resolve the actual source group by chat_id for admin/blacklist checks.
+            # The resolved `group` may be the assignment holder when group_tg_ids spans
+            # multiple groups, so use the source chat's own group when available.
+            source_group = (
+                await session.execute(
+                    select(Group).where(Group.tg_group_id == canonical_tg_group_id(int(chat_id)))
+                )
+            ).scalar_one_or_none() or group
             if self.log_message_events:
                 logger.info(
                     "agent_listener_message_received",
                     agent_id=agent_id,
                     group_id=group.id,
+                    source_group_id=source_group.id,
                     chat_id=chat_id,
                     user_id=user_id,
                     message_id=message_id,
@@ -702,7 +711,7 @@ class AgentListenerManager:
                         },
                         message_date=message_date,
                         user_id=user_id,
-                        group=group,
+                        group=source_group,
                         is_bot=is_bot,
                     )
             return True
