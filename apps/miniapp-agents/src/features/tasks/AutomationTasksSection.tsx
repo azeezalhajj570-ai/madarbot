@@ -73,7 +73,8 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
     const template = String(task.config.ack_template || '').trim()
     const summary = template ? template : t('automation.noTemplate')
     const mode = task.config.auto_respond ? ` · auto: ${String(task.config.respond_mode || 'public')}` : ''
-    return `${summary}${mode}`
+    const limit = task.config.max_new_contacts_per_day ? ` · limit: ${task.config.max_new_contacts_per_day}/day` : ''
+    return `${summary}${mode}${limit}`
   }
   const template = String(task.config.message_template || '').trim()
   const summary = template ? template : t('automation.noTemplate')
@@ -111,6 +112,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [leadAutoRespond, setLeadAutoRespond] = useState(false)
   const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
   const [leadRespondDelay, setLeadRespondDelay] = useState('3')
+  const [leadMaxNewContacts, setLeadMaxNewContacts] = useState('')
 
   const canSave = useMemo(() => {
     if (!taskKeywords.length) return false
@@ -173,6 +175,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadAutoRespond(false)
     setLeadRespondMode('public')
     setLeadRespondDelay('3')
+    setLeadMaxNewContacts('')
     setStatus(null)
   }
 
@@ -195,6 +198,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadAutoRespond(Boolean(task.config.auto_respond))
     setLeadRespondMode(String(task.config.respond_mode || 'public') as 'public' | 'private' | 'private_with_forward')
     setLeadRespondDelay(String(task.config.respond_delay_seconds ?? 3))
+    setLeadMaxNewContacts(task.config.max_new_contacts_per_day != null ? String(task.config.max_new_contacts_per_day) : '')
     setIsFormOpen(true)
   }
 
@@ -220,6 +224,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       config.auto_respond = true
       config.respond_mode = leadRespondMode
       config.respond_delay_seconds = Math.max(0, Number(leadRespondDelay) || 3)
+      const maxNew = Number(leadMaxNewContacts)
+      if (maxNew > 0) config.max_new_contacts_per_day = maxNew
     }
     if (errors.length) { notify(errors.join(' · ')); return }
     const payload = {
@@ -326,13 +332,24 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
                         style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
                       />
                     </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.maxNewContactsPerDay')}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={leadMaxNewContacts}
+                        onChange={(e) => setLeadMaxNewContacts(e.target.value)}
+                        placeholder={t('leadsAcq.maxNewContactsPerDayPlaceholder')}
+                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                      />
+                    </label>
                   </div>
                 )}
               </div>
             ) : null}
             <GroupAutocompleteField label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
-              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
+              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('automation.destGroupPlaceholder')} />
             {taskKey === 'notify_destination' ? (
               <>
                 <SelectField label={t('automation.destType')} value={taskDestinationMode} onChange={(v) => setTaskDestinationMode(v as TaskDestinationMode)}>

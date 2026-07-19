@@ -160,6 +160,10 @@ Status endpoint: `GET /api/agents/{id}/status` returns `session_state`, `retry_a
 
 Frontend polls every 60s and shows a colored dot + countdown in the header.
 
+Listener reconnection: when the listener is disconnected (e.g. because an `agent_worker` job uses the same Telegram session), it removes its event handler, disconnects the client, waits, and then reconnects. The reconnect delay uses exponential backoff starting at 5s up to 60s; it resets to 5s after a stable connection of 60s or more. This prevents rapid reconnect loops and gives the worker time to finish using the session.
+
+`lead_capture` tasks with `auto_respond: true` are sent directly by the agent listener instead of being dispatched to `agent_worker`. This avoids the worker taking over the same Telegram session and knocking the listener offline, so subsequent messages are still received.
+
 ## Groups Visibility Filter
 
 `GET /api/agents/{id}/groups` returns groups where EITHER:

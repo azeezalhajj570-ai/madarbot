@@ -68,6 +68,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
   const [leadAutoRespond, setLeadAutoRespond] = useState(false)
   const [leadRespondMode, setLeadRespondMode] = useState<'public' | 'private' | 'private_with_forward'>('public')
   const [leadRespondDelay, setLeadRespondDelay] = useState('3')
+  const [leadMaxNewContacts, setLeadMaxNewContacts] = useState('')
   const [taskGroupsQuery, setTaskGroupsQuery] = useState('')
   const [taskGroups, setTaskGroups] = useState<SelectedGroupChip[]>([])
 
@@ -132,6 +133,8 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         config.auto_respond = true
         config.respond_mode = leadRespondMode
         config.respond_delay_seconds = Math.max(0, Number(leadRespondDelay) || 3)
+        const maxNew = Number(leadMaxNewContacts)
+        if (maxNew > 0) config.max_new_contacts_per_day = maxNew
       }
       await agentsApi.createGroupTask(account.group_id || 196, {
         task_key: 'lead_capture',
@@ -179,6 +182,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
     setLeadAutoRespond(false)
     setLeadRespondMode('public')
     setLeadRespondDelay('3')
+    setLeadMaxNewContacts('')
     setTaskGroupsQuery('')
     setTaskGroups([])
     setStatus(null)
@@ -279,9 +283,22 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
                 />
               </label>
             )}
+            {leadAutoRespond && (
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('leadsAcq.maxNewContactsPerDay')}</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={leadMaxNewContacts}
+                  onChange={(e) => setLeadMaxNewContacts(e.target.value)}
+                  placeholder={t('leadsAcq.maxNewContactsPerDayPlaceholder')}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                />
+              </label>
+            )}
             <GroupAutocompleteField label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
               selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
-              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} />
+              onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('leadsAcq.groupPlaceholder')} />
             <div style={{ display: 'flex', gap: 8 }}>
               <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !canSubmit}>
                 Save

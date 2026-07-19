@@ -239,6 +239,48 @@ class AgentJobExecutor(BaseTaskExecutor):
             full_name=str(event.payload.get("full_name") or ""),
         )
 
+        # Handle lead_capture auto-respond directly in the agent listener. This avoids
+        # the agent_worker taking over the same Telegram session and knocking the
+        # listener offline, which caused subsequent messages to be missed.
+        if task.key == "lead_capture" and assignment.config.get("auto_respond"):
+            handler_result = await task.handler(assignment.config, event)
+            job = AgentJob(
+                agent_id=agent.id,
+                job_type="automation_task",
+                job_payload={
+                    "task_key": task.key,
+                    "task_config": assignment.config,
+                    "conditions": assignment.conditions,
+                    "assignment_id": assignment.assignment_id,
+                    "event": {
+                        "name": event.name,
+                        "group_id": event.group_id,
+                        "user_id": event.user_id,
+                        "payload": {
+                            "chat_id": event.payload.get("chat_id", event.group_id),
+                            "group_title": event.payload.get("group_title"),
+                            "text": event.payload.get("text"),
+                            "message_id": event.payload.get("message_id"),
+                            "first_name": event.payload.get("first_name"),
+                            "full_name": event.payload.get("full_name"),
+                            "username": event.payload.get("username"),
+                        },
+                    },
+                    "_listener_handled": True,
+                    "_handler_result": handler_result,
+                },
+                status="pending",
+            )
+            self.agent_service.session.add(job)
+            await self.agent_service.session.commit()
+            return {
+                "job_id": job.id,
+                "status": job.status,
+                "_listener_handled": True,
+                "_handler_result": handler_result,
+                "_task_config": assignment.config,
+            }
+
         job = AgentJob(
             agent_id=agent.id,
             job_type="automation_task",

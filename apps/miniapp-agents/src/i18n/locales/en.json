@@ -658,7 +658,9 @@
     "respondPublic": "Public (reply in group)",
     "respondPrivate": "Private (direct message)",
     "respondPrivateWithForward": "Private with forward",
-    "respondDelay": "Delay before responding (seconds)"
+    "respondDelay": "Delay before responding (seconds)",
+    "maxNewContactsPerDay": "Max new contacts per day",
+    "maxNewContactsPerDayPlaceholder": "Leave empty for no limit"
   },
   "automation": {
     "title": "Automation Tasks",
