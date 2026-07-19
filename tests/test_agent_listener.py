@@ -616,7 +616,6 @@ async def test_agent_listener_handles_lead_capture_auto_respond_directly(
     )
     db_session.add(group)
     await db_session.flush()
-    db_session.add(GroupAdminRole(group_id=group.id, user_id=owner.tg_user_id, role="owner"))
     agent = Agent(
         group_id=group.id,
         telegram_user_id=99010,
@@ -669,10 +668,10 @@ async def test_agent_listener_handles_lead_capture_auto_respond_directly(
         text="support needed",
         message_id=601,
         message_date=datetime.now(timezone.utc),
-        user_id=owner.tg_user_id,
-        first_name="Owner",
-        full_name="Owner 9210",
-        username="owner9210",
+        user_id=9211,
+        first_name="Lead",
+        full_name="Lead User",
+        username="leaduser9211",
     )
 
     async with session_factory() as verification_session:
@@ -703,11 +702,151 @@ async def test_agent_listener_handles_lead_capture_auto_respond_directly(
     assert progress.get("success_count") == 1
     assert (jobs[0].job_payload or {}).get("message") == "Thanks, we will contact you soon."
     assert len(forwarded_messages) == 1
-    assert forwarded_messages[0]["entity"] == owner.tg_user_id
+    assert forwarded_messages[0]["entity"] == 9211
     assert len(sent_messages) == 1
     assert sent_messages[0]["text"] == "Thanks, we will contact you soon."
-    assert sent_messages[0]["chat_id"] == owner.tg_user_id
+    assert sent_messages[0]["chat_id"] == 9211
     assert len(logs) == 1
-    assert logs[0].tg_user_id == owner.tg_user_id
+    assert logs[0].tg_user_id == 9211
     assert logs[0].status == "sent"
     assert logs[0].job_id == jobs[0].id
+
+
+@pytest.mark.asyncio
+async def test_agent_listener_skips_lead_capture_for_blacklist_admin_bot(
+    db_session,
+    session_factory,
+    fake_bot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bot.db.models import AgentJob
+    from sqlalchemy import select
+
+    owner = User(tg_user_id=9220, username="owner9220", full_name="Owner 9220", language_code="en")
+    db_session.add(owner)
+    await db_session.flush()
+    group = Group(
+        tg_group_id=-1009220, title="Lead Capture Skip Group", owner_user_id=owner.id, is_active=True
+    )
+    db_session.add(group)
+    await db_session.flush()
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=99020,
+        external_account_id="lead-agent-skip",
+        status="active",
+        auth_state="active",
+        session_string="session-lead-skip",
+        details={},
+    )
+    db_session.add(agent)
+    await db_session.commit()
+
+    await TaskService(db_session, dispatch_agent_job=lambda _job_id: None).save_assignment(
+        actor_user_id=owner.tg_user_id,
+        group_id=group.id,
+        task_key="lead_capture",
+        executor_type="agent",
+        agent_id=agent.id,
+        conditions={"text_contains": "support"},
+        config={
+            "ack_template": "Thanks, we will contact you soon.",
+            "auto_respond": True,
+            "respond_mode": "private",
+            "respond_delay_seconds": 0,
+        },
+    )
+
+    sent_messages: list[dict[str, Any]] = []
+
+    class FakeClient:
+        async def send_message(self, chat_id: int, text: str, reply_to=None):
+            sent_messages.append({"chat_id": chat_id, "text": text, "reply_to": reply_to})
+            return type("Sent", (), {"id": 2001})()
+
+    monkeypatch.setattr("bot.agents.listener.SessionLocal", session_factory)
+
+    from datetime import datetime, timezone
+
+    manager = AgentListenerManager(bot=fake_bot, session_factory=session_factory)
+
+    # 1. Blacklisted user
+    db_session.add(
+        AgentBlacklistEntry(agent_id=agent.id, tg_user_id=9221, reason="admin_blocked")
+    )
+    await db_session.commit()
+    await manager._dispatch_agent_message(
+        agent.id,
+        client=FakeClient(),
+        chat_id=group.tg_group_id,
+        group_title=group.title,
+        text="support needed",
+        message_id=701,
+        message_date=datetime.now(timezone.utc),
+        user_id=9221,
+        first_name="Blacklisted",
+        full_name="Blacklisted User",
+        username="blacklisted9221",
+    )
+
+    # 2. Admin user
+    db_session.add(GroupAdminRole(group_id=group.id, user_id=9222, role="admin"))
+    await db_session.commit()
+    await manager._dispatch_agent_message(
+        agent.id,
+        client=FakeClient(),
+        chat_id=group.tg_group_id,
+        group_title=group.title,
+        text="support needed",
+        message_id=702,
+        message_date=datetime.now(timezone.utc),
+        user_id=9222,
+        first_name="Admin",
+        full_name="Admin User",
+        username="admin9222",
+    )
+
+    # 3. Bot user
+    await manager._dispatch_agent_message(
+        agent.id,
+        client=FakeClient(),
+        chat_id=group.tg_group_id,
+        group_title=group.title,
+        text="support needed",
+        message_id=703,
+        message_date=datetime.now(timezone.utc),
+        user_id=9223,
+        first_name="Bot",
+        full_name="Bot User",
+        username="bot9223",
+        is_bot=True,
+    )
+
+    async with session_factory() as verification_session:
+        jobs = (
+            (
+                await verification_session.execute(
+                    select(AgentJob).where(AgentJob.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        logs = (
+            (
+                await verification_session.execute(
+                    select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert len(jobs) == 3
+    assert all(job.status == "completed" for job in jobs)
+    reasons = {
+        (job.job_payload or {}).get("result", {}).get("reason") for job in jobs
+    }
+    assert reasons == {"blacklist", "admin", "bot"}
+    assert len(sent_messages) == 0
+    assert len(logs) == 0
