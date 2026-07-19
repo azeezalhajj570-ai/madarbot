@@ -7,6 +7,7 @@ from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any
 
+import hashlib
 import structlog
 from sqlalchemy import select
 
@@ -14,7 +15,7 @@ from bot.agents.exceptions import AgentBannedError, AgentSessionRevokedError
 from bot.agents.session import SessionManager
 from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
-from bot.db.models import Agent, AgentJob, Group, GroupSetting, ModerationLog
+from bot.db.models import Agent, AgentJob, Group, GroupSetting, ModerationLog, SentBroadcastMessage
 from bot.db.session import SessionLocal
 from bot.services.agent_lead_service import AgentLeadService
 from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
@@ -752,6 +753,12 @@ class AgentListenerManager:
                                 "handled_by_listener": True,
                                 "reason": "stale",
                             }
+                            payload["progress"] = {
+                                "total_count": 0,
+                                "success_count": 0,
+                                "failure_count": 0,
+                            }
+                            payload["message"] = str(text)[:200]
                             job.job_payload = payload
                             await session.commit()
                     except Exception:
@@ -795,6 +802,12 @@ class AgentListenerManager:
                                     "handled_by_listener": True,
                                     "reason": "daily_limit_reached",
                                 }
+                                payload["progress"] = {
+                                    "total_count": 0,
+                                    "success_count": 0,
+                                    "failure_count": 0,
+                                }
+                                payload["message"] = str(text)[:200]
                                 job.job_payload = payload
                                 await session.commit()
                         except Exception:
@@ -869,9 +882,11 @@ class AgentListenerManager:
         # Send the ack message
         chat_id = handler_result.get("chat_id") or event_payload.get("chat_id") or 0
         text = handler_result.get("text", "")
+        sent_message_id: int | None = None
+        send_status = "failed"
         if text and chat_id:
             try:
-                await asyncio.wait_for(
+                sent_message = await asyncio.wait_for(
                     client.send_message(
                         int(chat_id),
                         str(text),
@@ -879,12 +894,15 @@ class AgentListenerManager:
                     ),
                     timeout=_DIRECT_SEND_TIMEOUT_SECONDS,
                 )
+                sent_message_id = getattr(sent_message, "id", None)
+                send_status = "sent"
                 logger.info(
                     "direct_lead_capture_reply_sent",
                     agent_id=agent_id,
                     chat_id=chat_id,
                     user_id=user_id,
                     message_id=event_payload.get("message_id"),
+                    sent_message_id=sent_message_id,
                 )
             except asyncio.TimeoutError:
                 logger.warning(
@@ -896,7 +914,38 @@ class AgentListenerManager:
             except Exception:
                 logger.exception("direct_lead_capture_reply_failed", agent_id=agent_id)
 
-        # Mark the tracking job as completed
+        # Log the sent message so it appears in task activity send logs.
+        if job_id is not None and user_id is not None:
+            try:
+                message_hash = hashlib.sha256(
+                    f"{user_id}:{text}".encode()
+                ).hexdigest()
+                session.add(
+                    SentBroadcastMessage(
+                        agent_id=agent_id,
+                        sender_tg_user_id=agent.telegram_user_id,
+                        job_id=job_id,
+                        tg_user_id=user_id,
+                        username=str(event_payload.get("username") or "") or None,
+                        message_id=sent_message_id,
+                        tg_chat_id=user_id,
+                        tg_group_id=int(chat_id) if chat_id else 0,
+                        message_text=str(text),
+                        message_hash=message_hash,
+                        status=send_status,
+                        sent_at=datetime.now(timezone.utc),
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
+                await session.commit()
+            except Exception:
+                logger.exception("direct_lead_capture_send_log_failed", agent_id=agent_id, job_id=job_id)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+
+        # Mark the tracking job as completed with progress
         if job_id is not None:
             try:
                 job = (
@@ -905,7 +954,16 @@ class AgentListenerManager:
                 if job is not None:
                     job.status = "completed"
                     payload = dict(job.job_payload or {})
-                    payload["result"] = {"sent": True, "handled_by_listener": True}
+                    payload["result"] = {
+                        "sent": send_status == "sent",
+                        "handled_by_listener": True,
+                    }
+                    payload["progress"] = {
+                        "total_count": 1,
+                        "success_count": 1 if send_status == "sent" else 0,
+                        "failure_count": 0 if send_status == "sent" else 1,
+                    }
+                    payload["message"] = str(text)[:200]
                     job.job_payload = payload
                     await session.commit()
             except Exception:

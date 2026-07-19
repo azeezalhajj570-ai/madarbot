@@ -252,6 +252,7 @@ class AgentJobExecutor(BaseTaskExecutor):
                     "task_config": assignment.config,
                     "conditions": assignment.conditions,
                     "assignment_id": assignment.assignment_id,
+                    "message": str(handler_result.get("text") or "")[:200],
                     "event": {
                         "name": event.name,
                         "group_id": event.group_id,

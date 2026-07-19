@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from bot.agents.exceptions import AgentSessionRevokedError
 from bot.agents.listener import AgentListenerManager
-from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, GroupMember, ModerationLog, User
+from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, GroupMember, ModerationLog, SentBroadcastMessage, User
 from bot.services.task_service import TaskService
 
 
@@ -685,12 +685,29 @@ async def test_agent_listener_handles_lead_capture_auto_respond_directly(
             .scalars()
             .all()
         )
+        logs = (
+            (
+                await verification_session.execute(
+                    select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     assert handled is True
     assert len(jobs) == 1
     assert jobs[0].status == "completed"
+    progress = (jobs[0].job_payload or {}).get("progress") or {}
+    assert progress.get("total_count") == 1
+    assert progress.get("success_count") == 1
+    assert (jobs[0].job_payload or {}).get("message") == "Thanks, we will contact you soon."
     assert len(forwarded_messages) == 1
     assert forwarded_messages[0]["entity"] == owner.tg_user_id
     assert len(sent_messages) == 1
     assert sent_messages[0]["text"] == "Thanks, we will contact you soon."
     assert sent_messages[0]["chat_id"] == owner.tg_user_id
+    assert len(logs) == 1
+    assert logs[0].tg_user_id == owner.tg_user_id
+    assert logs[0].status == "sent"
+    assert logs[0].job_id == jobs[0].id
