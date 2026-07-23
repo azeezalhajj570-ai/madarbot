@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "20260723_001"
-down_revision = "fc0848471b22"
+down_revision = ("fc0848471b22", "20260716_fix_agent_id_nullable")
 branch_labels = None
 depends_on = None
 
