@@ -6,6 +6,8 @@ import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
 import { GroupDestinationField } from '../components/GroupDestinationField'
 import { BlacklistSection } from '../features/blacklist/BlacklistSection'
+import { SchedulePicker, DEFAULT_SCHEDULE } from '../components/SchedulePicker'
+import type { ScheduleConfig } from '../components/SchedulePicker'
 
 import {
   agentsApi,
@@ -61,6 +63,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
   const [bulkScheduledAt, setBulkScheduledAt] = useState('')
+  const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
+  const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_SCHEDULE)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
   const [excludeBots, setExcludeBots] = useState(true)
   const [orderByMsgCount, setOrderByMsgCount] = useState<'desc' | 'asc'>('desc')
@@ -85,14 +89,16 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (!filledMessages.length) return false
     if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) return false
     if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) return false
-    const threshold = Number.parseInt(bulkThreshold, 10)
-    if (!Number.isFinite(threshold) || threshold <= 0) return false
-    const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
-    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
-    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    if (bulkSendMode === 'standard') {
+      const threshold = Number.parseInt(bulkThreshold, 10)
+      if (!Number.isFinite(threshold) || threshold <= 0) return false
+      const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
+      const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+      if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    }
     return true
-  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts])
+  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts, bulkSendMode])
 
   // Effects
   useEffect(() => {
@@ -143,6 +149,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
+    setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
     setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null)
     setQsSelectedCampaignId(''); setStatus(null)
   }
@@ -160,6 +167,33 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     const intervalContacts = Number.parseFloat(bulkIntervalContacts)
     if (!Number.isFinite(intervalContacts) || intervalContacts < 0) validationErrors.push(t('campaigns.intervalInvalid'))
     if (validationErrors.length) { notify(validationErrors.join(' · ')); return }
+
+    if (bulkSendMode === 'recurring') {
+      setBulkSaving(true)
+      try {
+        const targetGroupIds = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
+        const campaign = await agentsApi.createCampaign(account.id, {
+          name: `Recurring - ${filledMessages[0]?.slice(0, 40)}`,
+          message_template: filledMessages.join('\n---\n'),
+          target_filters: { group_ids: targetGroupIds },
+          recurrence_enabled: true,
+          repeat_type: scheduleConfig.repeatType,
+          interval_value: scheduleConfig.intervalValue,
+          repeat_time: scheduleConfig.repeatTime,
+          cron_expression: scheduleConfig.repeatType === 'cron' ? scheduleConfig.cronExpression : undefined,
+          end_type: scheduleConfig.endType === 'never' ? undefined : scheduleConfig.endType,
+          end_value: scheduleConfig.endValue || undefined,
+          timezone: scheduleConfig.timezone,
+        })
+        await agentsApi.activateCampaign(account.id, campaign.id)
+        resetForm(); setStatus(null)
+        onSaved(t('campaigns.recurringCreated'))
+        void agentsApi.listCampaigns(account.id).then((r) => setCampaigns(r.items ?? [])).catch(() => {})
+      } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedCreate')) }
+      finally { setBulkSaving(false) }
+      return
+    }
+
     if (bulkSummary) {
       setBulkSaving(true)
       try {
@@ -231,14 +265,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
         {/* Target type toggle */}
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['members', 'groups'] as const).map((type) => (
-            <button key={type} type="button" onClick={() => { setBulkTargetType(type); setBulkSummary(null) }} style={{
-              flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: bulkTargetType === type ? 'var(--miniapp-surface)' : 'transparent',
-              color: bulkTargetType === type ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-              fontWeight: bulkTargetType === type ? 600 : 400, fontSize: 13,
-            }}>{type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}</button>
-          ))}
+          {(['members', 'groups'] as const).map((type) => {
+            const disabled = bulkSendMode === 'recurring' && type === 'members'
+            return (
+              <button key={type} type="button" disabled={disabled} onClick={() => { if (!disabled) { setBulkTargetType(type); setBulkSummary(null) } }} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+                background: bulkTargetType === type ? 'var(--miniapp-surface)' : 'transparent',
+                color: disabled ? 'var(--miniapp-text-muted)' : (bulkTargetType === type ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)'),
+                fontWeight: bulkTargetType === type ? 600 : 400, fontSize: 13, opacity: disabled ? 0.4 : 1,
+              }}>{type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}</button>
+            )
+          })}
         </div>
 
         {bulkTargetType === 'members' ? (
@@ -429,23 +466,43 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         </div>
 
+        {/* Send mode: standard vs recurring */}
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['now', 'schedule'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setBulkScheduleMode(m)} style={{
+          {(['standard', 'recurring'] as const).map((m) => (
+            <button key={m} type="button" onClick={() => { setBulkSendMode(m); setBulkSummary(null); if (m === 'recurring') setBulkTargetType('groups') }} style={{
               flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: bulkScheduleMode === m ? 'var(--miniapp-surface)' : 'transparent',
-              color: bulkScheduleMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-              fontWeight: bulkScheduleMode === m ? 600 : 400, fontSize: 13,
-            }}>{m === 'now' ? t('campaigns.sendNow') : t('campaigns.schedule')}</button>
+              background: bulkSendMode === m ? 'var(--miniapp-surface)' : 'transparent',
+              color: bulkSendMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+              fontWeight: bulkSendMode === m ? 600 : 400, fontSize: 13,
+            }}>{t(m === 'standard' ? 'campaigns.sendOnce' : 'campaigns.recurring')}</button>
           ))}
         </div>
-        {bulkScheduleMode === 'schedule' ? (
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduleDatetime')}</span>
-            <input type="datetime-local" value={bulkScheduledAt} onChange={(e) => setBulkScheduledAt(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }} />
+
+        {bulkSendMode === 'standard' ? (
+          <>
+            <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
+              {(['now', 'schedule'] as const).map((m) => (
+                <button key={m} type="button" onClick={() => setBulkScheduleMode(m)} style={{
+                  flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
+                  background: bulkScheduleMode === m ? 'var(--miniapp-surface)' : 'transparent',
+                  color: bulkScheduleMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+                  fontWeight: bulkScheduleMode === m ? 600 : 400, fontSize: 13,
+                }}>{m === 'now' ? t('campaigns.sendNow') : t('campaigns.schedule')}</button>
+              ))}
+            </div>
+            {bulkScheduleMode === 'schedule' ? (
+              <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduleDatetime')}</span>
+                <input type="datetime-local" value={bulkScheduledAt} onChange={(e) => setBulkScheduledAt(e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }} />
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div style={{ marginBottom: 12 }}>
+            <SchedulePicker value={scheduleConfig} onChange={setScheduleConfig} />
           </div>
-        ) : null}
+        )}
         {bulkSummary ? (
           <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
             <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>

@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 from bot.mcp.tools.accounts import register_account_tools
 from bot.mcp.tools.bulk_messaging import register_bulk_messaging_tools
+from bot.mcp.tools.campaigns import register_campaign_tools
 from bot.mcp.tools.analytics import register_analytics_tools
 from bot.mcp.tools.groups import register_group_tools
 from bot.mcp.tools.health import register_health_tools
@@ -18,6 +19,7 @@ def create_mcp_server() -> FastMCP:
     register_health_tools(server)
     register_account_tools(server)
     register_bulk_messaging_tools(server)
+    register_campaign_tools(server)
     register_group_tools(server)
     register_task_tools(server)
     register_notification_tools(server)

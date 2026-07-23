@@ -321,9 +321,39 @@ export interface Campaign {
   scheduled_at?: string | null
   started_at?: string | null
   completed_at?: string | null
+  recurrence_enabled: boolean
+  repeat_type?: string | null
+  interval_value: number
+  repeat_time?: string | null
+  cron_expression?: string | null
+  end_type?: string | null
+  end_value?: string | null
+  timezone: string
+  next_run_at?: string | null
+  last_run_at?: string | null
+  run_count: number
+  max_runs?: number | null
   created_at: string
   updated_at: string
   recent_jobs?: Array<{ id: number; tg_group_id?: number; status: string; created_at?: string | null }>
+}
+
+export interface CampaignRecurrenceLog {
+  id: number
+  campaign_id: number
+  triggered_at: string
+  job_id?: number | null
+  status: string
+  error?: string | null
+  created_at: string
+}
+
+export interface CampaignRecurrenceLogList {
+  items: CampaignRecurrenceLog[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
 }
 
 export interface CampaignList {
