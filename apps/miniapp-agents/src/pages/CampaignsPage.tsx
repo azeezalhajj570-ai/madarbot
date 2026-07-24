@@ -178,7 +178,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           target_filters: { group_ids: targetGroupIds },
           recurrence_enabled: true,
           repeat_type: scheduleConfig.repeatType,
-          interval_value: scheduleConfig.intervalValue,
+          interval_value: 1,
           repeat_time: scheduleConfig.repeatTime,
           cron_expression: scheduleConfig.repeatType === 'cron' ? scheduleConfig.cronExpression : undefined,
           end_type: scheduleConfig.endType === 'never' ? undefined : scheduleConfig.endType,

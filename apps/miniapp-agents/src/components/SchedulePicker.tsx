@@ -41,12 +41,48 @@ const INPUT_STYLE: React.CSSProperties = {
   colorScheme: 'dark',
 }
 
+const TIMEZONES = [
+  'Asia/Aden',
+  'Asia/Riyadh',
+  'Asia/Dubai',
+  'Asia/Baghdad',
+  'Asia/Tehran',
+  'Asia/Qatar',
+  'Asia/Kuwait',
+  'Asia/Muscat',
+  'Asia/Amman',
+  'Asia/Beirut',
+  'Asia/Damascus',
+  'Asia/Jerusalem',
+  'Africa/Cairo',
+  'Africa/Khartoum',
+  'Africa/Tripoli',
+  'Africa/Tunis',
+  'Africa/Algiers',
+  'Africa/Casablanca',
+  'Europe/Istanbul',
+  'Europe/Athens',
+  'Europe/Moscow',
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Europe/London',
+  'Europe/Paris',
+  'Europe/Berlin',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+  'Pacific/Auckland',
+]
+
 type RepeatType = 'daily' | 'weekly' | 'monthly' | 'cron'
 type EndType = 'never' | 'on_date' | 'after_n_runs'
 
 export interface ScheduleConfig {
   repeatType: RepeatType
-  intervalValue: number
   repeatTime: string
   cronExpression: string
   startDate: string
@@ -72,15 +108,24 @@ function todayDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function detectTimezone(): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (tz && TIMEZONES.includes(tz)) return tz
+  if (tz && TIMEZONES.some((t) => t.includes(tz.split('/')[1]))) {
+    const match = TIMEZONES.find((t) => t.includes(tz.split('/')[1]))
+    if (match) return match
+  }
+  return 'Asia/Aden'
+}
+
 export const DEFAULT_SCHEDULE: ScheduleConfig = {
   repeatType: 'daily',
-  intervalValue: 1,
   repeatTime: nowRoundedTo30(),
   cronExpression: '',
   startDate: todayDate(),
   endType: 'never',
   endValue: '',
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  timezone: detectTimezone(),
 }
 
 export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
@@ -105,25 +150,8 @@ export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
         </select>
       </div>
 
-      {/* Frequency interval (hidden for cron) */}
-      {value.repeatType !== 'cron' ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-          <div style={{ flex: 1, ...FIELD_STYLE }}>
-            <span style={LABEL_STYLE}>{t('campaigns.frequency')}</span>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={value.intervalValue}
-              onChange={(e) => onChange({ ...value, intervalValue: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-              style={INPUT_STYLE}
-            />
-          </div>
-          <div style={{ flex: 1, paddingBottom: 2, fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
-            {value.repeatType === 'daily' ? t('campaigns.days') : value.repeatType === 'weekly' ? t('campaigns.weeks') : t('campaigns.months')}
-          </div>
-        </div>
-      ) : (
+      {/* Cron expression (shown only when cron is selected) */}
+      {value.repeatType === 'cron' ? (
         <div style={FIELD_STYLE}>
           <span style={LABEL_STYLE}>{t('campaigns.cronExpression')}</span>
           <input
@@ -134,7 +162,7 @@ export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
             style={INPUT_STYLE}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Time */}
       <div style={FIELD_STYLE}>
@@ -199,13 +227,15 @@ export function SchedulePicker({ value, onChange }: SchedulePickerProps) {
       {/* Timezone */}
       <div style={FIELD_STYLE}>
         <span style={LABEL_STYLE}>{t('campaigns.timezone')}</span>
-        <input
-          type="text"
+        <select
           value={value.timezone}
           onChange={(e) => onChange({ ...value, timezone: e.target.value })}
-          style={INPUT_STYLE}
-          placeholder="Asia/Aden"
-        />
+          style={SELECT_STYLE}
+        >
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>{tz}</option>
+          ))}
+        </select>
       </div>
     </div>
   )
