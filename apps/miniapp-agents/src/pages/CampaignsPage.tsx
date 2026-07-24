@@ -79,6 +79,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [bulkSaving, setBulkSaving] = useState(false)
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
   const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
+  const [groupNameMap, setGroupNameMap] = useState<Record<number, string>>({})
 
   function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
     setStatus(msg)
@@ -105,6 +106,32 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   useEffect(() => {
     void agentsApi.listCampaigns(account.id).then((r) => setCampaigns(r.items ?? [])).catch(() => {})
   }, [account.id])
+
+  useEffect(() => {
+    const groupIds = new Set<number>()
+    for (const c of campaigns) {
+      const ids = (c.target_filters?.group_ids as number[] | undefined) ?? []
+      for (const id of ids) groupIds.add(id)
+    }
+    const missing = [...groupIds].filter((id) => !(id in groupNameMap))
+    if (missing.length === 0) return
+    let cancelled = false
+    void Promise.all(missing.map((id) =>
+      agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
+        if (cancelled) return null
+        const g = Array.isArray(r) ? r.find((g) => g.tg_group_id === id || g.id === id) : null
+        return g ? { id, title: g.title } : null
+      }).catch(() => null)
+    )).then((results) => {
+      if (cancelled) return
+      const map: Record<number, string> = {}
+      for (const r of results) {
+        if (r) map[r.id] = r.title
+      }
+      setGroupNameMap((prev) => ({ ...prev, ...map }))
+    })
+    return () => { cancelled = true }
+  }, [campaigns, account.id])
 
   useEffect(() => {
     const gq = bulkSourceGroupQuery || bulkTargetGroupQuery
@@ -552,6 +579,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                     {c.next_run_at ? <span>· {t('campaigns.nextRun')}: {formatDateTime(c.next_run_at)}</span> : null}
                     {c.last_run_at ? <span>· {t('campaigns.lastRun')}: {formatTime(c.last_run_at)}</span> : null}
                     {c.run_count > 0 ? <span>· {t('campaigns.runCount', { count: c.run_count })}</span> : null}
+                  </div>
+                ) : null}
+                {c.target_filters?.group_ids ? (
+                  <div style={{ fontSize: 11, color: 'var(--miniapp-clay)', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {(c.target_filters.group_ids as number[]).map((gid) => (
+                      <span key={gid} style={{ padding: '1px 6px', borderRadius: 4, background: 'var(--miniapp-bg-deep)' }}>
+                        {groupNameMap[gid] || `#${gid}`}
+                      </span>
+                    ))}
                   </div>
                 ) : null}
                 {c.recurrence_enabled && (c.status === 'active' || c.status === 'paused') ? (
