@@ -458,6 +458,9 @@ function NotificationSheet({
   const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
 
   function handleNotificationClick(notification: AgentNotification) {
+    if (account) {
+      agentsApi.markAgentNotificationsSeen(account.id).catch(() => {})
+    }
     const jobId = notification.payload?.job_id as number | undefined
     if (jobId && onNavigateToJob) {
       onClose()
@@ -2535,6 +2538,8 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
   )
 }
 
+const _jobGroupCache: Record<number, string> = {}
+
 function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; scrollToJobId?: number | null; onScrolled?: () => void }) {
   const { t } = useTranslation()
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
@@ -2545,6 +2550,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   const [logsLoading, setLogsLoading] = useState(false)
   const [actingJobId, setActingJobId] = useState<number | null>(null)
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [jobGroupNames, setJobGroupNames] = useState<Record<number, string>>({})
   const jobCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   const [search, setSearch] = useState('')
@@ -2567,6 +2573,32 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     try {
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
+      const missingIds = new Set<number>()
+      for (const j of jobsData) {
+        if (j.target_group_ids) {
+          for (const gid of j.target_group_ids) {
+            if (!(gid in _jobGroupCache)) missingIds.add(gid)
+          }
+        }
+      }
+      if (missingIds.size > 0) {
+        const results = await Promise.allSettled(
+          [...missingIds].map((id) =>
+            agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
+              const g = Array.isArray(r) ? r.find((g) => g.tg_group_id === id || g.id === id) : null
+              return g ? { id, title: g.title || '' } : null
+            }).catch(() => null)
+          )
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) {
+            _jobGroupCache[r.value.id] = r.value.title
+          }
+        }
+        setJobGroupNames({ ..._jobGroupCache })
+      } else {
+        setJobGroupNames({ ..._jobGroupCache })
+      }
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : 'Failed to load task activity')
     } finally {
@@ -2927,7 +2959,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                       </div>
                     ) : null}
                     {job.target_group_ids && job.target_group_ids.length > 0 ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetGroups')}:</span> {job.target_group_ids.join(', ')}</div>
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetGroups')}:</span> {job.target_group_ids.map((gid) => jobGroupNames[gid] || `#${gid}`).join(', ')}</div>
                     ) : null}
                     {job.selected_count != null ? (
                       <div><span style={{ fontWeight: 600 }}>{t('tasks.selectedCount')}:</span> {job.selected_count}</div>
@@ -2957,7 +2989,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
       {totalPages > 1 ? (
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
           <Button tone="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('tasks.previous')}</Button>
-          <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('tasks.pageOf', { page, total: totalPages, count: filteredJobs.length })}</span>
+          <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('tasks.pageOf', { page, totalPages, count: filteredJobs.length })}</span>
           <Button tone="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t('tasks.next')}</Button>
         </div>
       ) : null}

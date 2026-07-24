@@ -31,6 +31,8 @@ type SelectedGroupChip = {
 
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 
+const _groupNameCache: Record<number, string> = {}
+
 export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
@@ -111,8 +113,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       const ids = (c.target_filters?.group_ids as number[] | undefined) ?? []
       for (const id of ids) groupIds.add(id)
     }
-    const missing = [...groupIds].filter((id) => !(id in groupNameMap))
-    if (missing.length === 0) return
+    const missing = [...groupIds].filter((id) => !(id in _groupNameCache))
+    if (missing.length === 0) {
+      const cached: Record<number, string> = {}
+      for (const id of groupIds) {
+        if (id in _groupNameCache) cached[id] = _groupNameCache[id]
+      }
+      if (Object.keys(cached).length) setGroupNameMap((prev) => ({ ...prev, ...cached }))
+      return
+    }
     let cancelled = false
     void Promise.all(missing.map((id) =>
       agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
@@ -122,11 +131,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       }).catch(() => null)
     )).then((results) => {
       if (cancelled) return
-      const map: Record<number, string> = {}
       for (const r of results) {
-        if (r) map[r.id] = r.title
+        if (r) _groupNameCache[r.id] = r.title
       }
-      setGroupNameMap((prev) => ({ ...prev, ...map }))
+      setGroupNameMap((prev) => ({ ...prev, ..._groupNameCache }))
     })
     return () => { cancelled = true }
   }, [campaigns, account.id])
