@@ -601,7 +601,7 @@ class GroupMemberBroadcastRuntime:
 
                 max_per_day = getattr(agent, "max_messages_per_day", None) or 500
 
-                min_delay = getattr(agent, "min_delay_seconds", None)
+                min_delay = agent_min_delay
                 if min_delay is not None and min_delay > 0:
                     wait = await limiter.enforce_delay(agent.id, float(min_delay))
                     if wait > 0:
@@ -801,6 +801,9 @@ class GroupMemberBroadcastRuntime:
         import hashlib
         from datetime import datetime, timezone
         from bot.db.models.agent import SentBroadcastMessage
+
+        agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
+        agent_min_delay = getattr(agent, "min_delay_seconds", None)
 
         target_group_ids = list(normalized.get("target_group_ids", []))
         total_count = len(target_group_ids)
@@ -1146,7 +1149,7 @@ class BulkAddMembersRuntime:
                             "stop_reason": "cooldown",
                             "retry_after": int(cd_remaining),
                         }
-                        raise Exception(f"Agent cooldown: {cd_remaining}s")
+                    raise Exception(f"Agent cooldown: {cd_remaining}s")
 
                 max_per_hour = agent_max_per_hour
                 if max_per_hour is not None and max_per_hour > 0:
