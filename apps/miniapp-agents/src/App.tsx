@@ -2969,16 +2969,16 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                       <div><span style={{ fontWeight: 600 }}>{t('tasks.targetGroups')}:</span> {job.target_group_ids.map((gid) => jobGroupNames[gid] || `#${gid}`).join(', ')}</div>
                     ) : null}
                     {job.selected_count != null ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.selectedCount')}:</span> {job.selected_count}</div>
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.selectedCount', { count: job.selected_count })}</span></div>
                     ) : null}
                     {job.exclusion_counts ? (
                       <div style={{ display: 'grid', gap: 2 }}>
                         <span style={{ fontWeight: 600 }}>{t('tasks.exclusions')}:</span>
                         <div style={{ color: 'var(--miniapp-text-muted)' }}>
-                          {job.exclusion_counts.admins_excluded ? `${t('tasks.adminsExcluded')}: ${job.exclusion_counts.admins_excluded} ` : ''}
-                          {job.exclusion_counts.bots_excluded ? `${t('tasks.botsExcluded')}: ${job.exclusion_counts.bots_excluded} ` : ''}
-                          {job.exclusion_counts.already_sent_excluded ? `${t('tasks.alreadySent')}: ${job.exclusion_counts.already_sent_excluded} ` : ''}
-                          {job.exclusion_counts.blacklisted_excluded ? `${t('tasks.blacklisted')}: ${job.exclusion_counts.blacklisted_excluded}` : ''}
+                          {job.exclusion_counts.admins_excluded ? t('tasks.adminsExcluded', { count: job.exclusion_counts.admins_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.bots_excluded ? t('tasks.botsExcluded', { count: job.exclusion_counts.bots_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.already_sent_excluded ? t('tasks.alreadySent', { count: job.exclusion_counts.already_sent_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.blacklisted_excluded ? t('tasks.blacklisted', { count: job.exclusion_counts.blacklisted_excluded }) : ''}
                         </div>
                       </div>
                     ) : null}
