@@ -78,6 +78,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
+  const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
 
   function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
     setStatus(msg)
@@ -150,7 +151,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
-    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null)
+    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null); setEditingCampaignId(null)
     setQsSelectedCampaignId(''); setStatus(null)
   }
 
@@ -172,7 +173,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       setBulkSaving(true)
       try {
         const targetGroupIds = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
-        const campaign = await agentsApi.createCampaign(account.id, {
+        const payload = {
           name: `Recurring - ${filledMessages[0]?.slice(0, 40)}`,
           message_template: filledMessages.join('\n---\n'),
           target_filters: { group_ids: targetGroupIds },
@@ -184,10 +185,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           end_type: scheduleConfig.endType === 'never' ? undefined : scheduleConfig.endType,
           end_value: scheduleConfig.endValue || undefined,
           timezone: scheduleConfig.timezone,
-        })
-        await agentsApi.activateCampaign(account.id, campaign.id)
-        resetForm(); setStatus(null)
-        onSaved(t('campaigns.recurringCreated'))
+        }
+        if (editingCampaignId) {
+          await agentsApi.updateCampaign(account.id, editingCampaignId, payload)
+          resetForm(); setStatus(null)
+          onSaved(t('campaigns.campaignUpdated'))
+        } else {
+          const campaign = await agentsApi.createCampaign(account.id, payload)
+          await agentsApi.activateCampaign(account.id, campaign.id)
+          resetForm(); setStatus(null)
+          onSaved(t('campaigns.recurringCreated'))
+        }
         void agentsApi.listCampaigns(account.id).then((r) => setCampaigns(r.items ?? [])).catch(() => {})
       } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedCreate')) }
       finally { setBulkSaving(false) }
@@ -560,10 +568,34 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
                       }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.resume')}</button>
                     ) : null}
+                    {c.status === 'draft' || c.status === 'paused' ? (
+                      <button type="button" onClick={() => {
+                        setBulkTargetType('groups')
+                        setBulkMessages([c.message_template || ''])
+                        const groupIds: Array<{ tg_group_id: number; title: string }> = (c.target_filters?.group_ids as number[] || []).map((id: number) => ({ tg_group_id: id, title: String(id) }))
+                        setBulkSelectedTargetGroups(groupIds)
+                        setBulkSendMode('recurring')
+                        if (c.repeat_time) setScheduleConfig((prev) => ({ ...prev, repeatTime: c.repeat_time! }))
+                        if (c.repeat_type) setScheduleConfig((prev) => ({ ...prev, repeatType: c.repeat_type as 'daily' | 'weekly' | 'monthly' | 'cron' }))
+                        if (c.cron_expression) setScheduleConfig((prev) => ({ ...prev, cronExpression: c.cron_expression! }))
+                        if (c.end_type) setScheduleConfig((prev) => ({ ...prev, endType: c.end_type as 'never' | 'on_date' | 'after_n_runs' }))
+                        if (c.end_value) setScheduleConfig((prev) => ({ ...prev, endValue: c.end_value! }))
+                        if (c.timezone) setScheduleConfig((prev) => ({ ...prev, timezone: c.timezone! }))
+                        setEditingCampaignId(c.id)
+                        setShowSendForm(true)
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.edit')}</button>
+                    ) : null}
                     <button type="button" onClick={async () => {
                       try { await agentsApi.runCampaignNow(account.id, c.id); onSaved(t('campaigns.runNowTriggered')) }
                       catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
                     }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.runNow')}</button>
+                    {c.status === 'draft' || c.status === 'paused' || c.status === 'completed' || c.status === 'cancelled' ? (
+                      <button type="button" onClick={async () => {
+                        if (!confirm(t('campaigns.confirmDelete'))) return
+                        try { await agentsApi.deleteCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-clay)' }}>{t('campaigns.delete')}</button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

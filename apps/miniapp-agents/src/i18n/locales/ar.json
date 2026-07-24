@@ -594,7 +594,11 @@
     "resume": "استئناف",
     "runNow": "تشغيل الآن",
     "runNowTriggered": "تم تشغيل الحملة",
-    "failedAction": "فشل الإجراء"
+    "failedAction": "فشل الإجراء",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "confirmDelete": "هل تريد حذف هذه الحملة؟",
+    "campaignUpdated": "تم تحديث الحملة"
   },
   "multiGroup": {
     "targetGroups": "المجموعات المستهدفة",

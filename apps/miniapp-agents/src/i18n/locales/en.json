@@ -594,7 +594,11 @@
     "resume": "Resume",
     "runNow": "Run now",
     "runNowTriggered": "Campaign triggered",
-    "failedAction": "Action failed"
+    "failedAction": "Action failed",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Delete this campaign?",
+    "campaignUpdated": "Campaign updated"
   },
   "multiGroup": {
     "targetGroups": "Target Groups",
