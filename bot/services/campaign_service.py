@@ -44,7 +44,7 @@ class CampaignService:
         cron_expression: str | None = None,
         end_type: str | None = None,
         end_value: str | None = None,
-        timezone: str = "UTC",
+        tz_name: str = "UTC",
     ) -> Campaign:
         if type not in self.VALID_TYPES:
             raise HTTPException(
@@ -68,7 +68,7 @@ class CampaignService:
             cron_expression=cron_expression,
             end_type=end_type,
             end_value=end_value,
-            timezone=timezone or "UTC",
+            timezone=tz_name or "UTC",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -150,7 +150,7 @@ class CampaignService:
         cron_expression: str | None = None,
         end_type: str | None = None,
         end_value: str | None = None,
-        timezone: str | None = None,
+        tz_name: str | None = None,
     ) -> Campaign:
         campaign = await self.get_campaign(campaign_id, agent_id)
 
@@ -191,8 +191,8 @@ class CampaignService:
             campaign.end_type = end_type
         if end_value is not None:
             campaign.end_value = end_value
-        if timezone is not None:
-            campaign.timezone = timezone or "UTC"
+        if tz_name is not None:
+            campaign.timezone = tz_name or "UTC"
 
         if campaign.recurrence_enabled:
             campaign.next_run_at = self.compute_next_run_at(campaign)

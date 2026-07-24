@@ -61,7 +61,7 @@ async def create_campaign(
         cron_expression=body.get("cron_expression"),
         end_type=body.get("end_type"),
         end_value=body.get("end_value"),
-        timezone=body.get("timezone", "UTC"),
+        tz_name=body.get("timezone", "UTC"),
     )
     return service._to_dict(campaign)
 
@@ -136,7 +136,7 @@ async def update_campaign(
         cron_expression=body.get("cron_expression"),
         end_type=body.get("end_type"),
         end_value=body.get("end_value"),
-        timezone=body.get("timezone"),
+        tz_name=body.get("timezone"),
     )
     return service._to_dict(campaign)
 
