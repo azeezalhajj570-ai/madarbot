@@ -429,16 +429,16 @@ class CampaignService:
                             campaign.completed_at = now
                             campaign.next_run_at = None
                         else:
-                            campaign.next_run_at = self.compute_next_run_at(campaign)
+                            campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
                     except (ValueError, TypeError):
-                        campaign.next_run_at = self.compute_next_run_at(campaign)
+                        campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
                 elif campaign.end_type == "on_date" and campaign.end_value:
-                    campaign.next_run_at = self.compute_next_run_at(campaign)
+                    campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
                     if campaign.next_run_at is None:
                         campaign.status = "completed"
                         campaign.completed_at = now
                 else:
-                    campaign.next_run_at = self.compute_next_run_at(campaign)
+                    campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
 
                 campaign.updated_at = now
                 processed.append({
@@ -504,15 +504,18 @@ class CampaignService:
         }
 
     @staticmethod
-    def compute_next_run_at(campaign: Campaign) -> datetime | None:
+    def compute_next_run_at(campaign: Campaign, from_dt: datetime | None = None) -> datetime | None:
         if not campaign.recurrence_enabled:
             return None
 
-        now = datetime.now(timezone.utc)
-        if campaign.next_run_at and campaign.next_run_at > now:
+        now = from_dt or datetime.now(timezone.utc)
+        if campaign.next_run_at and campaign.next_run_at > now and from_dt is None:
             return campaign.next_run_at
 
-        start_date = now.date()
+        repeat_type = campaign.repeat_type or "daily"
+        interval = max(1, campaign.interval_value or 1)
+        end_type = campaign.end_type
+
         if campaign.repeat_time:
             from zoneinfo import ZoneInfo
             try:
@@ -520,37 +523,54 @@ class CampaignService:
             except (KeyError, TypeError):
                 tz = timezone.utc
             local_now = now.astimezone(tz)
-            start_date = local_now.date()
-
-        repeat_type = campaign.repeat_type or "daily"
-        interval = max(1, campaign.interval_value or 1)
-        end_type = campaign.end_type
-
-        if repeat_type == "daily":
-            next_date = start_date + timedelta(days=interval)
-        elif repeat_type == "weekly":
-            next_date = start_date + timedelta(weeks=interval)
-        elif repeat_type == "monthly":
-            month = start_date.month + interval
-            year = start_date.year + (month - 1) // 12
-            month = ((month - 1) % 12) + 1
-            day = min(start_date.day, 28)
-            try:
-                from calendar import monthrange
-                max_day = monthrange(year, month)[1]
-                day = min(start_date.day, max_day)
-            except ImportError:
-                pass
-            next_date = date(year, month, day)
-        elif repeat_type == "cron":
-            return None
+            today_candidate = datetime.combine(local_now.date(), campaign.repeat_time, tzinfo=tz)
+            today_candidate_utc = today_candidate.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
+            if today_candidate_utc > now:
+                next_dt = today_candidate_utc
+            else:
+                if repeat_type == "daily":
+                    next_date = local_now.date() + timedelta(days=interval)
+                elif repeat_type == "weekly":
+                    next_date = local_now.date() + timedelta(weeks=interval)
+                elif repeat_type == "monthly":
+                    month = local_now.date().month + interval
+                    year = local_now.date().year + (month - 1) // 12
+                    month = ((month - 1) % 12) + 1
+                    day = min(local_now.date().day, 28)
+                    try:
+                        from calendar import monthrange
+                        max_day = monthrange(year, month)[1]
+                        day = min(local_now.date().day, max_day)
+                    except ImportError:
+                        pass
+                    next_date = date(year, month, day)
+                elif repeat_type == "cron":
+                    return None
+                else:
+                    return None
+                next_dt = datetime.combine(next_date, campaign.repeat_time, tzinfo=tz)
+                next_dt = next_dt.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
         else:
-            return None
-
-        if campaign.repeat_time:
-            next_dt = datetime.combine(next_date, campaign.repeat_time, tzinfo=tz)
-            next_dt = next_dt.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
-        else:
+            if repeat_type == "daily":
+                next_date = now.date() + timedelta(days=interval)
+            elif repeat_type == "weekly":
+                next_date = now.date() + timedelta(weeks=interval)
+            elif repeat_type == "monthly":
+                month = now.date().month + interval
+                year = now.date().year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1
+                day = min(now.date().day, 28)
+                try:
+                    from calendar import monthrange
+                    max_day = monthrange(year, month)[1]
+                    day = min(now.date().day, max_day)
+                except ImportError:
+                    pass
+                next_date = date(year, month, day)
+            elif repeat_type == "cron":
+                return None
+            else:
+                return None
             next_dt = datetime(next_date.year, next_date.month, next_date.day, tzinfo=timezone.utc)
 
         if end_type == "on_date" and campaign.end_value:
