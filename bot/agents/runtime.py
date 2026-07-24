@@ -601,7 +601,7 @@ class GroupMemberBroadcastRuntime:
 
                 max_per_day = getattr(agent, "max_messages_per_day", None) or 500
 
-                min_delay = agent_min_delay
+                min_delay = getattr(agent, "min_delay_seconds", None)
                 if min_delay is not None and min_delay > 0:
                     wait = await limiter.enforce_delay(agent.id, float(min_delay))
                     if wait > 0:
