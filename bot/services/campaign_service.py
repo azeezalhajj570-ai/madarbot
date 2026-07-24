@@ -5,8 +5,11 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
+import structlog
 from fastapi import HTTPException, status
 from sqlalchemy import func, select, desc
+
+logger = structlog.get_logger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -273,6 +276,7 @@ class CampaignService:
                     {"id": job.id, "tg_group_id": tg_group_id, "status": job.status}
                 )
             except ValueError as exc:
+                logger.bind(campaign_id=campaign.id, tg_group_id=tg_group_id, error=str(exc)).warning("launch_campaign_job_failed")
                 created_jobs.append({"id": None, "tg_group_id": tg_group_id, "error": str(exc)})
 
         if campaign.status == "draft":
@@ -347,10 +351,14 @@ class CampaignService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Only active or paused recurring campaigns can be triggered.",
             )
+        resolved_group_ids = list(
+            (campaign.target_filters or {}).get("group_ids") or []
+        )
         result = await self.launch_campaign(
             campaign_id=campaign_id,
             agent_id=agent_id,
             actor_user_id=actor_user_id,
+            threshold=len(resolved_group_ids) or 1,
         )
         return result
 
@@ -389,7 +397,7 @@ class CampaignService:
                         {
                             "target_type": "groups",
                             "messages": [campaign.message_template],
-                            "threshold": 500,
+                            "threshold": len(resolved_group_ids) or 1,
                             "interval_seconds": 3.0,
                             "source_group_id": tg_group_id,
                             "target_group_ids": [tg_group_id],
@@ -446,7 +454,8 @@ class CampaignService:
                     "jobs_created": len(created_jobs),
                     "status": "completed",
                 })
-            except Exception:
+            except Exception as exc:
+                logger.bind(campaign_id=campaign.id, error=str(exc)).exception("recurring_campaign_processing_failed")
                 processed.append({
                     "campaign_id": campaign.id,
                     "jobs_created": 0,
