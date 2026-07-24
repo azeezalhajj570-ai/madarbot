@@ -20,7 +20,6 @@ import type {
   Agent,
   AgentGroupMember,
   AgentManagedGroup,
-  AgentJobRecord,
   BulkPreflightResult,
   Campaign,
 } from '@miniapp/shared'
@@ -75,7 +74,6 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
-  const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
   const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
@@ -120,7 +118,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
         if (cancelled) return null
         const g = Array.isArray(r) ? r.find((g) => g.tg_group_id === id || g.id === id) : null
-        return g ? { id, title: g.title } : null
+        return g ? { id, title: g.title || '' } : null
       }).catch(() => null)
     )).then((results) => {
       if (cancelled) return
@@ -137,14 +135,19 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     const gq = bulkSourceGroupQuery || bulkTargetGroupQuery
     if (!gq.trim()) { setGroups([]); return }
     const timer = setTimeout(() => {
-      void agentsApi.fetchAgentGroups(account.id, gq).then((r) => setGroups(Array.isArray(r) ? r : [])).catch(() => setGroups([]))
+      void agentsApi.fetchAgentGroups(account.id, gq).then((r) => {
+        const raw = Array.isArray(r) ? r : []
+        const seen = new Set<number>()
+        setGroups(raw.filter((g) => {
+          const id = Number(g.tg_group_id || 0)
+          if (!id || seen.has(id)) return false
+          seen.add(id)
+          return true
+        }))
+      }).catch(() => setGroups([]))
     }, 350)
     return () => clearTimeout(timer)
   }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
-
-  useEffect(() => {
-    void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
-  }, [account.id])
 
   useEffect(() => {
     if (!bulkSourceGroup?.tg_group_id) { setBulkMemberResults([]); setBulkMemberTotal(0); setBulkMemberStatus(null); setLoadingBulkMembers(false); return }
@@ -248,7 +251,6 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload)
         setBulkSummary(null); resetForm(); setStatus(null)
         onSaved(t('campaigns.queued'))
-        void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
       } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
       finally { setBulkSaving(false) }
       return
@@ -531,31 +533,6 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         <FormActions submitLabel="Save" submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
         </>) : null}
       </Card>
-
-      {broadcastJobs.length > 0 ? (
-        <Card title={t('campaigns.recentJobs')} subtitle={t('campaigns.recentJobsSubtitle')}>
-          <div style={{ display: 'grid', gap: 6 }}>
-            {broadcastJobs.map((job) => {
-              const p = job.progress || {}; const total = p.total_count ?? 0; const sent = p.success_count ?? 0
-              return (
-                <div key={job.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{(job.message_preview || '').slice(0, 48)}</strong>
-                      {job.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(job.created_at)}</span> : null}
-                    </div>
-                    <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: job.status === 'completed' ? 'var(--miniapp-sage-dim)' : job.status === 'failed' ? 'rgba(161,87,62,0.12)' : job.status === 'scheduled' ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
-                      color: job.status === 'completed' ? 'var(--miniapp-sage)' : job.status === 'failed' ? 'var(--miniapp-clay)' : job.status === 'scheduled' ? '#b8960a' : 'var(--miniapp-text-muted)',
-                    }}>{job.status}</span>
-                  </div>
-                  {job.status === 'scheduled' && job.scheduled_at ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduledFor', { datetime: formatDateTime(job.scheduled_at) })}</div> : total > 0 ? <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span><span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.members')}</span></div> : null}
-                </div>
-              )
-            })}
-          </div>
-        </Card>
-      ) : null}
 
       {/* Campaigns list */}
       {campaigns.length > 0 ? (

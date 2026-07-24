@@ -226,6 +226,7 @@ export interface SendLogEntry {
   message_full?: string
   status: string
   sent_at?: string | null
+  [key: string]: unknown
 }
 
 export interface SendLogsResponse {
@@ -237,6 +238,7 @@ export interface AgentManagedGroup {
   id?: number
   title?: string
   tg_group_id?: number
+  group_type?: string
   member_count?: number
   messages_count?: number
 }

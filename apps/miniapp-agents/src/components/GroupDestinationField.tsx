@@ -27,9 +27,13 @@ export function GroupDestinationField({
   const normalizedQuery = query.trim().toLowerCase()
   const suggestions = useMemo(() => {
     if (!normalizedQuery) return []
-    return groups.filter((group) =>
-      [group.title || '', String(group.tg_group_id || '')].some((value) => value.toLowerCase().includes(normalizedQuery)),
-    ).slice(0, 8)
+    const seen = new Set<number>()
+    return groups.filter((group) => {
+      const tgGroupId = Number(group.tg_group_id || 0)
+      if (!tgGroupId || seen.has(tgGroupId)) return false
+      seen.add(tgGroupId)
+      return [group.title || '', String(tgGroupId)].some((value) => value.toLowerCase().includes(normalizedQuery))
+    }).slice(0, 8)
   }, [groups, normalizedQuery])
 
   return (
@@ -40,7 +44,7 @@ export function GroupDestinationField({
           {suggestions.length ? suggestions.map((group) => (
             <LinkRow key={String(group.tg_group_id)} onClick={() => onSelect({ tg_group_id: Number(group.tg_group_id), title: String(group.title || group.tg_group_id || 'Group') })}>
               <strong>{group.title || `Group ${group.tg_group_id}`}</strong>
-              <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id}</div>
+              <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id} · {group.group_type || 'group'}</div>
             </LinkRow>
           )) : <Note>No matching groups found.</Note>}
         </div>
