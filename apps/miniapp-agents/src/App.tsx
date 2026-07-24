@@ -2731,7 +2731,12 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     if (filterGroup !== 'all') {
       result = result.filter((j) => {
         if (j.source_group_title === filterGroup) return true
-        if (j.target_group_ids?.includes(Number(filterGroup))) return true
+        if (j.target_group_ids?.length) {
+          for (const gid of j.target_group_ids) {
+            const label = jobGroupNames[gid] || `#${gid}`
+            if (label === filterGroup) return true
+          }
+        }
         return false
       })
     }
@@ -2749,11 +2754,13 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     for (const j of jobs) {
       if (j.source_group_title) groups.add(j.source_group_title)
       if (j.target_group_ids?.length) {
-        for (const gid of j.target_group_ids) groups.add(String(gid))
+        for (const gid of j.target_group_ids) {
+          groups.add(jobGroupNames[gid] || `#${gid}`)
+        }
       }
     }
     return Array.from(groups).sort()
-  }, [jobs])
+  }, [jobs, jobGroupNames])
 
   const paginatedJobs = useMemo(() => {
     const start = (page - 1) * pageSize
