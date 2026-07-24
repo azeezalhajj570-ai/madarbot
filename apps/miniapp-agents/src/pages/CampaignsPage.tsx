@@ -568,34 +568,30 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                         catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
                       }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.resume')}</button>
                     ) : null}
-                    {c.status === 'draft' || c.status === 'paused' ? (
-                      <button type="button" onClick={() => {
-                        setBulkTargetType('groups')
-                        setBulkMessages([c.message_template || ''])
-                        const groupIds: Array<{ tg_group_id: number; title: string }> = (c.target_filters?.group_ids as number[] || []).map((id: number) => ({ tg_group_id: id, title: String(id) }))
-                        setBulkSelectedTargetGroups(groupIds)
-                        setBulkSendMode('recurring')
-                        if (c.repeat_time) setScheduleConfig((prev) => ({ ...prev, repeatTime: c.repeat_time! }))
-                        if (c.repeat_type) setScheduleConfig((prev) => ({ ...prev, repeatType: c.repeat_type as 'daily' | 'weekly' | 'monthly' | 'cron' }))
-                        if (c.cron_expression) setScheduleConfig((prev) => ({ ...prev, cronExpression: c.cron_expression! }))
-                        if (c.end_type) setScheduleConfig((prev) => ({ ...prev, endType: c.end_type as 'never' | 'on_date' | 'after_n_runs' }))
-                        if (c.end_value) setScheduleConfig((prev) => ({ ...prev, endValue: c.end_value! }))
-                        if (c.timezone) setScheduleConfig((prev) => ({ ...prev, timezone: c.timezone! }))
-                        setEditingCampaignId(c.id)
-                        setShowSendForm(true)
-                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.edit')}</button>
-                    ) : null}
                     <button type="button" onClick={async () => {
-                      try { await agentsApi.runCampaignNow(account.id, c.id); onSaved(t('campaigns.runNowTriggered')) }
+                      try { await agentsApi.runCampaignNow(account.id, c.id); onSaved(t('campaigns.sendNowTriggered')) }
                       catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
-                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.runNow')}</button>
-                    {c.status === 'draft' || c.status === 'paused' || c.status === 'completed' || c.status === 'cancelled' ? (
-                      <button type="button" onClick={async () => {
-                        if (!confirm(t('campaigns.confirmDelete'))) return
-                        try { await agentsApi.deleteCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
-                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
-                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-clay)' }}>{t('campaigns.delete')}</button>
-                    ) : null}
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.sendNow')}</button>
+                    <button type="button" onClick={() => {
+                      setBulkTargetType('groups')
+                      setBulkMessages([c.message_template || ''])
+                      const groupIds: Array<{ tg_group_id: number; title: string }> = (c.target_filters?.group_ids as number[] || []).map((id: number) => ({ tg_group_id: id, title: String(id) }))
+                      setBulkSelectedTargetGroups(groupIds)
+                      setBulkSendMode('recurring')
+                      if (c.repeat_time) setScheduleConfig((prev) => ({ ...prev, repeatTime: c.repeat_time! }))
+                      if (c.repeat_type) setScheduleConfig((prev) => ({ ...prev, repeatType: c.repeat_type as 'daily' | 'weekly' | 'monthly' | 'cron' }))
+                      if (c.cron_expression) setScheduleConfig((prev) => ({ ...prev, cronExpression: c.cron_expression! }))
+                      if (c.end_type) setScheduleConfig((prev) => ({ ...prev, endType: c.end_type as 'never' | 'on_date' | 'after_n_runs' }))
+                      if (c.end_value) setScheduleConfig((prev) => ({ ...prev, endValue: c.end_value! }))
+                      if (c.timezone) setScheduleConfig((prev) => ({ ...prev, timezone: c.timezone! }))
+                      setEditingCampaignId(c.id)
+                      setShowSendForm(true)
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.edit')}</button>
+                    <button type="button" onClick={async () => {
+                      if (!confirm(t('campaigns.confirmDelete'))) return
+                      try { await agentsApi.deleteCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                      catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-clay)' }}>{t('campaigns.delete')}</button>
                   </div>
                 ) : null}
               </div>

@@ -598,7 +598,8 @@
     "edit": "تعديل",
     "delete": "حذف",
     "confirmDelete": "هل تريد حذف هذه الحملة؟",
-    "campaignUpdated": "تم تحديث الحملة"
+    "campaignUpdated": "تم تحديث الحملة",
+    "sendNowTriggered": "تم الإرسال"
   },
   "multiGroup": {
     "targetGroups": "المجموعات المستهدفة",

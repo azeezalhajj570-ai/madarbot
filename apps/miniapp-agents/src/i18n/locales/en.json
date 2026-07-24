@@ -598,7 +598,8 @@
     "edit": "Edit",
     "delete": "Delete",
     "confirmDelete": "Delete this campaign?",
-    "campaignUpdated": "Campaign updated"
+    "campaignUpdated": "Campaign updated",
+    "sendNowTriggered": "Sending now"
   },
   "multiGroup": {
     "targetGroups": "Target Groups",
