@@ -20,6 +20,7 @@ import type {
   BulkPreflightResult,
   Campaign,
   CampaignList,
+  CampaignRecurrenceLogList,
   CampaignSendLogList,
   SendLogsResponse,
   TaskCatalogItem,
@@ -319,6 +320,14 @@ export async function createCampaign(agentId: number, payload: {
   message_template: string
   target_filters?: Record<string, unknown>
   scheduled_at?: string
+  recurrence_enabled?: boolean
+  repeat_type?: string
+  interval_value?: number
+  repeat_time?: string
+  cron_expression?: string
+  end_type?: string
+  end_value?: string
+  timezone?: string
 }) {
   return apiClient.post<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns`, payload)
 }
@@ -338,6 +347,14 @@ export async function updateCampaign(agentId: number, campaignId: number, payloa
   message_template?: string
   target_filters?: Record<string, unknown>
   scheduled_at?: string
+  recurrence_enabled?: boolean
+  repeat_type?: string
+  interval_value?: number
+  repeat_time?: string
+  cron_expression?: string
+  end_type?: string
+  end_value?: string
+  timezone?: string
 }) {
   return apiClient.patch<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}`, payload)
 }
@@ -353,6 +370,26 @@ export async function sendCampaign(agentId: number, campaignId: number, payload?
   return apiClient.post<{ status: string; started_at: string; jobs_created: number; jobs_failed: number; jobs: Array<{ id: number | null; tg_group_id: number; status?: string; error?: string }> }>(
     `${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/send`, payload || {}
   )
+}
+
+export async function activateCampaign(agentId: number, campaignId: number) {
+  return apiClient.post<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/activate`)
+}
+
+export async function pauseCampaign(agentId: number, campaignId: number) {
+  return apiClient.post<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/pause`)
+}
+
+export async function resumeCampaign(agentId: number, campaignId: number) {
+  return apiClient.post<Campaign>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/resume`)
+}
+
+export async function runCampaignNow(agentId: number, campaignId: number) {
+  return apiClient.post(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/run-now`, {})
+}
+
+export async function getCampaignRecurrenceLogs(agentId: number, campaignId: number, options?: { page?: number; page_size?: number }) {
+  return apiClient.get<CampaignRecurrenceLogList>(`${AGENTS_API_PREFIX}/${agentId}/campaigns/${campaignId}/recurrence-logs`, options)
 }
 
 export async function getCampaignSendLogs(agentId: number, campaignId: number, options?: { status?: string; page?: number; page_size?: number }) {

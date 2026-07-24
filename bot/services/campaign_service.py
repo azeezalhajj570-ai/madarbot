@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
+import structlog
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, desc
+
+logger = structlog.get_logger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -16,12 +19,12 @@ from bot.agents.jobs import (
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
     normalize_group_member_broadcast_payload,
 )
-from bot.db.models import Campaign
+from bot.db.models import Campaign, CampaignRecurrenceLog
 
 
 class CampaignService:
     VALID_TYPES = ("broadcast", "announcement", "promo", "reminder")
-    VALID_STATUSES = ("draft", "scheduled", "running", "paused", "completed", "cancelled")
+    VALID_STATUSES = ("draft", "scheduled", "running", "active", "paused", "completed", "cancelled")
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -37,6 +40,14 @@ class CampaignService:
         target_filters: dict | None = None,
         scheduled_at: datetime | None = None,
         created_by: int | None = None,
+        recurrence_enabled: bool = False,
+        repeat_type: str | None = None,
+        interval_value: int = 1,
+        repeat_time: time | None = None,
+        cron_expression: str | None = None,
+        end_type: str | None = None,
+        end_value: str | None = None,
+        tz_name: str = "UTC",
     ) -> Campaign:
         if type not in self.VALID_TYPES:
             raise HTTPException(
@@ -53,6 +64,14 @@ class CampaignService:
             target_filters=target_filters or {},
             created_by=created_by,
             scheduled_at=scheduled_at,
+            recurrence_enabled=recurrence_enabled,
+            repeat_type=repeat_type,
+            interval_value=interval_value,
+            repeat_time=repeat_time,
+            cron_expression=cron_expression,
+            end_type=end_type,
+            end_value=end_value,
+            timezone=tz_name or "UTC",
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -127,13 +146,21 @@ class CampaignService:
         message_template: str | None = None,
         target_filters: dict | None = None,
         scheduled_at: datetime | None = None,
+        recurrence_enabled: bool | None = None,
+        repeat_type: str | None = None,
+        interval_value: int | None = None,
+        repeat_time: time | None = None,
+        cron_expression: str | None = None,
+        end_type: str | None = None,
+        end_value: str | None = None,
+        tz_name: str | None = None,
     ) -> Campaign:
         campaign = await self.get_campaign(campaign_id, agent_id)
 
-        if campaign.status != "draft":
+        if campaign.status not in ("draft", "paused"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Only draft campaigns can be updated",
+                detail="Only draft or paused campaigns can be updated",
             )
 
         if name is not None:
@@ -153,6 +180,25 @@ class CampaignService:
             campaign.target_filters = target_filters
         if scheduled_at is not None:
             campaign.scheduled_at = scheduled_at
+        if recurrence_enabled is not None:
+            campaign.recurrence_enabled = recurrence_enabled
+        if repeat_type is not None:
+            campaign.repeat_type = repeat_type
+        if interval_value is not None:
+            campaign.interval_value = interval_value
+        if repeat_time is not None:
+            campaign.repeat_time = repeat_time
+        if cron_expression is not None:
+            campaign.cron_expression = cron_expression
+        if end_type is not None:
+            campaign.end_type = end_type
+        if end_value is not None:
+            campaign.end_value = end_value
+        if tz_name is not None:
+            campaign.timezone = tz_name or "UTC"
+
+        if campaign.recurrence_enabled:
+            campaign.next_run_at = self.compute_next_run_at(campaign)
 
         campaign.updated_at = datetime.now(timezone.utc)
         await self.session.commit()
@@ -162,10 +208,10 @@ class CampaignService:
     async def delete_campaign(self, campaign_id: int, agent_id: int) -> None:
         campaign = await self.get_campaign(campaign_id, agent_id)
 
-        if campaign.status not in ("draft", "cancelled", "completed"):
+        if campaign.status not in ("draft", "cancelled", "completed", "paused"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Cannot delete campaign with status '{campaign.status}'. Only draft, cancelled, or completed campaigns can be deleted.",
+                detail=f"Cannot delete campaign with status '{campaign.status}'. Only draft, cancelled, paused, or completed campaigns can be deleted.",
             )
 
         await self.session.delete(campaign)
@@ -230,6 +276,7 @@ class CampaignService:
                     {"id": job.id, "tg_group_id": tg_group_id, "status": job.status}
                 )
             except ValueError as exc:
+                logger.bind(campaign_id=campaign.id, tg_group_id=tg_group_id, error=str(exc)).warning("launch_campaign_job_failed")
                 created_jobs.append({"id": None, "tg_group_id": tg_group_id, "error": str(exc)})
 
         if campaign.status == "draft":
@@ -245,6 +292,315 @@ class CampaignService:
             "jobs_failed": len([j for j in created_jobs if j["id"] is None]),
             "jobs": created_jobs,
         }
+
+    async def pause_campaign(self, campaign_id: int, agent_id: int) -> Campaign:
+        campaign = await self.get_campaign(campaign_id, agent_id)
+        if campaign.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only active recurring campaigns can be paused.",
+            )
+        campaign.status = "paused"
+        campaign.updated_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(campaign)
+        return campaign
+
+    async def resume_campaign(self, campaign_id: int, agent_id: int) -> Campaign:
+        campaign = await self.get_campaign(campaign_id, agent_id)
+        if campaign.status != "paused":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only paused campaigns can be resumed.",
+            )
+        campaign.status = "active"
+        campaign.next_run_at = self.compute_next_run_at(campaign)
+        campaign.updated_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(campaign)
+        return campaign
+
+    async def activate_campaign(self, campaign_id: int, agent_id: int) -> Campaign:
+        campaign = await self.get_campaign(campaign_id, agent_id)
+        if campaign.status != "draft":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only draft campaigns can be activated.",
+            )
+        if not campaign.recurrence_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only recurring campaigns can be activated.",
+            )
+        campaign.status = "active"
+        campaign.next_run_at = self.compute_next_run_at(campaign)
+        campaign.updated_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(campaign)
+        return campaign
+
+    async def run_now(
+        self,
+        campaign_id: int,
+        agent_id: int,
+        actor_user_id: int,
+    ) -> dict[str, Any]:
+        campaign = await self.get_campaign(campaign_id, agent_id)
+        if campaign.status not in ("active", "paused"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only active or paused recurring campaigns can be triggered.",
+            )
+        resolved_group_ids = list(
+            (campaign.target_filters or {}).get("group_ids") or []
+        )
+        result = await self.launch_campaign(
+            campaign_id=campaign_id,
+            agent_id=agent_id,
+            actor_user_id=actor_user_id,
+            threshold=len(resolved_group_ids) or 1,
+        )
+        return result
+
+    async def process_due_recurring_campaigns(self, batch_size: int = 50) -> list[dict[str, Any]]:
+        from sqlalchemy import update as sql_update
+
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(Campaign)
+            .where(
+                Campaign.recurrence_enabled == True,
+                Campaign.status == "active",
+                Campaign.next_run_at <= now,
+                Campaign.message_template.isnot(None),
+            )
+            .order_by(Campaign.next_run_at)
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
+        )
+        due = result.unique().scalars().all()
+        processed: list[dict[str, Any]] = []
+
+        for campaign in due:
+            try:
+                resolved_group_ids = list(
+                    (campaign.target_filters or {}).get("group_ids") or []
+                )
+                if not resolved_group_ids:
+                    continue
+
+                job_service = AgentJobService(self.session)
+                created_jobs: list[int] = []
+
+                for tg_group_id in resolved_group_ids:
+                    job_payload = normalize_group_member_broadcast_payload(
+                        {
+                            "target_type": "groups",
+                            "messages": [campaign.message_template],
+                            "threshold": len(resolved_group_ids) or 1,
+                            "interval_seconds": 3.0,
+                            "source_group_id": tg_group_id,
+                            "target_group_ids": [tg_group_id],
+                        }
+                    )
+                    try:
+                        job = await job_service.create_job(
+                            actor_user_id=campaign.created_by or 0,
+                            agent_id=campaign.agent_id,
+                            job_type=GROUP_MEMBER_BROADCAST_JOB_TYPE,
+                            job_payload=job_payload,
+                            campaign_id=campaign.id,
+                        )
+                        await dispatch_agent_job(job.id)
+                        created_jobs.append(job.id)
+                    except ValueError:
+                        pass
+
+                log_entry = CampaignRecurrenceLog(
+                    campaign_id=campaign.id,
+                    triggered_at=now,
+                    job_id=created_jobs[0] if created_jobs else None,
+                    status="sent" if created_jobs else "failed",
+                    error=None if created_jobs else "No jobs created",
+                    created_at=now,
+                )
+                self.session.add(log_entry)
+
+                campaign.run_count = (campaign.run_count or 0) + 1
+                campaign.last_run_at = now
+
+                if campaign.end_type == "after_n_runs" and campaign.end_value:
+                    try:
+                        max_runs = int(campaign.end_value)
+                        if campaign.run_count >= max_runs:
+                            campaign.status = "completed"
+                            campaign.completed_at = now
+                            campaign.next_run_at = None
+                        else:
+                            campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
+                    except (ValueError, TypeError):
+                        campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
+                elif campaign.end_type == "on_date" and campaign.end_value:
+                    campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
+                    if campaign.next_run_at is None:
+                        campaign.status = "completed"
+                        campaign.completed_at = now
+                else:
+                    campaign.next_run_at = self.compute_next_run_at(campaign, from_dt=now)
+
+                campaign.updated_at = now
+                processed.append({
+                    "campaign_id": campaign.id,
+                    "jobs_created": len(created_jobs),
+                    "status": "completed",
+                })
+            except Exception as exc:
+                logger.bind(campaign_id=campaign.id, error=str(exc)).exception("recurring_campaign_processing_failed")
+                processed.append({
+                    "campaign_id": campaign.id,
+                    "jobs_created": 0,
+                    "status": "failed",
+                })
+
+        await self.session.commit()
+        return processed
+
+    async def get_recurrence_logs(
+        self,
+        campaign_id: int,
+        agent_id: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        campaign = await self.get_campaign(campaign_id, agent_id)
+
+        query = (
+            select(CampaignRecurrenceLog)
+            .where(CampaignRecurrenceLog.campaign_id == campaign.id)
+            .order_by(desc(CampaignRecurrenceLog.triggered_at))
+        )
+        count_query = select(func.count(CampaignRecurrenceLog.id)).where(
+            CampaignRecurrenceLog.campaign_id == campaign.id
+        )
+
+        total = (await self.session.execute(count_query)).scalar_one()
+        pages = max(1, (total + page_size - 1) // page_size)
+        offset = (page - 1) * page_size
+
+        rows = (
+            (await self.session.execute(query.offset(offset).limit(page_size)))
+            .scalars()
+            .all()
+        )
+
+        return {
+            "items": [
+                {
+                    "id": r.id,
+                    "campaign_id": r.campaign_id,
+                    "triggered_at": r.triggered_at.isoformat() if r.triggered_at else None,
+                    "job_id": r.job_id,
+                    "status": r.status,
+                    "error": r.error,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": pages,
+        }
+
+    @staticmethod
+    def compute_next_run_at(campaign: Campaign, from_dt: datetime | None = None) -> datetime | None:
+        if not campaign.recurrence_enabled:
+            return None
+
+        now = from_dt or datetime.now(timezone.utc)
+        if campaign.next_run_at and campaign.next_run_at > now and from_dt is None:
+            return campaign.next_run_at
+
+        repeat_type = campaign.repeat_type or "daily"
+        interval = max(1, campaign.interval_value or 1)
+        end_type = campaign.end_type
+
+        if campaign.repeat_time:
+            from zoneinfo import ZoneInfo
+            try:
+                tz = ZoneInfo(campaign.timezone or "UTC")
+            except (KeyError, TypeError):
+                tz = timezone.utc
+            local_now = now.astimezone(tz)
+            today_candidate = datetime.combine(local_now.date(), campaign.repeat_time, tzinfo=tz)
+            today_candidate_utc = today_candidate.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
+            if today_candidate_utc > now:
+                next_dt = today_candidate_utc
+            else:
+                if repeat_type == "daily":
+                    next_date = local_now.date() + timedelta(days=interval)
+                elif repeat_type == "weekly":
+                    next_date = local_now.date() + timedelta(weeks=interval)
+                elif repeat_type == "monthly":
+                    month = local_now.date().month + interval
+                    year = local_now.date().year + (month - 1) // 12
+                    month = ((month - 1) % 12) + 1
+                    day = min(local_now.date().day, 28)
+                    try:
+                        from calendar import monthrange
+                        max_day = monthrange(year, month)[1]
+                        day = min(local_now.date().day, max_day)
+                    except ImportError:
+                        pass
+                    next_date = date(year, month, day)
+                elif repeat_type == "cron":
+                    return None
+                else:
+                    return None
+                next_dt = datetime.combine(next_date, campaign.repeat_time, tzinfo=tz)
+                next_dt = next_dt.astimezone(timezone.utc).replace(tzinfo=timezone.utc)
+        else:
+            if repeat_type == "daily":
+                next_date = now.date() + timedelta(days=interval)
+            elif repeat_type == "weekly":
+                next_date = now.date() + timedelta(weeks=interval)
+            elif repeat_type == "monthly":
+                month = now.date().month + interval
+                year = now.date().year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1
+                day = min(now.date().day, 28)
+                try:
+                    from calendar import monthrange
+                    max_day = monthrange(year, month)[1]
+                    day = min(now.date().day, max_day)
+                except ImportError:
+                    pass
+                next_date = date(year, month, day)
+            elif repeat_type == "cron":
+                return None
+            else:
+                return None
+            next_dt = datetime(next_date.year, next_date.month, next_date.day, tzinfo=timezone.utc)
+
+        if end_type == "on_date" and campaign.end_value:
+            try:
+                end_date = datetime.fromisoformat(campaign.end_value)
+                if end_date.tzinfo is None:
+                    end_date = end_date.replace(tzinfo=timezone.utc)
+                if next_dt > end_date:
+                    return None
+            except (ValueError, TypeError):
+                pass
+
+        if end_type == "after_n_runs" and campaign.end_value:
+            try:
+                max_runs = int(campaign.end_value)
+                if campaign.run_count >= max_runs:
+                    return None
+            except (ValueError, TypeError):
+                pass
+
+        return next_dt
 
     def _to_dict(self, campaign: Campaign) -> dict[str, Any]:
         return {
@@ -264,6 +620,18 @@ class CampaignService:
             "scheduled_at": campaign.scheduled_at.isoformat() if campaign.scheduled_at else None,
             "started_at": campaign.started_at.isoformat() if campaign.started_at else None,
             "completed_at": campaign.completed_at.isoformat() if campaign.completed_at else None,
+            "recurrence_enabled": campaign.recurrence_enabled,
+            "repeat_type": campaign.repeat_type,
+            "interval_value": campaign.interval_value,
+            "repeat_time": campaign.repeat_time.isoformat() if campaign.repeat_time else None,
+            "cron_expression": campaign.cron_expression,
+            "end_type": campaign.end_type,
+            "end_value": campaign.end_value,
+            "timezone": campaign.timezone,
+            "next_run_at": campaign.next_run_at.isoformat() if campaign.next_run_at else None,
+            "last_run_at": campaign.last_run_at.isoformat() if campaign.last_run_at else None,
+            "run_count": campaign.run_count,
+            "max_runs": campaign.max_runs,
             "created_at": campaign.created_at.isoformat() if campaign.created_at else None,
             "updated_at": campaign.updated_at.isoformat() if campaign.updated_at else None,
         }

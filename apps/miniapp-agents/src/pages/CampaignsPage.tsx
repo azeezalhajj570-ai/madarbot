@@ -6,6 +6,8 @@ import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
 import { GroupDestinationField } from '../components/GroupDestinationField'
 import { BlacklistSection } from '../features/blacklist/BlacklistSection'
+import { SchedulePicker, DEFAULT_SCHEDULE } from '../components/SchedulePicker'
+import type { ScheduleConfig } from '../components/SchedulePicker'
 
 import {
   agentsApi,
@@ -18,7 +20,6 @@ import type {
   Agent,
   AgentGroupMember,
   AgentManagedGroup,
-  AgentJobRecord,
   BulkPreflightResult,
   Campaign,
 } from '@miniapp/shared'
@@ -29,6 +30,8 @@ type SelectedGroupChip = {
 }
 
 const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
+
+const _groupNameCache: Record<number, string> = {}
 
 export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
@@ -61,6 +64,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
   const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
   const [bulkScheduledAt, setBulkScheduledAt] = useState('')
+  const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
+  const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_SCHEDULE)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
   const [excludeBots, setExcludeBots] = useState(true)
   const [orderByMsgCount, setOrderByMsgCount] = useState<'desc' | 'asc'>('desc')
@@ -71,9 +76,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
-  const [broadcastJobs, setBroadcastJobs] = useState<AgentJobRecord[]>([])
   const [bulkSaving, setBulkSaving] = useState(false)
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
+  const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
+  const [groupNameMap, setGroupNameMap] = useState<Record<number, string>>({})
 
   function notify(msg: string, kind: 'error' | 'success' | 'info' = 'error') {
     setStatus(msg)
@@ -85,14 +91,16 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (!filledMessages.length) return false
     if (bulkTargetType === 'members' && !bulkSourceGroup?.tg_group_id) return false
     if (bulkTargetType === 'groups' && !bulkSelectedTargetGroups.length) return false
-    const threshold = Number.parseInt(bulkThreshold, 10)
-    if (!Number.isFinite(threshold) || threshold <= 0) return false
-    const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
-    if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
-    const intervalContacts = Number.parseFloat(bulkIntervalContacts)
-    if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    if (bulkSendMode === 'standard') {
+      const threshold = Number.parseInt(bulkThreshold, 10)
+      if (!Number.isFinite(threshold) || threshold <= 0) return false
+      const intervalSeconds = Number.parseFloat(bulkIntervalSeconds)
+      if (!Number.isFinite(intervalSeconds) || intervalSeconds < 0) return false
+      const intervalContacts = Number.parseFloat(bulkIntervalContacts)
+      if (!Number.isFinite(intervalContacts) || intervalContacts < 0) return false
+    }
     return true
-  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts])
+  }, [bulkMessages, bulkTargetType, bulkSourceGroup, bulkSelectedTargetGroups, bulkThreshold, bulkIntervalSeconds, bulkIntervalContacts, bulkSendMode])
 
   // Effects
   useEffect(() => {
@@ -100,17 +108,54 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   }, [account.id])
 
   useEffect(() => {
+    const groupIds = new Set<number>()
+    for (const c of campaigns) {
+      const ids = (c.target_filters?.group_ids as number[] | undefined) ?? []
+      for (const id of ids) groupIds.add(id)
+    }
+    const missing = [...groupIds].filter((id) => !(id in _groupNameCache))
+    if (missing.length === 0) {
+      const cached: Record<number, string> = {}
+      for (const id of groupIds) {
+        if (id in _groupNameCache) cached[id] = _groupNameCache[id]
+      }
+      if (Object.keys(cached).length) setGroupNameMap((prev) => ({ ...prev, ...cached }))
+      return
+    }
+    let cancelled = false
+    void Promise.all(missing.map((id) =>
+      agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
+        if (cancelled) return null
+        const g = Array.isArray(r) ? r.find((g) => g.tg_group_id === id || g.id === id) : null
+        return g ? { id, title: g.title || '' } : null
+      }).catch(() => null)
+    )).then((results) => {
+      if (cancelled) return
+      for (const r of results) {
+        if (r) _groupNameCache[r.id] = r.title
+      }
+      setGroupNameMap((prev) => ({ ...prev, ..._groupNameCache }))
+    })
+    return () => { cancelled = true }
+  }, [campaigns, account.id])
+
+  useEffect(() => {
     const gq = bulkSourceGroupQuery || bulkTargetGroupQuery
     if (!gq.trim()) { setGroups([]); return }
     const timer = setTimeout(() => {
-      void agentsApi.fetchAgentGroups(account.id, gq).then((r) => setGroups(Array.isArray(r) ? r : [])).catch(() => setGroups([]))
+      void agentsApi.fetchAgentGroups(account.id, gq).then((r) => {
+        const raw = Array.isArray(r) ? r : []
+        const seen = new Set<number>()
+        setGroups(raw.filter((g) => {
+          const id = Number(g.tg_group_id || 0)
+          if (!id || seen.has(id)) return false
+          seen.add(id)
+          return true
+        }))
+      }).catch(() => setGroups([]))
     }, 350)
     return () => clearTimeout(timer)
   }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
-
-  useEffect(() => {
-    void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
-  }, [account.id])
 
   useEffect(() => {
     if (!bulkSourceGroup?.tg_group_id) { setBulkMemberResults([]); setBulkMemberTotal(0); setBulkMemberStatus(null); setLoadingBulkMembers(false); return }
@@ -143,7 +188,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkMemberQuery(''); setBulkMemberResults([]); setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
-    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null)
+    setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
+    setExcludeAdmins(false); setExcludeBots(true); setBulkSummary(null); setEditingCampaignId(null)
     setQsSelectedCampaignId(''); setStatus(null)
   }
 
@@ -160,6 +206,40 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     const intervalContacts = Number.parseFloat(bulkIntervalContacts)
     if (!Number.isFinite(intervalContacts) || intervalContacts < 0) validationErrors.push(t('campaigns.intervalInvalid'))
     if (validationErrors.length) { notify(validationErrors.join(' · ')); return }
+
+    if (bulkSendMode === 'recurring') {
+      setBulkSaving(true)
+      try {
+        const targetGroupIds = bulkSelectedTargetGroups.map((g) => g.tg_group_id)
+        const payload = {
+          name: `Recurring - ${filledMessages[0]?.slice(0, 40)}`,
+          message_template: filledMessages.join('\n---\n'),
+          target_filters: { group_ids: targetGroupIds },
+          recurrence_enabled: true,
+          repeat_type: scheduleConfig.repeatType,
+          interval_value: 1,
+          repeat_time: scheduleConfig.repeatTime,
+          cron_expression: scheduleConfig.repeatType === 'cron' ? scheduleConfig.cronExpression : undefined,
+          end_type: scheduleConfig.endType === 'never' ? undefined : scheduleConfig.endType,
+          end_value: scheduleConfig.endValue || undefined,
+          timezone: scheduleConfig.timezone,
+        }
+        if (editingCampaignId) {
+          await agentsApi.updateCampaign(account.id, editingCampaignId, payload)
+          resetForm(); setStatus(null)
+          onSaved(t('campaigns.campaignUpdated'))
+        } else {
+          const campaign = await agentsApi.createCampaign(account.id, payload)
+          await agentsApi.activateCampaign(account.id, campaign.id)
+          resetForm(); setStatus(null)
+          onSaved(t('campaigns.recurringCreated'))
+        }
+        void agentsApi.listCampaigns(account.id).then((r) => setCampaigns(r.items ?? [])).catch(() => {})
+      } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedCreate')) }
+      finally { setBulkSaving(false) }
+      return
+    }
+
     if (bulkSummary) {
       setBulkSaving(true)
       try {
@@ -176,11 +256,9 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
         } else { jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
-        const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
-        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
+        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload)
         setBulkSummary(null); resetForm(); setStatus(null)
-        onSaved(scheduledAt ? t('campaigns.scheduled') : t('campaigns.queued'))
-        void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
+        onSaved(t('campaigns.queued'))
       } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
       finally { setBulkSaving(false) }
       return
@@ -231,14 +309,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
         {/* Target type toggle */}
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['members', 'groups'] as const).map((type) => (
-            <button key={type} type="button" onClick={() => { setBulkTargetType(type); setBulkSummary(null) }} style={{
-              flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: bulkTargetType === type ? 'var(--miniapp-surface)' : 'transparent',
-              color: bulkTargetType === type ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-              fontWeight: bulkTargetType === type ? 600 : 400, fontSize: 13,
-            }}>{type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}</button>
-          ))}
+          {(['members', 'groups'] as const).map((type) => {
+            const disabled = bulkSendMode === 'recurring' && type === 'members'
+            return (
+              <button key={type} type="button" disabled={disabled} onClick={() => { if (!disabled) { setBulkTargetType(type); setBulkSummary(null) } }} style={{
+                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
+                background: bulkTargetType === type ? 'var(--miniapp-surface)' : 'transparent',
+                color: disabled ? 'var(--miniapp-text-muted)' : (bulkTargetType === type ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)'),
+                fontWeight: bulkTargetType === type ? 600 : 400, fontSize: 13, opacity: disabled ? 0.4 : 1,
+              }}>{type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}</button>
+            )
+          })}
         </div>
 
         {bulkTargetType === 'members' ? (
@@ -429,21 +510,21 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         </div>
 
+        {/* Send mode: standard vs recurring */}
         <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['now', 'schedule'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setBulkScheduleMode(m)} style={{
+          {(['standard', 'recurring'] as const).map((m) => (
+            <button key={m} type="button" onClick={() => { setBulkSendMode(m); setBulkSummary(null); if (m === 'recurring') setBulkTargetType('groups') }} style={{
               flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: bulkScheduleMode === m ? 'var(--miniapp-surface)' : 'transparent',
-              color: bulkScheduleMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-              fontWeight: bulkScheduleMode === m ? 600 : 400, fontSize: 13,
-            }}>{m === 'now' ? t('campaigns.sendNow') : t('campaigns.schedule')}</button>
+              background: bulkSendMode === m ? 'var(--miniapp-surface)' : 'transparent',
+              color: bulkSendMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
+              fontWeight: bulkSendMode === m ? 600 : 400, fontSize: 13,
+            }}>{t(m === 'standard' ? 'campaigns.sendOnce' : 'campaigns.recurring')}</button>
           ))}
         </div>
-        {bulkScheduleMode === 'schedule' ? (
-          <div style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduleDatetime')}</span>
-            <input type="datetime-local" value={bulkScheduledAt} onChange={(e) => setBulkScheduledAt(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }} />
+
+        {bulkSendMode === 'recurring' ? (
+          <div style={{ marginBottom: 12 }}>
+            <SchedulePicker value={scheduleConfig} onChange={setScheduleConfig} />
           </div>
         ) : null}
         {bulkSummary ? (
@@ -461,27 +542,81 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         </>) : null}
       </Card>
 
-      {broadcastJobs.length > 0 ? (
-        <Card title={t('campaigns.recentJobs')} subtitle={t('campaigns.recentJobsSubtitle')}>
+      {/* Campaigns list */}
+      {campaigns.length > 0 ? (
+        <Card title={t('campaigns.campaigns')} subtitle={t('campaigns.campaignsSubtitle')}>
           <div style={{ display: 'grid', gap: 6 }}>
-            {broadcastJobs.map((job) => {
-              const p = job.progress || {}; const total = p.total_count ?? 0; const sent = p.success_count ?? 0
-              return (
-                <div key={job.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{(job.message_preview || '').slice(0, 48)}</strong>
-                      {job.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(job.created_at)}</span> : null}
-                    </div>
-                    <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: job.status === 'completed' ? 'var(--miniapp-sage-dim)' : job.status === 'failed' ? 'rgba(161,87,62,0.12)' : job.status === 'scheduled' ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
-                      color: job.status === 'completed' ? 'var(--miniapp-sage)' : job.status === 'failed' ? 'var(--miniapp-clay)' : job.status === 'scheduled' ? '#b8960a' : 'var(--miniapp-text-muted)',
-                    }}>{job.status}</span>
+            {campaigns.map((c) => (
+              <div key={c.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{c.name}</strong>
+                    {c.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(c.created_at)}</span> : null}
                   </div>
-                  {job.status === 'scheduled' && job.scheduled_at ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduledFor', { datetime: formatDateTime(job.scheduled_at) })}</div> : total > 0 ? <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}><span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span><span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.members')}</span></div> : null}
+                  <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                    background: c.status === 'active' ? 'var(--miniapp-sage-dim)' : c.status === 'paused' ? 'rgba(200,160,80,0.12)' : c.status === 'completed' ? 'rgba(100,100,100,0.12)' : c.status === 'draft' ? 'var(--miniapp-bg-deep)' : 'rgba(161,87,62,0.12)',
+                    color: c.status === 'active' ? 'var(--miniapp-sage)' : c.status === 'paused' ? '#b8960a' : c.status === 'completed' ? '#888' : c.status === 'draft' ? 'var(--miniapp-text-muted)' : 'var(--miniapp-clay)',
+                  }}>{c.status}</span>
                 </div>
-              )
-            })}
+                {c.recurrence_enabled ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                    <span>{c.repeat_type}</span>
+                    {c.next_run_at ? <span>· {t('campaigns.nextRun')}: {formatDateTime(c.next_run_at)}</span> : null}
+                    {c.last_run_at ? <span>· {t('campaigns.lastRun')}: {formatTime(c.last_run_at)}</span> : null}
+                    {c.run_count > 0 ? <span>· {t('campaigns.runCount', { count: c.run_count })}</span> : null}
+                  </div>
+                ) : null}
+                {c.target_filters?.group_ids ? (
+                  <div style={{ fontSize: 11, color: 'var(--miniapp-clay)', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {(c.target_filters.group_ids as number[]).map((gid) => (
+                      <span key={gid} style={{ padding: '1px 6px', borderRadius: 4, background: 'var(--miniapp-bg-deep)' }}>
+                        {groupNameMap[gid] || `#${gid}`}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {c.recurrence_enabled && (c.status === 'active' || c.status === 'paused') ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {c.status === 'active' ? (
+                      <button type="button" onClick={async () => {
+                        try { await agentsApi.pauseCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.pause')}</button>
+                    ) : null}
+                    {c.status === 'paused' ? (
+                      <button type="button" onClick={async () => {
+                        try { await agentsApi.resumeCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.resume')}</button>
+                    ) : null}
+                    <button type="button" onClick={async () => {
+                      try { await agentsApi.runCampaignNow(account.id, c.id); onSaved(t('campaigns.sendNowTriggered')) }
+                      catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.sendNow')}</button>
+                    <button type="button" onClick={() => {
+                      setBulkTargetType('groups')
+                      setBulkMessages([c.message_template || ''])
+                      const groupIds: Array<{ tg_group_id: number; title: string }> = (c.target_filters?.group_ids as number[] || []).map((id: number) => ({ tg_group_id: id, title: String(id) }))
+                      setBulkSelectedTargetGroups(groupIds)
+                      setBulkSendMode('recurring')
+                      if (c.repeat_time) setScheduleConfig((prev) => ({ ...prev, repeatTime: c.repeat_time! }))
+                      if (c.repeat_type) setScheduleConfig((prev) => ({ ...prev, repeatType: c.repeat_type as 'daily' | 'weekly' | 'monthly' | 'cron' }))
+                      if (c.cron_expression) setScheduleConfig((prev) => ({ ...prev, cronExpression: c.cron_expression! }))
+                      if (c.end_type) setScheduleConfig((prev) => ({ ...prev, endType: c.end_type as 'never' | 'on_date' | 'after_n_runs' }))
+                      if (c.end_value) setScheduleConfig((prev) => ({ ...prev, endValue: c.end_value! }))
+                      if (c.timezone) setScheduleConfig((prev) => ({ ...prev, timezone: c.timezone! }))
+                      setEditingCampaignId(c.id)
+                      setShowSendForm(true)
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.edit')}</button>
+                    <button type="button" onClick={async () => {
+                      if (!confirm(t('campaigns.confirmDelete'))) return
+                      try { await agentsApi.deleteCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                      catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-clay)' }}>{t('campaigns.delete')}</button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
           </div>
         </Card>
       ) : null}

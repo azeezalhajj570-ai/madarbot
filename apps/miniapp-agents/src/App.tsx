@@ -25,10 +25,13 @@ import type {
   AgentGroupMember,
   AgentGroupMemberMessagesPage,
   AgentGroupMembersPage,
+  AgentJobRecord,
   AgentLead,
   AgentLeadPage,
+  AgentNotification,
   AutomationTask,
   BulkPreflightResult,
+  SendLogEntry,
   TaskCatalogItem,
 } from '@miniapp/shared'
 
@@ -402,11 +405,13 @@ function NotificationSheet({
   account,
   onUnseenCountChange,
   onClose,
+  onNavigateToJob,
 }: {
   open: boolean
   account: Agent | null
   onUnseenCountChange: (count: number) => void
   onClose: () => void
+  onNavigateToJob?: (jobId: number) => void
 }) {
   const { t } = useTranslation()
   const [notifications, setNotifications] = useState<AgentNotification[]>([])
@@ -446,9 +451,22 @@ function NotificationSheet({
     }
   }
 
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
   if (!open) return null
 
   const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
+
+  function handleNotificationClick(notification: AgentNotification) {
+    if (account) {
+      agentsApi.markAgentNotificationsSeen(account.id).catch(() => {})
+    }
+    const jobId = notification.payload?.job_id as number | undefined
+    if (jobId && onNavigateToJob) {
+      onClose()
+      onNavigateToJob(jobId)
+    }
+  }
 
   return (
     <div
@@ -490,13 +508,17 @@ function NotificationSheet({
           {visibleNotifications.map((notification) => {
             const tone = notificationTone(notification.kind)
             const chips = notificationChips(t, notification)
+            const isExpanded = expandedId === notification.id
+            const payloadEntries = notification.payload ? Object.entries(notification.payload).filter(([k]) => k !== 'job_id') : []
             return (
               <div
                 key={notification.id}
+                onClick={() => handleNotificationClick(notification)}
                 style={{
-                  display: 'grid', gap: 10, padding: 14,
+                  display: 'grid', gap: 10, padding: 14, cursor: 'pointer',
                   border: `1px solid ${tone.border}`, borderRadius: 14,
                   background: tone.background,
+                  transition: 'opacity 0.15s',
                 }}
               >
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -511,12 +533,24 @@ function NotificationSheet({
                     </span>
                     <span style={{ color: 'var(--miniapp-coral)', fontSize: 12, fontWeight: 700 }}>NEW</span>
                   </div>
-                  <div style={{ color: '#7d746a', fontSize: 12, whiteSpace: 'nowrap' }}>{notificationTimeLabel(t, notification.created_at)}</div>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : notification.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--miniapp-text-muted)', fontSize: 16, padding: 2 }}>
+                    {isExpanded ? '▲' : '⋯'}
+                  </button>
                 </div>
                 <div style={{ display: 'grid', gap: 4 }}>
                   <strong style={{ fontSize: 15 }}>{notification.title}</strong>
                   <div style={{ color: '#655d52', lineHeight: 1.45 }}>{notification.body}</div>
                 </div>
+                {isExpanded && payloadEntries.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 3, padding: 8, background: 'var(--miniapp-bg)', borderRadius: 8, fontSize: 11, fontFamily: 'var(--miniapp-mono, monospace)' }}>
+                    {payloadEntries.map(([key, val]) => (
+                      <div key={key} style={{ color: 'var(--miniapp-text-muted)' }}>
+                        <span style={{ color: 'var(--miniapp-text-primary)', fontWeight: 600 }}>{key}</span>: {String(val ?? '')}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 {chips.length ? (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {chips.map((chip) => (
@@ -971,6 +1005,7 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [subscriptionExpanded, setSubscriptionExpanded] = useState(false)
   const [agentStatus, setAgentStatus] = useState<{ session_state?: string; retry_after?: number | null; flood_wait_until?: string | null } | null>(null)
+  const [scrollToJobId, setScrollToJobId] = useState<number | null>(null)
   const effectiveGroupId = session.selectedGroupId ?? session.groups[0]?.id ?? null
 
   useEffect(() => {
@@ -1434,7 +1469,7 @@ export default function App() {
               {route.page === 'tasks' ? (
                 <>
                   <AutomationTasksSection account={selectedAccount} onSaved={setStatus} />
-                  <TaskActivity account={selectedAccount} />
+                  <TaskActivity account={selectedAccount} scrollToJobId={scrollToJobId} onScrolled={() => setScrollToJobId(null)} />
                 </>
               ) : null}
             </>
@@ -1459,6 +1494,7 @@ export default function App() {
         account={selectedAccount}
         onUnseenCountChange={setUnseenNotifications}
         onClose={() => setShowNotifications(false)}
+        onNavigateToJob={(jobId) => { if (!selectedAccount) return; setScrollToJobId(jobId); navigate(accountPath(selectedAccount.id, 'tasks')) }}
       />
       {deleteTarget ? (
         <ConfirmModal
@@ -2502,7 +2538,9 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
   )
 }
 
-function TaskActivity({ account }: { account: Agent }) {
+const _jobGroupCache: Record<number, string> = {}
+
+function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; scrollToJobId?: number | null; onScrolled?: () => void }) {
   const { t } = useTranslation()
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -2511,11 +2549,17 @@ function TaskActivity({ account }: { account: Agent }) {
   const [logs, setLogs] = useState<SendLogEntry[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [actingJobId, setActingJobId] = useState<number | null>(null)
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
+  const [jobGroupNames, setJobGroupNames] = useState<Record<number, string>>({})
+  const jobCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterDate, setFilterDate] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [filterGroup, setFilterGroup] = useState('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
   useEffect(() => {
     void load()
@@ -2529,6 +2573,32 @@ function TaskActivity({ account }: { account: Agent }) {
     try {
       const jobsData = await agentsApi.fetchAgentJobs(account.id, undefined, 100)
       setJobs(jobsData)
+      const missingIds = new Set<number>()
+      for (const j of jobsData) {
+        if (j.target_group_ids) {
+          for (const gid of j.target_group_ids) {
+            if (!(gid in _jobGroupCache)) missingIds.add(gid)
+          }
+        }
+      }
+      if (missingIds.size > 0) {
+        const results = await Promise.allSettled(
+          [...missingIds].map((id) =>
+            agentsApi.fetchAgentGroups(account.id, String(id)).then((r) => {
+              const g = Array.isArray(r) ? r.find((g) => g.tg_group_id === id || g.id === id) : null
+              return g ? { id, title: g.title || '' } : null
+            }).catch(() => null)
+          )
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) {
+            _jobGroupCache[r.value.id] = r.value.title
+          }
+        }
+        setJobGroupNames({ ..._jobGroupCache })
+      } else {
+        setJobGroupNames({ ..._jobGroupCache })
+      }
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : 'Failed to load task activity')
     } finally {
@@ -2658,13 +2728,60 @@ function TaskActivity({ account }: { account: Agent }) {
       })
     }
 
+    if (filterGroup !== 'all') {
+      result = result.filter((j) => {
+        if (j.source_group_title === filterGroup) return true
+        if (j.target_group_ids?.length) {
+          for (const gid of j.target_group_ids) {
+            const label = jobGroupNames[gid] || `#${gid}`
+            if (label === filterGroup) return true
+          }
+        }
+        return false
+      })
+    }
+
     return result
-  }, [jobs, filterStatus, filterDate, filterType, search])
+  }, [jobs, filterStatus, filterDate, filterType, search, filterGroup])
 
   const taskTypes = useMemo(() => {
     const types = new Set(jobs.map((j) => j.job_type))
     return Array.from(types)
   }, [jobs])
+
+  const groupOptions = useMemo(() => {
+    const groups = new Set<string>()
+    for (const j of jobs) {
+      if (j.source_group_title) groups.add(j.source_group_title)
+      if (j.target_group_ids?.length) {
+        for (const gid of j.target_group_ids) {
+          groups.add(jobGroupNames[gid] || `#${gid}`)
+        }
+      }
+    }
+    return Array.from(groups).sort()
+  }, [jobs, jobGroupNames])
+
+  const paginatedJobs = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return filteredJobs.slice(start, start + pageSize)
+  }, [filteredJobs, page, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / pageSize))
+
+  useEffect(() => {
+    setPage(1)
+  }, [filterStatus, filterDate, filterType, search, filterGroup])
+
+  useEffect(() => {
+    if (scrollToJobId == null) return
+    const el = jobCardRefs.current[scrollToJobId]
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setExpandedJobId(scrollToJobId)
+      onScrolled?.()
+    }
+  }, [scrollToJobId, onScrolled])
 
   return (
     <Card title={t('tasks.activityTitle')} subtitle={t('tasks.activitySubtitle')}>
@@ -2699,6 +2816,12 @@ function TaskActivity({ account }: { account: Agent }) {
             ...taskTypes.map((jtype) => ({ label: JOB_TYPE_LABELS[jtype] || jtype.replace(/_/g, ' '), value: jtype })),
           ]} />
         ) : null}
+        {groupOptions.length > 0 ? (
+          <FilterSelect value={filterGroup} onChange={setFilterGroup} options={[
+            { label: t('tasks.filterAllGroups'), value: 'all' },
+            ...groupOptions.map((g) => ({ label: g, value: g })),
+          ]} />
+        ) : null}
       </div>
 
       {loading ? <Note>{t('common.loading')}</Note> : null}
@@ -2707,7 +2830,7 @@ function TaskActivity({ account }: { account: Agent }) {
 
       {!loading && filteredJobs.length > 0 ? (
         <div style={{ display: 'grid', gap: 6 }}>
-          {filteredJobs.map((job) => {
+          {paginatedJobs.map((job) => {
             const p = job.progress || {}
             const total = p.total_count ?? 0
             const sent = p.success_count ?? 0
@@ -2721,14 +2844,19 @@ function TaskActivity({ account }: { account: Agent }) {
             const isFailed = job.status === 'failed'
             const isScheduled = job.status === 'scheduled'
             const isStopped = p.stop_reason != null
+            const isExpanded = expandedJobId === job.id
             const taskName = job.message_preview
               ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
               : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
+            const groupNames: string[] = []
+            if (job.source_group_title) groupNames.push(job.source_group_title)
             return (
-              <div key={job.id} style={{
-                padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)',
-                background: 'var(--miniapp-surface)', display: 'grid', gap: 5,
-              }}>
+              <div key={job.id} ref={(el) => { jobCardRefs.current[job.id] = el }}
+                onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
+                style={{
+                  padding: 10, borderRadius: 10, border: `1px solid ${isExpanded ? 'var(--miniapp-sage)' : 'var(--miniapp-border-soft)'}`,
+                  background: 'var(--miniapp-surface)', display: 'grid', gap: 5, cursor: 'pointer',
+                }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ minWidth: 0 }}>
                     <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
@@ -2746,6 +2874,16 @@ function TaskActivity({ account }: { account: Agent }) {
                     {isStopped ? t('tasks.stopped') : job.status}
                   </span>
                 </div>
+
+                {groupNames.length > 0 ? (
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {groupNames.map((g) => (
+                      <span key={g} style={{ padding: '1px 6px', borderRadius: 4, background: 'var(--miniapp-bg-deep)', fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
 
                 {isScheduled && job.scheduled_at ? (
                   <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
@@ -2801,7 +2939,7 @@ function TaskActivity({ account }: { account: Agent }) {
                       </button>
                     ) : null}
                     {isCompleted && job.id ? (
-                      <button type="button" onClick={() => setLogsJobId(job.id)}
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setLogsJobId(job.id) }}
                         style={{
                           background: 'none', border: 'none', cursor: 'pointer',
                           color: 'var(--miniapp-text-muted)', fontSize: 11, fontWeight: 600,
@@ -2812,9 +2950,54 @@ function TaskActivity({ account }: { account: Agent }) {
                     ) : null}
                   </span>
                 </div>
+
+                {isExpanded ? (
+                  <div style={{ marginTop: 6, display: 'grid', gap: 6, padding: 8, background: 'var(--miniapp-bg)', borderRadius: 8, fontSize: 11 }}>
+                    {job.job_type ? (
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.jobType')}:</span> {JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')}</div>
+                    ) : null}
+                    {job.target_type ? (
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetType')}:</span> {job.target_type}</div>
+                    ) : null}
+                    {job.message_preview ? (
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <span style={{ fontWeight: 600 }}>{t('tasks.messagePreview')}:</span>
+                        <div style={{ color: 'var(--miniapp-text-muted)', lineHeight: 1.4, wordBreak: 'break-word' }}>{job.message_preview}</div>
+                      </div>
+                    ) : null}
+                    {job.target_group_ids && job.target_group_ids.length > 0 ? (
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetGroups')}:</span> {job.target_group_ids.map((gid) => jobGroupNames[gid] || `#${gid}`).join(', ')}</div>
+                    ) : null}
+                    {job.selected_count != null ? (
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.selectedCount', { count: job.selected_count })}</span></div>
+                    ) : null}
+                    {job.exclusion_counts ? (
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <span style={{ fontWeight: 600 }}>{t('tasks.exclusions')}:</span>
+                        <div style={{ color: 'var(--miniapp-text-muted)' }}>
+                          {job.exclusion_counts.admins_excluded ? t('tasks.adminsExcluded', { count: job.exclusion_counts.admins_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.bots_excluded ? t('tasks.botsExcluded', { count: job.exclusion_counts.bots_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.already_sent_excluded ? t('tasks.alreadySent', { count: job.exclusion_counts.already_sent_excluded }) + ' ' : ''}
+                          {job.exclusion_counts.blacklisted_excluded ? t('tasks.blacklisted', { count: job.exclusion_counts.blacklisted_excluded }) : ''}
+                        </div>
+                      </div>
+                    ) : null}
+                    {job.scheduled_at ? (
+                      <div><span style={{ fontWeight: 600 }}>{t('tasks.scheduledAt')}:</span> {formatDateTime(job.scheduled_at)}</div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )
           })}
+        </div>
+      ) : null}
+
+      {totalPages > 1 ? (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+          <Button tone="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('tasks.previous')}</Button>
+          <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('tasks.pageOf', { page, totalPages, count: filteredJobs.length })}</span>
+          <Button tone="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t('tasks.next')}</Button>
         </div>
       ) : null}
 

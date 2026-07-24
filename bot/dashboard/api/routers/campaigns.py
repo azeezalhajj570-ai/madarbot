@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -19,6 +19,20 @@ router = APIRouter(tags=["campaigns"])
 
 def _service(session: AsyncSession) -> CampaignService:
     return CampaignService(session)
+
+
+def _parse_time(value: str | None) -> time | None:
+    if not value:
+        return None
+    try:
+        parts = value.split(":")
+        if len(parts) == 2:
+            return time(int(parts[0]), int(parts[1]))
+        if len(parts) == 3:
+            return time(int(parts[0]), int(parts[1]), int(parts[2]))
+        return None
+    except (ValueError, TypeError):
+        return None
 
 
 @router.post("/webapp/agents/{agent_id}/campaigns")
@@ -40,6 +54,14 @@ async def create_campaign(
         target_filters=body.get("target_filters"),
         scheduled_at=_parse_dt(body.get("scheduled_at")),
         created_by=identity.user_id,
+        recurrence_enabled=body.get("recurrence_enabled", False),
+        repeat_type=body.get("repeat_type"),
+        interval_value=body.get("interval_value", 1),
+        repeat_time=_parse_time(body.get("repeat_time")),
+        cron_expression=body.get("cron_expression"),
+        end_type=body.get("end_type"),
+        end_value=body.get("end_value"),
+        tz_name=body.get("timezone", "UTC"),
     )
     return service._to_dict(campaign)
 
@@ -107,6 +129,14 @@ async def update_campaign(
         message_template=body.get("message_template"),
         target_filters=body.get("target_filters"),
         scheduled_at=_parse_dt(body.get("scheduled_at")),
+        recurrence_enabled=body.get("recurrence_enabled"),
+        repeat_type=body.get("repeat_type"),
+        interval_value=body.get("interval_value"),
+        repeat_time=_parse_time(body.get("repeat_time")),
+        cron_expression=body.get("cron_expression"),
+        end_type=body.get("end_type"),
+        end_value=body.get("end_value"),
+        tz_name=body.get("timezone"),
     )
     return service._to_dict(campaign)
 
@@ -142,6 +172,81 @@ async def send_campaign(
         target_type=body.get("target_type", "groups"),
         interval_seconds=body.get("interval_seconds", 3.0),
         threshold=body.get("threshold", 500),
+    )
+
+
+@router.post("/webapp/agents/{agent_id}/campaigns/{campaign_id}/activate")
+@router.post("/api/agents/{agent_id}/campaigns/{campaign_id}/activate")
+async def activate_campaign(
+    agent_id: int,
+    campaign_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await ensure_agent_admin(agent_id, session, identity)
+    campaign = await _service(session).activate_campaign(campaign_id, agent_id)
+    return _service(session)._to_dict(campaign)
+
+
+@router.post("/webapp/agents/{agent_id}/campaigns/{campaign_id}/pause")
+@router.post("/api/agents/{agent_id}/campaigns/{campaign_id}/pause")
+async def pause_campaign(
+    agent_id: int,
+    campaign_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await ensure_agent_admin(agent_id, session, identity)
+    campaign = await _service(session).pause_campaign(campaign_id, agent_id)
+    return _service(session)._to_dict(campaign)
+
+
+@router.post("/webapp/agents/{agent_id}/campaigns/{campaign_id}/resume")
+@router.post("/api/agents/{agent_id}/campaigns/{campaign_id}/resume")
+async def resume_campaign(
+    agent_id: int,
+    campaign_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await ensure_agent_admin(agent_id, session, identity)
+    campaign = await _service(session).resume_campaign(campaign_id, agent_id)
+    return _service(session)._to_dict(campaign)
+
+
+@router.post("/webapp/agents/{agent_id}/campaigns/{campaign_id}/run-now")
+@router.post("/api/agents/{agent_id}/campaigns/{campaign_id}/run-now")
+async def run_now_campaign(
+    agent_id: int,
+    campaign_id: int,
+    body: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await ensure_agent_admin(agent_id, session, identity)
+    return await _service(session).run_now(
+        campaign_id=campaign_id,
+        agent_id=agent_id,
+        actor_user_id=identity.user_id,
+    )
+
+
+@router.get("/webapp/agents/{agent_id}/campaigns/{campaign_id}/recurrence-logs")
+@router.get("/api/agents/{agent_id}/campaigns/{campaign_id}/recurrence-logs")
+async def get_campaign_recurrence_logs(
+    agent_id: int,
+    campaign_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await ensure_agent_admin(agent_id, session, identity)
+    return await _service(session).get_recurrence_logs(
+        campaign_id=campaign_id,
+        agent_id=agent_id,
+        page=page,
+        page_size=page_size,
     )
 
 

@@ -137,7 +137,7 @@ function Row({ group, selected, onToggle }: { group: AgentManagedGroup; selected
       </span>
       <div style={{ minWidth: 0 }}>
         <strong style={{ fontSize: 13 }}>{group.title || `Group ${group.tg_group_id}`}</strong>
-        <div style={{ color: '#655d52', fontSize: 11, marginTop: 1 }}>{group.tg_group_id}</div>
+        <div style={{ color: '#655d52', fontSize: 11, marginTop: 1 }}>{group.tg_group_id} · {group.group_type || 'group'}</div>
       </div>
     </div>
   )

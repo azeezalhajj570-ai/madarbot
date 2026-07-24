@@ -5,7 +5,7 @@ from strenum import StrEnum
 from bot.db.base import Base
 from bot.db.models.access import GroupAccessRequirement, PrivateAccessRequirement
 from bot.db.models.agent import Agent, AgentJob, AgentLead, AgentNotification, SentBroadcastMessage
-from bot.db.models.campaign import Campaign
+from bot.db.models.campaign import Campaign, CampaignRecurrenceLog
 from bot.db.models.contact_message import ContactMessage
 from bot.db.models.audit import MembershipAuditLog, OwnerAuditLog
 from bot.db.models.audit_log import AuditLog
@@ -139,6 +139,7 @@ __all__ = [
     "BulkMessageBatch",
     "BulkMessageRecipient",
     "Campaign",
+    "CampaignRecurrenceLog",
     "ChannelAccount",
     "CheckoutSession",
     "Contact",

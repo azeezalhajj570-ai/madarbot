@@ -67,6 +67,25 @@ async def _tick() -> None:
         except Exception:
             logger.bind(job_id=job_id, agent_id=agent_id).exception("scheduled_job_dispatch_failed")
 
+    await _process_recurring_campaigns()
+
+
+async def _process_recurring_campaigns() -> None:
+    from bot.services.campaign_service import CampaignService
+
+    async with SessionLocal() as session:
+        service = CampaignService(session)
+        try:
+            processed = await service.process_due_recurring_campaigns(batch_size=_BATCH_SIZE)
+            for item in processed:
+                logger.bind(
+                    campaign_id=item["campaign_id"],
+                    jobs_created=item["jobs_created"],
+                    status=item["status"],
+                ).info("recurring_campaign_processed")
+        except Exception:
+            logger.exception("recurring_campaigns_processing_failed")
+
 
 async def reconcile_loop() -> None:
     settings = get_settings()
