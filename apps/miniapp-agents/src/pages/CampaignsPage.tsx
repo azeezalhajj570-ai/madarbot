@@ -210,10 +210,9 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
           jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
         } else { jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
-        const scheduledAt = bulkScheduleMode === 'schedule' && bulkScheduledAt ? new Date(bulkScheduledAt).toISOString() : undefined
-        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload, scheduledAt)
+        await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload)
         setBulkSummary(null); resetForm(); setStatus(null)
-        onSaved(scheduledAt ? t('campaigns.scheduled') : t('campaigns.queued'))
+        onSaved(t('campaigns.queued'))
         void agentsApi.fetchAgentJobs(account.id, BULK_MESSAGE_TASK_KEY, 50).then(setBroadcastJobs).catch(() => {})
       } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedQueue')) }
       finally { setBulkSaving(false) }
@@ -478,31 +477,11 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           ))}
         </div>
 
-        {bulkSendMode === 'standard' ? (
-          <>
-            <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-              {(['now', 'schedule'] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setBulkScheduleMode(m)} style={{
-                  flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-                  background: bulkScheduleMode === m ? 'var(--miniapp-surface)' : 'transparent',
-                  color: bulkScheduleMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-                  fontWeight: bulkScheduleMode === m ? 600 : 400, fontSize: 13,
-                }}>{m === 'now' ? t('campaigns.sendNow') : t('campaigns.schedule')}</button>
-              ))}
-            </div>
-            {bulkScheduleMode === 'schedule' ? (
-              <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.scheduleDatetime')}</span>
-                <input type="datetime-local" value={bulkScheduledAt} onChange={(e) => setBulkScheduledAt(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }} />
-              </div>
-            ) : null}
-          </>
-        ) : (
+        {bulkSendMode === 'recurring' ? (
           <div style={{ marginBottom: 12 }}>
             <SchedulePicker value={scheduleConfig} onChange={setScheduleConfig} />
           </div>
-        )}
+        ) : null}
         {bulkSummary ? (
           <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
             <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>
