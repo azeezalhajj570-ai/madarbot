@@ -451,10 +451,11 @@ function NotificationSheet({
     }
   }
 
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
   if (!open) return null
 
   const visibleNotifications = notifications.filter((notification) => !notification.is_seen)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   function handleNotificationClick(notification: AgentNotification) {
     const jobId = notification.payload?.job_id as number | undefined
@@ -1490,7 +1491,7 @@ export default function App() {
         account={selectedAccount}
         onUnseenCountChange={setUnseenNotifications}
         onClose={() => setShowNotifications(false)}
-        onNavigateToJob={(jobId) => { setScrollToJobId(jobId); navigate(accountPath(selectedAccount!.id, 'tasks')) }}
+        onNavigateToJob={(jobId) => { if (!selectedAccount) return; setScrollToJobId(jobId); navigate(accountPath(selectedAccount.id, 'tasks')) }}
       />
       {deleteTarget ? (
         <ConfirmModal
@@ -2552,7 +2553,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   const [filterType, setFilterType] = useState('all')
   const [filterGroup, setFilterGroup] = useState('all')
   const [page, setPage] = useState(1)
-  const pageSize = 25
+  const pageSize = 10
 
   useEffect(() => {
     void load()
@@ -2788,14 +2789,6 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
 
       {!loading && filteredJobs.length === 0 ? <Note>{jobs.length === 0 ? t('tasks.noTasks') : t('tasks.noTasksFiltered')}</Note> : null}
 
-      {totalPages > 1 && filteredJobs.length > 0 ? (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
-          <Button tone="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('tasks.previous')}</Button>
-          <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('tasks.pageOf', { page, total: totalPages, count: filteredJobs.length })}</span>
-          <Button tone="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t('tasks.next')}</Button>
-        </div>
-      ) : null}
-
       {!loading && filteredJobs.length > 0 ? (
         <div style={{ display: 'grid', gap: 6 }}>
           {paginatedJobs.map((job) => {
@@ -2958,6 +2951,14 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
               </div>
             )
           })}
+        </div>
+      ) : null}
+
+      {totalPages > 1 ? (
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 }}>
+          <Button tone="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('tasks.previous')}</Button>
+          <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('tasks.pageOf', { page, total: totalPages, count: filteredJobs.length })}</span>
+          <Button tone="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t('tasks.next')}</Button>
         </div>
       ) : null}
 

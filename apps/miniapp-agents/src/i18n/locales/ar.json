@@ -274,7 +274,22 @@
     "sendLogs": "سجلات الإرسال",
     "logsEmptyNoProgress": "لا توجد سجلات إرسال لهذه المهمة. قد تكون الرسائل قيد المعالجة.",
     "logsEmptyWithProgress": "لا توجد سجلات إرسال فردية. تقدم المهمة: {sent} أُرسلت، {failed} فشلت من أصل {total}.",
-    "scheduledFor": "مجدول في {date}"
+    "scheduledFor": "مجدول في {date}",
+    "next": "التالي",
+    "previous": "السابق",
+    "pageOf": "الصفحة {page} من {totalPages} ({count} إجمالي)",
+    "jobType": "نوع المهمة",
+    "targetType": "نوع الهدف",
+    "messagePreview": "معاينة الرسالة",
+    "targetGroups": "المجموعات المستهدفة",
+    "selectedCount": "المحدد: {count}",
+    "exclusions": "الاستثناءات",
+    "adminsExcluded": "المشرفين المستثنيين: {count}",
+    "botsExcluded": "البوتات المستثناة: {count}",
+    "alreadySent": "أُرسل سابقاً: {count}",
+    "blacklisted": "المحظورين: {count}",
+    "scheduledAt": "مجدول في {datetime}",
+    "filterAllGroups": "كل المجموعات"
   },
   "analytics": {
     "title": "الإحصائيات",

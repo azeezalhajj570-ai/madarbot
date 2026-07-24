@@ -274,7 +274,22 @@
     "sendLogs": "Send Logs",
     "logsEmptyNoProgress": "No send logs for this job. Messages may still be in progress.",
     "logsEmptyWithProgress": "No individual send records found. Job progress: {sent} sent, {failed} failed of {total}.",
-    "scheduledFor": "Scheduled for {date}"
+    "scheduledFor": "Scheduled for {date}",
+    "next": "Next",
+    "previous": "Previous",
+    "pageOf": "Page {page} of {totalPages} ({count} total)",
+    "jobType": "Job type",
+    "targetType": "Target type",
+    "messagePreview": "Message preview",
+    "targetGroups": "Target groups",
+    "selectedCount": "Selected: {count}",
+    "exclusions": "Exclusions",
+    "adminsExcluded": "Admins excluded: {count}",
+    "botsExcluded": "Bots excluded: {count}",
+    "alreadySent": "Already sent: {count}",
+    "blacklisted": "Blacklisted: {count}",
+    "scheduledAt": "Scheduled at {datetime}",
+    "filterAllGroups": "All groups"
   },
   "analytics": {
     "title": "Analytics",
