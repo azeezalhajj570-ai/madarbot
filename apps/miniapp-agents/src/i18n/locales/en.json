@@ -584,7 +584,17 @@
     "timezone": "Timezone",
     "sendOnce": "Send once",
     "recurring": "Recurring",
-    "recurringCreated": "Recurring campaign created and activated"
+    "recurringCreated": "Recurring campaign created and activated",
+    "campaigns": "Campaigns",
+    "campaignsSubtitle": "Your recurring and one-shot campaigns",
+    "nextRun": "Next",
+    "lastRun": "Last",
+    "runCount": "{count} runs",
+    "pause": "Pause",
+    "resume": "Resume",
+    "runNow": "Run now",
+    "runNowTriggered": "Campaign triggered",
+    "failedAction": "Action failed"
   },
   "multiGroup": {
     "targetGroups": "Target Groups",

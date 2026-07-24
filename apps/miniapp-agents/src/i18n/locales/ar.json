@@ -584,7 +584,17 @@
     "timezone": "المنطقة الزمنية",
     "sendOnce": "إرسال مرة واحدة",
     "recurring": "متكرر",
-    "recurringCreated": "تم إنشاء وتفعيل الحملة المتكررة"
+    "recurringCreated": "تم إنشاء وتفعيل الحملة المتكررة",
+    "campaigns": "الحملات",
+    "campaignsSubtitle": "الحملات المتكررة والمرة الواحدة",
+    "nextRun": "التالي",
+    "lastRun": "السابق",
+    "runCount": "{count} تشغيلة",
+    "pause": "إيقاف مؤقت",
+    "resume": "استئناف",
+    "runNow": "تشغيل الآن",
+    "runNowTriggered": "تم تشغيل الحملة",
+    "failedAction": "فشل الإجراء"
   },
   "multiGroup": {
     "targetGroups": "المجموعات المستهدفة",

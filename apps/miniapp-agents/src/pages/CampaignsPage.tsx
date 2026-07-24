@@ -522,6 +522,56 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
         </Card>
       ) : null}
 
+      {/* Campaigns list */}
+      {campaigns.length > 0 ? (
+        <Card title={t('campaigns.campaigns')} subtitle={t('campaigns.campaignsSubtitle')}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {campaigns.map((c) => (
+              <div key={c.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{c.name}</strong>
+                    {c.created_at ? <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(c.created_at)}</span> : null}
+                  </div>
+                  <span style={{ flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                    background: c.status === 'active' ? 'var(--miniapp-sage-dim)' : c.status === 'paused' ? 'rgba(200,160,80,0.12)' : c.status === 'completed' ? 'rgba(100,100,100,0.12)' : c.status === 'draft' ? 'var(--miniapp-bg-deep)' : 'rgba(161,87,62,0.12)',
+                    color: c.status === 'active' ? 'var(--miniapp-sage)' : c.status === 'paused' ? '#b8960a' : c.status === 'completed' ? '#888' : c.status === 'draft' ? 'var(--miniapp-text-muted)' : 'var(--miniapp-clay)',
+                  }}>{c.status}</span>
+                </div>
+                {c.recurrence_enabled ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                    <span>{c.repeat_type}</span>
+                    {c.next_run_at ? <span>· {t('campaigns.nextRun')}: {formatDateTime(c.next_run_at)}</span> : null}
+                    {c.last_run_at ? <span>· {t('campaigns.lastRun')}: {formatTime(c.last_run_at)}</span> : null}
+                    {c.run_count > 0 ? <span>· {t('campaigns.runCount', { count: c.run_count })}</span> : null}
+                  </div>
+                ) : null}
+                {c.recurrence_enabled && (c.status === 'active' || c.status === 'paused') ? (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {c.status === 'active' ? (
+                      <button type="button" onClick={async () => {
+                        try { await agentsApi.pauseCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.pause')}</button>
+                    ) : null}
+                    {c.status === 'paused' ? (
+                      <button type="button" onClick={async () => {
+                        try { await agentsApi.resumeCampaign(account.id, c.id); const r = await agentsApi.listCampaigns(account.id); setCampaigns(r.items ?? []) }
+                        catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                      }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.resume')}</button>
+                    ) : null}
+                    <button type="button" onClick={async () => {
+                      try { await agentsApi.runCampaignNow(account.id, c.id); onSaved(t('campaigns.runNowTriggered')) }
+                      catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedAction')) }
+                    }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--miniapp-text-primary)' }}>{t('campaigns.runNow')}</button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       {/* Campaign create modal */}
       {showQuickCreate ? (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(32, 25, 16, 0.55)', display: 'grid', placeItems: 'center', padding: 16, zIndex: 1100 }} onClick={() => setShowQuickCreate(false)}>
