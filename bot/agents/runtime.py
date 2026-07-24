@@ -804,6 +804,7 @@ class GroupMemberBroadcastRuntime:
 
         agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
         agent_min_delay = getattr(agent, "min_delay_seconds", None)
+        agent_id_val = agent.id
 
         target_group_ids = list(normalized.get("target_group_ids", []))
         total_count = len(target_group_ids)
