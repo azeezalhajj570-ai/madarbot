@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from bot.config import get_settings
 from bot.mcp.server import create_mcp_server
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
@@ -24,14 +25,59 @@ async def mcp_get() -> JSONResponse:
     )
 
 
-@router.get("/.well-known/oauth-protected-resource")
+def _mcp_base_url() -> str:
+    settings = get_settings()
+    for url in (settings.dashboard_url, settings.webapp_url, settings.agents_webapp_url):
+        if url:
+            parts = url.rstrip("/").rsplit("/webapp", 1)
+            return parts[0]
+    return "https://madar.azeez-tech.com"
+
+
 @router.get("/.well-known/oauth-authorization-server")
+async def oauth_authorization_server() -> JSONResponse:
+    settings = get_settings()
+    if not settings.mcp_oauth_enabled:
+        return JSONResponse(content={})
+    base = _mcp_base_url()
+    client_ids = settings.mcp_oauth_client_ids
+    return JSONResponse(
+        content={
+            "issuer": base,
+            "authorization_endpoint": f"{base}/mcp/auth/authorize",
+            "token_endpoint": f"{base}/mcp/auth/token",
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code"],
+            "code_challenge_methods_supported": ["S256", "plain"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "scopes_supported": ["tools"],
+            "client_id": client_ids[0] if client_ids else "madarbot",
+        }
+    )
+
+
+@router.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource() -> JSONResponse:
+    settings = get_settings()
+    if not settings.mcp_oauth_enabled:
+        return JSONResponse(content={})
+    base = _mcp_base_url()
+    return JSONResponse(
+        content={
+            "resource": f"{base}/mcp/",
+            "scopes": ["tools"],
+            "authorization_servers": [f"{base}/"],
+        }
+    )
+
+
 @router.get("/.well-known/openid-configuration")
-async def mcp_well_known() -> JSONResponse:
+async def openid_configuration() -> JSONResponse:
     return JSONResponse(content={})
 
 
 @router.post("/")
+@router.post("")
 async def mcp_endpoint(request: Request) -> JSONResponse:
     """MCP JSON-RPC endpoint for ChatGPT and other MCP clients."""
     body = await request.json()
@@ -72,13 +118,20 @@ async def _handle_single_message(server: Any, message: dict) -> dict:
     if method == "tools/list":
         tools = []
         for tool in server._tool_manager.list_tools():
-            tools.append(
-                {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "inputSchema": tool.parameters,
-                }
-            )
+            tool_def = {
+                "name": tool.name,
+                "description": tool.description or "",
+                "inputSchema": tool.parameters,
+                "outputSchema": tool.output_schema or {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "data": {"type": "object"},
+                        "metadata": {"type": "object"},
+                    },
+                },
+            }
+            tools.append(tool_def)
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": tools}}
 
     if method == "tools/call":

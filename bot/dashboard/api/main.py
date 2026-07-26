@@ -312,17 +312,18 @@ if settings.mcp_enabled:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import JSONResponse as StarletteJSONResponse
 
-    if not settings.mcp_auth_token:
+    if not settings.mcp_auth_token and not settings.mcp_oauth_enabled:
         logger.critical(
-            "MCP_ENABLED=true but MCP_AUTH_TOKEN is not configured. "
-            "Set MCP_AUTH_TOKEN in your .env file or set MCP_ENABLED=false."
+            "MCP_ENABLED=true but MCP_AUTH_TOKEN is not configured "
+            "and MCP_OAUTH_ENABLED is false. "
+            "Set MCP_AUTH_TOKEN or MCP_OAUTH_ENABLED=true in your .env file."
         )
         raise SystemExit(1)
 
     class McpAuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             path = request.url.path
-            if path.startswith("/mcp") and ".well-known" not in path:
+            if path.startswith("/mcp") and ".well-known" not in path and "/mcp/auth" not in path:
                 token = None
                 auth_header = request.headers.get("authorization", "")
                 if auth_header.startswith("Bearer "):
@@ -341,18 +342,60 @@ if settings.mcp_enabled:
                     set_mcp_actor_user_id(tg_user_id)
             response = await call_next(request)
             if path.startswith("/mcp"):
-                response.headers["Content-Security-Policy"] = (
-                    "default-src 'self'; "
-                    "connect-src 'self' https://api.telegram.org https://api.openai.com https://generativelanguage.googleapis.com; "
-                    "script-src 'self'; "
-                    "style-src 'self' 'unsafe-inline'; "
-                    "img-src 'self' data:; "
-                    "frame-ancestors 'none'; "
-                    "base-uri 'self'"
-                )
+                if "/mcp/auth" in path:
+                    response.headers["Content-Security-Policy"] = (
+                        "default-src 'self'; "
+                        "connect-src 'self' https://api.telegram.org https://oauth.telegram.org; "
+                        "script-src 'self' 'unsafe-inline' https://telegram.org; "
+                        "style-src 'self' 'unsafe-inline'; "
+                        "img-src 'self' data:; "
+                        "frame-src https://oauth.telegram.org; "
+                        "base-uri 'self'"
+                    )
+                else:
+                    response.headers["Content-Security-Policy"] = (
+                        "default-src 'self'; "
+                        "connect-src 'self' https://api.telegram.org https://api.openai.com https://generativelanguage.googleapis.com; "
+                        "script-src 'self'; "
+                        "style-src 'self' 'unsafe-inline'; "
+                        "img-src 'self' data:; "
+                        "frame-ancestors 'none'; "
+                        "base-uri 'self'"
+                    )
             return response
 
     app.add_middleware(McpAuthMiddleware)
+    if settings.mcp_oauth_enabled:
+        from bot.mcp.oauth import router as mcp_oauth_router
+        from bot.dashboard.api.mcp_router import _mcp_base_url
+        app.include_router(mcp_oauth_router)
+        logger.info("MCP OAuth endpoints mounted at /mcp/auth")
+
+        @app.get("/.well-known/oauth-authorization-server")
+        async def root_oauth_authorization_server():
+            base = _mcp_base_url()
+            client_ids = settings.mcp_oauth_client_ids
+            return JSONResponse(content={
+                "issuer": base,
+                "authorization_endpoint": f"{base}/mcp/auth/authorize",
+                "token_endpoint": f"{base}/mcp/auth/token",
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code"],
+                "code_challenge_methods_supported": ["S256", "plain"],
+                "token_endpoint_auth_methods_supported": ["none"],
+                "scopes_supported": ["tools"],
+                "client_id": client_ids[0] if client_ids else "madarbot",
+            })
+
+        @app.get("/.well-known/oauth-protected-resource")
+        async def root_oauth_protected_resource():
+            base = _mcp_base_url()
+            return JSONResponse(content={
+                "resource": f"{base}/mcp/",
+                "scopes": ["tools"],
+            })
+
+        logger.info("MCP OAuth well-known endpoints also mounted at root")
     app.include_router(mcp_router)
     logger.info("MCP endpoint mounted at /mcp")
 
@@ -408,7 +451,10 @@ def _frontend_shell(frontend_dir: Path, missing_label: str) -> Response:
     index_file = frontend_dir / "index.html"
     if not index_file.exists():
         return HTMLResponse(f"<h3>{missing_label} frontend not found</h3>", status_code=404)
-    return FileResponse(index_file)
+    return FileResponse(
+        index_file,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/webapp/admin")

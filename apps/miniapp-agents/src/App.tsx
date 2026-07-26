@@ -1597,9 +1597,9 @@ function MCPTokensCard() {
           <Note>{t('settings.noTokens')}</Note>
         ) : (
           <div style={{ display: 'grid', gap: 8 }}>
-            {tokens.map((t) => (
+            {tokens.map((token) => (
               <div
-                key={t.id}
+                key={token.id}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 12px', border: '1px solid var(--miniapp-border-soft)',
@@ -1607,18 +1607,18 @@ function MCPTokensCard() {
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{token.name}</div>
                   <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginTop: 2 }}>
-                    <code style={{ fontFamily: 'var(--miniapp-mono)', fontSize: 11 }}>{t.prefix}...</code>
-                    {' · '}created {t.created_at ? formatDate(t.created_at) : ''}
+                    <code style={{ fontFamily: 'var(--miniapp-mono)', fontSize: 11 }}>{token.prefix}...</code>
+                    {' · '}created {token.created_at ? formatDate(token.created_at) : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {statusBadge(t.status)}
-                  {t.status === 'active' && (
+                  {statusBadge(token.status)}
+                  {token.status === 'active' && (
                     <button
                       type="button"
-                      onClick={() => void handleRevoke(t.id)}
+                      onClick={() => void handleRevoke(token.id)}
                       style={{
                         border: 'none', background: 'transparent', cursor: 'pointer',
                         color: 'var(--miniapp-clay)', fontSize: 12, fontWeight: 600,
@@ -3235,7 +3235,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
             {['new', 'contacted', 'interested', 'converted', 'junk', 'dismissed'].map((s) => {
               const count = a.leads.by_status[s] || 0
               const pct = a.leads.total > 0 ? Math.round((count / a.leads.total) * 100) : 0
-              const t = _statusTone(s)
+              const tone = _statusTone(s)
               return (
                 <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{
@@ -3243,7 +3243,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
                     fontWeight: 600,
                     textTransform: 'uppercase',
                     width: 80,
-                    color: t.accent,
+                    color: tone.accent,
                   }}>
                     {s}
                   </span>
@@ -3251,7 +3251,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
                     <div style={{
                       height: '100%',
                       width: `${Math.max(pct, 2)}%`,
-                      background: t.accent,
+                      background: tone.accent,
                       borderRadius: 10,
                       transition: 'width 0.5s ease',
                     }} />
