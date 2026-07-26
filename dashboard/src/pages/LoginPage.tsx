@@ -14,8 +14,18 @@ function LoginInner() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t, lang, setLang } = useI18n()
-  const switching = new URLSearchParams(location.search).get('switch') === '1'
-  const loggingOut = new URLSearchParams(location.search).get('logout') === '1'
+  const searchParams = new URLSearchParams(location.search)
+  const switching = searchParams.get('switch') === '1'
+  const loggingOut = searchParams.get('logout') === '1'
+  const redirectTo = searchParams.get('redirect') || '/'
+
+  function afterLogin() {
+    if (redirectTo !== '/') {
+      window.location.href = redirectTo
+    } else {
+      navigate('/')
+    }
+  }
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,7 +60,7 @@ function LoginInner() {
             role: me.is_bot_owner ? 'owner' : 'user',
             telegramId: me.user.id,
           })
-          navigate('/')
+          afterLogin()
         } catch {
           setError('Telegram login failed')
         } finally {
@@ -108,7 +118,7 @@ function LoginInner() {
         role: me.is_bot_owner ? 'owner' : 'admin',
         telegramId: me.user.id,
       })
-      navigate('/')
+      afterLogin()
     } catch {
       setError('Invalid credentials')
     } finally {
@@ -169,7 +179,7 @@ function LoginInner() {
                     key={account.id}
                     onClick={() => {
                       switchAccount(account)
-                      navigate('/')
+                      afterLogin()
                     }}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--ui-border)', background: 'var(--ui-surface-strong)', cursor: 'pointer', textAlign: 'left' }}
                   >

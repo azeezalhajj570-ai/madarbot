@@ -128,6 +128,10 @@ class Settings(BaseSettings):
     mcp_readonly: bool = Field(default=True, alias="MCP_READONLY")
     mcp_auth_token: str | None = Field(default=None, alias="MCP_AUTH_TOKEN")
     mcp_default_actor_user_id: int | None = Field(default=None, alias="MCP_DEFAULT_ACTOR_USER_ID")
+    mcp_oauth_enabled: bool = Field(default=False, alias="MCP_OAUTH_ENABLED")
+    mcp_oauth_client_ids_raw: str = Field(default="", alias="MCP_OAUTH_CLIENT_IDS")
+    mcp_oauth_token_ttl_seconds: int = Field(default=31536000, alias="MCP_OAUTH_TOKEN_TTL_SECONDS")
+    mcp_oauth_code_ttl_seconds: int = Field(default=600, alias="MCP_OAUTH_CODE_TTL_SECONDS")
 
     FREE_PLAN_LIMITS: dict[str, int] = {
         "max_groups": 5,
@@ -194,6 +198,19 @@ class Settings(BaseSettings):
             if token and token not in unique:
                 unique.append(token)
         return tuple(unique)
+
+    @property
+    def mcp_oauth_client_ids(self) -> list[str]:
+        raw = self.mcp_oauth_client_ids_raw.strip()
+        if not raw:
+            return []
+        try:
+            payload = json.loads(raw)
+            if isinstance(payload, list):
+                return [str(c).strip() for c in payload if str(c).strip()]
+        except json.JSONDecodeError:
+            pass
+        return [c.strip() for c in raw.split(",") if c.strip()]
 
     @property
     def bot_owner_ids(self) -> set[int]:
