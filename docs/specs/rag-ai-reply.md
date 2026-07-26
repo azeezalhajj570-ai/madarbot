@@ -1,4 +1,4 @@
-# RAG-Powered AI Reply for Agent Messages (pgvector)
+# RAG-Powered AI Reply for Agent Messages (pgvector + HNSW)
 
 ## Problem
 
@@ -6,7 +6,7 @@ When an agent receives a mention in a group, the AI Pilot replies using only con
 
 ## Solution
 
-Use **pgvector** for semantic search over `group_knowledge` entries. On each @mention, embed the user's message, find the top-K most semantically similar knowledge entries via cosine similarity, and inject them into the AI Pilot's system prompt.
+Use **pgvector** for semantic search over `group_knowledge` entries. On each @mention, embed the user's message, find the top-K most semantically similar knowledge entries via cosine similarity with an **HNSW index**, and inject them into the AI Pilot's system prompt.
 
 ---
 
@@ -33,16 +33,18 @@ Use **pgvector** for semantic search over `group_knowledge` entries. On each @me
                │                     │
                ▼                     ▼
       ┌─────────────────┐   ┌──────────────────┐
-      │ pgvector search  │   │ LLM Provider     │
+      │ pgvector HNSW    │   │ LLM Provider     │
       │ (cosine sim,     │   │ (chat completion) │
-      │  top-K = 15)     │   └──────────────────┘
+      │  top-K = 15 →    │   └──────────────────┘
+      │  token-capped)   │
       └─────────────────┘
                │
                ▼
       ┌─────────────────┐
       │ group_knowledge  │
       │ (+ embedding     │
-      │  column)         │
+      │  column, HNSW    │
+      │  index)          │
       └─────────────────┘
 ```
 
@@ -66,10 +68,9 @@ Source: https://hub.docker.com/r/pgvector/pgvector
 
 The `pgvector/pgvector:pg16` image is the official pgvector Docker image built on `postgres:16`. No schema or data changes — it's a drop-in replacement. The `vector` extension must be created in the database.
 
-**Alembic migration (first step):**
+**Alembic migration (step 1 — schema only, no ANN index yet):**
 
 ```python
-# revision: xxxx_add_pgvector_extension
 def upgrade():
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 ```
@@ -79,12 +80,12 @@ def upgrade():
 Add to `requirements.txt`:
 
 ```
-pgvector>=0.3.0
+pgvector>=0.5.0
 ```
 
 Source: https://github.com/pgvector/pgvector-python
 
-Provides SQLAlchemy `Vector` type for ORM mappings and `distance_strategy` helpers.
+HNSW index support was added in pgvector 0.5.0. Also provides SQLAlchemy `Vector` type.
 
 ---
 
@@ -100,24 +101,97 @@ class GroupKnowledge(Base):
     # ...existing columns...
 
     embedding: Mapped[Optional[list[float]]] = mapped_column(
-        Vector(1536), nullable=True, index=True
+        Vector(512), nullable=True
     )
 ```
 
-- `Vector(1536)` matches OpenAI `text-embedding-3-small` output dimension
-- Index: pgvector supports IVFFlat or HNSW indexes for fast ANN search
-- Nullable: existing rows start with NULL; backfill script fills them
+- `Vector(512)` — using 512 dimensions instead of 1536 via OpenAI's `dimensions` param. Cuts storage 3x, index builds faster, and `text-embedding-3-small` supports truncated embeddings with minimal recall loss.
+- No column index — the HNSW index is created after backfill (step 4), not in the schema migration.
 
-**Alembic migration:**
+**Alembic migration (step 1):**
 
 ```python
 from pgvector.sqlalchemy import Vector
 
 def upgrade():
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    op.add_column("group_knowledge", sa.Column("embedding", Vector(1536), nullable=True))
-    op.create_index("ix_group_knowledge_embedding", "group_knowledge", ["embedding"], postgresql_using="ivfflat", postgresql_with={"lists": 100})
+    op.add_column("group_knowledge", sa.Column("embedding", Vector(512), nullable=True))
 ```
+
+**HNSW index is created separately after backfill (step 4):**
+
+```sql
+-- Run AFTER backfilling all embeddings
+CREATE INDEX ix_group_knowledge_embedding_hnsw
+ON group_knowledge
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 200);
+```
+
+- `m = 16` — default, good balance of recall vs. index size
+- `ef_construction = 200` — higher = better recall but slower build
+- Doesn't need representative training data — unlike IVFFlat, HNSW builds well on empty or partial data
+- Supports incremental inserts without index degradation
+
+Source: https://github.com/pgvector/pgvector?tab=readme-ov-file#hnsw
+
+---
+
+## Group Isolation
+
+The vector search is scoped to a single group's knowledge entries. Without this, cross-group knowledge leaks into replies.
+
+```sql
+SELECT *, embedding <=> :query_vec AS distance
+FROM group_knowledge
+WHERE scraped_group_id = :group_internal_id       -- ← hard filter by group
+  AND embedding IS NOT NULL
+  AND confidence >= 0.5
+  AND knowledge_type IN ('faq','topic','entity','decision','consensus')
+ORDER BY distance ASC
+LIMIT 15
+```
+
+**Performance note:** ANN indexes (HNSW included) don't combine cleanly with hard pre-filters. PostgreSQL can either:
+- Scan the index (fast) then filter → may return fewer than 15 rows if the filtered set is small
+- Scan all rows that match the filter then sort by distance (slow on large per-group tables)
+
+This is acceptable for the expected scale:
+- Each group typically has 50–500 knowledge entries
+- HNSW with a small filtered set still beats brute-force
+- If any single group exceeds 10K entries, consider partitioning `group_knowledge` by `scraped_group_id` using declarative partitioning to make the filter truly prune partitions
+
+---
+
+## Token Budget for Context Injection
+
+Rather than a hard limit of 15 entries, cap by estimated token budget:
+
+```python
+MAX_CONTEXT_TOKENS = 1500  # roughly 1125 words
+
+def format_context_block(entries: list[tuple[GroupKnowledge, float]]) -> str:
+    lines = [f"## Group Context: {group_title}"]
+    lines.append("")
+    lines.append("The following information has been extracted from this group's messages:")
+
+    token_estimate = 0
+    for entry, distance in entries:
+        addition = f"- [{entry.knowledge_type}] {entry.title}"
+        if entry.content:
+            addition += f"\n  {entry.content[:200]}"
+
+        entry_tokens = len(addition) // 4  # rough char→token
+        if token_estimate + entry_tokens > MAX_CONTEXT_TOKENS:
+            break
+
+        lines.append(addition)
+        token_estimate += entry_tokens
+
+    return "\n".join(lines)
+```
+
+If multiple entries are near-duplicates (e.g. three FAQ variants asking the same thing), the LLM will deduplicate them naturally given the context block — MMR reranking isn't needed at this scale.
 
 ---
 
@@ -136,6 +210,7 @@ class EmbeddingService:
         resp = await self._client.embeddings.create(
             model=self._model,
             input=text,
+            dimensions=512,
         )
         return resp.data[0].embedding
 
@@ -143,121 +218,66 @@ class EmbeddingService:
         resp = await self._client.embeddings.create(
             model=self._model,
             input=texts,
+            dimensions=512,
         )
         return [d.embedding for d in resp.data]
 ```
 
-Source: https://platform.openai.com/docs/guides/embeddings
+Source: https://platform.openai.com/docs/guides/embeddings#use-cases
+
+The `dimensions=512` param is supported by `text-embedding-3-small` and newer models. It returns a truncated embedding that preserves more information than a naive slice of a 1536-dim vector.
 
 ### 2. `GroupKnowledgeEmbedder` (new: `bot/plugins/ai_pilot/embeddings.py`)
 
-Backfills embeddings for existing and newly created `GroupKnowledge` entries:
-
-```python
-class GroupKnowledgeEmbedder:
-    def __init__(self, session: AsyncSession, embedder: EmbeddingService):
-        self._session = session
-        self._embedder = embedder
-
-    async def embed_entry(self, entry: GroupKnowledge) -> None:
-        text = f"{entry.title or ''} {entry.content or ''}".strip()
-        if not text:
-            return
-        entry.embedding = await self._embedder.embed(text)
-        await self._session.commit()
-
-    async def backfill(self, batch_size: int = 20) -> int:
-        """Embed all entries that have NULL embedding. Returns count."""
-        count = 0
-        while True:
-            result = await self._session.execute(
-                select(GroupKnowledge)
-                .where(GroupKnowledge.embedding.is_(None))
-                .limit(batch_size)
-            )
-            entries = list(result.scalars().all())
-            if not entries:
-                break
-            texts = [
-                f"{e.title or ''} {e.content or ''}".strip()
-                for e in entries
-            ]
-            embeddings = await self._embedder.embed_batch(texts)
-            for entry, emb in zip(entries, embeddings):
-                entry.embedding = emb
-            await self._session.commit()
-            count += len(entries)
-        return count
-```
-
-**Trigger points for embedding:**
-1. When `KnowledgeExtractor._save_knowledge()` creates a new entry → immediately embed it
-2. Backfill script for existing entries (run once after migration)
+Same as previous spec — backfills existing entries and hooks into `KnowledgeExtractor._save_knowledge()` for incremental embedding.
 
 ### 3. `GroupContextService` — Semantic Retrieval (new: `bot/plugins/ai_pilot/context.py`)
 
-```python
-from pgvector.sqlalchemy import Vector
+Uses the token-budgeted context builder. Falls back to empty string on ANY error (embedding timeout, DB connection, etc.) — never blocks the reply.
 
+```python
 class GroupContextService:
     def __init__(self, session: AsyncSession, embedder: EmbeddingService):
         self._session = session
         self._embedder = embedder
 
     async def build_context_block(self, tg_group_id: int, query: str) -> str:
-        # 1. Resolve scraped_group_id
-        group = await self._get_group(tg_group_id)
-        if group is None:
-            return ""
+        try:
+            group = await self._get_group(tg_group_id)
+            if group is None:
+                return ""
 
-        # 2. Embed the user's message
-        query_emb = await self._embedder.embed(query)
+            query_emb = await self._embedder.embed(query)
 
-        # 3. Semantic search: cosine similarity
+            rows = await self._semantic_search(group.id, query_emb)
+            if not rows:
+                return ""
+
+            return self._format_context(group.title or str(tg_group_id), rows)
+        except Exception:
+            return ""  # always fail soft — don't block replies
+
+    async def _semantic_search(
+        self, scraped_group_id: int, query_emb: list[float]
+    ) -> list[tuple[GroupKnowledge, float]]:
         stmt = (
-            select(GroupKnowledge, GroupKnowledge.embedding.cosine_distance(query_emb).label("distance"))
+            select(GroupKnowledge, GroupKnowledge.embedding.cosine_distance(query_emb).label("dist"))
             .where(
-                GroupKnowledge.scraped_group_id == group.id,
+                GroupKnowledge.scraped_group_id == scraped_group_id,
                 GroupKnowledge.embedding.isnot(None),
                 GroupKnowledge.confidence >= 0.5,
                 GroupKnowledge.knowledge_type.in_(("faq", "topic", "entity", "decision", "consensus")),
             )
-            .order_by("distance")
+            .order_by("dist")
             .limit(15)
         )
         result = await self._session.execute(stmt)
-        rows = result.all()
-
-        if not rows:
-            return ""
-
-        # 4. Format into markdown
-        lines = [f"## Group Context: {group.title or tg_group_id}"]
-        lines.append("")
-        lines.append("The following information has been extracted from this group's messages:")
-        for row, _ in rows:
-            lines.append(f"- [{row.knowledge_type}] {row.title}")
-            if row.content and len(row.content) < 500:
-                lines.append(f"  {row.content[:300]}")
-
-        return "\n".join(lines)
-
-    async def _get_group(self, tg_group_id: int) -> ScrapedGroup | None:
-        from bot.services.group_service import canonical_tg_group_id
-        canonical = canonical_tg_group_id(tg_group_id)
-        result = await self._session.execute(
-            select(ScrapedGroup).where(ScrapedGroup.tg_group_id == canonical)
-        )
-        return result.scalar_one_or_none()
+        return [(row, dist) for row, dist in result.all()]
 ```
-
-**Hybrid search fallback:** If `embedding` is NULL for a row (not yet embedded), fall back to the SQL keyword query (confidence + type filter, limit 15). This ensures no rows are missed during backfill.
 
 ---
 
-## AIPilotService Changes (`bot/plugins/ai_pilot/service.py`)
-
-Same as Phase 1 — minimal:
+## AIPilotService Changes
 
 ```python
 async def generate_reply(
@@ -274,20 +294,17 @@ if context_block:
 
 ---
 
-## Listener Changes (`bot/agents/listener.py`)
+## Listener Changes
 
 In `_handle_group_mention()`, after creating `AIPilotService`:
 
 ```python
-from bot.plugins.ai_pilot.context import GroupContextService
-from bot.plugins.ai_pilot.embeddings import EmbeddingService
-
 try:
     embedder = EmbeddingService()
     ctx_svc = GroupContextService(session, embedder)
     context_block = await ctx_svc.build_context_block(chat_id, text)
 except Exception:
-    context_block = ""  # fallback to no context on error
+    context_block = ""  # always fail soft — don't block the reply
 
 reply = await ai_service.generate_reply(
     sender_id or chat_id, text, context_block=context_block
@@ -301,57 +318,76 @@ reply = await ai_service.generate_reply(
 ```
 1. User @mentions agent in group
 2. _handle_group_mention() runs
-3. EmbeddingService.embed(user_text) → 1536-dim vector
-4. pgvector cosine similarity search:
+3. EmbeddingService.embed(user_text, dimensions=512) → 512-dim vector
+4. pgvector HNSW cosine similarity search (scoped to scraped_group_id):
    SELECT *, embedding <=> :query_vec AS distance
    FROM group_knowledge
-   WHERE scraped_group_id = :id
-     AND embedding IS NOT NULL
+   WHERE scraped_group_id = :id AND embedding IS NOT NULL
      AND confidence >= 0.5
      AND knowledge_type IN ('faq','topic','entity',...)
    ORDER BY distance ASC
    LIMIT 15
-5. Format results into context_block markdown
+5. Format into context_block (capped at ~1500 tokens)
 6. AIPilotService.generate_reply(..., context_block=context_block)
-7. LLM receives: [system prompt] + [context block] + [conversation history] + [user message]
+7. LLM receives: [system prompt] + [context block] + [history] + [user message]
 8. Reply sent to Telegram
 ```
 
 ---
 
-## Embedding Costs and Latency
+## Embedding Costs and Latency (512-dim)
 
-| Operation | Cost (OpenAI text-embedding-3-small) | Latency |
-|-----------|--------------------------------------|---------|
-| Per query embed | $0.00000013 (128 tokens × $0.00002/1K tokens) | ~200ms |
-| Batch backfill (20 entries) | ~$0.00002 | ~2s |
-| Full backfill (10K entries) | ~$0.05 | ~15min |
+| Operation | Cost | Latency |
+|-----------|------|---------|
+| Per query embed | ~$0.00000006 (64 tokens × $0.00002/1K) | ~150ms |
+| Batch backfill (20 entries) | ~$0.00001 | ~1.5s |
+| Full backfill (10K entries) | ~$0.025 | ~10min |
 
-The per-reply latency adds ~200ms for embedding the user's message. The pgvector search itself adds <10ms.
+512-dim halves storage and index size vs 1536, with minimal recall loss for a small knowledge base.
 
 ---
 
-## Indexing Strategy
+## Rollout Order
 
-For the vector column, use **IVFFlat** with `lists = 100` (good for up to ~100K entries):
-
-```sql
-CREATE INDEX ix_group_knowledge_embedding
-ON group_knowledge
-USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
 ```
+Step 1: Infra
+  ├── Switch postgres image → pgvector/pgvector:pg16
+  ├── Add pgvector>=0.5.0 to requirements.txt
+  └── Rebuild + deploy (docker compose up -d postgres)
 
-- `lists = sqrt(n)` rule: for ~10K entries, lists = 100
-- `vector_cosine_ops` enables `<=>` cosine distance operator
-- Requires rebuilding (`REINDEX`) after significant data changes
+Step 2: Schema migration (no index yet)
+  ├── alembic revision: CREATE EXTENSION vector
+  └── alembic revision: ADD COLUMN embedding Vector(512) NULL
 
-For larger datasets (>100K), upgrade to **HNSW** index (faster, more accurate, higher build cost):
+Step 3: Code
+  ├── Create EmbeddingService
+  ├── Create GroupKnowledgeEmbedder
+  ├── Create GroupContextService (with token budget)
+  ├── Modify AIPilotService (context_block param)
+  └── Deploy code (backfill still pending, so service returns "" → no behavior change)
 
-```sql
-CREATE INDEX ix_group_knowledge_embedding_hnsw
-ON group_knowledge
-USING hnsw (embedding vector_cosine_ops);
+Step 4: Backfill
+  ├── Run GroupKnowledgeEmbedder.backfill() via management command or one-off
+  └── This requires EmbeddingService to be deployed (step 3)
+
+Step 5: HNSW index
+  ├── CREATE INDEX ix_group_knowledge_embedding_hnsw USING hnsw (...)
+  ├── Builds on the now-populated embedding column
+  ├── Run after backfill so the index is trained on actual data
+  └── m = 16, ef_construction = 200
+
+Step 6: Wire into AgentListener
+  ├── Modify _handle_group_mention() to call GroupContextService
+  └── Deploy
+
+Step 7: Test
+  ├── @mention agent in group WITH knowledge → verify context-aware reply
+  ├── @mention agent in group WITHOUT knowledge → verify unchanged behavior
+  ├── Simulate OpenAI embed timeout → verify reply still goes through (no context)
+  └── Monitor ai_pilot_reply_generated logs for latency shift
+
+Step 8: Hook KnowledgeExtractor._save_knowledge()
+  └── New entries get embedded immediately on creation
 ```
 
 ---
@@ -361,46 +397,28 @@ USING hnsw (embedding vector_cosine_ops);
 | File | Change |
 |------|--------|
 | `docker-compose.yml` | `postgres:16` → `pgvector/pgvector:pg16` |
-| `requirements.txt` | Add `pgvector>=0.3.0` |
-| `alembic/versions/` | New migration: CREATE EXTENSION vector + add embedding column |
-| `bot/db/models/scraper.py` | Add `embedding: Vector(1536)` to `GroupKnowledge` |
+| `requirements.txt` | Add `pgvector>=0.5.0` |
+| `alembic/versions/` | 2 migrations: CREATE EXTENSION vector + add embedding column |
+| `bot/db/models/scraper.py` | Add `embedding: Vector(512)` to `GroupKnowledge` |
 | `bot/plugins/ai_pilot/embeddings.py` | **NEW** — `EmbeddingService` + `GroupKnowledgeEmbedder` |
-| `bot/plugins/ai_pilot/context.py` | **NEW** — `GroupContextService` (semantic search) |
+| `bot/plugins/ai_pilot/context.py` | **NEW** — `GroupContextService` (semantic HNSW search, token-budgeted) |
 | `bot/plugins/ai_pilot/service.py` | Add `context_block` param to `generate_reply()` |
-| `bot/agents/listener.py` | Inject context in `_handle_group_mention()` |
-| `bot/services/knowledge_extractor.py` | Embed new entries on save (trigger) |
+| `bot/agents/listener.py` | Inject context in `_handle_group_mention()` (fail soft) |
+| `bot/services/knowledge_extractor.py` | Embed new entries on save |
 
 ---
 
-## Rollout
+## Future
 
-1. Switch postgres image, add pgvector to requirements, rebuild
-2. Run migration: `CREATE EXTENSION vector`, add `embedding` column, create IVFFlat index
-3. Create `EmbeddingService` + `GroupKnowledgeEmbedder`
-4. Backfill existing `group_knowledge` entries (run once)
-5. Create `GroupContextService` with semantic search
-6. Modify `AIPilotService` to accept `context_block`
-7. Modify listener to call context service on @mention
-8. Hook into `KnowledgeExtractor._save_knowledge()` to embed new entries automatically
-9. Test: @mention agent in a group with knowledge → verify context-aware reply
-10. Test: @mention agent with no knowledge → verify unchanged behavior
-11. Monitor: `ai_pilot_reply_generated` logs for latency
-
----
-
-## Future: Hybrid Search
-
-Combine semantic (pgvector) + keyword (SQL ILIKE on title/content) for better relevance:
-
+**1. Partitioning by group:** If any single group exceeds 10K knowledge entries, partition `group_knowledge` by `scraped_group_id`:
 ```sql
-SELECT * FROM (
-  -- Semantic
-  SELECT *, embedding <=> :query_vec AS distance, 1.0 AS keyword_score
-  FROM group_knowledge WHERE scraped_group_id = :id AND embedding IS NOT NULL
-  UNION ALL
-  -- Keyword fallback for NULL-embedding rows
-  SELECT *, 0 AS distance,
-    ts_rank(to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(content,'')), plainto_tsquery('simple', :query)) AS keyword_score
-  FROM group_knowledge WHERE scraped_group_id = :id AND embedding IS NULL
-) ORDER BY distance ASC, keyword_score DESC LIMIT 15;
+CREATE TABLE group_knowledge (...) PARTITION BY HASH (scraped_group_id);
 ```
+This makes the `WHERE scraped_group_id = :id` filter prune partitions, so HNSW scans only the relevant partition.
+
+**2. Hybrid search:** Combine semantic + keyword for better coverage during backfill:
+- pgvector handles the semantic path
+- `to_tsvector` + `plainto_tsquery` handles keyword path for NULL-embedding rows
+- Union both results, weighted or deduplicated
+
+**3. MMR reranking:** If token budget becomes tight with diverse results, add Maximal Marginal Relevance to deduplicate similar entries before injection.
