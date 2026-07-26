@@ -534,7 +534,20 @@ class AgentListenerManager:
                 rate_limit_max=rate_limit_max,
                 rate_limit_window_s=rate_limit_window_s,
             )
-            reply = await ai_service.generate_reply(sender_id or chat_id, text)
+
+            from bot.plugins.ai_pilot.context import GroupContextService
+            from bot.plugins.ai_pilot.embeddings import EmbeddingService
+
+            context_block = ""
+            try:
+                ctx_svc = GroupContextService(session, EmbeddingService())
+                context_block = await ctx_svc.build_context_block(chat_id, text)
+            except Exception:
+                pass
+
+            reply = await ai_service.generate_reply(
+                sender_id or chat_id, text, context_block=context_block
+            )
             if reply is None:
                 return
             try:

@@ -7,6 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import Vector
 
 from bot.db.base import Base
 
@@ -184,6 +185,9 @@ class GroupKnowledge(Base):
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_message_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     confidence: Mapped[float] = mapped_column(default=0.5)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(512), nullable=True
+    )
     metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
     first_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_updated: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

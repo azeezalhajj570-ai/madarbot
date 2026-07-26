@@ -358,6 +358,7 @@ class KnowledgeExtractor:
         self, scraped_group_id: int, results: dict[str, list[dict[str, Any]]]
     ) -> int:
         saved = 0
+        fresh_entries: list[GroupKnowledge] = []
         for knowledge_type, items in results.items():
             for item in items:
                 entry = GroupKnowledge(
@@ -378,9 +379,31 @@ class KnowledgeExtractor:
                     last_updated=datetime.utcnow(),
                 )
                 self.session.add(entry)
+                fresh_entries.append(entry)
                 saved += 1
         if saved:
             await self.session.commit()
+
+            for entry in fresh_entries:
+                text = f"{entry.title or ''} {entry.content or ''}".strip()
+                if not text:
+                    continue
+                try:
+                    from bot.plugins.ai_pilot.embeddings import EmbeddingService
+
+                    svc = EmbeddingService()
+                    vec = await svc.embed(text)
+                    entry.embedding = vec
+                except Exception as exc:
+                    logger.warning(
+                        "knowledge_embed_failed",
+                        entry_id=entry.id,
+                        error=str(exc),
+                    )
+
+            if fresh_entries:
+                await self.session.commit()
+
         return saved
 
     @staticmethod
