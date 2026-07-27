@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -11,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
 from bot.core.plugin_manager import PluginManager
 from bot.core.runtime.replay import RuntimeReplayService
-from bot.db.models import Group, GroupSetting, ModerationLog, PluginEnabled, Warning, AgentJob
+from bot.db.models import Group, GroupSetting, ModerationLog, PluginEnabled, Warning, AgentJob, SystemConfig, User as UserModel
+from bot.db.models.scraper import GroupKnowledge, ScrapedGroup
 from bot.db.session import get_session
 from bot.services.plugin_service import PluginService
 from bot.services.settings_service import SettingsService
@@ -592,6 +594,329 @@ async def admin_overview(
     ]
 
     return result
+
+
+@router.get("/webapp/owner/ai-config")
+async def webapp_get_ai_config(
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    result = await session.execute(select(SystemConfig))
+    db_config = {row.key: row.value for row in result.scalars().all()}
+    settings = get_settings()
+    return {
+        "provider": db_config.get("ai_provider", settings.ai_provider),
+        "api_key": db_config.get("ai_provider_api_key", ""),
+        "model": db_config.get("ai_provider_model", settings.ai_model or ""),
+        "base_url": db_config.get("ai_provider_base_url", ""),
+        "embedding_api_key": db_config.get("ai_embedding_api_key", settings.openai_api_key or ""),
+        "embedding_model": db_config.get("ai_embedding_model", "text-embedding-3-small"),
+        "embedding_dimensions": 512,
+        "enabled": db_config.get("ai_pilot_enabled", str(settings.ai_pilot_enabled).lower()),
+    }
+
+
+@router.put("/webapp/owner/ai-config")
+async def webapp_update_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    allowed_keys = {
+        "ai_provider",
+        "ai_provider_api_key",
+        "ai_provider_model",
+        "ai_provider_base_url",
+        "ai_embedding_api_key",
+        "ai_embedding_model",
+        "ai_pilot_enabled",
+    }
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    now = datetime.now(timezone.utc)
+    for key, value in payload.items():
+        if key not in allowed_keys:
+            continue
+        stmt = pg_insert(SystemConfig).values(key=key, value=str(value), updated_at=now)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["key"],
+            set_={"value": str(value), "updated_at": now},
+        )
+        await session.execute(stmt)
+    await session.commit()
+    return {"status": "ok"}
+
+
+@router.post("/webapp/owner/ai-config/test")
+async def webapp_test_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+) -> dict[str, Any]:
+    from bot.plugins.ai_pilot.provider import build_pilot_provider
+
+    provider = payload.get("provider", "openai")
+    api_key = payload.get("api_key", "")
+    model = payload.get("model", "")
+    base_url = payload.get("base_url", "")
+
+    try:
+        pilot = build_pilot_provider(
+            api_key=api_key or None,
+            model=model or None,
+            base_url=base_url or None,
+            provider_override=provider,
+        )
+        reply = await pilot.chat(
+            messages=[{"role": "user", "content": "Say exactly: connected"}],
+        )
+        return {"status": "ok", "reply": reply}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@router.get("/webapp/owner/knowledge/groups")
+async def webapp_list_knowledge_groups(
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    owned_tg_ids = (
+        await session.execute(
+            select(Group.tg_group_id)
+            .join(UserModel, Group.owner_user_id == UserModel.id)
+            .where(UserModel.tg_user_id == identity.user_id)
+        )
+    ).scalars().all()
+    owned_tg_set = set(owned_tg_ids)
+
+    subq = (
+        select(
+            GroupKnowledge.scraped_group_id,
+            func.count(GroupKnowledge.id).label("entry_count"),
+            func.array_agg(func.distinct(GroupKnowledge.knowledge_type)).label("knowledge_types"),
+        )
+        .group_by(GroupKnowledge.scraped_group_id)
+        .subquery()
+    )
+    stmt = (
+        select(
+            ScrapedGroup.id,
+            ScrapedGroup.title,
+            ScrapedGroup.tg_group_id,
+            subq.c.entry_count,
+            subq.c.knowledge_types,
+        )
+        .outerjoin(subq, ScrapedGroup.id == subq.c.scraped_group_id)
+        .where(ScrapedGroup.tg_group_id.in_(owned_tg_set))
+        .order_by(subq.c.entry_count.desc().nullsfirst())
+    )
+    result = await session.execute(stmt)
+    return [
+        {
+            "id": row.id,
+            "title": row.title or f"Group {row.tg_group_id}",
+            "tg_group_id": row.tg_group_id,
+            "entry_count": row.entry_count or 0,
+            "knowledge_types": row.knowledge_types or [],
+        }
+        for row in result.all()
+    ]
+
+
+async def _assert_owner_has_scraped_group(session: AsyncSession, identity: TelegramWebAppIdentity, scraped_group_id: int) -> None:
+    owned_tg_ids = (
+        await session.execute(
+            select(Group.tg_group_id)
+            .join(UserModel, Group.owner_user_id == UserModel.id)
+            .where(UserModel.tg_user_id == identity.user_id)
+        )
+    ).scalars().all()
+    owned_set = set(owned_tg_ids)
+    sg = await session.get(ScrapedGroup, scraped_group_id)
+    if sg is None or sg.tg_group_id not in owned_set:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+
+@router.get("/webapp/owner/knowledge/groups/{group_id}")
+async def webapp_list_group_knowledge(
+    group_id: int,
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    await _assert_owner_has_scraped_group(session, identity, group_id)
+    stmt = (
+        select(GroupKnowledge)
+        .where(GroupKnowledge.scraped_group_id == group_id)
+        .order_by(GroupKnowledge.created_at.desc())
+    )
+    result = await session.execute(stmt)
+    return [
+        {
+            "id": entry.id,
+            "knowledge_type": entry.knowledge_type,
+            "title": entry.title,
+            "confidence": entry.confidence,
+            "content": entry.content,
+            "source_message_ids": entry.source_message_ids,
+            "has_embedding": entry.embedding is not None,
+            "first_seen": entry.first_seen.isoformat() if entry.first_seen else None,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        }
+        for entry in result.scalars().all()
+    ]
+
+
+@router.get("/webapp/owner/knowledge/all")
+async def webapp_list_all_knowledge(
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+    knowledge_type: str | None = None,
+    search: str | None = None,
+    group_id: int | None = None,
+) -> list[dict[str, Any]]:
+    owned_tg_ids = (
+        await session.execute(
+            select(Group.tg_group_id)
+            .join(UserModel, Group.owner_user_id == UserModel.id)
+            .where(UserModel.tg_user_id == identity.user_id)
+        )
+    ).scalars().all()
+    owned_tg_set = set(owned_tg_ids)
+
+    stmt = (
+        select(GroupKnowledge, ScrapedGroup.title.label("group_title"), ScrapedGroup.tg_group_id)
+        .join(ScrapedGroup, GroupKnowledge.scraped_group_id == ScrapedGroup.id)
+        .where(ScrapedGroup.tg_group_id.in_(owned_tg_set))
+    )
+
+    if knowledge_type:
+        stmt = stmt.where(GroupKnowledge.knowledge_type == knowledge_type)
+    if group_id:
+        stmt = stmt.where(ScrapedGroup.id == group_id)
+    if search:
+        stmt = stmt.where(
+            GroupKnowledge.title.ilike(f"%{search}%")
+            | GroupKnowledge.content.ilike(f"%{search}%")
+        )
+
+    stmt = stmt.order_by(GroupKnowledge.created_at.desc())
+    result = await session.execute(stmt)
+    rows = result.all()
+    return [
+        {
+            "id": entry.id,
+            "knowledge_type": entry.knowledge_type,
+            "title": entry.title,
+            "confidence": entry.confidence,
+            "content": entry.content,
+            "source_message_ids": entry.source_message_ids,
+            "has_embedding": entry.embedding is not None,
+            "first_seen": entry.first_seen.isoformat() if entry.first_seen else None,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+            "group_id": entry.scraped_group_id,
+            "group_title": group_title or f"Group {tg_group_id}",
+        }
+        for entry, group_title, tg_group_id in rows
+    ]
+
+
+import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _get_redis() -> Any | None:
+    from bot.dashboard.api.main import app
+
+    return getattr(app.state, "redis", None)
+
+
+@router.post("/webapp/owner/knowledge/groups/{group_id}/extract")
+async def webapp_extract_group_knowledge(
+    group_id: int,
+    payload: dict[str, Any] | None = None,
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.services.knowledge_extractor import KnowledgeExtractor
+    from bot.plugins.ai_pilot.system_config import load_ai_config
+    from bot.db.session import SessionLocal
+
+    await _assert_owner_has_scraped_group(session, identity, group_id)
+    sys_config = await load_ai_config(session)
+    max_messages = (payload or {}).get("max_messages", 2000)
+
+    redis_key = f"knowledge_extraction:{group_id}"
+    redis = _get_redis()
+    if redis is not None:
+        await redis.setex(redis_key, 3600, "running")
+
+    async def _run_extraction() -> None:
+        async with SessionLocal() as bg_session:
+            ext = KnowledgeExtractor(bg_session, config_override=sys_config)
+            try:
+                result = await ext.extract_knowledge(
+                    scraped_group_id=group_id, max_messages=max_messages
+                )
+                if result.get("status") == "failed":
+                    status_payload = {
+                        "status": "failed",
+                        "error": result.get("error", "Extraction failed"),
+                    }
+                else:
+                    status_payload = {
+                        "status": "done",
+                        "saved": result.get("items_saved", 0),
+                        "cost": result.get("cost_estimate", 0),
+                    }
+                logger.info("webapp_knowledge_extraction_done", scraped_group_id=group_id, result=result)
+            except Exception as exc:
+                logger.exception("webapp_knowledge_extraction_failed")
+                status_payload = {
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            if redis is not None:
+                await redis.setex(redis_key, 3600, json.dumps(status_payload))
+
+    asyncio.ensure_future(_run_extraction())
+    return {"status": "started", "message": "Extraction started in background"}
+
+
+@router.get("/webapp/owner/knowledge/groups/{group_id}/extract/status")
+async def webapp_get_extraction_status(
+    group_id: int,
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _assert_owner_has_scraped_group(session, identity, group_id)
+    redis = _get_redis()
+    if redis is None:
+        return {"status": "unknown", "detail": "redis_unavailable"}
+    raw = await redis.get(f"knowledge_extraction:{group_id}")
+    if raw is None:
+        return {"status": "idle"}
+    if raw == "running":
+        return {"status": "running"}
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"status": "unknown", "raw": raw}
+
+
+@router.delete("/webapp/owner/knowledge/{entry_id}")
+async def webapp_delete_knowledge_entry(
+    entry_id: int,
+    identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    entry = await session.get(GroupKnowledge, entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    await _assert_owner_has_scraped_group(session, identity, entry.scraped_group_id)
+    await session.delete(entry)
+    await session.commit()
+    return {"status": "ok"}
 
 
 __all__ = ["router"]

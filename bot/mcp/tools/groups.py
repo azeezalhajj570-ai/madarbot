@@ -4,6 +4,8 @@ import time
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+import json
+
 from bot.agents.service import AgentService
 from bot.agents.account_group_membership_service import AccountGroupMembershipService
 from bot.db.session import SessionLocal
@@ -219,3 +221,162 @@ def register_group_tools(server: FastMCP) -> None:
                 },
             )
             return to_mcp_text(result)
+
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False),
+    )
+    async def madarbot_search_group_messages(
+        tg_group_id: int,
+        query: str,
+        limit: int = 100,
+        cursor: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        message_type: str | None = None,
+    ) -> str:
+        """Full-text search over scraped messages in a group across all senders. Uses cursor-based pagination."""
+        ctx = resolve_mcp_context()
+
+        page = 1
+        if cursor:
+            try:
+                cursor_data = json.loads(cursor)
+                page = cursor_data.get("page", 1) + 1
+            except (json.JSONDecodeError, ValueError):
+                result = error_response(
+                    content="Invalid cursor",
+                    code="INVALID_CURSOR",
+                )
+                return to_mcp_text(result)
+
+        from datetime import datetime as dt
+
+        parsed_date_from: dt | None = None
+        parsed_date_to: dt | None = None
+        if date_from:
+            try:
+                parsed_date_from = dt.fromisoformat(date_from)
+            except ValueError:
+                result = error_response(
+                    content="Invalid date_from format. Use ISO date (e.g. 2024-01-01)",
+                    code="INVALID_DATE",
+                )
+                return to_mcp_text(result)
+        if date_to:
+            try:
+                parsed_date_to = dt.fromisoformat(date_to)
+            except ValueError:
+                result = error_response(
+                    content="Invalid date_to format. Use ISO date (e.g. 2024-01-01)",
+                    code="INVALID_DATE",
+                )
+                return to_mcp_text(result)
+
+        async with SessionLocal() as session:
+            from bot.services.scraper_service import ScraperService
+
+            service = ScraperService(session)
+            result_data = await service.search_messages(
+                tg_group_id=tg_group_id,
+                query=query,
+                message_type=message_type,
+                date_from=parsed_date_from,
+                date_to=parsed_date_to,
+                page=page,
+                page_size=limit,
+            )
+
+            messages = result_data.get("messages", [])
+            total = result_data.get("total", 0)
+
+            results = [
+                {
+                    "message_id": m["message_id"],
+                    "text": m["message_text"],
+                    "date": m["message_date"],
+                    "message_type": m["message_type"],
+                    "sender_user_id": m["sender_user_id"],
+                    "username": m["sender_username"],
+                    "full_name": (
+                        (m["sender_first_name"] or "")
+                        + (" " + m["sender_last_name"] if m.get("sender_last_name") else "")
+                    ).strip() or None,
+                }
+                for m in messages
+            ]
+
+            next_cursor = None
+            if page * limit < total:
+                next_cursor = json.dumps({"page": page})
+
+            result = success_response(
+                content=f"Found {total} matching messages",
+                data={
+                    "tg_group_id": tg_group_id,
+                    "query": query,
+                    "results": results,
+                    "total_matches": total,
+                    "cursor": next_cursor,
+                },
+            )
+            return to_mcp_text(result)
+
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False),
+    )
+    async def madarbot_extract_group_knowledge(
+        scraped_group_id: int,
+        max_messages: int = 2000,
+    ) -> str:
+        """Extract structured knowledge (FAQs, topics, entities, decisions, consensus) from a scraped group's messages. Uses AI to analyze the last N messages and creates searchable knowledge entries. Max messages: 100-10000."""
+        ctx = resolve_mcp_context()
+        if max_messages < 100 or max_messages > 10000:
+            result = error_response(
+                content="max_messages must be between 100 and 10000",
+                code="INVALID_PARAMS",
+            )
+            return to_mcp_text(result)
+
+        from bot.db.models.scraper import ScrapedGroup
+        from bot.services.knowledge_extractor import KnowledgeExtractor
+        from sqlalchemy import select
+
+        async with SessionLocal() as session:
+            group = (
+                await session.execute(
+                    select(ScrapedGroup).where(ScrapedGroup.id == scraped_group_id)
+                )
+            ).scalar_one_or_none()
+            if group is None:
+                result = error_response(
+                    content=f"Scraped group {scraped_group_id} not found",
+                    code="NOT_FOUND",
+                )
+                return to_mcp_text(result)
+
+            extractor = KnowledgeExtractor(session)
+            try:
+                extraction = await extractor.extract_knowledge(
+                    scraped_group_id=scraped_group_id,
+                    max_messages=max_messages,
+                )
+                result = success_response(
+                    content=f"Extracted {extraction.get('saved', 0)} knowledge entries from group '{group.title or str(scraped_group_id)}'",
+                    data={
+                        "scraped_group_id": scraped_group_id,
+                        "title": group.title,
+                        "knowledge_types": extraction.get("knowledge_types", []),
+                        "saved": extraction.get("saved", 0),
+                        "message_count": extraction.get("message_count", 0),
+                        "refined": extraction.get("refined", 0),
+                        "total_cost": extraction.get("total_cost", 0),
+                    },
+                )
+                return to_mcp_text(result)
+            except Exception as e:
+                result = error_response(
+                    content=f"Knowledge extraction failed: {e}",
+                    code="EXTRACTION_ERROR",
+                    message=str(e),
+                )
+                return to_mcp_text(result)

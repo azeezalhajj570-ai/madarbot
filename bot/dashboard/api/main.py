@@ -75,7 +75,7 @@ async def _backfill_lead_group_titles() -> None:
 
             if updates:
                 logger.info(
-                    "backfilled_lead_group_titles", updates=updates, total_checked=len(rows)
+                    "backfilled_lead_group_titles", extra={"updates": updates, "total_checked": len(rows)}
                 )
     except Exception:
         logger.exception("lead_group_title_backfill_failed")

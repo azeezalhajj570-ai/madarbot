@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models.scraper import GroupKnowledge, ScrapedGroup
@@ -42,7 +42,7 @@ class GroupContextService:
                 group.title or str(tg_group_id), rows
             )
         except Exception as exc:
-            logger.warning("group_context_failed", tg_group_id=tg_group_id, error=str(exc))
+            logger.warning("group_context_failed", extra={"tg_group_id": tg_group_id, "error": str(exc)})
             return ""
 
     async def _get_group(self, tg_group_id: int) -> ScrapedGroup | None:
@@ -55,6 +55,9 @@ class GroupContextService:
     async def _semantic_search(
         self, scraped_group_id: int, query_emb: list[float]
     ) -> list[tuple[GroupKnowledge, float]]:
+        await self._session.execute(
+            text("SET LOCAL hnsw.ef_search = 64")
+        )
         stmt = (
             select(
                 GroupKnowledge,

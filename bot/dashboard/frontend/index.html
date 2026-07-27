@@ -847,6 +847,7 @@
         "#/subscription": { title: t("subscriptionTitle"), subtitle: t("subscriptionSubtitle") },
         "#/settings": { title: t("settingsTitle"), subtitle: t("settingsSubtitle") },
         "#/owner": { title: t("platformTitle"), subtitle: t("platformSubtitle") },
+        "#/ai-settings": { title: "AI Settings", subtitle: "Configure AI provider and RAG" },
       };
       return map[state.route] || map["#/home"];
     }
@@ -867,6 +868,7 @@
       ];
       if (state.isOwner) {
         items.push({ route: "#/owner", label: t("navPlatform"), icon: "shield", badge: { text: "owner", tone: "accent" } });
+        items.push({ route: "#/ai-settings", label: "AI Settings", icon: "cpu" });
       }
       return items;
     }
@@ -2922,6 +2924,11 @@
       if (!state.cache.ownerAudit || force) state.cache.ownerAudit = await apiRequest(`/webapp/owner/audit-log?limit=200&offset=0`);
     }
 
+    async function loadAIConfig(force = false) {
+      if (!state.isOwner) return;
+      if (!state.cache.aiConfig || force) state.cache.aiConfig = await apiRequest("/webapp/owner/ai-config");
+    }
+
     async function loadScraper(force = false) {
       const group = activeGroup();
       const draft = ensureScraperDraft();
@@ -2997,6 +3004,8 @@
         await loadSettings();
       } else if (state.route === "#/owner" && state.isOwner) {
         await loadOwner();
+      } else if (state.route === "#/ai-settings" && state.isOwner) {
+        await loadAIConfig();
       }
     }
 
@@ -4523,6 +4532,105 @@
       `;
     }
 
+    function renderAISettingsView() {
+      if (!state.isOwner) return emptyState("Owner access required.");
+      const config = state.cache.aiConfig || {};
+      const provider = config.provider || "heuristic";
+      const apiKey = config.api_key || "";
+      const model = config.model || "";
+      const baseUrl = config.base_url || "";
+      const embedKey = config.embedding_api_key || "";
+      const embedModel = config.embedding_model || "text-embedding-3-small";
+      const enabled = config.enabled === "true";
+
+      return \`
+        <div class="view">
+          <div class="stack">
+            <div class="settings-group">
+              <div class="settings-group-title">AI Provider</div>
+              <div class="settings-group-body">
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Provider</div>
+                    <div class="settings-label-hint">openai, gemini, or openrouter</div>
+                  </div>
+                  <select class="settings-input select-input" id="ai-provider-select" style="max-width:220px">
+                    <option value="heuristic" \${provider === "heuristic" ? "selected" : ""}>Heuristic (fallback)</option>
+                    <option value="openai" \${provider === "openai" ? "selected" : ""}>OpenAI</option>
+                    <option value="gemini" \${provider === "gemini" ? "selected" : ""}>Gemini</option>
+                    <option value="openrouter" \${provider === "openrouter" ? "selected" : ""}>OpenRouter</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">API Key</div>
+                    <div class="settings-label-hint">Provider API key</div>
+                  </div>
+                  <input class="settings-input" type="password" id="ai-api-key" value="\${apiKey}" placeholder="sk-..." />
+                </div>
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Model</div>
+                    <div class="settings-label-hint">Model name (leave empty for default)</div>
+                  </div>
+                  <input class="settings-input" type="text" id="ai-model" value="\${model}" placeholder="gpt-4.1-mini" />
+                </div>
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Base URL</div>
+                    <div class="settings-label-hint">Custom API endpoint (optional)</div>
+                  </div>
+                  <input class="settings-input" type="text" id="ai-base-url" value="\${baseUrl}" placeholder="https://api.openai.com/v1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group-title">Embeddings</div>
+              <div class="settings-group-body">
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Embedding API Key</div>
+                    <div class="settings-label-hint">Leave empty to use provider key</div>
+                  </div>
+                  <input class="settings-input" type="password" id="ai-embed-key" value="\${embedKey}" placeholder="sk-..." />
+                </div>
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Embedding Model</div>
+                    <div class="settings-label-hint">OpenAI text-embedding-3-small</div>
+                  </div>
+                  <input class="settings-input" type="text" id="ai-embed-model" value="\${embedModel}" disabled />
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="settings-group-title">AI Pilot</div>
+              <div class="settings-group-body">
+                <div class="settings-row">
+                  <div class="settings-label">
+                    <div class="settings-label-text">Enable AI Replies</div>
+                    <div class="settings-label-hint">Allow AI to auto-reply when @mentioned</div>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="ai-pilot-enabled" \${enabled ? "checked" : ""} />
+                    <span class="switch-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex-row" style="gap:8px;margin-top:8px">
+              <button class="btn btn-primary" type="button" id="ai-save-btn" data-action="save-ai-config">Save Config</button>
+              <button class="btn btn-secondary" type="button" id="ai-test-btn" data-action="test-ai-config">Test Connection</button>
+            </div>
+            <div id="ai-config-status" class="text-secondary" style="margin-top:8px;font-size:14px"></div>
+          </div>
+        </div>
+      \`;
+    }
+
     function renderContent() {
       applyLanguageDirection();
       if (state.sessionExpired) {
@@ -4560,6 +4668,7 @@
         "#/subscription": renderSubscriptionView,
         "#/settings": renderSettingsView,
         "#/owner": renderOwnerView,
+        "#/ai-settings": renderAISettingsView,
       };
       const renderer = renderers[state.route] || renderHomeView;
       roots.content.innerHTML = renderer();
@@ -6229,6 +6338,64 @@
         if (!groupId) return;
         removeModerationSettingsGroup(groupId);
         renderModerationSettingsModal();
+      } else if (action === "save-ai-config") {
+        const providerEl = document.getElementById("ai-provider-select");
+        const apiKeyEl = document.getElementById("ai-api-key");
+        const modelEl = document.getElementById("ai-model");
+        const baseUrlEl = document.getElementById("ai-base-url");
+        const embedKeyEl = document.getElementById("ai-embed-key");
+        const enabledEl = document.getElementById("ai-pilot-enabled");
+        const statusEl = document.getElementById("ai-config-status");
+        if (!providerEl || !statusEl) return;
+        try {
+          statusEl.textContent = "Saving...";
+          const body = {
+            ai_provider: providerEl.value,
+            ai_provider_api_key: apiKeyEl ? apiKeyEl.value : "",
+            ai_provider_model: modelEl ? modelEl.value : "",
+            ai_provider_base_url: baseUrlEl ? baseUrlEl.value : "",
+            ai_embedding_api_key: embedKeyEl ? embedKeyEl.value : "",
+            ai_pilot_enabled: enabledEl ? enabledEl.checked.toString() : "false",
+          };
+          await apiRequest("/webapp/owner/ai-config", { method: "PUT", body: JSON.stringify(body) });
+          state.cache.aiConfig = null;
+          await loadAIConfig(true);
+          statusEl.textContent = "Saved successfully.";
+          statusEl.style.color = "var(--color-success)";
+        } catch (exc) {
+          statusEl.textContent = "Save failed: " + (exc.message || exc);
+          statusEl.style.color = "var(--color-danger)";
+        }
+      } else if (action === "test-ai-config") {
+        const statusEl = document.getElementById("ai-config-status");
+        const providerEl = document.getElementById("ai-provider-select");
+        const apiKeyEl = document.getElementById("ai-api-key");
+        const modelEl = document.getElementById("ai-model");
+        const baseUrlEl = document.getElementById("ai-base-url");
+        if (!statusEl) return;
+        try {
+          statusEl.textContent = "Testing connection...";
+          statusEl.style.color = "var(--color-text-secondary)";
+          const result = await apiRequest("/webapp/owner/ai-config/test", {
+            method: "POST",
+            body: JSON.stringify({
+              provider: providerEl ? providerEl.value : "heuristic",
+              api_key: apiKeyEl ? apiKeyEl.value : "",
+              model: modelEl ? modelEl.value : "",
+              base_url: baseUrlEl ? baseUrlEl.value : "",
+            }),
+          });
+          if (result.status === "ok") {
+            statusEl.textContent = "Connected: " + (result.reply || "OK");
+            statusEl.style.color = "var(--color-success)";
+          } else {
+            statusEl.textContent = "Failed: " + (result.error || "Unknown error");
+            statusEl.style.color = "var(--color-danger)";
+          }
+        } catch (exc) {
+          statusEl.textContent = "Test failed: " + (exc.message || exc);
+          statusEl.style.color = "var(--color-danger)";
+        }
       }
     });
 
@@ -7331,6 +7498,10 @@
         location.hash = "#/home";
         return;
       }
+      if (nextRoute === "#/ai-settings" && !state.isOwner) {
+        location.hash = "#/home";
+        return;
+      }
       state.route = nextRoute;
       await ensureRouteData();
       renderSidebar();
@@ -7356,6 +7527,10 @@
         location.hash = state.route;
       }
       if (state.route === "#/owner" && !state.isOwner) {
+        state.route = "#/home";
+        location.hash = state.route;
+      }
+      if (state.route === "#/ai-settings" && !state.isOwner) {
         state.route = "#/home";
         location.hash = state.route;
       }

@@ -74,6 +74,7 @@ from bot.db.models.scraper import (
     ScrapedMessage,
 )
 from bot.db.models.subscription import PromotionCode, PromotionCodeRedemption, SubscriptionRequest
+from bot.db.models.system_config import SystemConfig
 from bot.db.models.summary import DailyGroupSummary, GroupMessageActivity, GroupSummarySettings
 from bot.db.models.task import Task, TaskGroup, TaskRun
 from bot.db.models.tenant import TenantMembership, UserIdentity
@@ -208,6 +209,7 @@ __all__ = [
     "SubscriptionPlan",
     "SubscriptionRequest",
     "SubscriptionStatus",
+    "SystemConfig",
     "Task",
     "TaskGroup",
     "TaskRun",

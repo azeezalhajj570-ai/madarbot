@@ -144,7 +144,7 @@ class GroupPaymentService:
                 settings.stripe_webhook_secret,
             )
         except (ValueError, stripe_lib.error.SignatureVerificationError) as exc:
-            logger.error("stripe_webhook_verification_failed", error=str(exc))
+            logger.error("stripe_webhook_verification_failed", extra={"error": str(exc)})
             raise ValueError("Invalid webhook signature") from exc
 
         if event["type"] == "checkout.session.completed":
@@ -152,7 +152,7 @@ class GroupPaymentService:
         if event["type"] == "checkout.session.expired":
             return {"status": "ignored", "event": event["type"]}
 
-        logger.info("stripe_webhook_unhandled_event", event_type=event["type"])
+        logger.info("stripe_webhook_unhandled_event", extra={"event_type": event["type"]})
         return {"status": "ok", "event": event["type"]}
 
     async def _handle_checkout_completed(self, session_data: dict) -> dict:
@@ -168,7 +168,7 @@ class GroupPaymentService:
         currency = session_data.get("currency", "usd")
 
         if not group_id or not user_id or not plan_id:
-            logger.warning("stripe_webhook_missing_metadata", metadata=metadata)
+            logger.warning("stripe_webhook_missing_metadata", extra={"metadata": metadata})
             return {"status": "missing_metadata"}
 
         from sqlalchemy import select
@@ -220,7 +220,7 @@ class GroupPaymentService:
         if plan not in {"pro", "business"}:
             plan = "pro"
         if tg_user_id <= 0:
-            logger.warning("stripe_agent_subscription_missing_user", metadata=metadata)
+            logger.warning("stripe_agent_subscription_missing_user", extra={"metadata": metadata})
             return {"status": "missing_metadata"}
 
         now = datetime.now(timezone.utc)

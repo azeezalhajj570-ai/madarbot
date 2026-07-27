@@ -19,3 +19,4 @@ stripe>=9.0.0
 mcp>=1.0.0
 bcrypt>=4.2.1
 pgvector>=0.5.0
+openai>=1.45.0

@@ -529,6 +529,55 @@ export async function deleteOwnerPromoCode(promoCodeId: number) {
   return data
 }
 
+// ─── AI Config ─────────────────────────────────────────────────────────────────
+
+export async function fetchAIConfig() {
+  const { data } = await api.get(`${OWNER_API_PREFIX}/ai-config`)
+  return data
+}
+
+export async function updateAIConfig(payload: Record<string, string>) {
+  const { data } = await api.put(`${OWNER_API_PREFIX}/ai-config`, payload)
+  return data
+}
+
+export async function testAIConfig(payload: { provider: string; api_key: string; model: string; base_url: string }) {
+  const { data } = await api.post(`${OWNER_API_PREFIX}/ai-config/test`, payload)
+  return data
+}
+
+// ─── Knowledge ────────────────────────────────────────────────────────────────
+
+export async function fetchKnowledgeGroups() {
+  const { data } = await api.get(`${OWNER_API_PREFIX}/knowledge/groups`)
+  return data
+}
+
+export async function fetchGroupKnowledge(groupId: number) {
+  const { data } = await api.get(`${OWNER_API_PREFIX}/knowledge/groups/${groupId}`)
+  return data
+}
+
+export async function fetchAllKnowledge(params?: { knowledge_type?: string; search?: string; group_id?: number }) {
+  const { data } = await api.get(`${OWNER_API_PREFIX}/knowledge/all`, { params })
+  return data
+}
+
+export async function extractGroupKnowledge(groupId: number, maxMessages = 2000) {
+  const { data } = await api.post(`${OWNER_API_PREFIX}/knowledge/groups/${groupId}/extract`, { max_messages: maxMessages })
+  return data
+}
+
+export async function fetchExtractionStatus(groupId: number) {
+  const { data } = await api.get(`${OWNER_API_PREFIX}/knowledge/groups/${groupId}/extract/status`)
+  return data
+}
+
+export async function deleteKnowledgeEntry(entryId: number) {
+  const { data } = await api.delete(`${OWNER_API_PREFIX}/knowledge/${entryId}`)
+  return data
+}
+
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 
 const WHATSAPP_API_PREFIX = '/api'

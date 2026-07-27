@@ -375,6 +375,13 @@ class AgentListenerManager:
             ).scalar_one_or_none()
             group_id = int(agent.group_id) if agent and agent.group_id is not None else None
 
+            from bot.plugins.ai_pilot.system_config import load_ai_config
+            sys_config = await load_ai_config(session)
+            provider_name = sys_config.get("ai_provider")
+            api_key = api_key or sys_config.get("ai_provider_api_key") or None
+            model = model or sys_config.get("ai_provider_model") or None
+            provider_url = provider_url or sys_config.get("ai_provider_base_url") or None
+
             if group_id is not None:
                 ssvc = SettingsService(session)
                 raw_api_key = await ssvc.get_one(group_id, "ai_pilot_api_key")
@@ -413,6 +420,7 @@ class AgentListenerManager:
             api_key=api_key,
             model=model,
             base_url=provider_url,
+            provider_override=provider_name,
         )
         service = AIPilotService(
             redis=self.redis,
@@ -480,10 +488,13 @@ class AgentListenerManager:
                 return
             from bot.plugins.ai_pilot.provider import build_pilot_provider
             from bot.plugins.ai_pilot.service import AIPilotService
+            from bot.plugins.ai_pilot.system_config import load_ai_config
 
-            api_key: str | None = None
-            model: str | None = None
-            provider_url: str | None = None
+            sys_config = await load_ai_config(session)
+            provider_name = sys_config.get("ai_provider")
+            api_key: str | None = sys_config.get("ai_provider_api_key") or None
+            model: str | None = sys_config.get("ai_provider_model") or None
+            provider_url: str | None = sys_config.get("ai_provider_base_url") or None
             system_prompt: str | None = None
             max_history = 10
             rate_limit_max = 5
@@ -524,6 +535,7 @@ class AgentListenerManager:
                 api_key=api_key,
                 model=model,
                 base_url=provider_url,
+                provider_override=provider_name,
             )
             ai_service = AIPilotService(
                 redis=self.redis,

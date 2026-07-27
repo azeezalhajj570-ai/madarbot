@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from bot.config import get_settings
 from bot.db.models import ScrapedDailySummary, ScrapedMessage
 from bot.db.models.scraper import GroupKnowledge
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 KNOWLEDGE_EXTRACTION_PROMPT = """Analyze these Telegram group messages and extract structured knowledge.
 Return a JSON object with these keys:
@@ -55,18 +55,28 @@ def _format_prompt(template: str, chunk_text: str, **extra) -> str:
 
 
 class KnowledgeExtractor:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, config_override: dict[str, str] | None = None) -> None:
         self.session = session
         self._settings = get_settings()
+        self._config_override = config_override or {}
+
+    def _cfg(self, key: str, default: str = "") -> str:
+        return self._config_override.get(key, default) or default
 
     async def extract_knowledge(
         self, *, scraped_group_id: int, max_messages: int = 2000
     ) -> dict[str, Any]:
         messages = await self._fetch_message_texts(scraped_group_id, max_messages)
         if not messages:
-            return {"status": "no_messages"}
+            return {"status": "no_messages", "saved": 0, "message_count": 0, "cost_estimate": 0.0}
 
+        # Use 8000-char chunks. Larger chunks cause cheap/free models (e.g.
+        # openrouter/free) to ignore JSON instructions and return safety text.
+        # 8000 chars keeps prompts within reliable token limits for most models.
         chunks = self._chunk_messages(messages, max_chars=8000)
+        max_chunks = 10
+        if len(chunks) > max_chunks:
+            chunks = chunks[:max_chunks]
         all_results: dict[str, list[dict[str, Any]]] = {
             "faqs": [],
             "topics": [],
@@ -76,12 +86,18 @@ class KnowledgeExtractor:
             "insights": [],
         }
         total_cost = 0.0
+        empty_chunks = 0
 
+        # Give each chunk up to 120s; free/slow providers can take 20-30s.
+        chunk_timeout = max(self._settings.ai_request_timeout_seconds, 120.0)
         for i, chunk in enumerate(chunks):
             if i > 0:
                 await asyncio.sleep(1.5)
             result, cost = await self._call_ai(
-                KNOWLEDGE_EXTRACTION_PROMPT, chunk_text=chunk, phase="bulk"
+                KNOWLEDGE_EXTRACTION_PROMPT,
+                chunk_text=chunk,
+                phase="bulk",
+                timeout_seconds=chunk_timeout,
             )
             total_cost += cost
             if result:
@@ -89,18 +105,47 @@ class KnowledgeExtractor:
                     items = result.get(key, [])
                     if isinstance(items, list):
                         all_results[key].extend(items)
+            else:
+                empty_chunks += 1
+                logger.warning(
+                    "knowledge_extraction_chunk_empty scraped_group_id=%s chunk_index=%s total_chunks=%s",
+                    scraped_group_id,
+                    i,
+                    len(chunks),
+                )
+
+        if empty_chunks and empty_chunks == len(chunks):
+            logger.error(
+                "knowledge_extraction_all_chunks_empty scraped_group_id=%s total_chunks=%s provider=%s model=%s",
+                scraped_group_id,
+                len(chunks),
+                self._cfg("ai_provider", self._settings.ai_provider),
+                self._cfg("ai_provider_model", ""),
+            )
+            return {
+                "status": "failed",
+                "saved": 0,
+                "message_count": len(messages),
+                "cost_estimate": round(total_cost, 4),
+                "error": "AI returned no parseable JSON for any chunk. Try a different model in AI Settings.",
+            }
 
         refined_results, refine_cost = await self._refine_knowledge(all_results)
         total_cost += refine_cost
 
         saved_count = await self._save_knowledge(scraped_group_id, refined_results)
         logger.info(
-            "knowledge_extraction_done",
-            scraped_group_id=scraped_group_id,
-            saved=saved_count,
-            cost_estimate=round(total_cost, 4),
+            "knowledge_extraction_done scraped_group_id=%s saved=%s cost_estimate=%s",
+            scraped_group_id,
+            saved_count,
+            round(total_cost, 4),
         )
-        return {"items_saved": saved_count, "cost_estimate": round(total_cost, 4)}
+        return {
+            "saved": saved_count,
+            "items_saved": saved_count,
+            "message_count": len(messages),
+            "cost_estimate": round(total_cost, 4),
+        }
 
     async def generate_daily_summary(
         self, *, scraped_group_id: int, date: datetime
@@ -176,30 +221,32 @@ class KnowledgeExtractor:
         return chunks
 
     async def _call_ai(
-        self, prompt_template: str, *, chunk_text: str = "", **extra
+        self, prompt_template: str, *, chunk_text: str = "", timeout_seconds: float | None = None, **extra
     ) -> tuple[dict[str, Any] | None, float]:
-        settings = self._settings
-        provider = settings.ai_provider
+        provider = self._cfg("ai_provider", self._settings.ai_provider).lower()
 
         if provider == "openai":
-            return await self._call_openai(prompt_template, chunk_text, **extra)
+            return await self._call_openai(prompt_template, chunk_text, timeout_seconds=timeout_seconds, **extra)
         elif provider == "gemini":
-            return await self._call_gemini(prompt_template, chunk_text, **extra)
+            return await self._call_gemini(prompt_template, chunk_text, timeout_seconds=timeout_seconds, **extra)
         elif provider == "openrouter":
-            return await self._call_openrouter(prompt_template, chunk_text, **extra)
+            return await self._call_openrouter(prompt_template, chunk_text, timeout_seconds=timeout_seconds, **extra)
         else:
+            logger.warning("knowledge_extraction_unknown_provider provider=%s", provider)
             return None, 0.0
 
     async def _call_openai(
-        self, prompt_template: str, chunk_text: str, **extra
+        self, prompt_template: str, chunk_text: str, *, timeout_seconds: float | None = None, **extra
     ) -> tuple[dict[str, Any] | None, float]:
-        api_key = self._settings.openai_api_key
+        api_key = self._cfg("ai_provider_api_key", self._settings.openai_api_key or "")
         if not api_key:
             return None, 0.0
 
         prompt = _format_prompt(prompt_template, chunk_text, **extra)
+        model = self._cfg("ai_provider_model", self._settings.openai_model)
+        base_url = self._cfg("ai_provider_base_url", "https://api.openai.com/v1").rstrip("/")
         payload = {
-            "model": self._settings.openai_model,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
@@ -208,22 +255,23 @@ class KnowledgeExtractor:
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
-            "max_tokens": 2000,
+            "max_tokens": 4096,
         }
 
+        timeout = timeout_seconds or self._settings.ai_request_timeout_seconds
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    "https://api.openai.com/v1/chat/completions",
+                    f"{base_url}/chat/completions",
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
                     },
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=self._settings.ai_request_timeout_seconds),
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
                     data = await resp.json()
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    content = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "")
                     usage = data.get("usage", {})
                     cost = (
                         usage.get("prompt_tokens", 0) * 0.00015
@@ -231,36 +279,38 @@ class KnowledgeExtractor:
                     ) / 1000
                     return self._parse_json_response(content), cost
         except Exception as exc:
-            logger.warning("openai_extract_failed", error=str(exc))
+            logger.warning("openai_extract_failed error=%s", str(exc))
             return None, 0.0
 
     async def _call_gemini(
-        self, prompt_template: str, chunk_text: str, **extra
+        self, prompt_template: str, chunk_text: str, *, timeout_seconds: float | None = None, **extra
     ) -> tuple[dict[str, Any] | None, float]:
-        api_key = self._settings.gemini_api_key
+        api_key = self._cfg("ai_provider_api_key", self._settings.gemini_api_key or "")
         if not api_key:
             return None, 0.0
 
         prompt = _format_prompt(prompt_template, chunk_text, **extra)
+        model = self._cfg("ai_provider_model", self._settings.gemini_model)
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2000},
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 4096},
         }
 
+        timeout = timeout_seconds or self._settings.ai_request_timeout_seconds
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{self._settings.gemini_model}:generateContent",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                     params={"key": api_key},
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=self._settings.ai_request_timeout_seconds),
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
                     data = await resp.json()
                     text = (
                         data.get("candidates", [{}])[0]
                         .get("content", {})
                         .get("parts", [{}])[0]
-                        .get("text", "")
+                        .get("text", "") or ""
                     )
                     usage = data.get("usageMetadata", {})
                     cost = (
@@ -269,17 +319,20 @@ class KnowledgeExtractor:
                     ) / 1000
                     return self._parse_json_response(text), cost
         except Exception as exc:
-            logger.warning("gemini_extract_failed", error=str(exc))
+            logger.warning("gemini_extract_failed error=%s", str(exc))
             return None, 0.0
 
     async def _call_openrouter(
-        self, prompt_template: str, chunk_text: str, phase: str = "bulk", **extra
+        self, prompt_template: str, chunk_text: str, *, phase: str = "bulk", timeout_seconds: float | None = None, **extra
     ) -> tuple[dict[str, Any] | None, float]:
-        api_key = self._settings.openrouter_api_key
+        api_key = self._cfg("ai_provider_api_key", self._settings.openrouter_api_key or "")
         if not api_key:
             return None, 0.0
 
-        if phase == "bulk":
+        override_model = self._cfg("ai_provider_model")
+        if override_model:
+            model = override_model
+        elif phase == "bulk":
             model = self._settings.openrouter_model_bulk or self._settings.openrouter_model
         elif phase == "premium":
             model = self._settings.openrouter_model_premium or self._settings.openrouter_model
@@ -305,19 +358,20 @@ class KnowledgeExtractor:
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
-            "max_tokens": 2000,
+            "max_tokens": 4096,
         }
 
+        timeout = timeout_seconds or self._settings.ai_request_timeout_seconds
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=self._settings.ai_request_timeout_seconds),
+                    timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
                     data = await resp.json()
-                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    content = (data.get("choices", [{}])[0].get("message", {}).get("content", "") or "")
                     usage = data.get("usage", {})
                     pricing = (
                         float(usage.get("prompt_tokens", 0)) * 0.0000001
@@ -328,9 +382,17 @@ class KnowledgeExtractor:
                         if data.get("total_cost", 0) == 0
                         else data.get("total_cost", pricing)
                     )
-                    return self._parse_json_response(content), cost
+                    parsed = self._parse_json_response(content)
+                    if not parsed and content.strip():
+                        logger.warning(
+                            "openrouter_extract_non_json content_preview=%s content_length=%s model=%s",
+                            content[:200],
+                            len(content),
+                            model,
+                        )
+                    return parsed, cost
         except Exception as exc:
-            logger.warning("openrouter_extract_failed", error=str(exc))
+            logger.warning("openrouter_extract_failed error=%s", str(exc))
             return None, 0.0
 
     async def _refine_knowledge(
@@ -391,14 +453,21 @@ class KnowledgeExtractor:
                 try:
                     from bot.plugins.ai_pilot.embeddings import EmbeddingService
 
-                    svc = EmbeddingService()
+                    emb_model = self._cfg("ai_embedding_model", "text-embedding-3-small")
+                    emb_api_key = self._cfg("ai_embedding_api_key")
+                    emb_base_url = self._cfg("ai_embedding_base_url")
+                    svc = EmbeddingService(
+                        api_key=emb_api_key or None,
+                        model=emb_model,
+                        base_url=emb_base_url or None,
+                    )
                     vec = await svc.embed(text)
                     entry.embedding = vec
                 except Exception as exc:
                     logger.warning(
-                        "knowledge_embed_failed",
-                        entry_id=entry.id,
-                        error=str(exc),
+                        "knowledge_embed_failed entry_id=%s error=%s",
+                        entry.id,
+                        str(exc),
                     )
 
             if fresh_entries:

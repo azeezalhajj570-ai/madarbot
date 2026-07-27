@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 
 from openai import AsyncOpenAI
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
 from bot.db.models.scraper import GroupKnowledge
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_DIMENSIONS = 512
@@ -17,14 +17,27 @@ BACKFILL_BATCH_SIZE = 20
 
 
 class EmbeddingService:
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         settings = get_settings()
         self._api_key = api_key or settings.openai_api_key
-        self._client = AsyncOpenAI(api_key=self._api_key)
+        self._model = model or EMBEDDING_MODEL
+        # Support OpenRouter or any OpenAI-compatible embeddings endpoint.
+        self._base_url = base_url
+        if not self._api_key:
+            raise RuntimeError("No embedding API key configured")
+        client_kwargs: dict[str, str] = {"api_key": self._api_key}
+        if self._base_url:
+            client_kwargs["base_url"] = self._base_url.rstrip("/")
+        self._client = AsyncOpenAI(**client_kwargs)
 
     async def embed(self, text: str) -> list[float]:
         resp = await self._client.embeddings.create(
-            model=EMBEDDING_MODEL,
+            model=self._model,
             input=text,
             dimensions=EMBEDDING_DIMENSIONS,
         )
@@ -32,7 +45,7 @@ class EmbeddingService:
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         resp = await self._client.embeddings.create(
-            model=EMBEDDING_MODEL,
+            model=self._model,
             input=texts,
             dimensions=EMBEDDING_DIMENSIONS,
         )
