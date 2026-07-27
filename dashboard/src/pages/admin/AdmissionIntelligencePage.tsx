@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react'
-import { Search, TrendingUp, MessageSquare, GitCompare, Loader2, BookOpen } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, TrendingUp, MessageSquare, GitCompare, Loader2, GraduationCap } from 'lucide-react'
 
-import { fetchAdmissionSearch, fetchCutoffTrend, fetchStudentConcerns, fetchCompareUniversities } from '../../lib/api'
+import { fetchScrapedGroups, fetchAdmissionSearch, fetchCutoffTrend, fetchStudentConcerns, fetchCompareUniversities, type ScrapedGroupSummary } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
@@ -10,16 +11,22 @@ import { Button, Card, Input, Select } from '../../components/ui/primitives'
 type Tab = 'search' | 'cutoff' | 'concerns' | 'compare'
 
 const TABS: { key: Tab; labelKey: string; icon: typeof Search }[] = [
+  { key: 'concerns', labelKey: 'admission.concerns', icon: MessageSquare },
   { key: 'search', labelKey: 'admission.search', icon: Search },
   { key: 'cutoff', labelKey: 'admission.cutoff', icon: TrendingUp },
-  { key: 'concerns', labelKey: 'admission.concerns', icon: MessageSquare },
   { key: 'compare', labelKey: 'admission.compare', icon: GitCompare },
 ]
 
 export default function AdminAdmissionIntelligencePage() {
   const { t } = useI18n()
   const user = getStoredUser()
-  const [tab, setTab] = useState<Tab>('search')
+  const [tab, setTab] = useState<Tab>('concerns')
+
+  const { data: groups, isLoading: groupsLoading } = useQuery({
+    queryKey: ['scraped-groups'],
+    queryFn: fetchScrapedGroups,
+    enabled: user?.role === 'admin' || user?.role === 'owner',
+  })
 
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
@@ -30,7 +37,7 @@ export default function AdminAdmissionIntelligencePage() {
   }
 
   return (
-    <PageShell titleKey="page.admin.admission" descriptionKey="page.admin.admission.desc" loading={false}>
+    <PageShell titleKey="page.admin.admission" descriptionKey="page.admin.admission.desc" loading={groupsLoading}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
         {TABS.map(({ key, labelKey, icon: Icon }) => (
           <Button key={key} variant={tab === key ? 'primary' : 'ghost'} onClick={() => setTab(key)}>
@@ -38,49 +45,84 @@ export default function AdminAdmissionIntelligencePage() {
           </Button>
         ))}
       </div>
-      {tab === 'search' && <SearchPanel />}
-      {tab === 'cutoff' && <CutoffPanel />}
-      {tab === 'concerns' && <ConcernsPanel />}
-      {tab === 'compare' && <ComparePanel />}
+      {tab === 'search' && <SearchPanel groups={groups || []} />}
+      {tab === 'cutoff' && <CutoffPanel groups={groups || []} />}
+      {tab === 'concerns' && <ConcernsPanel groups={groups || []} />}
+      {tab === 'compare' && <ComparePanel groups={groups || []} />}
     </PageShell>
   )
 }
 
-function SearchPanel() {
+function GroupSelector({ groups, value, onChange }: { groups: ScrapedGroupSummary[]; value: string; onChange: (v: string) => void }) {
+  const { t } = useI18n()
+  const admissionGroups = groups.filter(g =>
+    g.title?.includes('قبول') || g.title?.includes('admission') || g.title?.includes('جامعة')
+  )
+  const sorted = admissionGroups.length > 0
+    ? admissionGroups.sort((a, b) => (b.member_count || 0) - (a.member_count || 0))
+    : groups.sort((a, b) => (b.member_count || 0) - (a.member_count || 0))
+
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        padding: '8px 12px',
+        borderRadius: 8,
+        border: '1px solid var(--ui-border, #d0d0d0)',
+        background: 'var(--ui-surface, #fff)',
+        fontSize: 14,
+        width: '100%',
+        color: 'var(--ui-text, #000)',
+      }}
+    >
+      <option value="">{t('admission.selectGroup')}</option>
+      {sorted.slice(0, 50).map(g => (
+        <option key={g.tg_group_id} value={g.tg_group_id}>
+          {g.title} ({g.member_count?.toLocaleString() || '?'} members)
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [university, setUniversity] = useState('')
   const [major, setMajor] = useState('')
-  const [tgGroupId, setTgGroupId] = useState('')
+  const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSearch = useCallback(async () => {
-    if (!query.trim() || !tgGroupId.trim()) return
+    if (!query.trim() || !groupId.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchAdmissionSearch(query.trim(), parseInt(tgGroupId), university.trim() || undefined, major.trim() || undefined)
+      const data = await fetchAdmissionSearch(query.trim(), parseInt(groupId), university.trim() || undefined, major.trim() || undefined)
       setResult(data)
     } catch (err: any) {
       setError(err?.message || 'Search failed')
     } finally {
       setLoading(false)
     }
-  }, [query, university, major, tgGroupId])
+  }, [query, university, major, groupId])
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <GroupSelector groups={groups} value={groupId} onChange={setGroupId} />
           <Input placeholder={t('admission.queryPlaceholder')} value={query} onChange={e => setQuery(e.target.value)} />
-          <Input placeholder={t('admission.university')} value={university} onChange={e => setUniversity(e.target.value)} />
-          <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
-          <Input placeholder={t('admission.groupId')} value={tgGroupId} onChange={e => setTgGroupId(e.target.value)} />
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+            <Input placeholder={t('admission.university')} value={university} onChange={e => setUniversity(e.target.value)} />
+            <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
+          </div>
         </div>
         <div style={{ marginTop: 12 }}>
-          <Button onClick={handleSearch} disabled={loading || !query.trim() || !tgGroupId.trim()}>
+          <Button onClick={handleSearch} disabled={loading || !query.trim() || !groupId.trim()}>
             {loading ? <Loader2 size={14} className="spin" /> : <Search size={14} />}
             {loading ? t('loading') : t('admission.searchBtn')}
           </Button>
@@ -90,7 +132,7 @@ function SearchPanel() {
       {result && (
         <Card>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{t('admission.result')}</div>
-          <p style={{ lineHeight: 1.6, marginBottom: 12 }}>{result.answer_context}</p>
+          <p style={{ lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{result.answer_context}</p>
           <div style={{ fontSize: 13, color: 'var(--color-muted, #888)' }}>
             {result.total_matches} {t('admission.matches')} · {result.sources?.length || 0} {t('admission.sources')}
           </div>
@@ -100,28 +142,28 @@ function SearchPanel() {
   )
 }
 
-function CutoffPanel() {
+function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
   const [university, setUniversity] = useState('')
   const [major, setMajor] = useState('')
-  const [tgGroupId, setTgGroupId] = useState('')
+  const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = useCallback(async () => {
-    if (!university.trim() || !major.trim() || !tgGroupId.trim()) return
+    if (!university.trim() || !major.trim() || !groupId.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchCutoffTrend(university.trim(), major.trim(), parseInt(tgGroupId))
+      const data = await fetchCutoffTrend(university.trim(), major.trim(), parseInt(groupId))
       setResult(data)
     } catch (err: any) {
       setError(err?.message || 'Analysis failed')
     } finally {
       setLoading(false)
     }
-  }, [university, major, tgGroupId])
+  }, [university, major, groupId])
 
   const trendColor = (trend: string) => {
     if (trend === 'rising') return '#ef4444'
@@ -133,13 +175,15 @@ function CutoffPanel() {
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          <Input placeholder={t('admission.university')} value={university} onChange={e => setUniversity(e.target.value)} />
-          <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
-          <Input placeholder={t('admission.groupId')} value={tgGroupId} onChange={e => setTgGroupId(e.target.value)} />
+        <div style={{ display: 'grid', gap: 12 }}>
+          <GroupSelector groups={groups} value={groupId} onChange={setGroupId} />
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+            <Input placeholder={t('admission.university')} value={university} onChange={e => setUniversity(e.target.value)} />
+            <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
+          </div>
         </div>
         <div style={{ marginTop: 12 }}>
-          <Button onClick={handleAnalyze} disabled={loading || !university.trim() || !major.trim() || !tgGroupId.trim()}>
+          <Button onClick={handleAnalyze} disabled={loading || !university.trim() || !major.trim() || !groupId.trim()}>
             {loading ? <Loader2 size={14} className="spin" /> : <TrendingUp size={14} />}
             {loading ? t('loading') : t('admission.analyzeBtn')}
           </Button>
@@ -155,10 +199,10 @@ function CutoffPanel() {
           {result.cutoff_history?.length > 0 && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('admission.history')}</div>
-              <div style={{ display: 'grid', gap: 4 }}>
-                {result.cutoff_history.slice(-20).map((h: any, i: number) => (
+              <div style={{ display: 'grid', gap: 4, maxHeight: 300, overflowY: 'auto' }}>
+                {result.cutoff_history.slice(-30).map((h: any, i: number) => (
                   <div key={i} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
-                    <span style={{ color: 'var(--color-muted, #888)' }}>{h.date?.slice(0, 10)}</span>
+                    <span style={{ color: 'var(--color-muted, #888)', minWidth: 90 }}>{h.date?.slice(0, 10)}</span>
                     <span style={{ fontWeight: 700 }}>{h.value}%</span>
                   </div>
                 ))}
@@ -171,35 +215,42 @@ function CutoffPanel() {
   )
 }
 
-function ConcernsPanel() {
+function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
-  const [tgGroupId, setTgGroupId] = useState('')
+  const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = useCallback(async () => {
-    if (!tgGroupId.trim()) return
+    if (!groupId.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchStudentConcerns(parseInt(tgGroupId))
+      const data = await fetchStudentConcerns(parseInt(groupId))
       setResult(data)
     } catch (err: any) {
       setError(err?.message || 'Analysis failed')
     } finally {
       setLoading(false)
     }
-  }, [tgGroupId])
+  }, [groupId])
+
+  useEffect(() => {
+    if (!groupId && groups.length > 0) {
+      const admission = groups.find(g => g.tg_group_id === -1001499967735)
+      setGroupId(String(admission?.tg_group_id || groups[0].tg_group_id))
+    }
+  }, [groups, groupId])
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          <Input placeholder={t('admission.groupId')} value={tgGroupId} onChange={e => setTgGroupId(e.target.value)} />
+        <div style={{ display: 'grid', gap: 12 }}>
+          <GroupSelector groups={groups} value={groupId} onChange={setGroupId} />
         </div>
         <div style={{ marginTop: 12 }}>
-          <Button onClick={handleAnalyze} disabled={loading || !tgGroupId.trim()}>
+          <Button onClick={handleAnalyze} disabled={loading || !groupId.trim()}>
             {loading ? <Loader2 size={14} className="spin" /> : <MessageSquare size={14} />}
             {loading ? t('loading') : t('admission.analyzeConcernsBtn')}
           </Button>
@@ -217,7 +268,7 @@ function ConcernsPanel() {
                 </div>
               </div>
               {topic.examples?.map((ex: string, j: number) => (
-                <p key={j} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary, #555)' }}>{ex}</p>
+                <p key={j} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary, #555)', marginBottom: 4 }}>{ex}</p>
               ))}
             </Card>
           ))}
@@ -230,41 +281,43 @@ function ConcernsPanel() {
   )
 }
 
-function ComparePanel() {
+function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
   const [universityA, setUniversityA] = useState('')
   const [universityB, setUniversityB] = useState('')
   const [major, setMajor] = useState('')
-  const [tgGroupId, setTgGroupId] = useState('')
+  const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleCompare = useCallback(async () => {
-    if (!universityA.trim() || !universityB.trim() || !major.trim() || !tgGroupId.trim()) return
+    if (!universityA.trim() || !universityB.trim() || !major.trim() || !groupId.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchCompareUniversities(universityA.trim(), universityB.trim(), major.trim(), parseInt(tgGroupId))
+      const data = await fetchCompareUniversities(universityA.trim(), universityB.trim(), major.trim(), parseInt(groupId))
       setResult(data)
     } catch (err: any) {
       setError(err?.message || 'Comparison failed')
     } finally {
       setLoading(false)
     }
-  }, [universityA, universityB, major, tgGroupId])
+  }, [universityA, universityB, major, groupId])
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>
-        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-          <Input placeholder={t('admission.universityA')} value={universityA} onChange={e => setUniversityA(e.target.value)} />
-          <Input placeholder={t('admission.universityB')} value={universityB} onChange={e => setUniversityB(e.target.value)} />
+        <div style={{ display: 'grid', gap: 12 }}>
+          <GroupSelector groups={groups} value={groupId} onChange={setGroupId} />
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
+            <Input placeholder={t('admission.universityA')} value={universityA} onChange={e => setUniversityA(e.target.value)} />
+            <Input placeholder={t('admission.universityB')} value={universityB} onChange={e => setUniversityB(e.target.value)} />
+          </div>
           <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
-          <Input placeholder={t('admission.groupId')} value={tgGroupId} onChange={e => setTgGroupId(e.target.value)} />
         </div>
         <div style={{ marginTop: 12 }}>
-          <Button onClick={handleCompare} disabled={loading || !universityA.trim() || !universityB.trim() || !major.trim() || !tgGroupId.trim()}>
+          <Button onClick={handleCompare} disabled={loading || !universityA.trim() || !universityB.trim() || !major.trim() || !groupId.trim()}>
             {loading ? <Loader2 size={14} className="spin" /> : <GitCompare size={14} />}
             {loading ? t('loading') : t('admission.compareBtn')}
           </Button>
