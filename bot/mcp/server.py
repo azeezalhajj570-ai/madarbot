@@ -10,6 +10,7 @@ from bot.mcp.tools.groups import register_group_tools
 from bot.mcp.tools.health import register_health_tools
 from bot.mcp.tools.leads import register_lead_tools
 from bot.mcp.tools.notifications import register_notification_tools
+from bot.mcp.tools.admissions import register_admission_tools
 from bot.mcp.tools.subscriptions import register_subscription_tools
 from bot.mcp.tools.tasks import register_task_tools
 
@@ -25,6 +26,7 @@ def create_mcp_server() -> FastMCP:
     register_notification_tools(server)
     register_lead_tools(server)
     register_analytics_tools(server)
+    register_admission_tools(server)
     register_subscription_tools(server)
     return server
 

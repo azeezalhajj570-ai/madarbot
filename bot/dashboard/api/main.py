@@ -30,6 +30,7 @@ from bot.dashboard.api.routers.auth_boundary import router as auth_boundary_rout
 from bot.dashboard.api.routers.internal import router as internal_router
 from bot.dashboard.api.routers.mcp_tokens import router as mcp_tokens_router
 from bot.dashboard.api.routers.legal import router as legal_router
+from bot.dashboard.api.routers.admissions import router as admissions_router
 from bot.dashboard.api.routers.docs import router as docs_router
 from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
@@ -306,6 +307,7 @@ app.include_router(internal_router, prefix="/api/internal")
 app.include_router(mcp_tokens_router)
 app.include_router(legal_router)
 app.include_router(docs_router)
+app.include_router(admissions_router)
 
 if settings.mcp_enabled:
     from bot.dashboard.api.mcp_router import router as mcp_router
