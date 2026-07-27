@@ -28,10 +28,12 @@ async def execute_moderation_action(
     if settings.dry_run:
         logger.info(
             "moderation_dry_run",
-            group_id=group_id,
-            chat_id=chat_id,
-            message_id=message_id,
-            intended_action=action,
+            extra={
+                "group_id": group_id,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "intended_action": action,
+            },
         )
         return "dry_run"
 

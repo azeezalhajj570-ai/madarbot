@@ -251,9 +251,10 @@ def build_pilot_provider(
     api_key: str | None = None,
     model: str | None = None,
     base_url: str | None = None,
+    provider_override: str | None = None,
 ) -> BasePilotProvider:
     settings = get_settings()
-    provider_name = settings.ai_provider.strip().lower()
+    provider_name = (provider_override or settings.ai_provider).strip().lower()
 
     if provider_name == "openai":
         resolved_key = api_key or settings.openai_api_key

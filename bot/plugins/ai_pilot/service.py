@@ -73,7 +73,9 @@ class AIPilotService:
             history = history[-max_items:]
         await self._redis.set(key, json.dumps(history, ensure_ascii=False), ex=HISTORY_TTL)
 
-    async def generate_reply(self, user_id: int, text: str) -> str | None:
+    async def generate_reply(
+        self, user_id: int, text: str, *, context_block: str = ""
+    ) -> str | None:
         start = time.monotonic()
 
         if not await self._rate_limiter.is_allowed(
@@ -88,10 +90,14 @@ class AIPilotService:
         messages: list[dict[str, str]] = list(history)
         messages.append({"role": "user", "content": text})
 
+        system_prompt = self._system_prompt
+        if context_block:
+            system_prompt = f"{system_prompt}\n\n{context_block}"
+
         try:
             reply = await self._provider.chat(
                 messages=messages,
-                system_prompt=self._system_prompt,
+                system_prompt=system_prompt,
                 model=self._model,
             )
         except Exception as exc:

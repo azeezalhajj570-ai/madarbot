@@ -79,9 +79,9 @@ class GroupSubscriptionService:
                     metadata={"group_id": str(group_id), "plan_name": name},
                 )
                 plan.stripe_price_id = price.id
-                logger.info("stripe_price_created", plan_id=plan.id, price_id=price.id)
+                logger.info("stripe_price_created", extra={"plan_id": plan.id, "price_id": price.id})
             except Exception as exc:
-                logger.warning("stripe_price_creation_failed", plan=name, error=str(exc))
+                logger.warning("stripe_price_creation_failed", extra={"plan": name, "error": str(exc)})
 
         await self.session.flush()
         await self.log_event(group_id, None, "plan_created", {"plan_id": plan.id, "name": name})
