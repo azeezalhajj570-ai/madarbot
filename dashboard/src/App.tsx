@@ -11,6 +11,7 @@ import AdminPromoCodesPage from './pages/admin/PromoCodesPage'
 import AdminAuditPage from './pages/admin/AuditPage'
 import AdminBulkAddPage from './pages/admin/BulkAddPage'
 import AdminAISettingsPage from './pages/admin/AISettingsPage'
+import AdminAdmissionIntelligencePage from './pages/admin/AdmissionIntelligencePage'
 import AdminKnowledgePage from './pages/admin/KnowledgePage'
 
 const queryClient = new QueryClient()
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/admin/audit" element={<AdminAuditPage />} />
             <Route path="/admin/ai-settings" element={<AdminAISettingsPage />} />
             <Route path="/admin/knowledge" element={<AdminKnowledgePage />} />
+            <Route path="/admin/admissions" element={<AdminAdmissionIntelligencePage />} />
             <Route path="*" element={<Navigate to="/admin/health" replace />} />
           </Route>
         </Routes>

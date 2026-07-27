@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
 
 import { radius, spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
   { to: '/admin/ai-settings', label: 'nav.admin.ai', icon: Brain },
   { to: '/admin/knowledge', label: 'nav.admin.knowledge', icon: BookOpen },
+  { to: '/admin/admissions', label: 'nav.admin.admission', icon: GraduationCap },
 ]
 
 export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {

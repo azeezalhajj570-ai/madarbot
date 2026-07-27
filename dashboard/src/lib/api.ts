@@ -895,6 +895,53 @@ export async function updateLead(groupId: number, leadId: number, status: string
   return data
 }
 
+// ─── Admission Intelligence ──────────────────────────────────────────────
+
+export async function fetchAdmissionSearch(
+  q: string,
+  tgGroupId: number,
+  university?: string,
+  major?: string,
+): Promise<{ answer_context: string; sources: { message: string; date: string; confidence: string }[]; total_matches: number }> {
+  const params: Record<string, any> = { q, tg_group_id: tgGroupId }
+  if (university) params.university = university
+  if (major) params.major = major
+  const { data } = await api.get('/api/admissions/search', { params })
+  return data
+}
+
+export async function fetchCutoffTrend(
+  university: string,
+  major: string,
+  tgGroupId: number,
+): Promise<{ trend: string; summary: string; cutoff_history: { date: string; value: number; source: string }[] }> {
+  const { data } = await api.get('/api/admissions/cutoff-trend', {
+    params: { university, major, tg_group_id: tgGroupId },
+  })
+  return data
+}
+
+export async function fetchStudentConcerns(
+  tgGroupId: number,
+): Promise<{ topics: { name: string; mentions: number; examples: string[] }[]; method: string }> {
+  const { data } = await api.get('/api/admissions/student-concerns', {
+    params: { tg_group_id: tgGroupId },
+  })
+  return data
+}
+
+export async function fetchCompareUniversities(
+  universityA: string,
+  universityB: string,
+  major: string,
+  tgGroupId: number,
+): Promise<{ universities: { name: string; major: string; cutoff: any }[]; notes: string }> {
+  const { data } = await api.get('/api/admissions/compare-universities', {
+    params: { university_a: universityA, university_b: universityB, major, tg_group_id: tgGroupId },
+  })
+  return data
+}
+
 // ─── Engagement Nudges ──────────────────────────────────────────────────
 
 export interface NudgeSuggestion {
