@@ -338,18 +338,17 @@ async def webapp_sync_ai_provider_models(
     updated: dict[str, list[str]] = {}
 
     gemini_key = settings.gemini_api_key or db_config.get("gemini_api_key") or db_config.get("ai_provider_api_key")
+    gemini_url = db_config.get("ai_provider_base_url") or "https://generativelanguage.googleapis.com/v1beta/models"
     if gemini_key:
         try:
             async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(
-                    "https://generativelanguage.googleapis.com/v1beta/models",
-                    params={"key": gemini_key},
-                )
+                resp = await client.get(gemini_url, params={"key": gemini_key})
                 if resp.status_code == 200:
                     models = [
                         m["name"].replace("models/", "")
                         for m in resp.json().get("models", [])
-                        if "generateContent" in m.get("supportedGenerationMethods", [])
+                        if any(method in m.get("supportedGenerationMethods", [])
+                               for method in ("generateContent", "embedContent"))
                     ]
                     if models:
                         updated["gemini"] = sorted(models)
@@ -357,11 +356,12 @@ async def webapp_sync_ai_provider_models(
             pass
 
     openrouter_key = settings.openrouter_api_key or db_config.get("openrouter_api_key") or db_config.get("ai_provider_api_key")
+    openrouter_url = db_config.get("ai_provider_base_url") or "https://openrouter.ai/api/v1/models"
     if openrouter_key:
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
-                    "https://openrouter.ai/api/v1/models",
+                    openrouter_url,
                     headers={"Authorization": f"Bearer {openrouter_key}"},
                 )
                 if resp.status_code == 200:

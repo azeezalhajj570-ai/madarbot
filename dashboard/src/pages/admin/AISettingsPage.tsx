@@ -43,7 +43,11 @@ export default function AdminAISettingsPage() {
       setProvider(config.provider || 'openrouter')
       setApiKey(config.api_key || '')
       setGenModel(config.model || '')
-      setBaseUrl(config.base_url || (config.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : ''))
+      setBaseUrl(config.base_url || (
+        config.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' :
+        config.provider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta/models' :
+        ''
+      ))
       setEmbedModel(config.embedding_model || 'text-embedding-3-small')
       setEnabled(config.enabled === true || config.enabled === 'true')
     }
@@ -118,6 +122,8 @@ export default function AdminAISettingsPage() {
     setEmbedModel('')
     if (value === 'openrouter') {
       setBaseUrl('https://openrouter.ai/api/v1')
+    } else if (value === 'gemini') {
+      setBaseUrl('https://generativelanguage.googleapis.com/v1beta/models')
     }
   }
 
@@ -176,15 +182,13 @@ export default function AdminAISettingsPage() {
                 </div>
               </Field>
 
-              {provider === 'openrouter' && (
-                <Field label="Base URL" hint="OpenAI-compatible API endpoint.">
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://openrouter.ai/api/v1"
-                  />
-                </Field>
-              )}
+              <Field label="API URL" hint="API endpoint for this provider.">
+                <Input
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder={provider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta/models' : 'https://openrouter.ai/api/v1'}
+                />
+              </Field>
 
               <div>
                 <Button
