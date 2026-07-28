@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 
 import { fetchAIConfig, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, Field, FieldRow, InlineMessage, Input, Select } from '../../components/ui/primitives'
+import { Button, Card, Field, FieldRow, InlineMessage, Input, Select, EmptyState } from '../../components/ui/primitives'
 
 const OPENAI_MODELS = [
   'gpt-4.1-mini',
@@ -39,6 +39,23 @@ const OPENROUTER_MODELS = [
   'deepseek/deepseek-chat',
   'qwen/qwen-2.5-72b',
 ]
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <div style={{
+      fontSize: 11,
+      fontWeight: 700,
+      color: 'var(--ui-text-muted)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.06em',
+      paddingTop: 8,
+      borderTop: '1px solid var(--ui-border)',
+      marginBottom: 12,
+    }}>
+      {label}
+    </div>
+  )
+}
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
@@ -116,16 +133,8 @@ export default function AdminAISettingsPage() {
 
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell title="AI Settings" description="Admin access required.">
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
-      </PageShell>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <PageShell title="AI Settings" description="Loading...">
-        <div style={{ padding: 24, textAlign: 'center' }}>{t('loading')}</div>
+      <PageShell title="AI Settings" description="Admin access required." loading={false}>
+        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
       </PageShell>
     )
   }
@@ -143,103 +152,155 @@ export default function AdminAISettingsPage() {
       description="Configure the AI provider for RAG, knowledge extraction, and AI pilot replies."
     >
       <Card style={{ maxWidth: 600 }}>
-        <FieldRow>
-          <Field label="Provider" hint="Select the AI provider to use">
-            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              {providers.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Model" hint="Select the model to use">
-            {modelOptions.length > 0 ? (
-              <Select value={model} onChange={(e) => setModel(e.target.value)}>
-                {modelOptions.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </Select>
-            ) : (
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="gpt-4.1-mini"
-              />
-            )}
-          </Field>
-        </FieldRow>
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>{t('loading')}</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 20 }}>
+            {/* Provider */}
+            <div>
+              <SectionLabel label="Provider" />
+              <FieldRow>
+                <Field label="Provider" hint="Select the AI provider to use">
+                  <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                    {providers.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Model" hint="Select the model to use">
+                  {modelOptions.length > 0 ? (
+                    <Select value={model} onChange={(e) => setModel(e.target.value)}>
+                      {modelOptions.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="gpt-4.1-mini"
+                    />
+                  )}
+                </Field>
+              </FieldRow>
+            </div>
 
-        <FieldRow>
-          <Field label="API Key" hint="Provider API key">
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
-            />
-          </Field>
-        </FieldRow>
+            {/* Credentials */}
+            <div>
+              <SectionLabel label="Credentials" />
+              <Field label="API Key" hint="Provider API key">
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
+                />
+              </Field>
+            </div>
 
-        <FieldRow>
-          <Field label="Base URL" hint="Custom API endpoint (optional)">
-            <Input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-            />
-          </Field>
-        </FieldRow>
+            {/* Advanced */}
+            <div>
+              <SectionLabel label="Advanced" />
+              <FieldRow>
+                <Field label="Base URL" hint="Custom API endpoint (optional)">
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                </Field>
+                <Field label="Embedding Model" hint="e.g. text-embedding-3-small">
+                  <Input
+                    value={embedModel}
+                    onChange={(e) => setEmbedModel(e.target.value)}
+                    placeholder="text-embedding-3-small"
+                  />
+                </Field>
+              </FieldRow>
+            </div>
 
-        <FieldRow>
-          <Field label="Embedding Model" hint="e.g. text-embedding-3-small">
-            <Input
-              value={embedModel}
-              onChange={(e) => setEmbedModel(e.target.value)}
-              placeholder="text-embedding-3-small"
-            />
-          </Field>
-          <Field label="Enable AI Replies" hint="Allow AI to auto-reply when @mentioned in groups">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44 }}>
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--ui-primary)' }}
-              />
-              <span>{enabled ? 'Enabled' : 'Disabled'}</span>
-            </label>
-          </Field>
-        </FieldRow>
+            {/* Auto-reply toggle */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid var(--ui-border)',
+                background: 'var(--ui-surface-alt)',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, lineHeight: '20px' }}>Enable AI Replies</div>
+                <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', marginTop: 2, lineHeight: '18px' }}>
+                  Allow AI to auto-reply when @mentioned in groups
+                </div>
+              </div>
+              <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 26, cursor: 'pointer', flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                  style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }}
+                />
+                <span style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: 13,
+                  background: enabled ? 'var(--ui-primary)' : 'var(--ui-border-strong)',
+                  transition: 'background 0.2s',
+                  cursor: 'pointer',
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    top: 3,
+                    left: enabled ? 22 : 3,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    background: '#fff',
+                    transition: 'left 0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  }} />
+                </span>
+              </label>
+            </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <Button onClick={handleSave} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? 'Saving...' : 'Save Config'}
-          </Button>
-          <Button variant="outline" onClick={handleTest} disabled={testStatus === 'testing'}>
-            {testStatus === 'testing' ? (
-              <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Testing...</>
-            ) : 'Test Connection'}
-          </Button>
-        </div>
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? 'Saving...' : 'Save Config'}
+              </Button>
+              <Button variant="outline" onClick={handleTest} disabled={testStatus === 'testing'}>
+                {testStatus === 'testing' ? (
+                  <><Loader2 size={14} className="spin" /> Testing...</>
+                ) : 'Test Connection'}
+              </Button>
 
-        {saveMutation.isSuccess && (
-          <div style={{ marginTop: 12 }}>
-            <InlineMessage tone="success">Saved successfully.</InlineMessage>
-          </div>
-        )}
-        {saveMutation.isError && (
-          <div style={{ marginTop: 12 }}>
-            <InlineMessage tone="destructive">Save failed.</InlineMessage>
-          </div>
-        )}
-
-        {testStatus === 'ok' && (
-          <div style={{ marginTop: 12 }}>
-            <InlineMessage tone="success">{testMsg}</InlineMessage>
-          </div>
-        )}
-        {testStatus === 'error' && (
-          <div style={{ marginTop: 12 }}>
-            <InlineMessage tone="destructive">{testMsg}</InlineMessage>
+              {/* Inline results */}
+              {saveMutation.isSuccess && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--ui-success)' }}>
+                  <CheckCircle2 size={14} /> Saved
+                </span>
+              )}
+              {saveMutation.isError && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--ui-danger)' }}>
+                  <XCircle size={14} /> Save failed
+                </span>
+              )}
+              {testStatus === 'ok' && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--ui-success)' }}>
+                  <CheckCircle2 size={14} /> {testMsg}
+                </span>
+              )}
+              {testStatus === 'error' && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--ui-danger)' }}>
+                  <XCircle size={14} /> {testMsg}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </Card>
