@@ -215,6 +215,29 @@ async def scrape_members(
     )
 
 
+@router.get("/jobs/{job_id}/status")
+async def scrape_job_status(
+    job_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    job = await session.get(AgentJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    progress = None
+    if job.job_payload:
+        progress = job.job_payload.get("progress")
+    return {
+        "job_id": job.id,
+        "agent_id": job.agent_id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "progress": progress,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
+
+
 @router.post("/scrape/messages", response_model=ScrapeJobResponse)
 async def scrape_messages(
     request: ScrapeMessagesRequest,

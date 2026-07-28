@@ -978,6 +978,7 @@ class ScraperRuntime:
             service = ScraperService(session)
             active_job_type = job_type or payload.get("job_type") or payload.get("type")
             tg_group_id = payload.get("tg_group_id")
+            job_id = payload.get("job_id")
             if not tg_group_id:
                 raise ValueError("tg_group_id is required for scraper jobs")
 
@@ -1020,6 +1021,7 @@ class ScraperRuntime:
                         max_age_days=max_age_days,
                         checkpoint_batch_size=int(payload.get("checkpoint_batch_size", 500)),
                         client=client,
+                        job_id=job_id,
                     )
                     conv_jobs = result.pop("conversation_jobs", [])
                     await self._enqueue_conversation_jobs(conv_jobs)
@@ -1040,6 +1042,7 @@ class ScraperRuntime:
                         limit=message_limit,
                         max_age_days=max_age_days,
                         client=client,
+                        job_id=job_id,
                     )
                 return {
                     "job_type": active_job_type,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
-import { Heart, Bot, ClipboardList, Tag, Menu, X } from 'lucide-react'
+import { Heart, Bot, Search, ClipboardList, Tag, Menu, X } from 'lucide-react'
 
 import { spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { isAuthenticated } from '../lib/auth'
@@ -10,6 +10,7 @@ import Sidebar from './Sidebar'
 const NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
+  { to: '/admin/scraper', label: 'nav.scraper', icon: Search },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
   { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
 ]

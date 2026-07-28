@@ -682,10 +682,12 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     SCRAPER_MESSAGES_JOB_TYPE,
                     SCRAPER_FULL_GROUP_JOB_TYPE,
                 }:
+                    scrape_payload = dict(job.job_payload or {})
+                    scrape_payload["job_id"] = job.id
                     result = await scraper_runtime.execute(
                         client=None,
                         agent=agent,
-                        payload=dict(job.job_payload or {}),
+                        payload=scrape_payload,
                         job_type=job.job_type,
                     )
                     await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
