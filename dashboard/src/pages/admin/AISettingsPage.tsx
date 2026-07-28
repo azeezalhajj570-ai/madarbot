@@ -1,44 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 
-import { fetchAIConfig, updateAIConfig, testAIConfig } from '../../lib/api'
+import { fetchAIConfig, fetchAIModels, syncAIModels, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Button, Card, Field, FieldRow, InlineMessage, Input, Select } from '../../components/ui/primitives'
-
-const OPENAI_MODELS = [
-  'gpt-4.1-mini',
-  'gpt-4.1',
-  'gpt-4o-mini',
-  'gpt-4o',
-  'gpt-4-turbo',
-]
-
-const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-]
-
-const OPENROUTER_MODELS = [
-  'google/gemini-2.0-flash-001',
-  'google/gemini-2.5-flash-001',
-  'google/gemini-2.5-pro-001',
-  'openai/gpt-4.1-mini',
-  'openai/gpt-4.1',
-  'openai/gpt-4o-mini',
-  'openai/gpt-4o',
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-haiku-4',
-  'meta-llama/llama-4-maverick',
-  'deepseek/deepseek-chat',
-  'qwen/qwen-2.5-72b',
-]
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
@@ -59,6 +27,9 @@ export default function AdminAISettingsPage() {
   const [enabled, setEnabled] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [testMsg, setTestMsg] = useState('')
+  const [aiModels, setAIModels] = useState<Record<string, string[]>>({})
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
 
   useEffect(() => {
     if (data) {
@@ -71,6 +42,10 @@ export default function AdminAISettingsPage() {
     }
   }, [data])
 
+  useEffect(() => {
+    fetchAIModels().then(setAIModels).catch(() => {})
+  }, [])
+
   const saveMutation = useMutation({
     mutationFn: updateAIConfig,
     onSuccess: () => {
@@ -78,10 +53,7 @@ export default function AdminAISettingsPage() {
     },
   })
 
-  const modelOptions = provider === 'openai' ? OPENAI_MODELS
-    : provider === 'gemini' ? GEMINI_MODELS
-    : provider === 'openrouter' ? OPENROUTER_MODELS
-    : []
+  const modelOptions = aiModels[provider] ?? []
 
   async function handleSave() {
     setTestStatus('idle')
@@ -111,6 +83,20 @@ export default function AdminAISettingsPage() {
     } catch (err: any) {
       setTestStatus('error')
       setTestMsg(err?.message || 'Connection failed')
+    }
+  }
+
+  async function handleSyncModels() {
+    setSyncing(true)
+    setSyncMsg('')
+    try {
+      const result = await syncAIModels()
+      setAIModels(result.models)
+      setSyncMsg('Models synced from providers.')
+    } catch {
+      setSyncMsg('Failed to sync models.')
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -151,7 +137,7 @@ export default function AdminAISettingsPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Model" hint="Select the model to use">
+          <Field label="Model" hint="">
             {modelOptions.length > 0 ? (
               <Select value={model} onChange={(e) => setModel(e.target.value)}>
                 {modelOptions.map((m) => (
@@ -210,7 +196,7 @@ export default function AdminAISettingsPage() {
           </Field>
         </FieldRow>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
           <Button onClick={handleSave} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Saving...' : 'Save Config'}
           </Button>
@@ -219,7 +205,16 @@ export default function AdminAISettingsPage() {
               <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Testing...</>
             ) : 'Test Connection'}
           </Button>
+          <Button variant="outline" onClick={handleSyncModels} disabled={syncing}>
+            {syncing ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Syncing...</> : <><RefreshCw size={14} /> Sync models</>}
+          </Button>
         </div>
+
+        {syncMsg ? (
+          <div style={{ marginTop: 12 }}>
+            <InlineMessage tone={syncMsg.includes('Failed') ? 'destructive' : 'success'}>{syncMsg}</InlineMessage>
+          </div>
+        ) : null}
 
         {saveMutation.isSuccess && (
           <div style={{ marginTop: 12 }}>

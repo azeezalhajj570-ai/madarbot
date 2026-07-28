@@ -7,8 +7,10 @@ import {
   deleteScheduledMessage,
   fetchAccessGate,
   fetchAIProviderDefaults,
+  fetchAIModels,
   fetchGroupSettings,
   fetchScheduledMessages,
+  syncAIModels,
   testAIPilot,
   updateAccessGate,
   updateGroupSettings,
@@ -24,38 +26,6 @@ const PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Google Gemini' },
   { value: 'openrouter', label: 'OpenRouter' },
-]
-
-const OPENAI_MODELS = [
-  'gpt-4.1-mini',
-  'gpt-4.1',
-  'gpt-4o-mini',
-  'gpt-4o',
-  'gpt-4-turbo',
-]
-
-const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-]
-
-const OPENROUTER_MODELS = [
-  'google/gemini-2.0-flash-001',
-  'google/gemini-2.5-flash-001',
-  'google/gemini-2.5-pro-001',
-  'openai/gpt-4.1-mini',
-  'openai/gpt-4.1',
-  'openai/gpt-4o-mini',
-  'openai/gpt-4o',
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-haiku-4',
-  'meta-llama/llama-4-maverick',
-  'deepseek/deepseek-chat',
-  'qwen/qwen-2.5-72b',
 ]
 
 export default function SettingsPage() {
@@ -77,6 +47,7 @@ export default function SettingsPage() {
   const [savingMessage, setSavingMessage] = useState(false)
 
   const [aiDefaults, setAIDefaults] = useState<AIProviderDefaults | null>(null)
+  const [aiModels, setAIModels] = useState<Record<string, string[]>>({})
   const [aiProvider, setAIProvider] = useState('heuristic')
   const [aiModel, setAIModel] = useState('')
   const [openaiApiKey, setOpenaiApiKey] = useState('')
@@ -94,6 +65,7 @@ export default function SettingsPage() {
   const [savingAI, setSavingAI] = useState(false)
   const [testingAI, setTestingAI] = useState(false)
   const [aiTestResult, setAITestResult] = useState<{ status: string; reply?: string; error?: string } | null>(null)
+  const [syncingModels, setSyncingModels] = useState(false)
 
   useEffect(() => {
     if (currentGroupId == null) {
@@ -107,11 +79,12 @@ export default function SettingsPage() {
       setError('')
       setFeedback('')
       try {
-        const [gate, messages, defaults, groupSettings] = await Promise.all([
+        const [gate, messages, defaults, groupSettings, models] = await Promise.all([
           fetchAccessGate(currentGroupId),
           fetchScheduledMessages(currentGroupId),
           fetchAIProviderDefaults(),
           fetchGroupSettings(currentGroupId),
+          fetchAIModels(),
         ])
         if (cancelled) return
 
@@ -119,6 +92,7 @@ export default function SettingsPage() {
         setRequiredGroupCandidates(gate.candidates ?? [])
         setScheduledMessages(messages)
         setAIDefaults(defaults)
+        setAIModels(models)
 
         const overrides = groupSettings.settings
         setAIProvider(String(overrides.ai_provider ?? defaults.ai_provider))
@@ -168,11 +142,8 @@ export default function SettingsPage() {
   }, [requiredGroupCandidates, requiredGroupIds, requiredGroupsQuery])
 
   const modelOptions = useMemo(() => {
-    if (aiProvider === 'openai') return OPENAI_MODELS
-    if (aiProvider === 'gemini') return GEMINI_MODELS
-    if (aiProvider === 'openrouter') return OPENROUTER_MODELS
-    return []
-  }, [aiProvider])
+    return aiModels[aiProvider] ?? []
+  }, [aiProvider, aiModels])
 
   const currentModel = useMemo(() => {
     if (aiProvider === 'openai') return openaiModel
@@ -340,6 +311,21 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSyncModels() {
+    setSyncingModels(true)
+    setError('')
+    setFeedback('')
+    try {
+      const result = await syncAIModels()
+      setAIModels(result.models)
+      setFeedback('Models synced from providers.')
+    } catch {
+      setError('Failed to sync models.')
+    } finally {
+      setSyncingModels(false)
+    }
+  }
+
   return (
     <PageShell
      
@@ -431,7 +417,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)}>
-                {OPENAI_MODELS.map((m) => (
+                {(aiModels.openai ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.openai_model ? ' (default)' : ''}</option>
                 ))}
               </Select>
@@ -446,7 +432,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)}>
-                {GEMINI_MODELS.map((m) => (
+                {(aiModels.gemini ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.gemini_model ? ' (default)' : ''}</option>
                 ))}
               </Select>
@@ -461,7 +447,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)}>
-                {OPENROUTER_MODELS.map((m) => (
+                {(aiModels.openrouter ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.openrouter_model ? ' (default)' : ''}</option>
                 ))}
               </Select>
@@ -521,6 +507,9 @@ export default function SettingsPage() {
           </Button>
           <Button variant="outline" onClick={() => void handleTestAI()} disabled={testingAI || aiProvider === 'heuristic'}>
             {testingAI ? 'Testing…' : 'Test connection'}
+          </Button>
+          <Button variant="outline" onClick={() => void handleSyncModels()} disabled={syncingModels}>
+            {syncingModels ? 'Syncing…' : 'Sync models'}
           </Button>
           {aiTestResult ? (
             aiTestResult.status === 'ok' ? (

@@ -140,6 +140,16 @@ export async function fetchAIProviderDefaults(): Promise<AIProviderDefaults> {
   return data
 }
 
+export async function fetchAIModels(): Promise<Record<string, string[]>> {
+  const { data } = await api.get<Record<string, string[]>>(`${ADMIN_API_PREFIX}/ai-provider-models`)
+  return data
+}
+
+export async function syncAIModels(): Promise<{ status: string; models: Record<string, string[]> }> {
+  const { data } = await api.post<{ status: string; models: Record<string, string[]> }>(`${ADMIN_API_PREFIX}/ai-provider-models/sync`)
+  return data
+}
+
 export async function testAIPilot(payload: {
   provider?: string
   model?: string
