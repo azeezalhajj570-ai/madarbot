@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { uiVars } from '../../../../shared/ui-system/tokens'
 import { RefreshCw } from 'lucide-react'
 
 import { Badge, Button, Card, ColumnDef, EmptyState, Table } from '../../components/ui/primitives'
@@ -61,34 +62,34 @@ export default function AdminAgentsPage() {
   return (
     <PageShell titleKey="page.admin.agents" descriptionKey="page.admin.agents.desc" loading={loading}>
       {error && (
-        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
+        <Card style={{ background: uiVars.dangerSoft, border: `1px solid ${uiVars.danger}` }}>
+          <div style={{ fontSize: 14, color: uiVars.danger }}>Error: {error}</div>
         </Card>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Active</div>
+          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Active</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{activeCount}</div>
           </div>
           {failedCount > 0 && (
-            <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Failed</div>
+            <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Failed</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#ef4444' }}>{failedCount}</div>
             </div>
           )}
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Total Sent</div>
+          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Total Sent</div>
             <div style={{ fontSize: 20, fontWeight: 800 }}>{totalSent}</div>
           </div>
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)' }}>Contacts</div>
+          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Contacts</div>
             <div style={{ fontSize: 20, fontWeight: 800 }}>{totalContacts}</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{lastRefresh.toLocaleTimeString()}</span>
+          <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{lastRefresh.toLocaleTimeString()}</span>
           <Button variant="outline" size="sm" onClick={refresh}>
             <RefreshCw size={14} /> Refresh
           </Button>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
-import { Heart, Bot, ClipboardList, Tag, FileText, Menu, X, Shield } from 'lucide-react'
+import { Heart, Bot, ClipboardList, Tag, Menu, X } from 'lucide-react'
 
 import { spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { isAuthenticated } from '../lib/auth'
@@ -44,23 +44,6 @@ function LayoutInner() {
         className="mobile-hamburger"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
-        style={{
-          display: 'none',
-          [dir === 'rtl' ? 'right' : 'left']: 8,
-          top: 8,
-          position: 'fixed',
-          zIndex: 1000,
-          background: uiVars.surface,
-          border: `1px solid ${uiVars.border}`,
-          borderRadius: 10,
-          width: 40,
-          height: 40,
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: uiVars.text,
-          boxShadow: uiVars.shadow,
-        }}
       >
         {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
       </button>
@@ -78,27 +61,8 @@ function LayoutInner() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          padding: spacing.lg,
         }}
       >
-        {/* Language toggle in header area */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 8,
-            paddingBottom: spacing.sm,
-          }}
-        >
-          <button
-            className="lang-toggle"
-            onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-          >
-            {t('lang.switch')}
-          </button>
-        </div>
-
         <Outlet />
       </main>
 

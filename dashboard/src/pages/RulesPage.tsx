@@ -263,7 +263,7 @@ export default function RulesPage() {
           <div style={{ textAlign: 'center', padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>&#9888;&#65039;</div>
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>No groups found</div>
-            <div style={{ color: 'var(--color-muted)', maxWidth: 480, margin: '0 auto' }}>
+            <div style={{ color: 'var(--ui-text-muted)', maxWidth: 480, margin: '0 auto' }}>
               Add the bot as an administrator in a Telegram group, then select it here.
               For browser users, make sure your user ID is included in <code>DASHBOARD_BROWSER_USERS</code>.
             </div>
@@ -338,7 +338,7 @@ export default function RulesPage() {
               {testLoading ? 'Testing…' : 'Test Connection'}
             </Button>
             {testResult ? (
-              <InlineMessage tone={testResult.ok ? 'success' : 'danger'}>
+              <InlineMessage tone={testResult.ok ? 'success' : 'destructive'}>
                 {testResult.ok ? `\u2705 ${testResult.text}` : `\u274C ${testResult.text}`}
               </InlineMessage>
             ) : null}

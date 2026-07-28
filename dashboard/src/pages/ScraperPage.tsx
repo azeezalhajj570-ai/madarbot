@@ -16,7 +16,6 @@ import {
   searchMessages,
   triggerScrapeMessages,
   updateLead,
-  type Agent,
   type ConversationMessage,
   type LeaderboardMember,
   type NudgeData,
@@ -25,6 +24,7 @@ import {
   type ScrapedLead,
   type SearchResult,
 } from '../lib/api'
+import { type Agent } from '../lib/types'
 import { useI18n } from '../lib/i18n'
 
 export default function ScraperPage() {
@@ -636,7 +636,7 @@ export default function ScraperPage() {
                     <div key={lead.id} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                         <span style={{ fontSize: 14, fontWeight: 700 }}>{lead.sender_name || 'Unknown'}</span>
-                        <Badge tone={lead.signal === 'buying_intent' ? 'success' : lead.signal === 'support_need' ? 'danger' : 'info'}>{lead.signal}</Badge>
+                        <Badge tone={lead.signal === 'buying_intent' ? 'success' : lead.signal === 'support_need' ? 'destructive' : 'info'}>{lead.signal}</Badge>
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--ui-text)', marginBottom: 4 }}>{lead.excerpt}</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -715,7 +715,7 @@ export default function ScraperPage() {
                     border: s.severity === 'high' ? '1px solid rgba(220,50,50,0.2)' : '1px solid var(--ui-border)',
                     fontSize: 13,
                   }}>
-                    <Badge tone={s.severity === 'high' ? 'danger' : s.severity === 'medium' ? 'warning' : 'info'}>{s.severity}</Badge>{' '}
+                    <Badge tone={s.severity === 'high' ? 'destructive' : s.severity === 'medium' ? 'warning' : 'info'}>{s.severity}</Badge>{' '}
                     {s.message}
                   </div>
                 ))}

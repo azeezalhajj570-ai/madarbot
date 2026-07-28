@@ -172,14 +172,23 @@ export default function SubscriptionsPage() {
                     {sub.status === 'pending' ? (
                       <>
                         <div style={{ width: 100 }}>
-                          <Select 
-                            size="sm" 
+                          <select
                             value={approvalPlans[sub.id] || 'pro'} 
                             onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
+                            style={{
+                              width: '100%',
+                              minHeight: 32,
+                              borderRadius: '6px',
+                              border: '1px solid var(--ui-border)',
+                              padding: '0 8px',
+                              fontSize: 13,
+                              background: 'var(--ui-surface-strong)',
+                              color: 'var(--ui-text)',
+                            }}
                           >
                             <option value="pro">Pro</option>
                             <option value="business">Business</option>
-                          </Select>
+                          </select>
                         </div>
                         <Button 
                           size="sm" 

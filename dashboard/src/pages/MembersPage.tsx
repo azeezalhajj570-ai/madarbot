@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { ActionBar, Badge, Button, Card, Field, Input, Select, Sheet, Table } from '../components/ui/primitives'
+import { FilterSelect, SearchInput, Toolbar } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { useI18n } from '../lib/i18n'
 
@@ -30,14 +31,18 @@ export default function MembersPage() {
 
   return (
     <PageShell titleKey="page.members" descriptionKey="page.members.desc" actions={<Button onClick={() => setSheetOpen(true)}>Bulk actions</Button>}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 12 }}>
-        <Input placeholder="Search members" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <Select value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">All</option>
-          <option value="admin">Admins</option>
-          <option value="banned">Banned</option>
-        </Select>
-      </div>
+      <Toolbar>
+        <SearchInput value={query} onChange={setQuery} placeholder="Search members" style={{ flex: 1 }} />
+        <FilterSelect
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'admin', label: 'Admins' },
+            { value: 'banned', label: 'Banned' },
+          ]}
+        />
+      </Toolbar>
       <Card>
         <Table
           columns={[

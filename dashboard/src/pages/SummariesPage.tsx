@@ -102,13 +102,13 @@ export default function SummariesPage() {
             subtitle="Toggle daily summary generation for this group."
             checked={settings.enabled}
             disabled={currentGroupId == null}
-            onCheckedChange={(checked) => setSettings((current) => current ? { ...current, enabled: checked } : null)}
+            onCheckedChange={(checked) => setSettings((current: any) => current ? { ...current, enabled: checked } : null)}
           />
           <div style={{ marginTop: 16 }}>
             <Field label="Delivery mode" hint="How summaries are delivered to admins.">
               <Select
                 value={settings.delivery_mode}
-                onChange={(event) => setSettings((current) => current ? { ...current, delivery_mode: event.target.value } : null)}
+                onChange={(event) => setSettings((current: any) => current ? { ...current, delivery_mode: event.target.value } : null)}
               >
                 <option value="private">Private message</option>
                 <option value="group">Group message</option>
@@ -121,7 +121,7 @@ export default function SummariesPage() {
               <Input
                 type="time"
                 value={settings.delivery_time}
-                onChange={(event) => setSettings((current) => current ? { ...current, delivery_time: event.target.value } : null)}
+                onChange={(event) => setSettings((current: any) => current ? { ...current, delivery_time: event.target.value } : null)}
               />
             </Field>
           </div>

@@ -117,7 +117,7 @@ export default function AdminAISettingsPage() {
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell title="AI Settings" description="Admin access required.">
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Access denied.</div>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
       </PageShell>
     )
   }

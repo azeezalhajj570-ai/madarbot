@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Clock } from 'lucide-react'
 
-import { Badge, Button, Card, ColumnDef, ContentGrid, EmptyState, MetricCard, Table, LoadingState, Select } from '../../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, ContentGrid, EmptyState, MetricCard, Table, LoadingState } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerSubscriptions, updateOwnerSubscription, fetchOwnerStats } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
@@ -69,11 +69,11 @@ export default function AdminSubscriptionsPage() {
               { key: 'requester', label: 'Requester', render: (sub: any) => (
                 <div>
                   <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
                 </div>
               )},
               { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
-                <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: sub.message ? 'normal' : 'italic' }}>
+                <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
                   {sub.message || 'No message provided'}
                 </div>
               )},
@@ -83,7 +83,7 @@ export default function AdminSubscriptionsPage() {
                 </Badge>
               )},
               { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
                   {new Date(sub.created_at).toLocaleDateString()}
                 </div>
               )},
@@ -92,12 +92,14 @@ export default function AdminSubscriptionsPage() {
                   {sub.status === 'pending' ? (
                     <>
                       <div style={{ width: 100 }}>
-                        <Select size="sm" value={approvalPlans[sub.id] || 'pro'}
+                        <select
+                          value={approvalPlans[sub.id] || 'pro'}
                           onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
+                          style={{ width: '100%', minHeight: 32, borderRadius: 8, border: '1px solid var(--ui-border)', padding: '0 8px', fontSize: 13, background: 'var(--ui-surface-strong)', color: 'var(--ui-text)' }}
                         >
                           <option value="pro">Pro</option>
                           <option value="business">Business</option>
-                        </Select>
+                        </select>
                       </div>
                       <Button size="sm" variant="default"
                         onClick={() => subMutation.mutate({ id: sub.id, action: 'approve', plan: approvalPlans[sub.id] || 'pro' })}
@@ -113,7 +115,7 @@ export default function AdminSubscriptionsPage() {
                       </Button>
                     </>
                   ) : (
-                    <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
                       {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
                     </span>
                   )}

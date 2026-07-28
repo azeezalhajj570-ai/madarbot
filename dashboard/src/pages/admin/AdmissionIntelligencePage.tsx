@@ -6,7 +6,8 @@ import { fetchScrapedGroups, fetchAdmissionSearch, fetchCutoffTrend, fetchStuden
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, Input, Select } from '../../components/ui/primitives'
+import { Button, Card, Input, Select, Tabs } from '../../components/ui/primitives'
+import { SearchInput, FilterSelect } from '../../components/ui/data-display'
 
 type Tab = 'search' | 'cutoff' | 'concerns' | 'compare'
 
@@ -38,13 +39,11 @@ export default function AdminAdmissionIntelligencePage() {
 
   return (
     <PageShell titleKey="page.admin.admission" descriptionKey="page.admin.admission.desc" loading={groupsLoading}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        {TABS.map(({ key, labelKey, icon: Icon }) => (
-          <Button key={key} variant={tab === key ? 'primary' : 'ghost'} onClick={() => setTab(key)}>
-            <Icon size={14} /> {t(labelKey)}
-          </Button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+        items={TABS.map(({ key, labelKey }) => ({ value: key, label: t(labelKey) }))}
+      />
       {tab === 'search' && <SearchPanel groups={groups || []} />}
       {tab === 'cutoff' && <CutoffPanel groups={groups || []} />}
       {tab === 'concerns' && <ConcernsPanel groups={groups || []} />}
@@ -63,26 +62,18 @@ function GroupSelector({ groups, value, onChange }: { groups: ScrapedGroupSummar
     : groups.sort((a, b) => (b.member_count || 0) - (a.member_count || 0))
 
   return (
-    <select
+    <FilterSelect
+      label=""
       value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        padding: '8px 12px',
-        borderRadius: 8,
-        border: '1px solid var(--ui-border, #d0d0d0)',
-        background: 'var(--ui-surface, #fff)',
-        fontSize: 14,
-        width: '100%',
-        color: 'var(--ui-text, #000)',
-      }}
-    >
-      <option value="">{t('admission.selectGroup')}</option>
-      {sorted.slice(0, 50).map(g => (
-        <option key={g.tg_group_id} value={g.tg_group_id}>
-          {g.title} ({g.member_count?.toLocaleString() || '?'} members)
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      options={[
+        { value: '', label: t('admission.selectGroup') },
+        ...sorted.slice(0, 50).map(g => ({
+          value: String(g.tg_group_id),
+          label: `${g.title} (${g.member_count?.toLocaleString() || '?'})`,
+        })),
+      ]}
+    />
   )
 }
 
@@ -115,7 +106,12 @@ function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
       <Card>
         <div style={{ display: 'grid', gap: 12 }}>
           <GroupSelector groups={groups} value={groupId} onChange={setGroupId} />
-          <Input placeholder={t('admission.queryPlaceholder')} value={query} onChange={e => setQuery(e.target.value)} />
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            onSearch={handleSearch}
+            placeholder={t('admission.queryPlaceholder')}
+          />
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr' }}>
             <Input placeholder={t('admission.university')} value={university} onChange={e => setUniversity(e.target.value)} />
             <Input placeholder={t('admission.major')} value={major} onChange={e => setMajor(e.target.value)} />
@@ -128,12 +124,12 @@ function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--color-error, #ef4444)' }}>{error}</p></Card>}
+      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <Card>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{t('admission.result')}</div>
           <p style={{ lineHeight: 1.6, marginBottom: 12, whiteSpace: 'pre-wrap' }}>{result.answer_context}</p>
-          <div style={{ fontSize: 13, color: 'var(--color-muted, #888)' }}>
+          <div style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
             {result.total_matches} {t('admission.matches')} · {result.sources?.length || 0} {t('admission.sources')}
           </div>
         </Card>
@@ -189,7 +185,7 @@ function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--color-error, #ef4444)' }}>{error}</p></Card>}
+      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <Card>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
@@ -202,7 +198,7 @@ function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
               <div style={{ display: 'grid', gap: 4, maxHeight: 300, overflowY: 'auto' }}>
                 {result.cutoff_history.slice(-30).map((h: any, i: number) => (
                   <div key={i} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
-                    <span style={{ color: 'var(--color-muted, #888)', minWidth: 90 }}>{h.date?.slice(0, 10)}</span>
+                    <span style={{ color: 'var(--ui-text-muted)', minWidth: 90 }}>{h.date?.slice(0, 10)}</span>
                     <span style={{ fontWeight: 700 }}>{h.value}%</span>
                   </div>
                 ))}
@@ -243,12 +239,6 @@ function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
     }
   }, [groups, groupId])
 
-  useEffect(() => {
-    if (groupId && !result && !loading) {
-      handleAnalyze()
-    }
-  }, [groupId])
-
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>
@@ -262,19 +252,19 @@ function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--color-error, #ef4444)' }}>{error}</p></Card>}
+      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <div style={{ display: 'grid', gap: 12 }}>
           {result.topics?.map((topic: any, i: number) => (
             <Card key={i}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{topic.name}</div>
-                <div style={{ fontSize: 13, color: 'var(--color-muted, #888)' }}>
+                <div style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
                   {topic.mentions} {t('admission.mentions')}
                 </div>
               </div>
               {topic.examples?.map((ex: string, j: number) => (
-                <p key={j} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-text-secondary, #555)', marginBottom: 4 }}>{ex}</p>
+                <p key={j} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ui-text-muted)', marginBottom: 4 }}>{ex}</p>
               ))}
             </Card>
           ))}
@@ -329,7 +319,7 @@ function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--color-error, #ef4444)' }}>{error}</p></Card>}
+      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <div style={{ display: 'grid', gap: 16 }}>
           {result.universities?.map((u: any, i: number) => (
@@ -343,7 +333,7 @@ function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           ))}
           {result.notes && (
             <Card>
-              <div style={{ fontSize: 13, color: 'var(--color-muted, #888)', lineHeight: 1.5 }}>{result.notes}</div>
+              <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', lineHeight: 1.5 }}>{result.notes}</div>
             </Card>
           )}
         </div>
