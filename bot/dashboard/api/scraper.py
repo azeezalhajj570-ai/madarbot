@@ -223,10 +223,13 @@ async def list_scrape_jobs(
     limit: int = Query(default=10, ge=1, le=50),
 ) -> list[dict[str, Any]]:
     from bot.db.models.agent import Agent
+    from bot.db.models.scraper import ScrapedGroup
+    from sqlalchemy.orm import contains_eager
 
     stmt = (
         select(AgentJob)
         .join(Agent, AgentJob.agent_id == Agent.id)
+        .options(contains_eager(AgentJob.agent))
         .where(
             Agent.linked_by_user_id == identity.user_id,
             AgentJob.job_type.in_([
@@ -237,13 +240,30 @@ async def list_scrape_jobs(
         .limit(limit)
     )
     result = await session.execute(stmt)
-    jobs = result.scalars().all()
+    jobs = result.unique().scalars().all()
+
+    tg_group_ids = {
+        int(j.job_payload["tg_group_id"])
+        for j in jobs if j.job_payload and j.job_payload.get("tg_group_id")
+    }
+    groups_map: dict[int, ScrapedGroup] = {}
+    if tg_group_ids:
+        gs = await session.execute(
+            select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(tg_group_ids))
+        )
+        for g in gs.scalars().all():
+            groups_map[int(g.tg_group_id)] = g
+
     return [
         {
             "job_id": j.id,
             "agent_id": j.agent_id,
+            "agent_phone": j.agent.phone_number or j.agent.external_account_id,
             "job_type": j.job_type,
             "status": j.status,
+            "tg_group_id": int(j.job_payload["tg_group_id"]) if j.job_payload and j.job_payload.get("tg_group_id") else None,
+            "group_title": groups_map[int(j.job_payload["tg_group_id"])].title if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
+            "member_count": groups_map[int(j.job_payload["tg_group_id"])].member_count if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
             "progress": j.job_payload.get("progress") if j.job_payload else None,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "updated_at": j.updated_at.isoformat() if j.updated_at else None,

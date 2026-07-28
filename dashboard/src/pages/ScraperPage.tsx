@@ -373,7 +373,23 @@ export default function ScraperPage() {
               render: (job) => <span style={{ fontWeight: 700 }}>#{job.job_id}</span>,
             },
             {
+              key: 'agent', label: 'Agent',
+              render: (job) => (
+                <span style={{ fontSize: 13 }}>{job.agent_phone ?? `#${job.agent_id}`}</span>
+              ),
+            },
+            {
+              key: 'group', label: 'Group',
+              render: (job) => (
+                <span style={{ fontSize: 13 }}>
+                  {job.group_title || (job.tg_group_id ? `tg:${job.tg_group_id}` : '-')}
+                  {job.member_count != null ? <span style={{ color: 'var(--ui-text-muted)', fontSize: 11, marginLeft: 6 }}>({job.member_count} members)</span> : null}
+                </span>
+              ),
+            },
+            {
               key: 'job_type', label: 'Type',
+              hideOnMobile: true,
               render: (job) => (
                 <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>
                   {job.job_type.replace('scraper_', '').replace('_', ' ')}
