@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Card, Field, FieldRow, InlineMessage, Input, ToggleRow } from '../components/ui/primitives'
+import { useToast } from '../components/ui/toast'
 import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { fetchGroupSettings, fetchSettingsSchema, updateGroupSettings, testAIPilot } from '../lib/api'
@@ -71,6 +72,7 @@ const LIMIT_DEFINITIONS: Array<{
 
 export default function RulesPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const { groups, currentGroup, currentGroupId, setCurrentGroupId, loading: groupsLoading, error: groupsError } = useDashboardGroups()
   const [settings, setSettings] = useState<Record<string, boolean | number | string>>({})
   const [limitDrafts, setLimitDrafts] = useState<Record<ModerationLimitKey, string>>({
@@ -111,7 +113,6 @@ export default function RulesPage() {
     ;(async () => {
       setLoading(true)
       setError('')
-      setFeedback('')
       try {
         const response = await fetchGroupSettings(currentGroupId)
         if (cancelled) return
@@ -146,13 +147,12 @@ export default function RulesPage() {
     if (currentGroupId == null) return
     setSavingToggle(key)
     setError('')
-    setFeedback('')
     try {
       await updateGroupSettings(currentGroupId, { [key]: nextValue })
       setSettings((current) => ({ ...current, [key]: nextValue }))
-      setFeedback('Moderation rules updated.')
+      toast.success('Moderation rules updated.')
     } catch {
-      setError('Unable to save moderation changes right now.')
+      toast.error('Unable to save moderation changes right now.')
     } finally {
       setSavingToggle(null)
     }
@@ -166,7 +166,6 @@ export default function RulesPage() {
       const parsed = Number(limitDrafts[item.key])
       if (!Number.isInteger(parsed) || parsed < 1) {
         setError(`${item.label} must be a whole number greater than 0.`)
-        setFeedback('')
         return
       }
       payload[item.key] = parsed
@@ -174,13 +173,12 @@ export default function RulesPage() {
 
     setSavingLimits(true)
     setError('')
-    setFeedback('')
     try {
       await updateGroupSettings(currentGroupId, payload)
       setSettings((current) => ({ ...current, ...payload }))
-      setFeedback('Moderation thresholds saved.')
+      toast.success('Moderation thresholds saved.')
     } catch {
-      setError('Unable to save moderation thresholds right now.')
+      toast.error('Unable to save moderation thresholds right now.')
     } finally {
       setSavingLimits(false)
     }
@@ -190,13 +188,12 @@ export default function RulesPage() {
     if (currentGroupId == null) return
     setPluginSaving(key)
     setError('')
-    setFeedback('')
     try {
       await updateGroupSettings(currentGroupId, { [key]: value })
       setSettings((current) => ({ ...current, [key]: value }))
-      setFeedback(`Setting "${key}" saved.`)
+      toast.success(`Setting "${key}" saved.`)
     } catch {
-      setError('Unable to save setting.')
+      toast.error('Unable to save setting.')
     } finally {
       setPluginSaving(null)
     }
@@ -217,12 +214,15 @@ export default function RulesPage() {
       })
       if (result.status === 'ok') {
         setTestResult({ ok: true, text: result.reply || 'No reply' })
+        toast.success(result.reply || 'No reply')
       } else {
         setTestResult({ ok: false, text: result.error || result.detail || 'Unknown error' })
+        toast.error(result.error || result.detail || 'Unknown error')
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Test request failed'
       setTestResult({ ok: false, text: detail })
+      toast.error(detail)
     } finally {
       setTestLoading(false)
     }
@@ -277,7 +277,6 @@ export default function RulesPage() {
         <InlineMessage tone="neutral">Select a group from the dropdown above to manage AI Pilot settings.</InlineMessage>
       ) : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
-      {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {pluginCategories.length > 0 && pluginCategories.map(([category, entries]) => (
         <Card key={category}>
@@ -340,11 +339,6 @@ export default function RulesPage() {
             <Button onClick={() => void handleTestAI()} disabled={testLoading || currentGroupId == null}>
               {testLoading ? 'Testing…' : 'Test Connection'}
             </Button>
-            {testResult ? (
-              <InlineMessage tone={testResult.ok ? 'success' : 'destructive'}>
-                {testResult.ok ? `\u2705 ${testResult.text}` : `\u274C ${testResult.text}`}
-              </InlineMessage>
-            ) : null}
           </div>
         </Card>
       ))}

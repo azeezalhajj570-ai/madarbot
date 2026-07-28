@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 
-import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
+import { Badge, Button, Card, CardSkeleton, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
+import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { fetchAdminOverview } from '../../lib/api'
@@ -21,6 +22,7 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminJobsPage() {
+  const { toast } = useToast()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
@@ -31,17 +33,15 @@ export default function AdminJobsPage() {
   }
   const [data, setData] = useState<AdminOverview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const refresh = useCallback(async () => {
     try {
       const overview = await fetchAdminOverview()
       setData(overview)
-      setError(null)
       setLastRefresh(new Date())
     } catch (err: any) {
-      setError(err?.message || 'Failed to load')
+      toast.error(err?.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
@@ -60,13 +60,10 @@ export default function AdminJobsPage() {
   const totalContacts = data?.agents?.reduce((s, a) => s + a.unique_contacts, 0) || 0
 
   return (
-    <PageShell titleKey="page.admin.jobs" descriptionKey="page.admin.jobs.desc" loading={loading}>
-      {error && (
-        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
-        </Card>
-      )}
-
+    <PageShell titleKey="page.admin.jobs" descriptionKey="page.admin.jobs.desc" loading={false}>
+      {loading ? (
+        <CardSkeleton />
+      ) : (<>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{lastRefresh.toLocaleTimeString()}</span>
@@ -140,6 +137,7 @@ export default function AdminJobsPage() {
           />
         </Card>
       </ContentGrid>
+      </>)}
     </PageShell>
   )
 }

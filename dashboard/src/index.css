@@ -336,3 +336,14 @@ textarea {
 .pulse {
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Send } from 'lucide-react'
 
-import { Badge, Button, Card, ColumnDef, EmptyState, InlineMessage, Input, Select, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, ColumnDef, EmptyState, Input, Select, Table } from '../../components/ui/primitives'
+import { useToast } from '../../components/ui/toast'
 import { GroupAutoComplete, SearchInput } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import api, { fetchAdminOverview, fetchAgents } from '../../lib/api'
@@ -164,6 +165,7 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
 }
 
 export default function AdminBulkAddPage() {
+  const { toast } = useToast()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
@@ -175,7 +177,6 @@ export default function AdminBulkAddPage() {
 
   const [data, setData] = useState<AdminOverview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
@@ -199,10 +200,9 @@ export default function AdminBulkAddPage() {
     try {
       const overview = await fetchAdminOverview()
       setData(overview)
-      setError(null)
       setLastRefresh(new Date())
     } catch (err: any) {
-      setError(err?.message || 'Failed to load')
+      toast.error(err?.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
@@ -274,7 +274,7 @@ export default function AdminBulkAddPage() {
       setSearchQuery((prev) => prev || ' ')
       setTimeout(() => setSearchQuery((prev) => prev.trim() || ''), 100)
     } catch (err: any) {
-      setError(err?.message || 'Scrape failed')
+      toast.error(err?.message || 'Scrape failed')
     } finally {
       setScraping(false)
     }
@@ -299,7 +299,7 @@ export default function AdminBulkAddPage() {
       setSelectedUserIds([])
       await refreshJobs()
     } catch (err: any) {
-      setError(err?.message || 'Failed to create job')
+      toast.error(err?.message || 'Failed to create job')
     } finally {
       setSubmitting(false)
     }
@@ -307,12 +307,6 @@ export default function AdminBulkAddPage() {
 
   return (
     <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
-      {error && (
-        <div style={{ marginBottom: 16 }}>
-          <InlineMessage tone="destructive">{error}</InlineMessage>
-        </div>
-      )}
-
       <div className="grid-2col" style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         {/* Left: Form */}
         <Card title="New Bulk Add Job" subtitle="Select agent, target group, and members to invite.">
@@ -337,13 +331,12 @@ export default function AdminBulkAddPage() {
                 <Button variant="outline" size="sm" onClick={async () => {
                   if (!selectedAgentId) return
                   setSyncingGroups(true)
-                  setError(null)
                   try {
                     const { data: freshGroups } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
                     setSourceGroups(freshGroups)
                     setTargetGroups(freshGroups.filter((g) => g.can_add_members))
                   } catch (err: any) {
-                    setError(err?.message || 'Failed to sync groups')
+                    toast.error(err?.message || 'Failed to sync groups')
                   } finally {
                     setSyncingGroups(false)
                   }

@@ -7,6 +7,7 @@ import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Button, Card, Input, Select, Tabs } from '../../components/ui/primitives'
+import { useToast } from '../../components/ui/toast'
 import { GroupAutoComplete, SearchInput, FilterSelect } from '../../components/ui/data-display'
 
 type Tab = 'search' | 'cutoff' | 'concerns' | 'compare'
@@ -75,23 +76,22 @@ function GroupSelector({ groups, value, onChange }: { groups: ScrapedGroupSummar
 
 function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
+  const { toast } = useToast()
   const [query, setQuery] = useState('')
   const [university, setUniversity] = useState('')
   const [major, setMajor] = useState('')
   const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleSearch = useCallback(async () => {
     if (!query.trim() || !groupId.trim()) return
     setLoading(true)
-    setError(null)
     try {
       const data = await fetchAdmissionSearch(query.trim(), parseInt(groupId), university.trim() || undefined, major.trim() || undefined)
       setResult(data)
     } catch (err: any) {
-      setError(err?.message || 'Search failed')
+      toast.error(err?.message || 'Search failed')
     } finally {
       setLoading(false)
     }
@@ -120,7 +120,6 @@ function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <Card>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{t('admission.result')}</div>
@@ -136,22 +135,21 @@ function SearchPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
 
 function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
+  const { toast } = useToast()
   const [university, setUniversity] = useState('')
   const [major, setMajor] = useState('')
   const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = useCallback(async () => {
     if (!university.trim() || !major.trim() || !groupId.trim()) return
     setLoading(true)
-    setError(null)
     try {
       const data = await fetchCutoffTrend(university.trim(), major.trim(), parseInt(groupId))
       setResult(data)
     } catch (err: any) {
-      setError(err?.message || 'Analysis failed')
+      toast.error(err?.message || 'Analysis failed')
     } finally {
       setLoading(false)
     }
@@ -181,7 +179,6 @@ function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <Card>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
@@ -209,20 +206,19 @@ function CutoffPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
 
 function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
+  const { toast } = useToast()
   const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = useCallback(async () => {
     if (!groupId.trim()) return
     setLoading(true)
-    setError(null)
     try {
       const data = await fetchStudentConcerns(parseInt(groupId))
       setResult(data)
     } catch (err: any) {
-      setError(err?.message || 'Analysis failed')
+      toast.error(err?.message || 'Analysis failed')
     } finally {
       setLoading(false)
     }
@@ -248,7 +244,6 @@ function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <div style={{ display: 'grid', gap: 12 }}>
           {result.topics?.map((topic: any, i: number) => (
@@ -275,23 +270,22 @@ function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
 
 function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
   const { t } = useI18n()
+  const { toast } = useToast()
   const [universityA, setUniversityA] = useState('')
   const [universityB, setUniversityB] = useState('')
   const [major, setMajor] = useState('')
   const [groupId, setGroupId] = useState('')
   const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleCompare = useCallback(async () => {
     if (!universityA.trim() || !universityB.trim() || !major.trim() || !groupId.trim()) return
     setLoading(true)
-    setError(null)
     try {
       const data = await fetchCompareUniversities(universityA.trim(), universityB.trim(), major.trim(), parseInt(groupId))
       setResult(data)
     } catch (err: any) {
-      setError(err?.message || 'Comparison failed')
+      toast.error(err?.message || 'Comparison failed')
     } finally {
       setLoading(false)
     }
@@ -315,7 +309,6 @@ function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
           </Button>
         </div>
       </Card>
-      {error && <Card><p style={{ color: 'var(--ui-danger)' }}>{error}</p></Card>}
       {result && (
         <div style={{ display: 'grid', gap: 16 }}>
           {result.universities?.map((u: any, i: number) => (

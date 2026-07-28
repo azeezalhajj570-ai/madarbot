@@ -480,6 +480,62 @@ export function EmptyState({
   )
 }
 
+export function Skeleton({ width, height, style }: {
+  width?: string | number
+  height?: string | number
+  style?: CSSProperties
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pulse"
+      style={{
+        borderRadius: radius.xs,
+        background: uiVars.bgMuted,
+        width: width ?? '100%',
+        height: height ?? 16,
+        ...style,
+      }}
+    />
+  )
+}
+
+const CARD_SKELETON_WIDTHS = ['85%', '70%', '60%', '75%', '65%']
+
+export function CardSkeleton({ rows = 3, title = true }: { rows?: number; title?: boolean }) {
+  return (
+    <Card aria-busy="true" aria-label="Loading content">
+      <div style={{ display: 'grid', gap: spacing.md }}>
+        {title && <Skeleton width="55%" height={20} />}
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} height={14} width={CARD_SKELETON_WIDTHS[i % CARD_SKELETON_WIDTHS.length]} />
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+  return (
+    <div aria-busy="true" aria-label="Loading table data">
+      <div style={{ display: 'grid', gap: spacing.sm }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: spacing.md, padding: '0 0 10px 0' }}>
+          {Array.from({ length: columns }).map((_, i) => (
+            <Skeleton key={i} height={12} width="70%" />
+          ))}
+        </div>
+        {Array.from({ length: rows }).map((_, rowIdx) => (
+          <div key={rowIdx} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: spacing.md, padding: '12px 0', borderTop: `1px solid ${uiVars.border}` }}>
+            {Array.from({ length: columns }).map((_, colIdx) => (
+              <Skeleton key={colIdx} height={14} width={colIdx === 0 ? '65%' : '85%'} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function InlineMessage({
   tone = 'neutral',
   children,

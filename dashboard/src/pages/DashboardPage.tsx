@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../components/ui/primitives'
+import { useToast } from '../components/ui/toast'
 import { PageShell } from '../lib/page-shell'
 import * as api from '../lib/api'
 import type { AdminAgent, AdminOverview, OwnerSubscriptionRequest, PromotionCode } from '../lib/types'
@@ -31,12 +32,12 @@ function HealthBadge({ status }: { status: string }) {
 }
 
 export default function DashboardPage() {
+  const { toast } = useToast()
   const [data, setData] = useState<AdminOverview | null>(null)
   const [subs, setSubs] = useState<OwnerSubscriptionRequest[]>([])
   const [promos, setPromos] = useState<PromotionCode[]>([])
   const [auditLog, setAuditLog] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const refresh = useCallback(async () => {
@@ -51,10 +52,9 @@ export default function DashboardPage() {
       setSubs(subsData)
       setPromos(promosData)
       setAuditLog(auditData)
-      setError(null)
       setLastRefresh(new Date())
     } catch (err: any) {
-      setError(err?.message || 'Failed to load')
+      toast.error(err?.message || 'Failed to load')
     } finally {
       setLoading(false)
     }
@@ -80,12 +80,6 @@ export default function DashboardPage() {
 
   return (
     <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={loading}>
-      {error && (
-        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
-        </Card>
-      )}
-
       {/* Section 1: System Health */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

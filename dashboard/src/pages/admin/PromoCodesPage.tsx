@@ -8,6 +8,7 @@ import { PageShell } from '../../lib/page-shell'
 import {
   fetchOwnerPromoCodes, createOwnerPromoCode, updateOwnerPromoCode, deleteOwnerPromoCode,
 } from '../../lib/api'
+import { useToast } from '../../components/ui/toast'
 import { getStoredUser } from '../../lib/auth'
 
 export default function AdminPromoCodesPage() {
@@ -19,6 +20,7 @@ export default function AdminPromoCodesPage() {
       </PageShell>
     )
   }
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newPromo, setNewPromo] = useState({
@@ -40,7 +42,11 @@ export default function AdminPromoCodesPage() {
       setDialogOpen(false)
       setNewPromo({ code: '', plan: 'pro', duration_days: 30, max_uses: 0, is_active: true })
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code created.')
     },
+    onError: () => {
+      toast.error('Failed to create promo code.')
+    }
   })
 
   const updateMutation = useMutation({
@@ -50,7 +56,13 @@ export default function AdminPromoCodesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteOwnerPromoCode(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code deleted.')
+    },
+    onError: () => {
+      toast.error('Failed to delete promo code.')
+    }
   })
 
   return (

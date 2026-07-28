@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { Badge, Button, Card, Dialog, EmptyState, Field, FieldRow, InlineMessage, Input, ListItem, Select, Textarea, ToggleRow } from '../components/ui/primitives'
+import { useToast } from '../components/ui/toast'
 import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import {
@@ -61,6 +62,7 @@ const OPENROUTER_MODELS = [
 
 export default function SettingsPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const { groups, currentGroup, currentGroupId, setCurrentGroupId, loading: groupsLoading, error: groupsError } = useDashboardGroups()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -106,7 +108,6 @@ export default function SettingsPage() {
     ;(async () => {
       setLoading(true)
       setError('')
-      setFeedback('')
       try {
         const [gate, messages, defaults, groupSettings] = await Promise.all([
           fetchAccessGate(currentGroupId),
@@ -203,14 +204,13 @@ export default function SettingsPage() {
 
     setSavingGate(true)
     setError('')
-    setFeedback('')
     try {
       const updated = await updateAccessGate(currentGroupId, requiredGroupIds)
       setRequiredGroupIds(updated.required_group_tg_ids)
       setRequiredGroupCandidates(updated.candidates ?? [])
-      setFeedback('Required groups updated.')
+      toast.success('Required groups updated.')
     } catch {
-      setError('Unable to save required groups right now.')
+      toast.error('Unable to save required groups right now.')
     } finally {
       setSavingGate(false)
     }
@@ -235,7 +235,6 @@ export default function SettingsPage() {
 
     setSavingMessage(true)
     setError('')
-    setFeedback('')
     try {
       if (editingMessage) {
         const response = await updateScheduledMessage(currentGroupId, editingMessage.id, {
@@ -253,9 +252,9 @@ export default function SettingsPage() {
         setScheduledMessages((current) => [response.scheduled_message, ...current])
       }
       setEditorOpen(false)
-      setFeedback('Scheduled messages updated.')
+      toast.success('Scheduled messages updated.')
     } catch {
-      setError('Unable to save the scheduled message.')
+      toast.error('Unable to save the scheduled message.')
     } finally {
       setSavingMessage(false)
     }
@@ -264,13 +263,12 @@ export default function SettingsPage() {
   async function handleDeleteScheduledMessage(message: ScheduledMessage) {
     if (currentGroupId == null) return
     setError('')
-    setFeedback('')
     try {
       await deleteScheduledMessage(currentGroupId, message.id)
       setScheduledMessages((current) => current.filter((item) => item.id !== message.id))
-      setFeedback('Scheduled message deleted.')
+      toast.success('Scheduled message deleted.')
     } catch {
-      setError('Unable to delete the scheduled message.')
+      toast.error('Unable to delete the scheduled message.')
     }
   }
 
@@ -288,7 +286,6 @@ export default function SettingsPage() {
 
     setSavingAI(true)
     setError('')
-    setFeedback('')
     setAITestResult(null)
     try {
       const settings: Record<string, string | boolean | number> = {
@@ -308,9 +305,9 @@ export default function SettingsPage() {
         ai_pilot_enabled: aiPilot,
       }
       await updateGroupSettings(currentGroupId, settings)
-      setFeedback('AI provider settings saved.')
+      toast.success('AI provider settings saved.')
     } catch {
-      setError('Unable to save AI provider settings.')
+      toast.error('Unable to save AI provider settings.')
     } finally {
       setSavingAI(false)
     }
@@ -334,8 +331,14 @@ export default function SettingsPage() {
 
       const result = await testAIPilot(payload)
       setAITestResult(result)
+      if (result.status === 'ok') {
+        toast.success(`Connected! Response: ${result.reply}`)
+      } else {
+        toast.error(`Failed: ${result.error}`)
+      }
     } catch {
       setAITestResult({ status: 'error', error: 'Connection test failed.' })
+      toast.error('Connection test failed.')
     } finally {
       setTestingAI(false)
     }
@@ -363,7 +366,6 @@ export default function SettingsPage() {
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">Editing settings for {currentGroup.title}.</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
-      {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       <Card title="Required groups" subtitle="Search managed groups by name, role, or Telegram ID and add multiple requirements.">
         <Field label="Select groups" hint="">
@@ -525,13 +527,7 @@ export default function SettingsPage() {
           <Button variant="outline" onClick={() => void handleTestAI()} disabled={testingAI || aiProvider === 'heuristic'}>
             {testingAI ? 'Testing…' : 'Test connection'}
           </Button>
-          {aiTestResult ? (
-            aiTestResult.status === 'ok' ? (
-              <InlineMessage tone="success">Connected! Response: {aiTestResult.reply}</InlineMessage>
-            ) : (
-              <InlineMessage tone="destructive">Failed: {aiTestResult.error}</InlineMessage>
-            )
-          ) : null}
+          {aiTestResult ? null : null}
         </div>
       </Card>
 

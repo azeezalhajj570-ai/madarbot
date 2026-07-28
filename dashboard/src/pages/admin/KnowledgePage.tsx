@@ -6,7 +6,8 @@ import { fetchKnowledgeGroups, fetchAllKnowledge, extractGroupKnowledge, deleteK
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Badge, Button, Card, Input } from '../../components/ui/primitives'
+import { Badge, Button, Card, Input, TableSkeleton } from '../../components/ui/primitives'
+import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { FilterSelect, GroupAutoComplete, Toolbar } from '../../components/ui/data-display'
 
@@ -23,6 +24,7 @@ export default function AdminKnowledgePage() {
   const { t } = useI18n()
   const user = getStoredUser()
   const qc = useQueryClient()
+  const { toast } = useToast()
 
   const [filterGroupId, setFilterGroupId] = useState<number | undefined>(undefined)
   const [filterType, setFilterType] = useState<string>('')
@@ -30,7 +32,6 @@ export default function AdminKnowledgePage() {
   const [extractGroupId, setExtractGroupId] = useState<number | null>(null)
   const [extractCount, setExtractCount] = useState(500)
   const [isExtracting, setIsExtracting] = useState(false)
-  const [extractResult, setExtractResult] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
   const { data: groups, isLoading: groupsLoading } = useQuery({
     queryKey: ['knowledge-groups'],
@@ -63,33 +64,32 @@ export default function AdminKnowledgePage() {
   useEffect(() => {
     if (!isExtracting || !status) return
     if (status.status === 'running') {
-      setExtractResult({ text: 'Extraction is running in the background...', type: 'info' })
       return
     }
     if (status.status === 'done') {
       setIsExtracting(false)
-      setExtractResult({ text: `Extraction complete. Saved ${status.saved} entries.`, type: 'success' })
       qc.invalidateQueries({ queryKey: ['all-knowledge'] })
       qc.invalidateQueries({ queryKey: ['knowledge-groups'] })
+      toast.success(`Extraction complete. Saved ${status.saved} entries.`)
       return
     }
     if (status.status === 'failed') {
       setIsExtracting(false)
-      setExtractResult({ text: `Extraction failed: ${status.error || 'Unknown error'}`, type: 'error' })
+      toast.error(`Extraction failed: ${status.error || 'Unknown error'}`)
       return
     }
-  }, [status, isExtracting, extractGroupId, qc])
+  }, [status, isExtracting, extractGroupId, qc, toast])
 
   const extractMutation = useMutation({
     mutationFn: () => extractGroupKnowledge(extractGroupId!, extractCount),
     onSuccess: () => {
       setIsExtracting(true)
-      setExtractResult({ text: 'Extraction started. It will run in the background.', type: 'info' })
+      toast.info('Extraction started. It will run in the background.')
       qc.invalidateQueries({ queryKey: ['extraction-status', extractGroupId] })
     },
     onError: (err: any) => {
       setIsExtracting(false)
-      setExtractResult({ text: `Failed to start: ${err?.message || 'Unknown error'}`, type: 'error' })
+      toast.error(`Failed to start: ${err?.message || 'Unknown error'}`)
     },
   })
 
@@ -98,6 +98,10 @@ export default function AdminKnowledgePage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['all-knowledge'] })
       qc.invalidateQueries({ queryKey: ['knowledge-groups'] })
+      toast.success('Entry deleted')
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Delete failed')
     },
   })
 
@@ -145,11 +149,6 @@ export default function AdminKnowledgePage() {
         {isExtracting && (
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-warning)' }}>
             <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Extraction running in background.
-          </div>
-        )}
-        {extractResult && !isExtracting && (
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: extractResult.type === 'error' ? 'var(--ui-danger)' : extractResult.type === 'success' ? 'var(--ui-success)' : 'var(--ui-text-muted)' }}>
-            {extractResult.type === 'error' ? <XCircle size={16} /> : <CheckCircle size={16} />} {extractResult.text}
           </div>
         )}
       </Card>
