@@ -19,7 +19,7 @@ import {
   updateScheduledMessage,
   type ScheduledMessage,
 } from '../lib/api'
-import type { AIProviderDefaults } from '../lib/types'
+import type { AIModel, AIProviderDefaults } from '../lib/types'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
 import { useI18n } from '../lib/i18n'
 
@@ -50,7 +50,7 @@ export default function SettingsPage() {
   const [savingMessage, setSavingMessage] = useState(false)
 
   const [aiDefaults, setAIDefaults] = useState<AIProviderDefaults | null>(null)
-  const [aiModels, setAIModels] = useState<Record<string, string[]>>({})
+  const [aiModels, setAIModels] = useState<AIModel[]>([])
   const [aiProvider, setAIProvider] = useState('heuristic')
   const [aiModel, setAIModel] = useState('')
   const [openaiApiKey, setOpenaiApiKey] = useState('')
@@ -143,9 +143,18 @@ export default function SettingsPage() {
     })
   }, [requiredGroupCandidates, requiredGroupIds, requiredGroupsQuery])
 
+  const modelsByProvider = useMemo(() => {
+    const grouped: Record<string, string[]> = {}
+    for (const m of aiModels) {
+      if (!grouped[m.provider]) grouped[m.provider] = []
+      grouped[m.provider].push(m.name)
+    }
+    return grouped
+  }, [aiModels])
+
   const modelOptions = useMemo(() => {
-    return aiModels[aiProvider] ?? []
-  }, [aiProvider, aiModels])
+    return modelsByProvider[aiProvider] ?? []
+  }, [aiProvider, modelsByProvider])
 
   const currentModel = useMemo(() => {
     if (aiProvider === 'openai') return openaiModel
@@ -422,7 +431,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)}>
-                {(aiModels.openai ?? []).map((m) => (
+                {(modelsByProvider.openai ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.openai_model ? ' (default)' : ''}</option>
                 ))}
               </Select>
@@ -437,7 +446,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)}>
-                {(aiModels.gemini ?? []).map((m) => (
+                {(modelsByProvider.gemini ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.gemini_model ? ' (default)' : ''}</option>
                 ))}
               </Select>
@@ -452,7 +461,7 @@ export default function SettingsPage() {
             </Field>
             <Field label="Model">
               <Select value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)}>
-                {(aiModels.openrouter ?? []).map((m) => (
+                {(modelsByProvider.openrouter ?? []).map((m) => (
                   <option key={m} value={m}>{m}{m === aiDefaults?.openrouter_model ? ' (default)' : ''}</option>
                 ))}
               </Select>

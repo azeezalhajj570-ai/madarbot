@@ -292,12 +292,34 @@ AVAILABLE_AI_MODELS: dict[str, list[str]] = {
 }
 
 
+EMBEDDING_KEYWORDS = {"embedding", "embed", "text-embedding", "ada", "text-similarity"}
+
+
+def _classify_model(id: str, provider: str) -> str:
+    lid = id.lower()
+    if any(kw in lid for kw in EMBEDDING_KEYWORDS):
+        return "embedding"
+    return "chat"
+
+
 @router.get("/api/admin/ai-provider-models")
 @router.get("/webapp/ai-provider-models")
 async def webapp_ai_provider_models(
     _identity: TelegramWebAppIdentity = Depends(get_identity),
-) -> dict[str, list[str]]:
-    return dict(AVAILABLE_AI_MODELS)
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for provider, model_ids in AVAILABLE_AI_MODELS.items():
+        for mid in model_ids:
+            if mid not in seen:
+                seen.add(mid)
+                result.append({
+                    "id": mid,
+                    "name": mid,
+                    "provider": provider,
+                    "type": _classify_model(mid, provider),
+                })
+    return result
 
 
 @router.post("/api/admin/ai-provider-models/sync")
@@ -309,24 +331,6 @@ async def webapp_sync_ai_provider_models(
 
     settings = get_settings()
     updated: dict[str, list[str]] = {}
-
-    if settings.openai_api_key:
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                )
-                if resp.status_code == 200:
-                    models = [
-                        m["id"]
-                        for m in resp.json().get("data", [])
-                        if not m.get("id", "").startswith("ft:")
-                    ]
-                    if models:
-                        updated["openai"] = sorted(models)
-        except Exception:
-            pass
 
     if settings.gemini_api_key:
         try:
@@ -363,7 +367,19 @@ async def webapp_sync_ai_provider_models(
     if updated:
         AVAILABLE_AI_MODELS.update(updated)
 
-    return {"status": "ok", "models": dict(AVAILABLE_AI_MODELS)}
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for provider, model_ids in AVAILABLE_AI_MODELS.items():
+        for mid in model_ids:
+            if mid not in seen:
+                seen.add(mid)
+                result.append({
+                    "id": mid,
+                    "name": mid,
+                    "provider": provider,
+                    "type": _classify_model(mid, provider),
+                })
+    return {"status": "ok", "models": result}
 
 
 @router.get("/api/admin/ai-provider-defaults")

@@ -1,14 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Brain, Eye, EyeOff, Loader2, RefreshCw, Zap } from 'lucide-react'
+import { Brain, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react'
 
 import { fetchAIConfig, fetchAIModels, syncAIModels, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, CardSkeleton, Field, FieldRow, InlineMessage, Input, Select, ToggleRow, EmptyState } from '../../components/ui/primitives'
+import { Button, Card, CardSkeleton, Field, InlineMessage, Input, Select, ToggleRow, EmptyState } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
 import { spacing, radius } from '../../../../shared/ui-system/tokens'
+import type { AIModel } from '../../lib/types'
+
+const PROVIDERS = [
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'gemini', label: 'Google Gemini' },
+] as const
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
@@ -16,36 +22,46 @@ export default function AdminAISettingsPage() {
   const qc = useQueryClient()
   const { toast } = useToast()
 
-  const { data, isLoading } = useQuery({
+  const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ['ai-config'],
     queryFn: fetchAIConfig,
     enabled: user?.role === 'admin' || user?.role === 'owner',
   })
 
-  const [provider, setProvider] = useState('heuristic')
+  const [provider, setProvider] = useState<string>('openrouter')
   const [apiKey, setApiKey] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const [model, setModel] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
+  const [genModel, setGenModel] = useState('')
   const [embedModel, setEmbedModel] = useState('')
   const [enabled, setEnabled] = useState(false)
-  const [aiModels, setAIModels] = useState<Record<string, string[]>>({})
+  const [aiModels, setAIModels] = useState<AIModel[]>([])
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    if (data) {
-      setProvider(data.provider || 'heuristic')
-      setApiKey(data.api_key || '')
-      setModel(data.model || '')
-      setBaseUrl(data.base_url || '')
-      setEmbedModel(data.embedding_model || 'text-embedding-3-small')
-      setEnabled(data.enabled === true || data.enabled === 'true')
+    if (config) {
+      setProvider(config.provider || 'openrouter')
+      setApiKey(config.api_key || '')
+      setGenModel(config.model || '')
+      setBaseUrl(config.base_url || (config.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : ''))
+      setEmbedModel(config.embedding_model || 'text-embedding-3-small')
+      setEnabled(config.enabled === true || config.enabled === 'true')
     }
-  }, [data])
+  }, [config])
 
   useEffect(() => {
     fetchAIModels().then(setAIModels).catch(() => {})
   }, [])
+
+  const chatModels = useMemo(
+    () => aiModels.filter(m => m.provider === provider && m.type === 'chat').sort((a, b) => a.name.localeCompare(b.name)),
+    [aiModels, provider]
+  )
+
+  const embeddingModels = useMemo(
+    () => aiModels.filter(m => m.provider === provider && m.type === 'embedding').sort((a, b) => a.name.localeCompare(b.name)),
+    [aiModels, provider]
+  )
 
   const saveMutation = useMutation({
     mutationFn: updateAIConfig,
@@ -59,7 +75,7 @@ export default function AdminAISettingsPage() {
   })
 
   const testMutation = useMutation({
-    mutationFn: () => testAIConfig({ provider, api_key: apiKey, model, base_url: baseUrl }),
+    mutationFn: () => testAIConfig({ provider, api_key: apiKey, model: genModel, base_url: baseUrl }),
     onSuccess: (result) => {
       if (result.status === 'ok') {
         toast.success(result.reply || 'Connected')
@@ -71,19 +87,6 @@ export default function AdminAISettingsPage() {
       toast.error(err?.message || 'Connection failed')
     },
   })
-
-  const modelOptions = aiModels[provider] ?? []
-
-  function handleSave() {
-    saveMutation.mutate({
-      ai_provider: provider,
-      ai_provider_api_key: apiKey,
-      ai_provider_model: model,
-      ai_provider_base_url: baseUrl,
-      ai_embedding_model: embedModel,
-      ai_pilot_enabled: enabled ? 'true' : 'false',
-    })
-  }
 
   async function handleSyncModels() {
     setSyncing(true)
@@ -98,6 +101,28 @@ export default function AdminAISettingsPage() {
     }
   }
 
+  function handleSave() {
+    saveMutation.mutate({
+      ai_provider: provider,
+      ai_provider_api_key: apiKey,
+      ai_provider_model: genModel,
+      ai_provider_base_url: baseUrl,
+      ai_embedding_model: embedModel,
+      ai_pilot_enabled: enabled ? 'true' : 'false',
+    })
+  }
+
+  function handleProviderChange(value: string) {
+    setProvider(value)
+    setGenModel('')
+    setEmbedModel('')
+    if (value === 'openrouter') {
+      setBaseUrl('https://openrouter.ai/api/v1')
+    }
+  }
+
+  const needsSync = chatModels.length === 0 && provider !== 'heuristic'
+
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell title="AI Settings" description="Admin access required." loading={false}>
@@ -106,108 +131,126 @@ export default function AdminAISettingsPage() {
     )
   }
 
-  const providers = [
-    { value: 'heuristic', label: 'Heuristic (rule-based)' },
-    { value: 'openai', label: 'OpenAI' },
-    { value: 'gemini', label: 'Google Gemini' },
-    { value: 'openrouter', label: 'OpenRouter' },
-  ]
-
-  const hasApiKey = provider !== 'heuristic'
-
   return (
     <PageShell
       title="AI Settings"
-      description="Configure the AI provider for RAG, knowledge extraction, and AI pilot replies."
+      description="Configure AI provider, models, and reply behavior."
       icon={<Brain size={20} />}
     >
-      {isLoading ? (
-        <CardSkeleton rows={4} />
+      {configLoading ? (
+        <CardSkeleton rows={5} />
       ) : (
-        <div style={{ display: 'grid', gap: spacing.lg }}>
-          <div className="settings-card-grid">
-            <Card title="Provider Configuration" subtitle="Choose your AI provider and inference model.">
-              <FieldRow>
-                <Field label="AI Provider" hint="Which service powers AI features">
-                  <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                    {providers.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
+        <div style={{ display: 'grid', gap: spacing.lg, maxWidth: 720 }}>
+          {/* ── 1. AI Provider ── */}
+          <Card title="AI Provider" subtitle="Select the service that powers AI features.">
+            <Select value={provider} onChange={(e) => handleProviderChange(e.target.value)}>
+              {PROVIDERS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </Select>
+          </Card>
+
+          {/* ── 2. Authentication ── */}
+          <Card title="Authentication" subtitle="API credentials for the selected provider.">
+            <div style={{ display: 'grid', gap: spacing.md }}>
+              <Field label="API Key" hint="Required. Provider API key for authentication.">
+                <div style={{ position: 'relative' }}>
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={provider === 'gemini' ? 'AIza...' : 'sk-or-...'}
+                    style={{ paddingRight: 44 }}
+                  />
+                  <button
+                    onClick={() => setShowKey(!showKey)}
+                    aria-label={showKey ? 'Hide API key' : 'Show API key'}
+                    style={{
+                      position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', color: 'var(--ui-text-muted)',
+                      cursor: 'pointer', padding: 4, display: 'flex',
+                    }}
+                  >
+                    {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </Field>
+
+              {provider === 'openrouter' && (
+                <Field label="Base URL" hint="OpenAI-compatible API endpoint.">
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder="https://openrouter.ai/api/v1"
+                  />
+                </Field>
+              )}
+
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={() => testMutation.mutate()}
+                  disabled={testMutation.isPending || !apiKey}
+                >
+                  {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* ── 3. Models ── */}
+          <Card title="Models" subtitle="Configure generation and embedding models.">
+            <div style={{ display: 'grid', gap: spacing.md }}>
+              {needsSync && (
+                <InlineMessage tone="neutral">
+                  No models loaded. Click <strong>Sync Models</strong> to fetch available models for {PROVIDERS.find(p => p.value === provider)?.label}.
+                </InlineMessage>
+              )}
+
+              <div style={{ display: 'flex', gap: spacing.sm, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 240, flex: 1 }}>
+                  <Field label="Generation Model" hint="Used for chat and AI replies.">
+                    {chatModels.length > 0 ? (
+                      <Select value={genModel} onChange={(e) => setGenModel(e.target.value)}>
+                        <option value="">Select a model...</option>
+                        {chatModels.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Input
+                        value={genModel}
+                        onChange={(e) => setGenModel(e.target.value)}
+                        placeholder="e.g. gpt-4o"
+                      />
+                    )}
+                  </Field>
+                </div>
+                <Button variant="outline" onClick={handleSyncModels} disabled={syncing}>
+                  {syncing ? <><Loader2 size={14} className="spin" /> Syncing...</> : <><RefreshCw size={14} /> Sync Models</>}
+                </Button>
+              </div>
+
+              <Field label="Embedding Model" hint="Used for vector search and RAG.">
+                {embeddingModels.length > 0 ? (
+                  <Select value={embedModel} onChange={(e) => setEmbedModel(e.target.value)}>
+                    <option value="">Select a model...</option>
+                    {embeddingModels.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </Select>
-                </Field>
-                <Field label="Model" hint={provider === 'heuristic' ? 'N/A in heuristic mode' : 'Inference model name'}>
-                  {modelOptions.length > 0 ? (
-                    <Select value={model} onChange={(e) => setModel(e.target.value)}>
-                      {modelOptions.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Input
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      placeholder={provider === 'heuristic' ? 'N/A' : 'gpt-4.1-mini'}
-                      disabled={provider === 'heuristic'}
-                    />
-                  )}
-                </Field>
-              </FieldRow>
-              {provider === 'heuristic' && (
-                <div style={{ marginTop: spacing.md }}>
-                  <InlineMessage tone="neutral">
-                    <Zap size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                    Heuristic mode uses rule-based matching. No API key or model required.
-                  </InlineMessage>
-                </div>
-              )}
-            </Card>
-
-            <Card title="Authentication" subtitle="API credentials for your chosen provider.">
-              <div style={{ display: 'grid', gap: spacing.md }}>
-                {hasApiKey && (
-                  <Field label="API Key" hint="Your provider API key">
-                    <div style={{ position: 'relative' }}>
-                      <Input
-                        type={showKey ? 'text' : 'password'}
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
-                        style={{ paddingRight: 44 }}
-                      />
-                      <button
-                        onClick={() => setShowKey(!showKey)}
-                        aria-label={showKey ? 'Hide API key' : 'Show API key'}
-                        style={{
-                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                          background: 'none', border: 'none', color: 'var(--ui-text-muted)',
-                          cursor: 'pointer', padding: 4, display: 'flex',
-                        }}
-                      >
-                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </Field>
+                ) : (
+                  <Input
+                    value={embedModel}
+                    onChange={(e) => setEmbedModel(e.target.value)}
+                    placeholder="text-embedding-3-small"
+                  />
                 )}
-                <FieldRow>
-                  <Field label="Base URL" hint="Custom API endpoint (optional)">
-                    <Input
-                      value={baseUrl}
-                      onChange={(e) => setBaseUrl(e.target.value)}
-                      placeholder="https://api.openai.com/v1"
-                    />
-                  </Field>
-                  <Field label="Embedding Model" hint="Used for vector search">
-                    <Input
-                      value={embedModel}
-                      onChange={(e) => setEmbedModel(e.target.value)}
-                      placeholder="text-embedding-3-small"
-                    />
-                  </Field>
-                </FieldRow>
-              </div>
-            </Card>
-          </div>
+              </Field>
+            </div>
+          </Card>
 
+          {/* ── 4. AI Replies ── */}
           <Card title="AI Replies" subtitle="Allow the AI to respond to @mentions in group chats.">
             <ToggleRow
               title="Enable AI Replies"
@@ -217,17 +260,12 @@ export default function AdminAISettingsPage() {
             />
           </Card>
 
+          {/* ── 5. Actions ── */}
           <div style={{
             padding: spacing.lg, borderRadius: radius.lg,
             background: 'var(--ui-surface)', border: '1px solid var(--ui-border)',
           }}>
-            <div className="settings-actions">
-              <Button variant="outline" onClick={handleSyncModels} disabled={syncing}>
-                {syncing ? <><Loader2 size={14} className="spin" /> Syncing...</> : <><RefreshCw size={14} /> Sync models</>}
-              </Button>
-              <Button variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending || provider === 'heuristic'}>
-                {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
-              </Button>
+            <div className="settings-actions" style={{ justifyContent: 'flex-end' }}>
               <Button onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? 'Saving...' : 'Save Configuration'}
               </Button>

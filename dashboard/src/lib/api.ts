@@ -31,6 +31,7 @@ import type {
   WhatsAppNotificationSettings,
   SettingsSchemaCatalog,
   AdminOverview,
+  AIModel,
 } from '../lib/types'
 
 function resolveApiBaseUrl() {
@@ -140,13 +141,13 @@ export async function fetchAIProviderDefaults(): Promise<AIProviderDefaults> {
   return data
 }
 
-export async function fetchAIModels(): Promise<Record<string, string[]>> {
-  const { data } = await api.get<Record<string, string[]>>(`${ADMIN_API_PREFIX}/ai-provider-models`)
+export async function fetchAIModels(): Promise<AIModel[]> {
+  const { data } = await api.get<AIModel[]>(`${ADMIN_API_PREFIX}/ai-provider-models`)
   return data
 }
 
-export async function syncAIModels(): Promise<{ status: string; models: Record<string, string[]> }> {
-  const { data } = await api.post<{ status: string; models: Record<string, string[]> }>(`${ADMIN_API_PREFIX}/ai-provider-models/sync`)
+export async function syncAIModels(): Promise<{ status: string; models: AIModel[] }> {
+  const { data } = await api.post<{ status: string; models: AIModel[] }>(`${ADMIN_API_PREFIX}/ai-provider-models/sync`)
   return data
 }
 

@@ -338,6 +338,16 @@ export interface AdminAgent {
   last_job_at?: string
 }
 
+export interface AIModel {
+  id: string
+  name: string
+  provider: 'openrouter' | 'gemini'
+  type: 'chat' | 'embedding'
+  contextWindow?: number
+  dimensions?: number
+  capabilities?: string[]
+}
+
 export interface AdminJob {
   job_id: number
   agent_id: number
