@@ -326,18 +326,24 @@ async def webapp_ai_provider_models(
 @router.post("/webapp/ai-provider-models/sync")
 async def webapp_sync_ai_provider_models(
     identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     import httpx
 
+    from bot.db.models.system_config import SystemConfig
+
     settings = get_settings()
+    result = await session.execute(select(SystemConfig))
+    db_config = {row.key: row.value for row in result.scalars().all()}
     updated: dict[str, list[str]] = {}
 
-    if settings.gemini_api_key:
+    gemini_key = settings.gemini_api_key or db_config.get("gemini_api_key") or db_config.get("ai_provider_api_key")
+    if gemini_key:
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
                     "https://generativelanguage.googleapis.com/v1beta/models",
-                    params={"key": settings.gemini_api_key},
+                    params={"key": gemini_key},
                 )
                 if resp.status_code == 200:
                     models = [
@@ -350,12 +356,13 @@ async def webapp_sync_ai_provider_models(
         except Exception:
             pass
 
-    if settings.openrouter_api_key:
+    openrouter_key = settings.openrouter_api_key or db_config.get("openrouter_api_key") or db_config.get("ai_provider_api_key")
+    if openrouter_key:
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
                     "https://openrouter.ai/api/v1/models",
-                    headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
+                    headers={"Authorization": f"Bearer {openrouter_key}"},
                 )
                 if resp.status_code == 200:
                     models = [m["id"] for m in resp.json().get("data", [])]
