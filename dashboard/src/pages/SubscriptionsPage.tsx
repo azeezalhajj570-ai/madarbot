@@ -29,10 +29,12 @@ import {
   deleteOwnerPromoCode,
   fetchOwnerStats 
 } from '../lib/api'
+import { useToast } from '../components/ui/toast'
 import { useI18n } from '../lib/i18n'
 
 export default function SubscriptionsPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const user = getStoredUser()
   const [promoDialogOpen, setPromoDialogOpen] = useState(false)
@@ -65,9 +67,17 @@ export default function SubscriptionsPage() {
   const subMutation = useMutation({
     mutationFn: ({ id, action, plan }: { id: number, action: 'approve' | 'decline', plan?: 'pro' | 'business' }) => 
       updateOwnerSubscription(id, action, plan),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['owner', 'subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['owner', 'stats'] })
+      if (variables.action === 'approve') {
+        toast.success('Subscription approved.')
+      } else {
+        toast.success('Subscription declined.')
+      }
+    },
+    onError: () => {
+      toast.error('Failed to update subscription.')
     }
   })
 
@@ -77,6 +87,10 @@ export default function SubscriptionsPage() {
       setPromoDialogOpen(false)
       setNewPromo({ code: '', plan: 'pro', duration_days: 30, max_uses: 0, is_active: true })
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code created.')
+    },
+    onError: () => {
+      toast.error('Failed to create promo code.')
     }
   })
 
@@ -92,6 +106,10 @@ export default function SubscriptionsPage() {
     mutationFn: (id: number) => deleteOwnerPromoCode(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code deleted.')
+    },
+    onError: () => {
+      toast.error('Failed to delete promo code.')
     }
   })
 
@@ -172,14 +190,23 @@ export default function SubscriptionsPage() {
                     {sub.status === 'pending' ? (
                       <>
                         <div style={{ width: 100 }}>
-                          <Select 
-                            size="sm" 
+                          <select
                             value={approvalPlans[sub.id] || 'pro'} 
                             onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
+                            style={{
+                              width: '100%',
+                              minHeight: 32,
+                              borderRadius: '6px',
+                              border: '1px solid var(--ui-border)',
+                              padding: '0 8px',
+                              fontSize: 13,
+                              background: 'var(--ui-surface-strong)',
+                              color: 'var(--ui-text)',
+                            }}
                           >
                             <option value="pro">Pro</option>
                             <option value="business">Business</option>
-                          </Select>
+                          </select>
                         </div>
                         <Button 
                           size="sm" 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { uiVars } from '../../../../shared/ui-system/tokens'
 import { RefreshCw } from 'lucide-react'
 
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
@@ -20,7 +21,7 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === 'ok' ? '#22c55e' : status === 'degraded' ? '#f59e0b' : status === 'down' ? '#ef4444' : '#6b7280'
+  const color = status === 'ok' ? 'var(--ui-success)' : status === 'degraded' ? 'var(--ui-warning)' : status === 'down' ? 'var(--ui-danger)' : 'var(--ui-text-muted)'
   return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: color, marginRight: 6 }} />
 }
 
@@ -75,8 +76,8 @@ export default function AdminHealthPage() {
   return (
     <PageShell titleKey="page.admin.health" descriptionKey="page.admin.health.desc" loading={loading}>
       {error && (
-        <Card style={{ background: 'var(--ui-danger-soft, #fef2f2)', border: '1px solid var(--ui-danger, #ef4444)' }}>
-          <div style={{ fontSize: 14, color: 'var(--ui-danger, #ef4444)' }}>Error: {error}</div>
+        <Card style={{ background: uiVars.dangerSoft, border: `1px solid ${uiVars.danger}` }}>
+          <div style={{ fontSize: 14, color: uiVars.danger }}>Error: {error}</div>
         </Card>
       )}
 
@@ -85,10 +86,10 @@ export default function AdminHealthPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 16, fontWeight: 800 }}>System Status</span>
             {sh && <HealthBadge status={sh.status} />}
-            <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{okCount}/{checks.length} healthy</span>
+            <span style={{ fontSize: 12, color: uiVars.textMuted }}>{okCount}/{checks.length} healthy</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+            <span style={{ fontSize: 12, color: uiVars.textMuted }}>
               {lastRefresh.toLocaleTimeString()}
             </span>
             <Button variant="outline" size="sm" onClick={refresh}>
@@ -98,22 +99,22 @@ export default function AdminHealthPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {checks.map(({ label, check }) => (
-            <div key={label} style={{ padding: '14px 16px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)', marginBottom: 6 }}>{label}</div>
+            <div key={label} style={{ padding: '14px 16px', borderRadius: 8, background: uiVars.surfaceAlt, border: `1px solid ${uiVars.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: uiVars.textMuted, marginBottom: 6 }}>{label}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <StatusDot status={check?.status || 'unknown'} />
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{check?.status || 'unknown'}</span>
               </div>
               {check?.latency_ms !== undefined && (
-                <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 4 }}>{check.latency_ms}ms latency</div>
+                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>{check.latency_ms}ms latency</div>
               )}
               {check?.pending !== undefined && (
-                <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>
                   {check.pending} pending · {check.running} running{check.stuck ? ` · ${check.stuck} stuck` : ''}
                 </div>
               )}
               {check?.last_seen && (
-                <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 4 }}>Last seen {timeAgo(check.last_seen)}</div>
+                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>Last seen {timeAgo(check.last_seen)}</div>
               )}
             </div>
           ))}

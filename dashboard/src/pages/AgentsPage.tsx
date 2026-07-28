@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bot, User, Shield, Activity, Phone, Mail, Trash2 } from 'lucide-react'
 
-import { Badge, Card, ContentGrid, EmptyState, MetricCard, Table, LoadingState, Button } from '../components/ui/primitives'
+import { Badge, Card, CardSkeleton, ContentGrid, EmptyState, MetricCard, Table, Button } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import { getStoredUser } from '../lib/auth'
 import { fetchAgents, fetchOwnerAgents, fetchOwnerUsers, fetchOwnerStats, deleteAgent } from '../lib/api'
@@ -47,7 +47,7 @@ export default function AgentsPage() {
       <PageShell titleKey="page.agents" descriptionKey="page.agents.desc">
         <Card title="My Agent Accounts" subtitle="Linked Telegram accounts for your automated tasks and scraping.">
           {myAgentsLoading ? (
-            <LoadingState />
+            <CardSkeleton />
           ) : (myAgents || []).length > 0 ? (
             <Table<Agent>
               columns={[
@@ -117,7 +117,7 @@ export default function AgentsPage() {
 
       <Card title="Telegram Agent Accounts" subtitle="All bot agents linked by users for automated tasks and scraping.">
         {agentsLoading ? (
-          <LoadingState />
+          <CardSkeleton />
         ) : (agents || []).length > 0 ? (
           <Table<Agent>
             columns={[
@@ -181,7 +181,7 @@ export default function AgentsPage() {
 
       <Card title="Dashboard Staff" subtitle="Users with login access to this dashboard (configured in system environment).">
         {usersLoading ? (
-          <LoadingState />
+          <CardSkeleton />
         ) : (users || []).length > 0 ? (
           <Table
             columns={[

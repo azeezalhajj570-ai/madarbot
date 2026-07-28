@@ -21,10 +21,10 @@ export default function HomePage() {
   return (
     <PageShell titleKey="nav.workspace" descriptionKey="page.dashboard.desc" loading={loading}>
       <ContentGrid columns="repeat(auto-fit, minmax(220px, 1fr))">
-        <MetricCard label="Groups" value={String(stats?.total_groups ?? 0)} hint="Tracked workspaces" icon={<Users size={20} />} />
-        <MetricCard label="Members" value={String(stats?.total_members ?? 0)} hint="Across all groups" icon={<TrendingUp size={20} />} />
-        <MetricCard label="Active Agents" value={String(stats?.active_agents ?? 0)} hint="Linked accounts" icon={<Bot size={20} />} />
-        <MetricCard label="Messages" value={String(stats?.total_messages ?? 0)} hint="Total scraped" icon={<MessageSquare size={20} />} />
+        <MetricCard label="Groups" value={String((stats as any)?.total_groups ?? 0)} hint="Tracked workspaces" icon={<Users size={20} />} />
+        <MetricCard label="Members" value={String((stats as any)?.total_members ?? 0)} hint="Across all groups" icon={<TrendingUp size={20} />} />
+        <MetricCard label="Active Agents" value={String((stats as any)?.active_agents ?? 0)} hint="Linked accounts" icon={<Bot size={20} />} />
+        <MetricCard label="Messages" value={String((stats as any)?.total_messages ?? 0)} hint="Total scraped" icon={<MessageSquare size={20} />} />
       </ContentGrid>
 
       <Card title="Your Groups">

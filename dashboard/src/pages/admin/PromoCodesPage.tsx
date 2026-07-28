@@ -2,14 +2,13 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 
-import {
-  Badge, Button, Card, ColumnDef, EmptyState, Table, LoadingState,
-  Dialog, Field, Input, FieldRow, Select, ToggleRow,
-} from '../../components/ui/primitives'
+import { Badge, Button, Dialog, Field, FieldRow, Input, Select, ToggleRow } from '../../components/ui/primitives'
+import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import {
   fetchOwnerPromoCodes, createOwnerPromoCode, updateOwnerPromoCode, deleteOwnerPromoCode,
 } from '../../lib/api'
+import { useToast } from '../../components/ui/toast'
 import { getStoredUser } from '../../lib/auth'
 
 export default function AdminPromoCodesPage() {
@@ -17,10 +16,11 @@ export default function AdminPromoCodesPage() {
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
       </PageShell>
     )
   }
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newPromo, setNewPromo] = useState({
@@ -42,7 +42,11 @@ export default function AdminPromoCodesPage() {
       setDialogOpen(false)
       setNewPromo({ code: '', plan: 'pro', duration_days: 30, max_uses: 0, is_active: true })
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code created.')
     },
+    onError: () => {
+      toast.error('Failed to create promo code.')
+    }
   })
 
   const updateMutation = useMutation({
@@ -52,52 +56,51 @@ export default function AdminPromoCodesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteOwnerPromoCode(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
+      toast.success('Promo code deleted.')
+    },
+    onError: () => {
+      toast.error('Failed to delete promo code.')
+    }
   })
 
   return (
     <PageShell titleKey="page.admin.promocodes" descriptionKey="page.admin.promocodes.desc" loading={false}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus size={16} style={{ marginRight: 8 }} />
-          Create Promo Code
-        </Button>
-      </div>
-
-      <Card title="Promotion Codes" subtitle="Codes users can redeem for trial or paid periods.">
-        {isLoading ? (
-          <LoadingState />
-        ) : promos && promos.length > 0 ? (
-          <Table
-            columns={[
-              { key: 'code', label: 'Code', render: (p: any) => <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span> },
-              { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p: any) => <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge> },
-              { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p: any) => <span style={{ fontWeight: 600 }}>{p.duration_days} days</span> },
-              { key: 'usage', label: 'Usage', render: (p: any) => <span>{p.used_count} / {p.max_uses || '∞'}</span> },
-              { key: 'active', label: 'Active', render: (p: any) => (
-                <ToggleRow title="" subtitle="" checked={p.is_active}
-                  onCheckedChange={(checked) => updateMutation.mutate({ id: p.id, payload: { is_active: checked } })}
-                  disabled={updateMutation.isPending}
-                />
-              )},
-              { key: 'actions', label: 'Actions', hideOnMobile: true, render: (p: any) => (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Button size="sm" variant="outline"
-                    onClick={() => { if (confirm('Delete this promo code?')) deleteMutation.mutate(p.id) }}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              )},
-            ]}
-            data={promos}
-            keyExtractor={(p: any) => p.id}
-          />
-        ) : (
-          <EmptyState title="No codes" subtitle="Create your first promotion code." />
-        )}
-      </Card>
+      <DataTable
+        data={promos || []}
+        total={(promos || []).length}
+        loading={isLoading}
+        title="Promotion Codes"
+        subtitle="Codes users can redeem for trial or paid periods."
+        searchPlaceholder="Search codes..."
+        actions={
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus size={16} /> Create Promo Code
+          </Button>
+        }
+        columns={[
+          { key: 'code', label: 'Code', render: (p: any) => <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</span> },
+          { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p: any) => <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge> },
+          { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p: any) => <span style={{ fontWeight: 600 }}>{p.duration_days} days</span> },
+          { key: 'usage', label: 'Usage', render: (p: any) => <span>{p.used_count} / {p.max_uses || '∞'}</span> },
+          { key: 'active', label: 'Active', render: (p: any) => (
+            <ToggleRow title="" subtitle="" checked={p.is_active}
+              onCheckedChange={(checked) => updateMutation.mutate({ id: p.id, payload: { is_active: checked } })}
+              disabled={updateMutation.isPending}
+            />
+          )},
+          { key: 'actions', label: '', hideOnMobile: true, render: (p: any) => (
+            <Button size="sm" variant="outline"
+              onClick={() => { if (confirm('Delete this promo code?')) deleteMutation.mutate(p.id) }}
+              disabled={deleteMutation.isPending}
+            >
+              <Trash2 size={14} />
+            </Button>
+          )},
+        ]}
+        keyExtractor={(p: any) => p.id}
+      />
 
       <Dialog
         open={dialogOpen}

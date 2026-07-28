@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Select, ToggleRow } from '../components/ui/primitives'
+import { useToast } from '../components/ui/toast'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { fetchSummaries, fetchSummarySettings, updateSummarySettings } from '../lib/api'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
@@ -8,10 +10,10 @@ import { useI18n } from '../lib/i18n'
 
 export default function SummariesPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const { groups, currentGroup, currentGroupId, setCurrentGroupId, loading: groupsLoading, error: groupsError } = useDashboardGroups()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [feedback, setFeedback] = useState('')
   const [settings, setSettings] = useState<any>(null)
   const [summaries, setSummaries] = useState<any[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
@@ -27,7 +29,6 @@ export default function SummariesPage() {
     ;(async () => {
       setLoading(true)
       setError('')
-      setFeedback('')
       try {
         const [summarySettings, summaryList] = await Promise.all([
           fetchSummarySettings(currentGroupId),
@@ -61,13 +62,12 @@ export default function SummariesPage() {
 
     setSavingSettings(true)
     setError('')
-    setFeedback('')
     try {
       const updated = await updateSummarySettings(currentGroupId, settings)
       setSettings(updated)
-      setFeedback('Summary settings saved.')
+      toast.success('Summary settings saved.')
     } catch {
-      setError('Unable to save summary settings.')
+      toast.error('Unable to save summary settings.')
     } finally {
       setSavingSettings(false)
     }
@@ -79,21 +79,22 @@ export default function SummariesPage() {
       titleKey="page.summaries"
       descriptionKey="page.summaries.desc"
       loading={loading}
-      actions={(
-        <div style={{ minWidth: 240 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">No managed groups</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
-        </div>
-      )}
+actions={(
+  <div style={{ minWidth: 240 }}>
+    <GroupAutoComplete
+      items={groups || []}
+      value={currentGroupId}
+      onChange={setCurrentGroupId}
+      placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+      getLabel={(g: any) => g.title}
+      getId={(g: any) => g.id}
+    />
+  </div>
+)}
     >
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">Viewing summaries for {currentGroup.title}.</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
-      {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {settings ? (
         <Card title="Summary settings" subtitle="Configure summary delivery preferences.">
@@ -102,13 +103,13 @@ export default function SummariesPage() {
             subtitle="Toggle daily summary generation for this group."
             checked={settings.enabled}
             disabled={currentGroupId == null}
-            onCheckedChange={(checked) => setSettings((current) => current ? { ...current, enabled: checked } : null)}
+            onCheckedChange={(checked) => setSettings((current: any) => current ? { ...current, enabled: checked } : null)}
           />
           <div style={{ marginTop: 16 }}>
             <Field label="Delivery mode" hint="How summaries are delivered to admins.">
               <Select
                 value={settings.delivery_mode}
-                onChange={(event) => setSettings((current) => current ? { ...current, delivery_mode: event.target.value } : null)}
+                onChange={(event) => setSettings((current: any) => current ? { ...current, delivery_mode: event.target.value } : null)}
               >
                 <option value="private">Private message</option>
                 <option value="group">Group message</option>
@@ -121,7 +122,7 @@ export default function SummariesPage() {
               <Input
                 type="time"
                 value={settings.delivery_time}
-                onChange={(event) => setSettings((current) => current ? { ...current, delivery_time: event.target.value } : null)}
+                onChange={(event) => setSettings((current: any) => current ? { ...current, delivery_time: event.target.value } : null)}
               />
             </Field>
           </div>

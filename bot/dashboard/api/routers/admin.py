@@ -25,6 +25,7 @@ from bot.services.settings_service import SettingsService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import ensure_group_admin, get_identity, require_bot_owner
+from bot.config import get_settings
 from .auth_boundary import require_admin_boundary
 from ._shared import (
     AccessGateUpdateRequest,
@@ -256,6 +257,196 @@ async def webapp_patch_group_settings(
         changed[key.strip()] = value
 
     return {"status": "ok", "group_id": group_id, "changed": changed}
+
+
+AVAILABLE_AI_MODELS: dict[str, list[str]] = {
+    "openai": [
+        "gpt-4.1-mini",
+        "gpt-4.1",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+    ],
+    "gemini": [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+    ],
+    "openrouter": [
+        "google/gemini-2.0-flash-001",
+        "google/gemini-2.5-flash-001",
+        "google/gemini-2.5-pro-001",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4.1",
+        "openai/gpt-4o-mini",
+        "openai/gpt-4o",
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-haiku-4",
+        "meta-llama/llama-4-maverick",
+        "deepseek/deepseek-chat",
+        "qwen/qwen-2.5-72b",
+    ],
+}
+
+
+EMBEDDING_KEYWORDS = {"embedding", "embed", "text-embedding", "ada", "text-similarity"}
+
+
+def _classify_model(id: str, provider: str) -> str:
+    lid = id.lower()
+    if any(kw in lid for kw in EMBEDDING_KEYWORDS):
+        return "embedding"
+    return "chat"
+
+
+@router.get("/api/admin/ai-provider-models")
+@router.get("/webapp/ai-provider-models")
+async def webapp_ai_provider_models(
+    _identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for provider, model_ids in AVAILABLE_AI_MODELS.items():
+        for mid in model_ids:
+            if mid not in seen:
+                seen.add(mid)
+                result.append({
+                    "id": mid,
+                    "name": mid,
+                    "provider": provider,
+                    "type": _classify_model(mid, provider),
+                })
+    return result
+
+
+@router.post("/api/admin/ai-provider-models/sync")
+@router.post("/webapp/ai-provider-models/sync")
+async def webapp_sync_ai_provider_models(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    import httpx
+
+    from bot.db.models.system_config import SystemConfig
+
+    settings = get_settings()
+    result = await session.execute(select(SystemConfig))
+    db_config = {row.key: row.value for row in result.scalars().all()}
+    updated: dict[str, list[str]] = {}
+
+    gemini_key = settings.gemini_api_key or db_config.get("gemini_api_key") or db_config.get("ai_provider_api_key")
+    gemini_url = db_config.get("ai_provider_base_url") or "https://generativelanguage.googleapis.com/v1beta/models"
+    if gemini_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(gemini_url, params={"key": gemini_key})
+                if resp.status_code == 200:
+                    models = [
+                        m["name"].replace("models/", "")
+                        for m in resp.json().get("models", [])
+                        if any(method in m.get("supportedGenerationMethods", [])
+                               for method in ("generateContent", "embedContent"))
+                    ]
+                    if models:
+                        updated["gemini"] = sorted(models)
+        except Exception:
+            pass
+
+    openrouter_key = settings.openrouter_api_key or db_config.get("openrouter_api_key") or db_config.get("ai_provider_api_key")
+    openrouter_url = db_config.get("ai_provider_base_url") or "https://openrouter.ai/api/v1/models"
+    if openrouter_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    openrouter_url,
+                    headers={"Authorization": f"Bearer {openrouter_key}"},
+                )
+                if resp.status_code == 200:
+                    models = [m["id"] for m in resp.json().get("data", [])]
+                    if models:
+                        updated["openrouter"] = sorted(models)
+        except Exception:
+            pass
+
+    if updated:
+        AVAILABLE_AI_MODELS.update(updated)
+
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for provider, model_ids in AVAILABLE_AI_MODELS.items():
+        for mid in model_ids:
+            if mid not in seen:
+                seen.add(mid)
+                result.append({
+                    "id": mid,
+                    "name": mid,
+                    "provider": provider,
+                    "type": _classify_model(mid, provider),
+                })
+    return {"status": "ok", "models": result}
+
+
+@router.get("/api/admin/ai-provider-defaults")
+@router.get("/webapp/ai-provider-defaults")
+async def webapp_ai_provider_defaults(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, Any]:
+    settings = get_settings()
+    return {
+        "ai_provider": settings.ai_provider,
+        "ai_model": settings.ai_model,
+        "openai_model": settings.openai_model,
+        "openai_model_premium": settings.openai_model_premium,
+        "openai_model_bulk": settings.openai_model_bulk,
+        "openai_has_key": bool(settings.openai_api_key),
+        "gemini_model": settings.gemini_model,
+        "gemini_model_premium": settings.gemini_model_premium,
+        "gemini_has_key": bool(settings.gemini_api_key),
+        "openrouter_model": settings.openrouter_model,
+        "openrouter_model_premium": settings.openrouter_model_premium,
+        "openrouter_model_bulk": settings.openrouter_model_bulk,
+        "openrouter_has_key": bool(settings.openrouter_api_key),
+        "ai_spam_detection_enabled": settings.ai_spam_detection_enabled,
+        "ai_receptionist_enabled": settings.ai_receptionist_enabled,
+        "knowledge_extraction_enabled": settings.knowledge_extraction_enabled,
+        "daily_summary_enabled": settings.daily_summary_enabled,
+        "faq_auto_answer_enabled": settings.faq_auto_answer_enabled,
+        "ai_pilot_enabled": settings.ai_pilot_enabled,
+    }
+
+
+SYSTEM_CONFIG_GROUP_ID = 0  # pseudo group id for system-wide key-value settings
+ALLOWED_AI_CONFIG_KEYS = frozenset({
+    "ai_provider",
+    "ai_provider_api_key",
+    "ai_provider_model",
+    "ai_provider_base_url",
+    "ai_embedding_model",
+    "ai_pilot_enabled",
+})
+
+
+@router.post("/api/admin/ai-config")
+@router.post("/webapp/ai-config")
+async def webapp_update_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    service = SettingsService(session)
+    changed: dict[str, bool | int | str] = {}
+    for key, value in payload.items():
+        if key not in ALLOWED_AI_CONFIG_KEYS:
+            continue
+        if isinstance(value, str) and len(value) > 2_000:
+            raise HTTPException(status_code=422, detail=f"Field {key} is too long")
+        if isinstance(value, (bool, int, str)):
+            await service.set_value(SYSTEM_CONFIG_GROUP_ID, key, value)
+            changed[key] = value
+    return {"status": "ok", "changed": changed}
 
 
 @router.get("/api/admin/groups/{group_id}/moderation/warnings")

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Select, Textarea, ToggleRow, ContentGrid } from '../components/ui/primitives'
+import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Textarea, ToggleRow, ContentGrid } from '../components/ui/primitives'
+import { useToast } from '../components/ui/toast'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import {
   aiAnalyzeGroupMessages,
@@ -18,6 +20,7 @@ import { useI18n } from '../lib/i18n'
 
 export default function FAQPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const { groups, currentGroup, currentGroupId, setCurrentGroupId, loading: groupsLoading, error: groupsError } = useDashboardGroups()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -52,7 +55,6 @@ export default function FAQPage() {
     ;(async () => {
       setLoading(true)
       setError('')
-      setFeedback('')
       try {
         const [faqSettings, faqEntries, faqUnanswered] = await Promise.all([
           fetchFAQSettings(currentGroupId),
@@ -67,7 +69,7 @@ export default function FAQPage() {
         setSuggestionThreshold(String(faqSettings.suggestion_threshold ?? 3))
         setAutoReplyThreshold(String(faqSettings.auto_reply_threshold ?? 5))
       } catch {
-        if (!cancelled) setError(t('faq.loadError'))
+        if (!cancelled) toast.error(t('faq.loadError'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -92,7 +94,6 @@ export default function FAQPage() {
 
     setSavingSettings(true)
     setError('')
-    setFeedback('')
     try {
       const updated = await updateFAQSettings(currentGroupId, {
         enabled_safe_mode: settings.enabled_safe_mode,
@@ -102,9 +103,9 @@ export default function FAQPage() {
       setSettings(updated)
       setSuggestionThreshold(String(updated.suggestion_threshold ?? threshold))
       setAutoReplyThreshold(String(updated.auto_reply_threshold ?? autoThreshold))
-      setFeedback(t('faq.settingsSaved'))
+      toast.success(t('faq.settingsSaved'))
     } catch {
-      setError(t('faq.settingsError'))
+      toast.error(t('faq.settingsError'))
     } finally {
       setSavingSettings(false)
     }
@@ -119,7 +120,6 @@ export default function FAQPage() {
 
     setCreatingEntry(true)
     setError('')
-    setFeedback('')
     try {
       const keywords = newKeywords.split(',').map((k) => k.trim()).filter(Boolean)
       const entry = await createFAQEntry(currentGroupId, { question: newQuestion, answer: newAnswer, keywords })
@@ -127,9 +127,9 @@ export default function FAQPage() {
       setNewQuestion('')
       setNewAnswer('')
       setNewKeywords('')
-      setFeedback(t('faq.entryCreated'))
+      toast.success(t('faq.entryCreated'))
     } catch {
-      setError(t('faq.entryError'))
+      toast.error(t('faq.entryError'))
     } finally {
       setCreatingEntry(false)
     }
@@ -154,13 +154,12 @@ export default function FAQPage() {
   async function handleDeleteEntry(entryId: number) {
     if (currentGroupId == null) return
     setError('')
-    setFeedback('')
     try {
       await deleteFAQEntry(currentGroupId, entryId)
       setEntries((current) => current.filter((entry) => entry.id !== entryId))
-      setFeedback(t('faq.entryDeleted'))
+      toast.success(t('faq.entryDeleted'))
     } catch {
-      setError(t('faq.entryError'))
+      toast.error(t('faq.entryError'))
     }
   }
 
@@ -173,14 +172,13 @@ export default function FAQPage() {
     }
 
     setError('')
-    setFeedback('')
     try {
       await convertUnansweredToFAQ(currentGroupId, questionId, answer)
       setUnanswered((current) => current.filter((q) => q.id !== questionId))
       setConvertAnswers((current) => { const next = { ...current }; delete next[questionId]; return next })
-      setFeedback(t('faq.converted'))
+      toast.success(t('faq.converted'))
     } catch {
-      setError(t('faq.convertError'))
+      toast.error(t('faq.convertError'))
     }
   }
 
@@ -192,16 +190,15 @@ export default function FAQPage() {
     if (currentGroupId == null) return
     setAiAnalyzing(true)
     setError('')
-    setFeedback('')
     setAiResult(null)
     try {
       const result = await aiAnalyzeGroupMessages(currentGroupId, 1000)
       setAiResult(result)
-      setFeedback(`${t('faq.aiResult')} ${result.entries_saved} ${t('faq.aiFrom')} ${result.messages_analyzed} ${t('faq.aiMessages')}.`)
+      toast.success(`${t('faq.aiResult')} ${result.entries_saved} ${t('faq.aiFrom')} ${result.messages_analyzed} ${t('faq.aiMessages')}.`)
       const faqEntries = await fetchFAQEntries(currentGroupId)
       setEntries(faqEntries)
     } catch (e: any) {
-      setError(e?.response?.data?.detail || t('faq.aiError'))
+      toast.error(e?.response?.data?.detail || t('faq.aiError'))
     }
     setAiAnalyzing(false)
   }
@@ -212,20 +209,21 @@ export default function FAQPage() {
       descriptionKey="page.faq.desc"
       loading={loading}
       actions={(
-        <div style={{ minWidth: 200 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">{t('faq.noGroups')}</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
+        <div style={{ minWidth: 240 }}>
+          <GroupAutoComplete
+            items={groups || []}
+            value={currentGroupId}
+            onChange={setCurrentGroupId}
+            placeholder={groups.length === 0 ? t('faq.noGroups') : 'Search groups...'}
+            getLabel={(g: any) => g.title}
+            getId={(g: any) => g.id}
+          />
         </div>
       )}
     >
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">{t('faq.managing')} {currentGroup.title}.</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
-      {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
       {settings ? (
         <Card title={t('faq.settingsTitle')} subtitle={t('faq.settingsDesc')}>
@@ -234,7 +232,7 @@ export default function FAQPage() {
             subtitle={t('faq.safeModeDesc')}
             checked={settings.enabled_safe_mode}
             disabled={currentGroupId == null}
-            onCheckedChange={(checked) => setSettings((current) => current ? { ...current, enabled_safe_mode: checked } : null)}
+            onCheckedChange={(checked) => setSettings((current: any) => current ? { ...current, enabled_safe_mode: checked } : null)}
           />
           <ContentGrid columns="repeat(auto-fit, minmax(240px, 1fr))">
             <Field label={t('faq.suggestionThreshold')} hint={t('faq.suggestionThresholdHint')}>

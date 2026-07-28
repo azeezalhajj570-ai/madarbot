@@ -1,11 +1,13 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Shield, UserCheck, AlertTriangle, Info, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Badge, Button, Card, EmptyState, LoadingState } from '../../components/ui/primitives'
+import { SimplePagination } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerAuditLog } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
+import { spacing } from '../../../../shared/ui-system/tokens'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -17,6 +19,125 @@ function timeAgo(iso: string | null | undefined): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
+}
+
+function ActionIcon({ action }: { action: string }) {
+  const iconProps = { size: 14 }
+  if (action.includes('approve') || action.includes('added')) return <UserCheck {...iconProps} />
+  if (action.includes('delete') || action.includes('ban') || action.includes('remove')) return <XCircle {...iconProps} />
+  if (action.includes('warn') || action.includes('mute')) return <AlertTriangle {...iconProps} />
+  if (action.includes('login') || action.includes('auth')) return <Shield {...iconProps} />
+  return <Info {...iconProps} />
+}
+
+function ActionBadge({ action }: { action: string }) {
+  const tone = action.includes('delete') || action.includes('ban') || action.includes('remove')
+    ? 'destructive'
+    : action.includes('approve') || action.includes('added')
+    ? 'success'
+    : action.includes('warn') || action.includes('mute')
+    ? 'warning'
+    : 'neutral'
+  return <Badge tone={tone}>{action}</Badge>
+}
+
+function AuditEntry({ entry, index }: { entry: any; index: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const detailText = entry.detail
+    ? typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)
+    : null
+  const isLong = detailText && detailText.length > 120
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 12,
+        padding: '14px 0',
+        borderTop: index === 0 ? 'none' : '1px solid var(--ui-border)',
+      }}
+    >
+      {/* Icon */}
+      <div style={{
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        background: 'var(--ui-bg-muted)',
+        color: 'var(--ui-text-muted)',
+        display: 'grid',
+        placeItems: 'center',
+        flexShrink: 0,
+        marginTop: 2,
+      }}>
+        <ActionIcon action={entry.action} />
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+          <ActionBadge action={entry.action} />
+          {entry.target_type && (
+            <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
+              → {entry.target_type}#{entry.target_id}
+            </span>
+          )}
+        </div>
+
+        {detailText && (
+          <div style={{ marginTop: 4 }}>
+            <div style={{
+              fontSize: 13,
+              color: 'var(--ui-text-muted)',
+              lineHeight: '18px',
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: expanded || !isLong ? undefined : 2,
+              WebkitBoxOrient: 'vertical',
+              wordBreak: 'break-word',
+            }}>
+              {detailText}
+            </div>
+            {isLong && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--ui-primary)',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '2px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginTop: 2,
+                }}
+              >
+                {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Timestamp */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 4,
+        fontSize: 12,
+        color: 'var(--ui-text-subtle)',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+        paddingTop: 2,
+      }}>
+        <Clock size={12} style={{ marginTop: 1 }} />
+        {timeAgo(entry.created_at)}
+      </div>
+    </div>
+  )
 }
 
 export default function AdminAuditPage() {
@@ -31,7 +152,7 @@ export default function AdminAuditPage() {
   const [page, setPage] = useState(0)
   const limit = 50
 
-  const { data: entries, isLoading, refetch, isFetching } = useQuery({
+  const { data: entries, isLoading, refetch } = useQuery({
     queryKey: ['admin', 'audit', page],
     queryFn: () => fetchOwnerAuditLog(limit, page * limit),
   })
@@ -39,44 +160,24 @@ export default function AdminAuditPage() {
   return (
     <PageShell titleKey="page.admin.audit" descriptionKey="page.admin.audit.desc" loading={false}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>
-          Showing {page * limit + 1}–{(page + 1) * limit}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
-          <Button variant="outline" size="sm" disabled={!entries || entries.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-        </div>
+        <SimplePagination
+          page={page + 1}
+          hasNext={!!(entries && entries.length >= limit)}
+          hasPrev={page > 0}
+          onPageChange={(p) => setPage(p - 1)}
+        />
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw size={14} /> Refresh
+        </Button>
       </div>
 
-      <Card title="Audit Log">
+      <Card>
         {isLoading ? (
           <LoadingState />
         ) : entries && entries.length > 0 ? (
-          <div style={{ display: 'grid', gap: 0 }}>
+          <div>
             {entries.map((entry: any, i: number) => (
-              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>
-                    {entry.action}
-                    {entry.target_type && (
-                      <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>
-                        {' → '}{entry.target_type}#{entry.target_id}
-                      </span>
-                    )}
-                  </div>
-                  {entry.detail && (
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', maxWidth: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                      {typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)}
-                    </div>
-                  )}
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)', whiteSpace: 'nowrap', marginLeft: 16 }}>
-                  {timeAgo(entry.created_at)}
-                </span>
-              </div>
+              <AuditEntry key={entry.id} entry={entry} index={i} />
             ))}
           </div>
         ) : (

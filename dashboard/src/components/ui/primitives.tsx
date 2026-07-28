@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-
 import { contentMaxWidth, radius, spacing, typeScale, uiVars } from '../../../../shared/ui-system/tokens'
 
 const panelBaseStyle: CSSProperties = {
@@ -10,34 +9,31 @@ const panelBaseStyle: CSSProperties = {
 }
 
 function buttonVariantStyle(variant: ButtonVariant): CSSProperties {
-  if (variant === 'outline') {
-    return {
-      background: uiVars.surfaceStrong,
-      color: uiVars.text,
-      border: `1px solid ${uiVars.borderStrong}`,
-    }
-  }
-
-  if (variant === 'ghost') {
-    return {
-      background: 'transparent',
-      color: uiVars.primary,
-      border: '1px solid transparent',
-    }
-  }
-
-  if (variant === 'destructive') {
-    return {
-      background: uiVars.dangerSoft,
-      color: uiVars.danger,
-      border: `1px solid color-mix(in srgb, ${uiVars.danger} 22%, transparent)`,
-    }
-  }
-
-  return {
-    background: uiVars.primary,
-    color: uiVars.primaryText,
-    border: `1px solid ${uiVars.primary}`,
+  switch (variant) {
+    case 'outline':
+      return {
+        background: uiVars.surfaceStrong,
+        color: uiVars.text,
+        border: `1px solid ${uiVars.borderStrong}`,
+      }
+    case 'ghost':
+      return {
+        background: 'transparent',
+        color: uiVars.textMuted,
+        border: '1px solid transparent',
+      }
+    case 'destructive':
+      return {
+        background: uiVars.dangerSoft,
+        color: uiVars.danger,
+        border: `1px solid color-mix(in srgb, ${uiVars.danger} 22%, transparent)`,
+      }
+    default:
+      return {
+        background: uiVars.primary,
+        color: uiVars.primaryText,
+        border: `1px solid ${uiVars.primary}`,
+      }
   }
 }
 
@@ -46,7 +42,7 @@ function overlayStyle(dimmed = true): CSSProperties {
     position: 'fixed',
     inset: 0,
     background: dimmed ? 'rgba(20, 33, 61, 0.22)' : 'transparent',
-    backdropFilter: 'blur(10px)',
+    backdropFilter: 'blur(8px)',
     zIndex: 1000,
   }
 }
@@ -113,12 +109,15 @@ export function AutoComplete<T>({
           ) : filtered.map(item => (
             <div
               key={getKey(item)}
-              onClick={() => { onChange(item); setQuery(''); setOpen(false); }}
+              onClick={() => { onChange(item); setQuery(''); setOpen(false) }}
               style={{
                 padding: '10px 14px', cursor: 'pointer', fontSize: 14,
                 background: value && getKey(item) === getKey(value) ? uiVars.primarySoft : 'transparent',
                 borderBottom: `1px solid ${uiVars.border}`,
+                transition: 'background 0.1s',
               }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = uiVars.bgMuted }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = value && getKey(item) === getKey(value) ? uiVars.primarySoft : 'transparent' }}
             >
               {getLabel(item)}
             </div>
@@ -141,8 +140,8 @@ export function Button({
 }) {
   const sizes = {
     sm: { minHeight: 32, padding: '0 10px', fontSize: 13 },
-    md: { minHeight: 42, padding: '0 14px', fontSize: typeScale.subhead },
-    lg: { minHeight: 50, padding: '0 20px', fontSize: 16 },
+    md: { minHeight: 40, padding: '0 14px', fontSize: typeScale.subhead },
+    lg: { minHeight: 48, padding: '0 20px', fontSize: 16 },
   }
   const sizeStyle = sizes[size]
 
@@ -154,12 +153,13 @@ export function Button({
         fontWeight: 700,
         lineHeight: '18px',
         cursor: props.disabled ? 'not-allowed' : 'pointer',
-        transition: 'opacity 0.16s ease, background 0.16s ease, border-color 0.16s ease',
-        opacity: props.disabled ? 0.55 : 1,
+        transition: 'opacity 0.15s, background 0.15s, border-color 0.15s',
+        opacity: props.disabled ? 0.5 : 1,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         gap: spacing.xs,
+        whiteSpace: 'nowrap',
         ...sizeStyle,
         ...buttonVariantStyle(variant),
         ...style,
@@ -186,23 +186,21 @@ export function Card({
   return (
     <section style={{ ...panelBaseStyle, padding: padded ? spacing.lg : 0, ...style }}>
       {title ? (
-        <div style={{ padding: padded ? `0 0 ${spacing.lg}px 0` : spacing.lg, borderBottom: subtitle ? 'none' : `1px solid ${uiVars.border}` }}>
-          <div style={{ fontSize: 16, fontWeight: 800 }}>{title}</div>
-          {subtitle ? <div style={{ fontSize: 13, color: uiVars.textMuted, marginTop: 4 }}>{subtitle}</div> : null}
+        <div style={{ padding: `0 0 ${spacing.md}px 0`, borderBottom: `1px solid ${uiVars.border}`, marginBottom: spacing.md }}>
+          <div style={{ fontSize: typeScale.title, fontWeight: 700, lineHeight: '24px', color: uiVars.text }}>{title}</div>
+          {subtitle ? <div style={{ fontSize: typeScale.body, color: uiVars.textMuted, marginTop: 2, lineHeight: '20px' }}>{subtitle}</div> : null}
         </div>
       ) : null}
-      <div style={{ marginTop: title ? spacing.lg : 0 }}>
-        {children}
-      </div>
+      <div>{children}</div>
     </section>
   )
 }
 
-export function LoadingState() {
+export function LoadingState({ label = 'Loading...' }: { label?: string }) {
   return (
-    <div style={{ padding: spacing.xl, textAlign: 'center', color: uiVars.textMuted }}>
-      <div className="pulse" style={{ width: 40, height: 40, borderRadius: 20, background: uiVars.primarySoft, margin: '0 auto 12px' }} />
-      Loading...
+    <div style={{ padding: spacing.xxxl, textAlign: 'center', color: uiVars.textMuted }}>
+      <div className="pulse" style={{ width: 32, height: 32, borderRadius: 16, background: uiVars.primarySoft, margin: '0 auto 12px' }} />
+      <div style={{ fontSize: typeScale.body }}>{label}</div>
     </div>
   )
 }
@@ -211,15 +209,20 @@ export function SectionHeader({
   title,
   subtitle,
   actions,
+  icon,
 }: {
   title: ReactNode
   subtitle?: ReactNode
   actions?: ReactNode
+  icon?: ReactNode
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.lg }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 22, lineHeight: '28px', fontWeight: 800, color: uiVars.text }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+          {icon ? <span style={{ color: uiVars.primary, flexShrink: 0 }}>{icon}</span> : null}
+          <div style={{ fontSize: 22, lineHeight: '28px', fontWeight: 800, color: uiVars.text }}>{title}</div>
+        </div>
         {subtitle ? (
           <div style={{ marginTop: spacing.xs, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>
             {subtitle}
@@ -237,13 +240,14 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       style={{
         width: '100%',
-        minHeight: 44,
+        minHeight: 42,
         borderRadius: radius.md,
         border: `1px solid ${uiVars.borderStrong}`,
-        padding: '0 14px',
+        padding: '0 12px',
         background: uiVars.surfaceStrong,
         color: uiVars.text,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
+        fontSize: typeScale.body,
+        transition: 'border-color 0.15s',
         ...props.style,
       }}
     />
@@ -260,14 +264,13 @@ export function Select({
       {...props}
       style={{
         width: '100%',
-        minHeight: selectSize === 'sm' ? 32 : 44,
+        minHeight: selectSize === 'sm' ? 32 : 42,
         borderRadius: radius.md,
         border: `1px solid ${uiVars.border}`,
-        padding: selectSize === 'sm' ? '0 8px' : '0 14px',
-        fontSize: selectSize === 'sm' ? 13 : 15,
+        padding: selectSize === 'sm' ? '0 8px' : '0 12px',
+        fontSize: selectSize === 'sm' ? 13 : typeScale.body,
         background: uiVars.surfaceStrong,
         color: uiVars.text,
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
         ...props.style,
       }}
     >
@@ -282,14 +285,14 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
       {...props}
       style={{
         width: '100%',
-        minHeight: 120,
+        minHeight: 100,
         borderRadius: radius.md,
         border: `1px solid ${uiVars.borderStrong}`,
-        padding: 14,
+        padding: 12,
         background: uiVars.surfaceStrong,
         color: uiVars.text,
+        fontSize: typeScale.body,
         resize: 'vertical',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.72)',
         ...props.style,
       }}
     />
@@ -306,12 +309,12 @@ export function Field({
   children: ReactNode
 }) {
   return (
-    <label style={{ display: 'grid', gap: 8 }}>
-        <div>
+    <label style={{ display: 'grid', gap: 6 }}>
+      <div>
         <div style={{ fontSize: typeScale.body, lineHeight: '18px', fontWeight: 700, color: uiVars.textMuted }}>
           {label}
         </div>
-        {hint ? <div style={{ marginTop: 4, fontSize: typeScale.caption, lineHeight: '16px', color: uiVars.textSubtle }}>{hint}</div> : null}
+        {hint ? <div style={{ marginTop: 2, fontSize: typeScale.caption, lineHeight: '16px', color: uiVars.textSubtle }}>{hint}</div> : null}
       </div>
       {children}
     </label>
@@ -342,9 +345,11 @@ export function FieldRow({
 export function Badge({
   children,
   tone = 'default',
+  style,
 }: {
   children: ReactNode
   tone?: 'default' | 'success' | 'warning' | 'destructive' | 'info' | 'neutral'
+  style?: CSSProperties
 }) {
   const tones: Record<string, CSSProperties> = {
     default: { background: uiVars.primarySoft, color: uiVars.primary },
@@ -360,19 +365,19 @@ export function Badge({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
-        border: `1px solid ${uiVars.border}`,
-        borderRadius: radius.sm,
-        padding: '4px 8px',
+        gap: 4,
+        borderRadius: radius.xs,
+        padding: '3px 7px',
         fontSize: typeScale.caption,
         lineHeight: '16px',
-        fontWeight: 800,
-        ...tones[tone],
-      }}
-    >
-      {children}
-    </span>
-  )
+        fontWeight: 700,
+      ...tones[tone],
+      ...style,
+    }}
+  >
+    {children}
+  </span>
+)
 }
 
 export function ToggleRow({
@@ -399,15 +404,15 @@ export function ToggleRow({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: spacing.md,
-        padding: '14px 16px',
+        padding: '12px 14px',
         borderRadius: radius.md,
         border: `1px solid ${uiVars.border}`,
         background: uiVars.surfaceAlt,
       }}
     >
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: typeScale.subhead, lineHeight: '20px', fontWeight: 800 }}>{title}</div>
-        <div style={{ marginTop: 4, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
+        <div style={{ fontSize: typeScale.subhead, lineHeight: '20px', fontWeight: 700 }}>{title}</div>
+        <div style={{ marginTop: 2, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
         {action}
@@ -436,14 +441,14 @@ export function MetricCard({
   icon?: ReactNode
 }) {
   return (
-    <Card style={{ display: 'grid', gap: spacing.sm }}>
+    <Card style={{ display: 'grid', gap: spacing.xs }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <div style={{ fontSize: typeScale.body, lineHeight: '18px', fontWeight: 700, color: uiVars.textMuted }}>
           {label}
         </div>
         {icon ? <div style={{ color: uiVars.primary }}>{icon}</div> : null}
       </div>
-      <div style={{ fontSize: 30, lineHeight: '34px', fontWeight: 800, color: uiVars.text }}>{value}</div>
+      <div style={{ fontSize: 28, lineHeight: '32px', fontWeight: 800, color: uiVars.text }}>{value}</div>
       <div style={{ fontSize: typeScale.caption, lineHeight: '16px', color: uiVars.textSubtle }}>{hint}</div>
     </Card>
   )
@@ -459,18 +464,75 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <Card
+    <div
       style={{
+        padding: spacing.xxxl,
+        textAlign: 'center',
         display: 'grid',
-        justifyItems: 'start',
         gap: spacing.sm,
-        background: uiVars.surfaceAlt,
+        justifyItems: 'center',
       }}
     >
-      <div style={{ fontSize: 18, lineHeight: '24px', fontWeight: 800 }}>{title}</div>
-      <div style={{ maxWidth: 520, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
+      <div style={{ fontSize: 18, lineHeight: '24px', fontWeight: 700, color: uiVars.text }}>{title}</div>
+      <div style={{ maxWidth: 420, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
       {action}
+    </div>
+  )
+}
+
+export function Skeleton({ width, height, style }: {
+  width?: string | number
+  height?: string | number
+  style?: CSSProperties
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pulse"
+      style={{
+        borderRadius: radius.xs,
+        background: uiVars.bgMuted,
+        width: width ?? '100%',
+        height: height ?? 16,
+        ...style,
+      }}
+    />
+  )
+}
+
+const CARD_SKELETON_WIDTHS = ['85%', '70%', '60%', '75%', '65%']
+
+export function CardSkeleton({ rows = 3, title = true }: { rows?: number; title?: boolean }) {
+  return (
+    <Card aria-busy="true" aria-label="Loading content">
+      <div style={{ display: 'grid', gap: spacing.md }}>
+        {title && <Skeleton width="55%" height={20} />}
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} height={14} width={CARD_SKELETON_WIDTHS[i % CARD_SKELETON_WIDTHS.length]} />
+        ))}
+      </div>
     </Card>
+  )
+}
+
+export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+  return (
+    <div aria-busy="true" aria-label="Loading table data">
+      <div style={{ display: 'grid', gap: spacing.sm }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: spacing.md, padding: '0 0 10px 0' }}>
+          {Array.from({ length: columns }).map((_, i) => (
+            <Skeleton key={i} height={12} width="70%" />
+          ))}
+        </div>
+        {Array.from({ length: rows }).map((_, rowIdx) => (
+          <div key={rowIdx} style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: spacing.md, padding: '12px 0', borderTop: `1px solid ${uiVars.border}` }}>
+            {Array.from({ length: columns }).map((_, colIdx) => (
+              <Skeleton key={colIdx} height={14} width={colIdx === 0 ? '65%' : '85%'} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -489,7 +551,7 @@ export function InlineMessage({
   }
 
   return (
-    <div style={{ padding: '12px 14px', borderRadius: radius.md, fontSize: typeScale.body, lineHeight: '20px', ...toneStyle[tone] }}>
+    <div style={{ padding: '10px 14px', borderRadius: radius.md, fontSize: typeScale.body, lineHeight: '20px', ...toneStyle[tone] }}>
       {children}
     </div>
   )
@@ -531,7 +593,7 @@ export function Table<Row>({
   return (
     <div>
       <div className="table-desktop-view" style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               {columns.map((col) => (
@@ -539,10 +601,12 @@ export function Table<Row>({
                   key={col.key}
                   style={{
                     textAlign: 'left',
-                    fontSize: typeScale.body,
+                    fontSize: typeScale.caption,
                     color: uiVars.textMuted,
-                    padding: '0 0 12px',
+                    padding: '0 8px 10px 0',
                     fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                   }}
                 >
                   {col.label}
@@ -557,7 +621,7 @@ export function Table<Row>({
                   <td
                     key={col.key}
                     style={{
-                      padding: '14px 0',
+                      padding: '12px 8px 12px 0',
                       borderTop: `1px solid ${uiVars.border}`,
                       fontSize: typeScale.body,
                       lineHeight: '20px',
@@ -572,24 +636,24 @@ export function Table<Row>({
           </tbody>
         </table>
       </div>
-      <div className="table-mobile-view" style={{ display: 'none' }}>
+      <div className="table-mobile-view" style={{ display: 'none', gap: spacing.sm }}>
         {data.map((row, i) => (
           <div
             key={keyExtractor(row, i)}
             style={{
-              background: uiVars.surfaceAlt,
+              background: uiVars.surface,
+              border: `1px solid ${uiVars.border}`,
               borderRadius: radius.lg,
               padding: spacing.md,
               display: 'grid',
               gap: spacing.sm,
-              marginBottom: spacing.sm,
             }}
           >
             {visibleColumns.map((col) => (
-              <div key={col.key} style={{ display: 'grid', gap: 2 }}>
+              <div key={col.key} style={{ display: 'grid', gap: 1 }}>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: typeScale.micro,
                     fontWeight: 700,
                     color: uiVars.textMuted,
                     textTransform: 'uppercase',
@@ -598,7 +662,7 @@ export function Table<Row>({
                 >
                   {col.label}
                 </div>
-                <div style={{ fontSize: 14 }}>{col.render(row, i)}</div>
+                <div style={{ fontSize: typeScale.body }}>{col.render(row, i)}</div>
               </div>
             ))}
           </div>
@@ -635,20 +699,20 @@ export function ListItem({
       <div style={{ display: 'flex', gap: spacing.sm, minWidth: 0, flex: 1 }}>
         <span
           style={{
-            width: 10,
-            height: 10,
-            borderRadius: radius.sm,
+            width: 8,
+            height: 8,
+            borderRadius: radius.xs,
             background: markerColor ?? uiVars.primary,
-            marginTop: 6,
+            marginTop: 7,
             flexShrink: 0,
           }}
         />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: typeScale.subhead, lineHeight: '20px', fontWeight: 800 }}>{title}</div>
+            <div style={{ fontSize: typeScale.subhead, lineHeight: '20px', fontWeight: 700 }}>{title}</div>
             {meta}
           </div>
-          <div style={{ marginTop: 4, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
+          <div style={{ marginTop: 2, fontSize: typeScale.body, lineHeight: '20px', color: uiVars.textMuted }}>{subtitle}</div>
         </div>
       </div>
       {actions ? <div style={{ display: 'flex', gap: spacing.sm, flexWrap: 'wrap', justifyContent: 'flex-end' }}>{actions}</div> : null}
@@ -673,9 +737,15 @@ export function Dialog({
 
   return (
     <div style={{ ...overlayStyle(), display: 'grid', placeItems: 'center', padding: spacing.lg }}>
-      <div style={{ ...panelBaseStyle, width: 'min(560px, 100%)', padding: spacing.xl }}>
-        <SectionHeader title={title} subtitle={description} actions={<Button variant="ghost" onClick={onClose}>Close</Button>} />
-        <div style={{ display: 'grid', gap: spacing.md, marginTop: spacing.lg }}>{children}</div>
+      <div style={{ ...panelBaseStyle, width: 'min(520px, 100%)', padding: spacing.xl, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.lg }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, lineHeight: '24px' }}>{title}</div>
+            {description ? <div style={{ fontSize: typeScale.body, color: uiVars.textMuted, marginTop: 2 }}>{description}</div> : null}
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: uiVars.textMuted, cursor: 'pointer', padding: 4 }} aria-label="Close">✕</button>
+        </div>
+        <div style={{ display: 'grid', gap: spacing.md }}>{children}</div>
       </div>
     </div>
   )
@@ -706,7 +776,7 @@ export function Sheet({
           top: spacing.lg,
           right: spacing.lg,
           bottom: spacing.lg,
-          width: 'min(560px, calc(100vw - 32px))',
+          width: 'min(520px, calc(100vw - 32px))',
           ...panelBaseStyle,
           background: uiVars.surfaceStrong,
           overflow: 'hidden',
@@ -734,9 +804,9 @@ export function Tabs({
   items: { value: string; label: string }[]
 }) {
   return (
-    <div style={{ display: 'flex', gap: spacing.sm, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: spacing.xs, flexWrap: 'wrap' }}>
       {items.map((item) => (
-        <Button key={item.value} variant={value === item.value ? 'default' : 'outline'} onClick={() => onChange(item.value)}>
+        <Button key={item.value} variant={value === item.value ? 'default' : 'outline'} size="sm" onClick={() => onChange(item.value)}>
           {item.label}
         </Button>
       ))}

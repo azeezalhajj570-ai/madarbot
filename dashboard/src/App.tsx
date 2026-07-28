@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+import { ToastProvider } from './components/ui/toast'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import AdminHealthPage from './pages/admin/HealthPage'
@@ -11,6 +12,7 @@ import AdminPromoCodesPage from './pages/admin/PromoCodesPage'
 import AdminAuditPage from './pages/admin/AuditPage'
 import AdminBulkAddPage from './pages/admin/BulkAddPage'
 import AdminAISettingsPage from './pages/admin/AISettingsPage'
+import AdminAdmissionIntelligencePage from './pages/admin/AdmissionIntelligencePage'
 import AdminKnowledgePage from './pages/admin/KnowledgePage'
 
 const queryClient = new QueryClient()
@@ -18,6 +20,7 @@ const queryClient = new QueryClient()
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ToastProvider>
       <BrowserRouter basename="/dashboard">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -33,10 +36,12 @@ export default function App() {
             <Route path="/admin/audit" element={<AdminAuditPage />} />
             <Route path="/admin/ai-settings" element={<AdminAISettingsPage />} />
             <Route path="/admin/knowledge" element={<AdminKnowledgePage />} />
+            <Route path="/admin/admissions" element={<AdminAdmissionIntelligencePage />} />
             <Route path="*" element={<Navigate to="/admin/health" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   )
 }

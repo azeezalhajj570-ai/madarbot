@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type {
+  AIProviderDefaults,
   BulkJob,
   Member,
   ModAction,
@@ -30,6 +31,7 @@ import type {
   WhatsAppNotificationSettings,
   SettingsSchemaCatalog,
   AdminOverview,
+  AIModel,
 } from '../lib/types'
 
 function resolveApiBaseUrl() {
@@ -131,6 +133,21 @@ export async function updateGroupSettings(groupId: number, settings: Record<stri
 
 export async function fetchSettingsSchema(): Promise<SettingsSchemaCatalog> {
   const { data } = await api.get<SettingsSchemaCatalog>('/settings/schema')
+  return data
+}
+
+export async function fetchAIProviderDefaults(): Promise<AIProviderDefaults> {
+  const { data } = await api.get<AIProviderDefaults>(`${ADMIN_API_PREFIX}/ai-provider-defaults`)
+  return data
+}
+
+export async function fetchAIModels(): Promise<AIModel[]> {
+  const { data } = await api.get<AIModel[]>(`${ADMIN_API_PREFIX}/ai-provider-models`)
+  return data
+}
+
+export async function syncAIModels(): Promise<{ status: string; models: AIModel[] }> {
+  const { data } = await api.post<{ status: string; models: AIModel[] }>(`${ADMIN_API_PREFIX}/ai-provider-models/sync`)
   return data
 }
 
@@ -892,6 +909,53 @@ export async function fetchLeads(
 
 export async function updateLead(groupId: number, leadId: number, status: string, notes?: string): Promise<{ status: string }> {
   const { data } = await api.patch(`/webapp/scraper/groups/${groupId}/leads/${leadId}`, { status, notes })
+  return data
+}
+
+// ─── Admission Intelligence ──────────────────────────────────────────────
+
+export async function fetchAdmissionSearch(
+  q: string,
+  tgGroupId: number,
+  university?: string,
+  major?: string,
+): Promise<{ answer_context: string; sources: { message: string; date: string; confidence: string }[]; total_matches: number }> {
+  const params: Record<string, any> = { q, tg_group_id: tgGroupId }
+  if (university) params.university = university
+  if (major) params.major = major
+  const { data } = await api.get('/api/admissions/search', { params })
+  return data
+}
+
+export async function fetchCutoffTrend(
+  university: string,
+  major: string,
+  tgGroupId: number,
+): Promise<{ trend: string; summary: string; cutoff_history: { date: string; value: number; source: string }[] }> {
+  const { data } = await api.get('/api/admissions/cutoff-trend', {
+    params: { university, major, tg_group_id: tgGroupId },
+  })
+  return data
+}
+
+export async function fetchStudentConcerns(
+  tgGroupId: number,
+): Promise<{ topics: { name: string; mentions: number; examples: string[] }[]; method: string }> {
+  const { data } = await api.get('/api/admissions/student-concerns', {
+    params: { tg_group_id: tgGroupId },
+  })
+  return data
+}
+
+export async function fetchCompareUniversities(
+  universityA: string,
+  universityB: string,
+  major: string,
+  tgGroupId: number,
+): Promise<{ universities: { name: string; major: string; cutoff: any }[]; notes: string }> {
+  const { data } = await api.get('/api/admissions/compare-universities', {
+    params: { university_a: universityA, university_b: universityB, major, tg_group_id: tgGroupId },
+  })
   return data
 }
 

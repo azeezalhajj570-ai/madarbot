@@ -338,12 +338,44 @@ export interface AdminAgent {
   last_job_at?: string
 }
 
+export interface AIModel {
+  id: string
+  name: string
+  provider: 'openrouter' | 'gemini'
+  type: 'chat' | 'embedding'
+  contextWindow?: number
+  dimensions?: number
+  capabilities?: string[]
+}
+
 export interface AdminJob {
   job_id: number
   agent_id: number
   job_type: string
   status: string
   created_at?: string
+}
+
+export interface AIProviderDefaults {
+  ai_provider: string
+  ai_model: string | null
+  openai_model: string
+  openai_model_premium: string
+  openai_model_bulk: string
+  openai_has_key: boolean
+  gemini_model: string
+  gemini_model_premium: string
+  gemini_has_key: boolean
+  openrouter_model: string
+  openrouter_model_premium: string
+  openrouter_model_bulk: string
+  openrouter_has_key: boolean
+  ai_spam_detection_enabled: boolean
+  ai_receptionist_enabled: boolean
+  knowledge_extraction_enabled: boolean
+  daily_summary_enabled: boolean
+  faq_auto_answer_enabled: boolean
+  ai_pilot_enabled: boolean
 }
 
 export interface AdminOverview {
