@@ -1,46 +1,59 @@
-# Implementation Plan: Recurring Tasks Support for Scheduled Messages
+# Implementation Plan: Dark Mode, RTL & Translation
 
 ## Overview
 
-Extend the existing Campaign system to support recurring schedules (daily/weekly/monthly/custom cron). The scheduler loop will poll campaigns with active recurrence settings and automatically create/trigger jobs on schedule. All existing one-shot campaign functionality remains unchanged.
+Three sprints adding dark mode, fixing RTL, and completing Arabic translations for the admin dashboard SPA at `dashboard/`.
 
 ## Architecture Decisions
 
-- **Add recurrence fields directly to `Campaign` model** — avoids a new table for schedule config, keeps everything in one place
-- **New `CampaignRecurrenceLog` table** for execution history — one row per triggered run, linked to the created `AgentJob`
-- **Extend `scheduler_loop()`** to also poll for due recurring campaigns (SELECT ... FOR UPDATE to prevent duplicates)
-- **Reuse existing `CampaignService.launch_campaign()`** for triggering — each recurrence run creates an `AgentJob` per target group exactly like a manual send
-- **Frontend integrated into CampaignsPage** — recurrence fields appear inline when "Recurring" toggle is enabled, with sensible defaults
+1. **CSS variables for theming** — Dark mode is a second set of `--ui-*` vars under `[data-theme='dark']`. No Tailwind, no CSS modules, no CSS-in-JS. All 24 tokens get dark values.
+2. **Theme as `data-theme` attribute** — Set on `<html>` to avoid specificity battles. Anti-flash inline script reads `localStorage` + `prefers-color-scheme` before first paint.
+3. **Logical CSS properties** — Replace hardcoded `marginLeft`/`marginRight`/`paddingLeft`/`paddingRight` with `marginInlineStart`/`marginInlineEnd`/`paddingInlineStart`/`paddingInlineEnd`. These are natively RTL-aware — no runtime logic needed.
+4. **No RTL wrapper components** — Use a thin `useDirectional()` hook only where logical properties can't express the intent (e.g., `textAlign`, `translateX`).
+5. **Single-file i18n dictionary** — The custom `i18n.tsx` context stays. No migration to i18next. Keys follow `page.<name>.<section>.<element>` convention.
 
 ## Dependency Graph
 
 ```
-Phase 1: Foundation (Ordered)
-  1. DB migration — add recurrence columns to `campaigns`, create `campaign_recurrence_logs`
-  2. Update Campaign model + service `_to_dict()`
-  3. Update Campaign API endpoints to accept/return recurrence fields
+ThemeContext ──┬── App.tsx (wrap provider)
+               ├── index.css (dark vars)
+               ├── index.html (anti-flash script)
+               └── Sidebar.tsx (toggle UI)
 
-Phase 2: Scheduler (Ordered)
-  4. Add `process_recurring_campaigns()` to scheduler loop
-  5. Create recurrence logging in `campaign_recurrence_logs`
-  6. Add pause/resume/run-now endpoints
+RTL utility ──┬── primitives.tsx (Sheet, Dialog, AutoComplete)
+               ├── Layout.tsx (mobile nav, overlay)
+               ├── Sidebar.tsx (slide animation)
+               ├── LoginPage.tsx (decorative panel)
+               └── all pages (sweep)
 
-Phase 3: Frontend (Ordered)
-  7. Update TypeScript types (Campaign interface + new API response types)
-  8. Add reusable SchedulePicker component
-  9. Integrate into CampaignsPage with recurrence toggle
-  10. Add execution history view
-
-Phase 4: Polish
-  11. MCP tools for recurring campaign management
-  12. i18n strings for new UI elements
+i18n audit ──┬── i18n.tsx (add missing keys)
+              └── all pages (replace hardcoded strings)
 ```
 
-## Risks and Mitigations
+## Sprints
+
+### Sprint 1: Dark Mode (3 tasks)
+Foundation: theme context → CSS vars → toggle UI. Sequential, no parallelization.
+
+### Sprint 2: RTL Fixes (3 tasks)
+Utility first, then primitives (biggest impact), then layout components, then remaining pages.
+
+### Sprint 3: Translation Completion (3 tasks)
+Audit first (read-only), then add keys, then replace strings across all pages.
+
+## Risks
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Scheduler dispatches duplicate jobs for same campaign | High | Use `SELECT ... FOR UPDATE` + optimistic locking on `next_run_at` |
-| Timezone edge cases (DST, invalid time) | Medium | Use IANA tz database via `zoneinfo`; validate timezone on save |
-| Recurring campaign never ends (infinite loop bug) | Medium | Enforce `max_runs` default from `end_type`; add safety cap at 10,000 runs |
-| Old campaigns with null recurrence fields break | Low | Backward-compatible: null fields = no recurrence (existing behavior) |
+| Anti-flash script breaks on older browsers | Low | `localStorage` + `matchMedia` are well-supported |
+| RTL fix misses some hardcoded styles | Medium | Systematic grep for `*(Left\|Right)` patterns |
+| Translation keys conflict with existing keys | Medium | Use `page.` prefix convention to namespace |
+| Inline script has wrong theme at paint time | High | Test: set localStorage, hard refresh, verify no flash |
+| `useDirectional` hook causes re-renders | Low | Only re-renders when `dir` changes (on language toggle) |
+
+## Verification Checkpoints
+
+- **After Sprint 1**: `npm run build` succeeds, theme toggle works, dark mode renders correctly
+- **After Sprint 2**: Dashboard looks correct in RTL, no hardcoded directional styles remain
+- **After Sprint 3**: No hardcoded English strings, all strings use `t()`, Arabic translations present
+- **Final**: `npm test` passes, `npm run build` succeeds

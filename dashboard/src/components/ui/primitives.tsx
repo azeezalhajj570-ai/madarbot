@@ -600,7 +600,7 @@ export function Table<Row>({
                 <th
                   key={col.key}
                   style={{
-                    textAlign: 'left',
+                    textAlign: 'start',
                     fontSize: typeScale.caption,
                     color: uiVars.textMuted,
                     padding: '0 8px 10px 0',
@@ -773,9 +773,9 @@ export function Sheet({
       <div
         style={{
           position: 'absolute',
-          top: spacing.lg,
-          right: spacing.lg,
-          bottom: spacing.lg,
+          insetBlockStart: spacing.lg,
+          insetInlineEnd: spacing.lg,
+          insetBlockEnd: spacing.lg,
           width: 'min(520px, calc(100vw - 32px))',
           ...panelBaseStyle,
           background: uiVars.surfaceStrong,

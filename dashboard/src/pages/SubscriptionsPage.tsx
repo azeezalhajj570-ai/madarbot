@@ -71,13 +71,13 @@ export default function SubscriptionsPage() {
       queryClient.invalidateQueries({ queryKey: ['owner', 'subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['owner', 'stats'] })
       if (variables.action === 'approve') {
-        toast.success('Subscription approved.')
+        toast.success(t('subscription.approved'))
       } else {
-        toast.success('Subscription declined.')
+        toast.success(t('subscription.declined'))
       }
     },
     onError: () => {
-      toast.error('Failed to update subscription.')
+      toast.error(t('subscription.updateError'))
     }
   })
 
@@ -87,10 +87,10 @@ export default function SubscriptionsPage() {
       setPromoDialogOpen(false)
       setNewPromo({ code: '', plan: 'pro', duration_days: 30, max_uses: 0, is_active: true })
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
-      toast.success('Promo code created.')
+      toast.success(t('promocode.created'))
     },
     onError: () => {
-      toast.error('Failed to create promo code.')
+      toast.error(t('promocode.createError'))
     }
   })
 
@@ -106,17 +106,17 @@ export default function SubscriptionsPage() {
     mutationFn: (id: number) => deleteOwnerPromoCode(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['owner', 'promos'] })
-      toast.success('Promo code deleted.')
+      toast.success(t('promocode.deleted'))
     },
     onError: () => {
-      toast.error('Failed to delete promo code.')
+      toast.error(t('promocode.deleteError'))
     }
   })
 
   if (user?.role !== 'owner' && user?.role !== 'admin') {
     return (
       <PageShell titleKey="page.subscriptions" descriptionKey="page.subscriptions.desc">
-        <EmptyState title="Access denied" subtitle="This area is available to owner accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.ownerOnly')} />
       </PageShell>
     )
   }
@@ -129,27 +129,27 @@ export default function SubscriptionsPage() {
     >
       <ContentGrid columns="repeat(auto-fit, minmax(240px, 1fr))">
         <MetricCard 
-          label="Active Subs" 
+          label={t('subscription.activeSubs')} 
           value={stats?.active_subscriptions?.toString() || '0'} 
-          hint="Approved accounts" 
+          hint={t('subscription.approvedAccounts')} 
           icon={<CheckCircle2 size={20} />}
         />
         <MetricCard 
-          label="Pending Requests" 
+          label={t('subscription.pendingRequests')} 
           value={stats?.pending_requests?.toString() || '0'} 
-          hint="Awaiting review" 
+          hint={t('subscription.awaitingReview')} 
           icon={<Clock size={20} />}
         />
         <MetricCard 
-          label="Promo Codes" 
+          label={t('promocode.title')} 
           value={(promos?.length || 0).toString()} 
-          hint="Active campaigns" 
+          hint={t('subscription.activeCampaigns')} 
           icon={<Ticket size={20} />}
         />
       </ContentGrid>
 
       <div style={{ display: 'grid', gap: 24 }}>
-        <Card title="Subscription Requests" subtitle="Users requesting access to the premium agent features.">
+        <Card title={t('subscription.title')} subtitle={t('subscription.desc')}>
           {subsLoading ? (
             <LoadingState />
           ) : (subs || []).length > 0 ? (
@@ -161,14 +161,14 @@ export default function SubscriptionsPage() {
                       <Users size={16} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-                      <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+                      <div style={{ fontWeight: 700 }}>{sub.full_name || t('subscription.telegramUser')}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || t('common.unknown')} · {sub.tg_user_id}</div>
                     </div>
                   </div>
                 )},
                 { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
                   <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
-                    {sub.message || 'No message provided'}
+                    {sub.message || t('subscription.noMessage')}
                   </div>
                 )},
                 { key: 'status', label: 'Status', render: (sub: any) => (
@@ -204,8 +204,8 @@ export default function SubscriptionsPage() {
                               color: 'var(--ui-text)',
                             }}
                           >
-                            <option value="pro">Pro</option>
-                            <option value="business">Business</option>
+                            <option value="pro">{t('subscription.planPro')}</option>
+                            <option value="business">{t('subscription.planBusiness')}</option>
                           </select>
                         </div>
                         <Button 
@@ -218,7 +218,7 @@ export default function SubscriptionsPage() {
                           })}
                           disabled={subMutation.isPending}
                         >
-                          Approve
+                          {t('subscription.approve')}
                         </Button>
                         <Button 
                           size="sm" 
@@ -226,12 +226,12 @@ export default function SubscriptionsPage() {
                           onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
                           disabled={subMutation.isPending}
                         >
-                          Decline
+                          {t('subscription.decline')}
                         </Button>
                       </>
                     ) : (
                       <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                        {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
+                        {sub.status === 'approved' ? <>{t('subscription.approvedAs')}{sub.plan || t('subscription.planPro')}</> : t('subscription.noActions')}
                       </span>
                     )}
                   </div>
@@ -241,18 +241,18 @@ export default function SubscriptionsPage() {
               keyExtractor={(sub: any) => sub.id}
             />
           ) : (
-            <EmptyState title="No requests" subtitle="Manual subscription requests will appear here." />
+            <EmptyState title={t('subscription.noRequests')} subtitle={t('subscription.noRequests.desc')} />
           )}
         </Card>
 
         <Card 
-          title="Promotion Codes" 
-          subtitle="Generate codes that users can redeem for trial or paid periods."
+          title={t('promocode.title')} 
+          subtitle={t('promocode.desc')}
         >
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={() => setPromoDialogOpen(true)}>
-              <Plus size={16} style={{ marginRight: 8 }} />
-              Create Promo Code
+              <Plus size={16} style={{ marginInlineEnd: 8 }} />
+              {t('promocode.create')}
             </Button>
           </div>
           
@@ -269,18 +269,18 @@ export default function SubscriptionsPage() {
                     <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14 }}>{p.code}</div>
                   </div>
                 )},
-                { key: 'plan', label: 'Plan', hideOnMobile: true, render: (p: any) => (
+                { key: 'plan', label: t('promocode.plan'), hideOnMobile: true, render: (p: any) => (
                   <Badge tone={p.plan === 'business' ? 'success' : 'neutral'}>{p.plan}</Badge>
                 )},
                 { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p: any) => (
-                  <div style={{ fontWeight: 600 }}>{p.duration_days} days</div>
+                  <div style={{ fontWeight: 600 }}>{p.duration_days} {t('promocode.days')}</div>
                 )},
-                { key: 'usage', label: 'Usage', render: (p: any) => (
+                { key: 'usage', label: t('promocode.usage'), render: (p: any) => (
                   <div style={{ fontSize: 13 }}>
                     {p.used_count} / {p.max_uses || '∞'}
                   </div>
                 )},
-                { key: 'active', label: 'Active', render: (p: any) => (
+                { key: 'active', label: t('promocode.active'), render: (p: any) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <ToggleRow
                       title=""
@@ -291,12 +291,12 @@ export default function SubscriptionsPage() {
                     />
                   </div>
                 )},
-                { key: 'actions', label: 'Actions', render: (p: any) => (
+                { key: 'actions', label: t('subscription.actions'), render: (p: any) => (
                   <div style={{ display: 'flex', gap: 8 }}>
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      onClick={() => { if(confirm('Are you sure you want to delete this promo code?')) deletePromoMutation.mutate(p.id) }}
+                      onClick={() => { if(confirm(t('promocode.deleteConfirm'))) deletePromoMutation.mutate(p.id) }}
                       disabled={deletePromoMutation.isPending}
                     >
                       <Trash2 size={14} />
@@ -308,7 +308,7 @@ export default function SubscriptionsPage() {
               keyExtractor={(p: any) => p.id}
             />
           ) : (
-            <EmptyState title="No codes" subtitle="Create your first promotion code to attract users." />
+            <EmptyState title={t('promocode.noCodes')} subtitle={t('promocode.noCodes.desc')} />
           )}
         </Card>
       </div>
@@ -316,38 +316,38 @@ export default function SubscriptionsPage() {
       <Dialog 
         open={promoDialogOpen} 
         onClose={() => setPromoDialogOpen(false)}
-        title="Create Promo Code"
-        description="This code can be shared with users to grant them a period of premium access."
+        title={t('promocode.create')}
+        description={t('promocode.desc')}
       >
         <div style={{ display: 'grid', gap: 16 }}>
           <FieldRow>
-            <Field label="Code Name" hint="Alphanumeric string (e.g. TRIAL30)">
+            <Field label={t('promocode.codeName')} hint={t('promocode.codeNameHint')}>
               <Input 
                 value={newPromo.code} 
                 onChange={(e) => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase() })} 
-                placeholder="SUMMER2026"
+                placeholder={t('promocode.codePlaceholder')}
               />
             </Field>
-            <Field label="Plan" hint="Tier to grant">
+            <Field label={t('promocode.plan')} hint={t('promocode.planHint')}>
               <Select 
                 value={newPromo.plan} 
                 onChange={(e) => setNewPromo({ ...newPromo, plan: e.target.value as any })}
               >
-                <option value="pro">Pro</option>
-                <option value="business">Business</option>
+                <option value="pro">{t('subscription.planPro')}</option>
+                <option value="business">{t('subscription.planBusiness')}</option>
               </Select>
             </Field>
           </FieldRow>
           
           <FieldRow>
-            <Field label="Duration (Days)" hint="Length of access">
+            <Field label={t('promocode.durationDays')} hint={t('promocode.durationHint')}>
               <Input 
                 type="number" 
                 value={newPromo.duration_days} 
                 onChange={(e) => setNewPromo({ ...newPromo, duration_days: parseInt(e.target.value) || 1 })} 
               />
             </Field>
-            <Field label="Max Uses" hint="0 for unlimited">
+            <Field label={t('promocode.maxUses')} hint={t('promocode.maxUsesHint')}>
               <Input 
                 type="number" 
                 value={newPromo.max_uses} 
@@ -363,7 +363,7 @@ export default function SubscriptionsPage() {
             })}
             disabled={createPromoMutation.isPending || !newPromo.code}
           >
-            {createPromoMutation.isPending ? 'Creating...' : 'Create Code'}
+            {createPromoMutation.isPending ? t('promocode.creating') : t('promocode.createCode')}
           </Button>
         </div>
       </Dialog>

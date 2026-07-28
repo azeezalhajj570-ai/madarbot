@@ -14,15 +14,15 @@ export default function BulkJobsPage() {
   const [open, setOpen] = useState(false)
 
   return (
-    <PageShell titleKey="page.jobs" descriptionKey="page.jobs.desc" actions={<Button onClick={() => setOpen(true)}>New job</Button>}>
+    <PageShell titleKey="page.jobs" descriptionKey="page.jobs.desc" actions={<Button onClick={() => setOpen(true)}>{t('bulkjobs.newJob')}</Button>}>
       <Card>
         <Table
           columns={[
-            { key: 'id', label: 'ID', hideOnMobile: true, render: (j: any) => j.id },
-            { key: 'source', label: 'Source', hideOnMobile: true, render: (j: any) => j.source },
-            { key: 'target', label: 'Target', render: (j: any) => j.target },
-            { key: 'total', label: 'Total', render: (j: any) => j.total },
-            { key: 'status', label: 'Status', render: (j: any) => j.status },
+            { key: 'id', label: t('bulkjobs.id'), hideOnMobile: true, render: (j: any) => j.id },
+            { key: 'source', label: t('bulkjobs.source'), hideOnMobile: true, render: (j: any) => j.source },
+            { key: 'target', label: t('bulkjobs.target'), render: (j: any) => j.target },
+            { key: 'total', label: t('bulkjobs.total'), render: (j: any) => j.total },
+            { key: 'status', label: t('bulkjobs.status'), render: (j: any) => j.status },
           ]}
           data={JOBS}
           keyExtractor={(j: any) => j.id}
@@ -30,22 +30,22 @@ export default function BulkJobsPage() {
       </Card>
       <Sheet
         open={open}
-        title="New member job"
-        description="Desktop adds capacity details while staying aligned with the Mini App’s single primary action workflow."
+        title={t('bulkjobs.newJobTitle')}
+        description={t("bulkjobs.sheetDesc")}
         onClose={() => setOpen(false)}
-        footer={<ActionBar secondary={<Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>} primary={<Button onClick={() => setOpen(false)}>Create job</Button>} />}
+        footer={<ActionBar secondary={<Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>} primary={<Button onClick={() => setOpen(false)}>{t('bulkjobs.createJob')}</Button>} />}
       >
         <FieldRow>
-          <Field label="Source group"><Input placeholder="Invest Community" /></Field>
-          <Field label="Target group"><Input placeholder="Trading AR" /></Field>
+          <Field label={t('bulkjobs.sourceGroup')}><Input placeholder="Invest Community" /></Field>
+          <Field label={t('bulkjobs.targetGroup')}><Input placeholder="Trading AR" /></Field>
         </FieldRow>
         <FieldRow>
-          <Field label="Member limit"><Input placeholder="120" type="number" /></Field>
-          <Field label="Mode">
+          <Field label={t('bulkjobs.memberLimit')}><Input placeholder="120" type="number" /></Field>
+          <Field label={t('bulkjobs.mode')}>
             <Select defaultValue="safe">
-              <option value="safe">Safe defaults</option>
-              <option value="balanced">Balanced</option>
-              <option value="aggressive">Aggressive</option>
+              <option value="safe">{t('bulkjobs.safeDefaults')}</option>
+              <option value="balanced">{t('bulkjobs.balanced')}</option>
+              <option value="aggressive">{t('bulkjobs.aggressive')}</option>
             </Select>
           </Field>
         </FieldRow>

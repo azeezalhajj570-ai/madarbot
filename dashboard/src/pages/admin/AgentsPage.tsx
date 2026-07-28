@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Badge, Card, EmptyState } from '../../components/ui/primitives'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
+import { useI18n } from '../../lib/i18n'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
 import type { AdminAgent } from '../../lib/types'
@@ -19,11 +20,12 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminAgentsPage() {
+  const { t } = useI18n()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -38,7 +40,7 @@ export default function AdminAgentsPage() {
       setAgents(overview.agents || [])
       setError(null)
     } catch (err: any) {
-      setError(err?.message || 'Failed to load')
+      setError(err?.message || t('common.failedToLoad'))
     } finally {
       setLoading(false)
     }
@@ -58,11 +60,11 @@ export default function AdminAgentsPage() {
       {/* Summary cards */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <Card style={{ padding: '12px 18px', display: 'grid', gap: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('common.active')}</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ui-success)' }}>{activeCount}</div>
         </Card>
         <Card style={{ padding: '12px 18px', display: 'grid', gap: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Sent</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('agent.totalSent')}</div>
           <div style={{ fontSize: 22, fontWeight: 800 }}>{totalSent}</div>
         </Card>
       </div>
@@ -73,15 +75,15 @@ export default function AdminAgentsPage() {
         loading={loading}
         error={error}
         columns={[
-          { key: 'phone', label: 'Phone', render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
-          { key: 'status', label: 'Status', render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
-          { key: 'sent', label: 'Sent', hideOnMobile: true, render: (a) => String(a.total_sent) },
-          { key: 'contacts', label: 'Contacts', hideOnMobile: true, render: (a) => String(a.unique_contacts) },
-          { key: 'jobs', label: 'Jobs', hideOnMobile: true, render: (a) => String(a.jobs_count) },
-          { key: 'lastActivity', label: 'Last Activity', render: (a) => timeAgo(a.last_job_at) },
+          { key: 'phone', label: t('agent.phone'), render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
+          { key: 'status', label: t('agent.status'), render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
+          { key: 'sent', label: t('agent.sent'), hideOnMobile: true, render: (a) => String(a.total_sent) },
+          { key: 'contacts', label: t('agent.contacts'), hideOnMobile: true, render: (a) => String(a.unique_contacts) },
+          { key: 'jobs', label: t('agent.jobs'), hideOnMobile: true, render: (a) => String(a.jobs_count) },
+          { key: 'lastActivity', label: t('agent.lastActivity'), render: (a) => timeAgo(a.last_job_at) },
         ]}
         keyExtractor={(a) => a.id}
-        searchPlaceholder="Search agents..."
+        searchPlaceholder={t('agent.searchPlaceholder')}
       />
     </PageShell>
   )

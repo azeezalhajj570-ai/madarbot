@@ -11,11 +11,6 @@ import { useToast } from '../../components/ui/toast'
 import { spacing, radius } from '../../../../shared/ui-system/tokens'
 import type { AIModel } from '../../lib/types'
 
-const PROVIDERS = [
-  { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'gemini', label: 'Google Gemini' },
-] as const
-
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
   const user = getStoredUser()
@@ -71,10 +66,10 @@ export default function AdminAISettingsPage() {
     mutationFn: updateAIConfig,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-config'] })
-      toast.success('Configuration saved')
+      toast.success(t('ai.configSaved'))
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'Save failed')
+      toast.error(err?.message || t('ai.saveFailed'))
     },
   })
 
@@ -82,13 +77,13 @@ export default function AdminAISettingsPage() {
     mutationFn: () => testAIConfig({ provider, api_key: apiKey, model: genModel, base_url: baseUrl }),
     onSuccess: (result) => {
       if (result.status === 'ok') {
-        toast.success(result.reply || 'Connected')
+        toast.success(result.reply || t('common.connected'))
       } else {
-        toast.error(result.error || 'Test failed')
+        toast.error(result.error || t('ai.testFailed'))
       }
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'Connection failed')
+      toast.error(err?.message || t('ai.connectionFailed'))
     },
   })
 
@@ -97,9 +92,9 @@ export default function AdminAISettingsPage() {
     try {
       const result = await syncAIModels()
       setAIModels(result.models)
-      toast.success('Models synced from providers.')
+      toast.success(t('ai.modelsSynced'))
     } catch {
-      toast.error('Failed to sync models.')
+      toast.error(t('ai.syncFailed'))
     } finally {
       setSyncing(false)
     }
@@ -131,16 +126,16 @@ export default function AdminAISettingsPage() {
 
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell title="AI Settings" description="Admin access required." loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+      <PageShell title={t('ai.settings')} description={t('common.accessDenied.desc')} loading={false}>
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
 
   return (
     <PageShell
-      title="AI Settings"
-      description="Configure AI provider, models, and reply behavior."
+      title={t('ai.settings')}
+      description={t('ai.settings.desc')}
       icon={<Brain size={20} />}
     >
       {configLoading ? (
@@ -148,31 +143,30 @@ export default function AdminAISettingsPage() {
       ) : (
         <div style={{ display: 'grid', gap: spacing.lg, maxWidth: 720 }}>
           {/* ── 1. AI Provider ── */}
-          <Card title="AI Provider" subtitle="Select the service that powers AI features.">
+          <Card title={t('ai.provider')} subtitle={t('ai.providerDesc')}>
             <Select value={provider} onChange={(e) => handleProviderChange(e.target.value)}>
-              {PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
+              <option value="openrouter">{t('ai.provider.openrouter')}</option>
+              <option value="gemini">{t('ai.provider.gemini')}</option>
             </Select>
           </Card>
 
           {/* ── 2. Authentication ── */}
-          <Card title="Authentication" subtitle="API credentials for the selected provider.">
+          <Card title={t('ai.auth')} subtitle={t('ai.authDesc')}>
             <div style={{ display: 'grid', gap: spacing.md }}>
-              <Field label="API Key" hint="Required. Provider API key for authentication.">
+              <Field label={t('ai.apiKey')} hint={t('ai.apiKeyHint')}>
                 <div style={{ position: 'relative' }}>
                   <Input
                     type={showKey ? 'text' : 'password'}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={provider === 'gemini' ? 'AIza...' : 'sk-or-...'}
-                    style={{ paddingRight: 44 }}
+                    placeholder={t('ai.selectModel')}
+                    style={{ paddingInlineEnd: 44 }}
                   />
                   <button
                     onClick={() => setShowKey(!showKey)}
-                    aria-label={showKey ? 'Hide API key' : 'Show API key'}
+                    aria-label={showKey ? t('ai.hideKey') : t('ai.showKey')}
                     style={{
-                      position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                      position: 'absolute', insetInlineEnd: 8, top: '50%', transform: 'translateY(-50%)',
                       background: 'none', border: 'none', color: 'var(--ui-text-muted)',
                       cursor: 'pointer', padding: 4, display: 'flex',
                     }}
@@ -182,7 +176,7 @@ export default function AdminAISettingsPage() {
                 </div>
               </Field>
 
-              <Field label="API URL" hint="API endpoint for this provider.">
+              <Field label={t('ai.apiUrl')} hint={t('ai.apiUrlHint')}>
                 <Input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
@@ -196,27 +190,27 @@ export default function AdminAISettingsPage() {
                   onClick={() => testMutation.mutate()}
                   disabled={testMutation.isPending || !apiKey}
                 >
-                  {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
+                  {testMutation.isPending ? <><Loader2 size={14} className="spin" /> {t('ai.testing')}</> : t('ai.testConnection')}
                 </Button>
               </div>
             </div>
           </Card>
 
           {/* ── 3. Models ── */}
-          <Card title="Models" subtitle="Configure generation and embedding models.">
+          <Card title={t('ai.models')} subtitle={t('ai.modelsDesc')}>
             <div style={{ display: 'grid', gap: spacing.md }}>
               {needsSync && (
                 <InlineMessage tone="neutral">
-                  No models loaded. Click <strong>Sync Models</strong> to fetch available models for {PROVIDERS.find(p => p.value === provider)?.label}.
+                  {t('ai.noModels')} <strong>{t('ai.syncModels')}</strong>
                 </InlineMessage>
               )}
 
               <div style={{ display: 'flex', gap: spacing.sm, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 240, flex: 1 }}>
-                  <Field label="Generation Model" hint="Used for chat and AI replies.">
+                  <Field label={t('ai.generationModel')} hint={t('ai.generationModelHint')}>
                     {chatModels.length > 0 ? (
                       <Select value={genModel} onChange={(e) => setGenModel(e.target.value)}>
-                        <option value="">Select a model...</option>
+                        <option value="">{t('ai.selectModel')}</option>
                         {chatModels.map((m) => (
                           <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
@@ -231,14 +225,14 @@ export default function AdminAISettingsPage() {
                   </Field>
                 </div>
                 <Button variant="outline" onClick={handleSyncModels} disabled={syncing}>
-                  {syncing ? <><Loader2 size={14} className="spin" /> Syncing...</> : <><RefreshCw size={14} /> Sync Models</>}
+                  {syncing ? <><Loader2 size={14} className="spin" /> {t('ai.syncing')}</> : <><RefreshCw size={14} /> {t('ai.syncModels')}</>}
                 </Button>
               </div>
 
-              <Field label="Embedding Model" hint="Used for vector search and RAG.">
+              <Field label={t('ai.embeddingModel')} hint={t('ai.embeddingModelHint')}>
                 {embeddingModels.length > 0 ? (
                   <Select value={embedModel} onChange={(e) => setEmbedModel(e.target.value)}>
-                    <option value="">Select a model...</option>
+                    <option value="">{t('ai.selectModel')}</option>
                     {embeddingModels.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
@@ -255,10 +249,10 @@ export default function AdminAISettingsPage() {
           </Card>
 
           {/* ── 4. AI Replies ── */}
-          <Card title="AI Replies" subtitle="Allow the AI to respond to @mentions in group chats.">
+          <Card title={t('ai.aiReplies')} subtitle={t('ai.aiRepliesDesc')}>
             <ToggleRow
-              title="Enable AI Replies"
-              subtitle="When enabled, the AI pilot will automatically reply when your bot is @mentioned in managed groups."
+              title={t('ai.enableAiReplies')}
+              subtitle={t('ai.enableAiRepliesHint')}
               checked={enabled}
               onCheckedChange={setEnabled}
             />
@@ -271,7 +265,7 @@ export default function AdminAISettingsPage() {
           }}>
             <div className="settings-actions" style={{ justifyContent: 'flex-end' }}>
               <Button onClick={handleSave} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? 'Saving...' : 'Save Configuration'}
+                {saveMutation.isPending ? t('common.saving') : t('ai.saveConfig')}
               </Button>
             </div>
           </div>

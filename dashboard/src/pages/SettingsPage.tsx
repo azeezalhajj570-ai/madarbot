@@ -23,15 +23,15 @@ import type { AIModel, AIProviderDefaults } from '../lib/types'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
 import { useI18n } from '../lib/i18n'
 
-const PROVIDER_OPTIONS = [
-  { value: 'heuristic', label: 'Heuristic (rule-based)' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openrouter', label: 'OpenRouter' },
-]
-
 export default function SettingsPage() {
   const { t } = useI18n()
+
+  const PROVIDER_OPTIONS = [
+    { value: 'heuristic', label: t('ai.provider.heuristic') },
+    { value: 'openai', label: t('ai.provider.openai') },
+    { value: 'gemini', label: t('ai.provider.gemini') },
+    { value: 'openrouter', label: t('ai.provider.openrouter') },
+  ]
   const { toast } = useToast()
   const { groups, currentGroup, currentGroupId, setCurrentGroupId, loading: groupsLoading, error: groupsError } = useDashboardGroups()
   const [loading, setLoading] = useState(true)
@@ -112,7 +112,7 @@ export default function SettingsPage() {
         setFaqAutoAnswer(overrides.faq_auto_answer_enabled === true || (overrides.faq_auto_answer_enabled === undefined && defaults.faq_auto_answer_enabled))
         setAIPilot(overrides.ai_pilot_enabled === true || (overrides.ai_pilot_enabled === undefined && defaults.ai_pilot_enabled))
       } catch {
-        if (!cancelled) setError('Unable to load group settings right now.')
+        if (!cancelled) setError(t('settings.loadError'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -188,9 +188,9 @@ export default function SettingsPage() {
       const updated = await updateAccessGate(currentGroupId, requiredGroupIds)
       setRequiredGroupIds(updated.required_group_tg_ids)
       setRequiredGroupCandidates(updated.candidates ?? [])
-      toast.success('Required groups updated.')
+      toast.success(t('settings.requiredGroupsUpdated'))
     } catch {
-      toast.error('Unable to save required groups right now.')
+      toast.error(t('settings.saveRequiredError'))
     } finally {
       setSavingGate(false)
     }
@@ -201,15 +201,15 @@ export default function SettingsPage() {
 
     const deleteAfter = Number(messageDeleteAfter)
     if (!messageText.trim()) {
-      setError('Scheduled message text is required.')
+      setError(t('settings.scheduledMessageRequired'))
       return
     }
     if (!messageSchedule.trim()) {
-      setError('Schedule is required.')
+      setError(t('settings.scheduleRequired'))
       return
     }
     if (!Number.isFinite(deleteAfter) || deleteAfter < 0) {
-      setError('Delete after seconds must be 0 or a positive number.')
+      setError(t('settings.deleteAfterInvalid'))
       return
     }
 
@@ -232,9 +232,9 @@ export default function SettingsPage() {
         setScheduledMessages((current) => [response.scheduled_message, ...current])
       }
       setEditorOpen(false)
-      toast.success('Scheduled messages updated.')
+      toast.success(t('settings.scheduledMessagesUpdated'))
     } catch {
-      toast.error('Unable to save the scheduled message.')
+      toast.error(t('settings.scheduledMessagesError'))
     } finally {
       setSavingMessage(false)
     }
@@ -246,9 +246,9 @@ export default function SettingsPage() {
     try {
       await deleteScheduledMessage(currentGroupId, message.id)
       setScheduledMessages((current) => current.filter((item) => item.id !== message.id))
-      toast.success('Scheduled message deleted.')
+      toast.success(t('settings.scheduledMessageDeleted'))
     } catch {
-      toast.error('Unable to delete the scheduled message.')
+      toast.error(t('settings.scheduledMessageDeleteError'))
     }
   }
 
@@ -285,9 +285,9 @@ export default function SettingsPage() {
         ai_pilot_enabled: aiPilot,
       }
       await updateGroupSettings(currentGroupId, settings)
-      toast.success('AI provider settings saved.')
+      toast.success(t('settings.aiProviderSaved'))
     } catch {
-      toast.error('Unable to save AI provider settings.')
+      toast.error(t('settings.aiProviderError'))
     } finally {
       setSavingAI(false)
     }
@@ -312,13 +312,13 @@ export default function SettingsPage() {
       const result = await testAIPilot(payload)
       setAITestResult(result)
       if (result.status === 'ok') {
-        toast.success(`Connected! Response: ${result.reply}`)
+        toast.success(`${t('common.connected')}! ${t('common.response')}: ${result.reply}`)
       } else {
-        toast.error(`Failed: ${result.error}`)
+        toast.error(`${t('common.failed')}: ${result.error}`)
       }
     } catch {
-      setAITestResult({ status: 'error', error: 'Connection test failed.' })
-      toast.error('Connection test failed.')
+      setAITestResult({ status: 'error', error: t('settings.connectionTestFailed') })
+      toast.error(t('settings.connectionTestFailed'))
     } finally {
       setTestingAI(false)
     }
@@ -331,9 +331,9 @@ export default function SettingsPage() {
     try {
       const result = await syncAIModels()
       setAIModels(result.models)
-      setFeedback('Models synced from providers.')
+      setFeedback(t('ai.modelsSynced'))
     } catch {
-      setError('Failed to sync models.')
+      setError(t('ai.syncFailed'))
     } finally {
       setSyncingModels(false)
     }
@@ -351,7 +351,7 @@ export default function SettingsPage() {
             items={groups || []}
             value={currentGroupId}
             onChange={setCurrentGroupId}
-            placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+            placeholder={groups.length === 0 ? t('common.noData') : t('settings.searchGroups')}
             getLabel={(g: any) => g.title}
             getId={(g: any) => g.id}
           />
@@ -359,15 +359,15 @@ export default function SettingsPage() {
       )}
     >
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
-      {currentGroup ? <InlineMessage tone="neutral">Editing settings for {currentGroup.title}.</InlineMessage> : null}
+      {currentGroup ? <InlineMessage tone="neutral">{t('settings.editingSettingsFor')} {currentGroup.title}.</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
 
-      <Card title="Required groups" subtitle="Search managed groups by name, role, or Telegram ID and add multiple requirements.">
-        <Field label="Select groups" hint="">
+      <Card title={t('settings.requiredGroups')} subtitle={t('settings.requiredGroupsDesc')}>
+        <Field label={t('settings.selectGroups')} hint="">
           <Input
             value={requiredGroupsQuery}
             onChange={(event) => setRequiredGroupsQuery(event.target.value)}
-            placeholder="Search groups"
+            placeholder={t('settings.searchGroups')}
           />
         </Field>
         {selectedRequiredGroups.length > 0 ? (
@@ -400,7 +400,7 @@ export default function SettingsPage() {
                   borderRadius: 10,
                   background: 'var(--ui-surface-alt)',
                   padding: '10px 12px',
-                  textAlign: 'left',
+                  textAlign: 'start',
                   cursor: 'pointer',
                 }}
               >
@@ -412,11 +412,11 @@ export default function SettingsPage() {
             ))}
           </div>
         ) : null}
-        <div style={{ marginTop: 12 }}><Button onClick={() => void handleSaveAccessGate()} disabled={savingGate || currentGroupId == null}>{savingGate ? 'Saving…' : 'Save required groups'}</Button></div>
+        <div style={{ marginTop: 12 }}><Button onClick={() => void handleSaveAccessGate()} disabled={savingGate || currentGroupId == null}>{savingGate ? t('common.saving') : t('settings.saveRequiredGroups')}</Button></div>
       </Card>
 
-      <Card title="AI Provider" subtitle="Configure the AI provider and model for this group. Settings here override environment defaults.">
-        <Field label="AI Provider">
+      <Card title={t('ai.provider')} subtitle={t('settings.aiProviderDesc')}>
+        <Field label={t('ai.provider')}>
           <Select value={aiProvider} onChange={(e) => setAIProvider(e.target.value)}>
             {PROVIDER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -426,13 +426,13 @@ export default function SettingsPage() {
 
         {aiProvider === 'openai' && (
           <FieldRow>
-            <Field label="OpenAI API Key" hint="Leave blank to use env default">
+            <Field label={t('ai.apiKey')} hint={t('settings.apiKeyLeaveBlank')}>
               <Input type="password" value={openaiApiKey} onChange={(e) => setOpenaiApiKey(e.target.value)} placeholder={aiDefaults?.openai_has_key ? '•••••••• (env default set)' : 'sk-...'} />
             </Field>
-            <Field label="Model">
+            <Field label={t('ai.generationModel')}>
               <Select value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)}>
                 {(modelsByProvider.openai ?? []).map((m) => (
-                  <option key={m} value={m}>{m}{m === aiDefaults?.openai_model ? ' (default)' : ''}</option>
+                  <option key={m} value={m}>{m}{m === aiDefaults?.openai_model ? ` ${t('common.default')}` : ''}</option>
                 ))}
               </Select>
             </Field>
@@ -441,13 +441,13 @@ export default function SettingsPage() {
 
         {aiProvider === 'gemini' && (
           <FieldRow>
-            <Field label="Gemini API Key" hint="Leave blank to use env default">
+            <Field label={t('ai.apiKey')} hint={t('settings.apiKeyLeaveBlank')}>
               <Input type="password" value={geminiApiKey} onChange={(e) => setGeminiApiKey(e.target.value)} placeholder={aiDefaults?.gemini_has_key ? '•••••••• (env default set)' : 'AIza...'} />
             </Field>
-            <Field label="Model">
+            <Field label={t('ai.generationModel')}>
               <Select value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)}>
                 {(modelsByProvider.gemini ?? []).map((m) => (
-                  <option key={m} value={m}>{m}{m === aiDefaults?.gemini_model ? ' (default)' : ''}</option>
+                  <option key={m} value={m}>{m}{m === aiDefaults?.gemini_model ? ` ${t('common.default')}` : ''}</option>
                 ))}
               </Select>
             </Field>
@@ -456,13 +456,13 @@ export default function SettingsPage() {
 
         {aiProvider === 'openrouter' && (
           <FieldRow>
-            <Field label="OpenRouter API Key" hint="Leave blank to use env default">
+            <Field label={t('ai.apiKey')} hint={t('settings.apiKeyLeaveBlank')}>
               <Input type="password" value={openrouterApiKey} onChange={(e) => setOpenrouterApiKey(e.target.value)} placeholder={aiDefaults?.openrouter_has_key ? '•••••••• (env default set)' : 'sk-or-...'} />
             </Field>
-            <Field label="Model">
+            <Field label={t('ai.generationModel')}>
               <Select value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)}>
                 {(modelsByProvider.openrouter ?? []).map((m) => (
-                  <option key={m} value={m}>{m}{m === aiDefaults?.openrouter_model ? ' (default)' : ''}</option>
+                  <option key={m} value={m}>{m}{m === aiDefaults?.openrouter_model ? ` ${t('common.default')}` : ''}</option>
                 ))}
               </Select>
             </Field>
@@ -470,45 +470,45 @@ export default function SettingsPage() {
         )}
 
         {aiProvider === 'heuristic' && (
-          <InlineMessage tone="neutral">Heuristic mode uses rule-based logic without any AI provider. No API key or model needed.</InlineMessage>
+          <InlineMessage tone="neutral">{t('settings.heuristicMode')}</InlineMessage>
         )}
 
         <div style={{ marginTop: 16, marginBottom: 16, borderTop: '1px solid var(--ui-border)', paddingTop: 16 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>AI Features</div>
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>{t('settings.aiFeatures')}</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <ToggleRow
-              title="AI Spam Detection"
-              subtitle="Use AI to detect and flag spam messages"
+              title={t('settings.aiSpamDetection')}
+              subtitle={t('settings.aiSpamDetectionHint')}
               checked={aiSpamDetection}
               onCheckedChange={setAISpamDetection}
             />
             <ToggleRow
-              title="AI Receptionist"
-              subtitle="Auto-respond to welcome messages using AI"
+              title={t('settings.aiReceptionist')}
+              subtitle={t('settings.aiReceptionistHint')}
               checked={aiReceptionist}
               onCheckedChange={setAIReceptionist}
             />
             <ToggleRow
-              title="Knowledge Extraction"
-              subtitle="Extract structured knowledge from group messages"
+              title={t('settings.knowledgeExtraction')}
+              subtitle={t('settings.knowledgeExtractionHint')}
               checked={knowledgeExtraction}
               onCheckedChange={setKnowledgeExtraction}
             />
             <ToggleRow
-              title="Daily Summary"
-              subtitle="Generate AI-powered daily group summaries"
+              title={t('settings.dailySummary')}
+              subtitle={t('settings.dailySummaryHint')}
               checked={dailySummary}
               onCheckedChange={setDailySummary}
             />
             <ToggleRow
-              title="FAQ Auto-Answer"
-              subtitle="Auto-answer frequently asked questions using AI"
+              title={t('settings.faqAutoAnswer')}
+              subtitle={t('settings.faqAutoAnswerHint')}
               checked={faqAutoAnswer}
               onCheckedChange={setFaqAutoAnswer}
             />
             <ToggleRow
-              title="AI Pilot"
-              subtitle="Let AI assist with group management tasks"
+              title={t('settings.aiPilot')}
+              subtitle={t('settings.aiPilotHint')}
               checked={aiPilot}
               onCheckedChange={setAIPilot}
             />
@@ -517,20 +517,20 @@ export default function SettingsPage() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <Button onClick={() => void handleSaveAI()} disabled={savingAI || currentGroupId == null}>
-            {savingAI ? 'Saving…' : 'Save AI settings'}
+            {savingAI ? t('common.saving') : t('settings.saveAISettings')}
           </Button>
           <Button variant="outline" onClick={() => void handleTestAI()} disabled={testingAI || aiProvider === 'heuristic'}>
-            {testingAI ? 'Testing…' : 'Test connection'}
+            {testingAI ? t('common.testing') : t('ai.testConnection')}
           </Button>
           <Button variant="outline" onClick={() => void handleSyncModels()} disabled={syncingModels}>
-            {syncingModels ? 'Syncing…' : 'Sync models'}
+            {syncingModels ? t('common.syncing') : t('ai.syncModels')}
           </Button>
         </div>
       </Card>
 
-      <Card title="Scheduled messages" subtitle="Create recurring or one-off reminders for the selected group.">
+      <Card title={t('settings.scheduledMessages')} subtitle={t('settings.scheduledMessagesDesc')}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button onClick={openCreateDialog} disabled={currentGroupId == null}>New scheduled message</Button>
+          <Button onClick={openCreateDialog} disabled={currentGroupId == null}>{t('settings.newScheduledMessage')}</Button>
         </div>
         {scheduledMessages.length > 0 ? (
           <div style={{ display: 'grid' }}>
@@ -538,42 +538,42 @@ export default function SettingsPage() {
               <ListItem
                 key={message.id}
                 title={message.text}
-                subtitle={`Schedule: ${message.schedule} · Next send: ${new Date(message.send_at).toLocaleString()}`}
-                meta={<Badge tone="info">{message.delete_after_seconds ? `Delete after ${message.delete_after_seconds}s` : 'Keep message'}</Badge>}
+                subtitle={`${t('settings.schedule')} ${message.schedule} ${t('settings.nextSend')} ${new Date(message.send_at).toLocaleString()}`}
+                meta={<Badge tone="info">{message.delete_after_seconds ? `${t('settings.deleteAfter')} ${message.delete_after_seconds}s` : t('settings.keepMessage')}</Badge>}
                 actions={(
                   <>
-                    <Button variant="outline" onClick={() => openEditDialog(message)}>Edit</Button>
-                    <Button variant="destructive" onClick={() => void handleDeleteScheduledMessage(message)}>Delete</Button>
+                    <Button variant="outline" onClick={() => openEditDialog(message)}>{t('common.edit')}</Button>
+                    <Button variant="destructive" onClick={() => void handleDeleteScheduledMessage(message)}>{t('common.delete')}</Button>
                   </>
                 )}
               />
             ))}
           </div>
         ) : (
-          <EmptyState title="No scheduled messages" subtitle="Use the group scheduler for recurring reminders, announcements, and cleanup-friendly notices." action={<Button onClick={openCreateDialog} disabled={currentGroupId == null}>Create one</Button>} />
+          <EmptyState title={t('settings.noScheduledMessages')} subtitle={t('settings.noScheduledMessagesDesc')} action={<Button onClick={openCreateDialog} disabled={currentGroupId == null}>{t('settings.createOne')}</Button>} />
         )}
       </Card>
 
       <Dialog
         open={editorOpen}
-        title={editingMessage ? 'Edit scheduled message' : 'Create scheduled message'}
-        description="The scheduler accepts relative times like +10m or cron expressions like */15 * * * *."
+        title={editingMessage ? t('settings.editScheduledMessage') : t('settings.createScheduledMessage')}
+        description={t('settings.scheduleDialogDesc')}
         onClose={() => setEditorOpen(false)}
       >
-        <Field label="Message text">
-          <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="Deploy reminder" />
+        <Field label={t('settings.messageText')}>
+          <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder={t('settings.messagePlaceholder')} />
         </Field>
         <FieldRow>
-          <Field label="Schedule" hint="Examples: +10m, +1h, 0 9 * * *">
+          <Field label={t('settings.scheduleLabel')} hint={t('settings.scheduleHint')}>
             <Input value={messageSchedule} onChange={(event) => setMessageSchedule(event.target.value)} />
           </Field>
-          <Field label="Delete after seconds" hint="Use 0 to keep the message after sending.">
+          <Field label={t('settings.deleteAfterSeconds')} hint={t('settings.deleteAfterHint')}>
             <Input type="number" min={0} value={messageDeleteAfter} onChange={(event) => setMessageDeleteAfter(event.target.value)} />
           </Field>
         </FieldRow>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Button variant="outline" onClick={() => setEditorOpen(false)}>Cancel</Button>
-          <Button onClick={() => void handleSaveScheduledMessage()} disabled={savingMessage}>{savingMessage ? 'Saving…' : editingMessage ? 'Save changes' : 'Create message'}</Button>
+          <Button variant="outline" onClick={() => setEditorOpen(false)}>{t('common.cancel')}</Button>
+          <Button onClick={() => void handleSaveScheduledMessage()} disabled={savingMessage}>{savingMessage ? t('common.saving') : editingMessage ? t('settings.saveChanges') : t('settings.createMessage')}</Button>
         </div>
       </Dialog>
     </PageShell>

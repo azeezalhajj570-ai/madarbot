@@ -70,12 +70,12 @@ export default function AdminKnowledgePage() {
       setIsExtracting(false)
       qc.invalidateQueries({ queryKey: ['all-knowledge'] })
       qc.invalidateQueries({ queryKey: ['knowledge-groups'] })
-      toast.success(`Extraction complete. Saved ${status.saved} entries.`)
+      toast.success(`${t('knowledge.extracted')} Saved ${status.saved} entries.`)
       return
     }
     if (status.status === 'failed') {
       setIsExtracting(false)
-      toast.error(`Extraction failed: ${status.error || 'Unknown error'}`)
+      toast.error(`${t('knowledge.extractFailed')} ${status.error || t('common.unknown')}`)
       return
     }
   }, [status, isExtracting, extractGroupId, qc, toast])
@@ -84,12 +84,12 @@ export default function AdminKnowledgePage() {
     mutationFn: () => extractGroupKnowledge(extractGroupId!, extractCount),
     onSuccess: () => {
       setIsExtracting(true)
-      toast.info('Extraction started. It will run in the background.')
+      toast.info(t('knowledge.extractionStarted'))
       qc.invalidateQueries({ queryKey: ['extraction-status', extractGroupId] })
     },
     onError: (err: any) => {
       setIsExtracting(false)
-      toast.error(`Failed to start: ${err?.message || 'Unknown error'}`)
+      toast.error(`${t('common.failedToLoad')}: ${err?.message || t('common.unknown')}`)
     },
   })
 
@@ -98,17 +98,17 @@ export default function AdminKnowledgePage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['all-knowledge'] })
       qc.invalidateQueries({ queryKey: ['knowledge-groups'] })
-      toast.success('Entry deleted')
+      toast.success(t('knowledge.entryDeleted'))
     },
     onError: (err: any) => {
-      toast.error(err?.message || 'Delete failed')
+      toast.error(err?.message || t('knowledge.deleteFailed'))
     },
   })
 
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell title="Knowledge" description="Admin access required.">
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
+      <PageShell title={t('knowledge.title')} description={t('common.accessDenied.desc')}>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>{t('common.accessDenied')}</div>
       </PageShell>
     )
   }
@@ -120,35 +120,35 @@ export default function AdminKnowledgePage() {
 
   return (
     <PageShell
-      title="Knowledge Base"
-      description="Extract and manage AI-generated knowledge from scraped group messages."
+      title={t('knowledge.title')}
+      description={t('knowledge.desc')}
       icon={<Brain size={20} />}
     >
       {/* Extraction controls */}
       <Card>
         <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ minWidth: 200, flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Extract for Group</label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>{t('knowledge.extractFor')}</label>
             <GroupAutoComplete
               items={groups || []}
               value={extractGroupId}
               onChange={(id) => setExtractGroupId(id)}
-              placeholder="Select a group..."
+              placeholder={t('knowledge.selectGroup')}
               getLabel={(g: any) => g.title}
               getId={(g: any) => g.id}
             />
           </div>
           <div style={{ minWidth: 100 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Max Messages</label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>{t('knowledge.maxMessages')}</label>
             <Input type="number" value={extractCount} onChange={(e) => setExtractCount(Number(e.target.value))} min={100} max={10000} />
           </div>
           <Button onClick={() => extractMutation.mutate()} disabled={!extractGroupId || isExtracting}>
-            {isExtracting ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Extracting...</> : 'Extract Knowledge'}
+            {isExtracting ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> {t('knowledge.extracting')}</> : t('knowledge.extract')}
           </Button>
         </div>
         {isExtracting && (
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-warning)' }}>
-            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Extraction running in background.
+            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> {t('knowledge.runningBackground')}
           </div>
         )}
       </Card>
@@ -157,22 +157,22 @@ export default function AdminKnowledgePage() {
       <Card style={{ marginTop: 16 }}>
         <Toolbar style={{ marginBottom: 16 }}>
           <div style={{ minWidth: 200 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Group</label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>{t('knowledge.group')}</label>
             <GroupAutoComplete
               items={groups || []}
               value={filterGroupId ?? null}
               onChange={(id) => setFilterGroupId(id ?? undefined)}
-              placeholder="All groups"
+              placeholder={t('knowledge.allGroups')}
               getLabel={(g: any) => `${g.title} (${g.entry_count})`}
               getId={(g: any) => g.id}
             />
           </div>
           <FilterSelect
-            label="Type"
+            label={t('knowledge.type')}
             value={filterType}
             onChange={setFilterType}
             options={[
-              { value: '', label: 'All types' },
+              { value: '', label: t('knowledge.allTypes') },
               ...allTypes.map((type) => ({ value: type, label: type })),
             ]}
           />
@@ -180,29 +180,29 @@ export default function AdminKnowledgePage() {
 
         <DataTable
           columns={[
-            { key: 'type', label: 'Type', render: (entry: any) => (
+            { key: 'type', label: t('knowledge.type'), render: (entry: any) => (
               <Badge style={{ background: TYPE_COLORS[entry.knowledge_type] || '#6b7280', color: '#fff' }}>
                 {entry.knowledge_type}
               </Badge>
             )},
-            { key: 'title', label: 'Title', render: (entry: any) => (
+            { key: 'title', label: t('knowledge.titleCol'), render: (entry: any) => (
               <span style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                {entry.title || 'Untitled'}
+                {entry.title || t('knowledge.untitled')}
               </span>
             )},
-            { key: 'group', label: 'Group', render: (entry: any) => (
+            { key: 'group', label: t('knowledge.group'), render: (entry: any) => (
               <Badge style={{ background: '#374151', color: '#fff' }}>{entry.group_title || `Group ${entry.group_id}`}</Badge>
             )},
-            { key: 'confidence', label: 'Confidence', render: (entry: any) => `${(entry.confidence * 100).toFixed(0)}%` },
-            { key: 'embedding', label: 'Embedding', render: (entry: any) => (
+            { key: 'confidence', label: t('knowledge.confidence'), render: (entry: any) => `${(entry.confidence * 100).toFixed(0)}%` },
+            { key: 'embedding', label: t('knowledge.embedding'), render: (entry: any) => (
               entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--ui-success)' }} /> : <XCircle size={14} style={{ color: 'var(--ui-text-muted)' }} />
             )},
-            { key: 'created', label: 'Created', render: (entry: any) => (
+            { key: 'created', label: t('knowledge.created'), render: (entry: any) => (
               <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
             )},
             { key: 'actions', label: '', render: (entry: any) => (
               <button
-                onClick={() => { if (confirm('Delete this entry?')) deleteMutation.mutate(entry.id) }}
+                onClick={() => { if (confirm(t('knowledge.deleteConfirm'))) deleteMutation.mutate(entry.id) }}
                 style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
                 title="Delete"
               >
@@ -214,7 +214,7 @@ export default function AdminKnowledgePage() {
           total={entries?.length || 0}
           keyExtractor={(entry: any) => entry.id}
           loading={entriesLoading}
-          searchPlaceholder="Search title or content..."
+          searchPlaceholder={t('knowledge.searchPlaceholder')}
           style={{ marginTop: 16 }}
         />
       </Card>

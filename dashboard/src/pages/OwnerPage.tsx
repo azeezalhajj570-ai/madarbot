@@ -18,7 +18,7 @@ export default function OwnerPage() {
   if (user?.role !== 'owner' && user?.role !== 'admin') {
     return (
       <PageShell titleKey="page.owner" descriptionKey="page.owner.desc">
-        <EmptyState title="Access denied" subtitle="This area is available to owner accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.ownerOnly')} />
       </PageShell>
     )
   }
@@ -26,23 +26,23 @@ export default function OwnerPage() {
   return (
     <PageShell titleKey="page.owner" descriptionKey="page.owner.desc">
       <ContentGrid columns="repeat(auto-fit, minmax(220px, 1fr))">
-        <MetricCard label="Total groups" value="4" hint="Tracked workspaces" />
-        <MetricCard label="Total members" value="6481" hint="Across all groups" />
-        <MetricCard label="Active subs" value="2" hint="Approved access" />
-        <MetricCard label="Pending requests" value="1" hint="Awaiting review" />
+        <MetricCard label={t('owner.totalGroups')} value="4" hint={t('owner.trackedWorkspaces')} />
+        <MetricCard label={t('owner.totalMembers')} value="6481" hint={t('owner.acrossAllGroups')} />
+        <MetricCard label={t('owner.activeSubs')} value="2" hint={t('owner.approvedAccess')} />
+        <MetricCard label={t('owner.pendingRequests')} value="1" hint={t('owner.awaitingReview')} />
       </ContentGrid>
 
       <DataTable
         data={GROUPS}
         total={GROUPS.length}
-        title="Your Groups"
-        subtitle="Manage your tracked groups and their subscriptions."
-        searchPlaceholder="Search groups..."
+        title={t('owner.yourGroups')}
+        subtitle={t('owner.yourGroupsDesc')}
+        searchPlaceholder={t('owner.searchGroups')}
         columns={[
-          { key: 'name', label: 'Name', render: (g: any) => g.name },
-          { key: 'health', label: 'Health', hideOnMobile: true, render: (g: any) => g.health },
-          { key: 'members', label: 'Members', render: (g: any) => g.members },
-          { key: 'subscription', label: 'Subscription', hideOnMobile: true, render: (g: any) => g.subscription },
+          { key: 'name', label: t('owner.name'), render: (g: any) => g.name },
+          { key: 'health', label: t('owner.health'), hideOnMobile: true, render: (g: any) => g.health },
+          { key: 'members', label: t('owner.members'), render: (g: any) => g.members },
+          { key: 'subscription', label: t('owner.subscription'), hideOnMobile: true, render: (g: any) => g.subscription },
         ]}
         keyExtractor={(_: any, i: number) => i}
       />

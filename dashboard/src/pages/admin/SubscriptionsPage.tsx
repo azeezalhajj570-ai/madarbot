@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock } from 'lucide-react'
 
 import { Badge, Button, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
+import { useI18n } from '../../lib/i18n'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerSubscriptions, updateOwnerSubscription, fetchOwnerStats } from '../../lib/api'
@@ -21,11 +22,12 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminSubscriptionsPage() {
+  const { t } = useI18n()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -57,48 +59,48 @@ export default function AdminSubscriptionsPage() {
   return (
     <PageShell titleKey="page.admin.subscriptions" descriptionKey="page.admin.subscriptions.desc" loading={false}>
       <ContentGrid columns="repeat(auto-fit, minmax(200px, 1fr))">
-        <MetricCard label="Active Subs" value={String(stats?.active_subscriptions ?? approvedCount)} hint="Approved accounts" icon={<CheckCircle2 size={20} />} />
-        <MetricCard label="Pending Requests" value={String(stats?.pending_requests ?? pendingCount)} hint="Awaiting review" icon={<Clock size={20} />} />
+        <MetricCard label={t('subscription.activeSubs')} value={String(stats?.active_subscriptions ?? approvedCount)} hint={t('subscription.approvedAccounts')} icon={<CheckCircle2 size={20} />} />
+        <MetricCard label={t('subscription.pendingRequests')} value={String(stats?.pending_requests ?? pendingCount)} hint={t('subscription.awaitingReview')} icon={<Clock size={20} />} />
       </ContentGrid>
 
       <DataTable
         data={subs || []}
         total={(subs || []).length}
         loading={isLoading}
-        title="Subscription Requests"
-        subtitle="Users requesting access to premium features."
-        searchPlaceholder="Search by name or username..."
+        title={t('subscription.title')}
+        subtitle={t('subscription.desc')}
+        searchPlaceholder={t('subscription.searchPlaceholder')}
         filters={[
-          { key: 'status', label: 'Status', options: [
-            { value: '', label: 'All statuses' },
-            { value: 'pending', label: 'Pending' },
-            { value: 'approved', label: 'Approved' },
-            { value: 'declined', label: 'Declined' },
+          { key: 'status', label: t('subscription.filterStatus'), options: [
+            { value: '', label: t('subscription.allStatuses') },
+            { value: 'pending', label: t('common.pending') },
+            { value: 'approved', label: t('common.approved') },
+            { value: 'declined', label: t('common.declined') },
           ]},
         ]}
         columns={[
-          { key: 'requester', label: 'Requester', render: (sub: any) => (
+          { key: 'requester', label: t('subscription.requester'), render: (sub: any) => (
             <div>
-              <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-              <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+              <div style={{ fontWeight: 700 }}>{sub.full_name || t('subscription.telegramUser')}</div>
+              <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || t('common.none')} · {sub.tg_user_id}</div>
             </div>
           )},
-          { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
+          { key: 'message', label: t('subscription.message'), hideOnMobile: true, render: (sub: any) => (
             <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
-              {sub.message || 'No message provided'}
+              {sub.message || t('subscription.noMessage')}
             </div>
           )},
-          { key: 'status', label: 'Status', render: (sub: any) => (
+          { key: 'status', label: t('subscription.filterStatus'), render: (sub: any) => (
             <Badge tone={sub.status === 'approved' ? 'success' : sub.status === 'pending' ? 'warning' : sub.status === 'declined' ? 'destructive' : 'neutral'}>
               {sub.status}
             </Badge>
           )},
-          { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
+          { key: 'requested', label: t('subscription.requested'), hideOnMobile: true, render: (sub: any) => (
             <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
               {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : '—'}
             </div>
           )},
-          { key: 'actions', label: 'Actions', render: (sub: any) => (
+          { key: 'actions', label: t('subscription.actions'), render: (sub: any) => (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {sub.status === 'pending' ? (
                 <>
@@ -108,26 +110,26 @@ export default function AdminSubscriptionsPage() {
                       onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as 'pro' | 'business' })}
                       style={{ width: '100%', minHeight: 32, borderRadius: 8, border: '1px solid var(--ui-border)', padding: '0 8px', fontSize: 13, background: 'var(--ui-surface-strong)', color: 'var(--ui-text)' }}
                     >
-                      <option value="pro">Pro</option>
-                      <option value="business">Business</option>
+                      <option value="pro">{t('subscription.planPro')}</option>
+                      <option value="business">{t('subscription.planBusiness')}</option>
                     </select>
                   </div>
                   <Button size="sm" variant="default"
                     onClick={() => subMutation.mutate({ id: sub.id, action: 'approve', plan: approvalPlans[sub.id] || 'pro' })}
                     disabled={subMutation.isPending}
                   >
-                    Approve
+                    {t('subscription.approve')}
                   </Button>
                   <Button size="sm" variant="outline"
                     onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
                     disabled={subMutation.isPending}
                   >
-                    Decline
+                    {t('subscription.decline')}
                   </Button>
                 </>
               ) : (
                 <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                  {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
+                  {sub.status === 'approved' ? `${t('subscription.approvedAs')}${sub.plan || 'pro'}` : t('subscription.noActions')}
                 </span>
               )}
             </div>

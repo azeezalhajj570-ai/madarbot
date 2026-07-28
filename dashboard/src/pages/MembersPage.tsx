@@ -17,34 +17,34 @@ export default function MembersPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
 
   return (
-    <PageShell titleKey="page.members" descriptionKey="page.members.desc" actions={<Button onClick={() => setSheetOpen(true)}>Bulk actions</Button>}>
+    <PageShell titleKey="page.members" descriptionKey="page.members.desc" actions={<Button onClick={() => setSheetOpen(true)}>{t('members.bulkActions')}</Button>}>
       <DataTable
         data={MEMBERS}
         total={MEMBERS.length}
-        searchPlaceholder="Search members..."
+        searchPlaceholder={t('members.searchPlaceholder')}
         filters={[
-          { key: 'role', label: 'Role', options: [
-            { value: '', label: 'All roles' },
-            { value: 'owner', label: 'Owner' },
-            { value: 'admin', label: 'Admin' },
-            { value: 'member', label: 'Member' },
-            { value: 'banned', label: 'Banned' },
+          { key: 'role', label: t('members.role'), options: [
+            { value: '', label: t('members.allRoles') },
+            { value: 'owner', label: t('members.owner') },
+            { value: 'admin', label: t('members.admin') },
+            { value: 'member', label: t('members.member') },
+            { value: 'banned', label: t('members.banned') },
           ]},
         ]}
         columns={[
-          { key: 'name', label: 'Name', render: (member: any) => member.name },
-          { key: 'username', label: 'Username', render: (member: any) => member.username },
-          { key: 'role', label: 'Role', render: (member: any) => (
+          { key: 'name', label: t('members.name'), render: (member: any) => member.name },
+          { key: 'username', label: t('members.username'), render: (member: any) => member.username },
+          { key: 'role', label: t('members.role'), render: (member: any) => (
             <Badge tone={member.role === 'banned' ? 'destructive' : member.role === 'admin' || member.role === 'owner' ? 'warning' : 'default'}>
               {member.role}
             </Badge>
           )},
-          { key: 'joined', label: 'Joined', hideOnMobile: true, render: (member: any) => member.joinedAt },
-          { key: 'actions', label: 'Actions', hideOnMobile: true, render: () => (
+          { key: 'joined', label: t('members.joined'), hideOnMobile: true, render: (member: any) => member.joinedAt },
+          { key: 'actions', label: t('members.actions'), hideOnMobile: true, render: () => (
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button variant="outline">Warn</Button>
-              <Button variant="outline">Mute</Button>
-              <Button variant="destructive">Ban</Button>
+              <Button variant="outline">{t('members.warn')}</Button>
+              <Button variant="outline">{t('members.mute')}</Button>
+              <Button variant="destructive">{t('members.ban')}</Button>
             </div>
           )},
         ]}
@@ -52,18 +52,18 @@ export default function MembersPage() {
       />
       <Sheet
         open={sheetOpen}
-        title="Bulk member action"
+        title={t('members.bulkAction')}
         onClose={() => setSheetOpen(false)}
-        footer={<ActionBar secondary={<Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>} primary={<Button onClick={() => setSheetOpen(false)}>Apply action</Button>} />}
+        footer={<ActionBar secondary={<Button variant="outline" onClick={() => setSheetOpen(false)}>{t('members.bulkCancel')}</Button>} primary={<Button onClick={() => setSheetOpen(false)}>{t('members.bulkApply')}</Button>} />}
       >
-        <Field label="Members" hint="Paste member IDs or usernames.">
-          <Input placeholder="@ali_h, @mona_s" />
+        <Field label={t('members.memberIds')} hint={t('members.memberIdsHint')}>
+          <Input placeholder={t('members.memberIdsPlaceholder')} />
         </Field>
-        <Field label="Action">
+        <Field label={t('members.actionLabel')}>
           <Select defaultValue="warn">
-            <option value="warn">Warn</option>
-            <option value="mute">Mute</option>
-            <option value="ban">Ban</option>
+            <option value="warn">{t('members.warn')}</option>
+            <option value="mute">{t('members.mute')}</option>
+            <option value="ban">{t('members.ban')}</option>
           </Select>
         </Field>
       </Sheet>

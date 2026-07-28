@@ -1,4 +1,6 @@
-:root {
+:root,
+[data-theme='light'] {
+  color-scheme: light;
   font-family: "Manrope", "IBM Plex Sans", sans-serif;
   color: #14213d;
   background: #f0ece4;
@@ -24,6 +26,38 @@
   --ui-danger-soft: #fce8e7;
   --ui-shadow: 0 1px 3px rgba(20, 33, 61, 0.06);
   --ui-shadow-strong: 0 4px 12px rgba(20, 33, 61, 0.08);
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 0px;
+  --mobile-nav-height: 52px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  font-family: "Manrope", "IBM Plex Sans", sans-serif;
+  color: #e8e8e8;
+  background: #121212;
+  --ui-bg: #121212;
+  --ui-bg-muted: #1e1e1e;
+  --ui-surface: #252525;
+  --ui-surface-alt: #2a2a2a;
+  --ui-surface-strong: #333333;
+  --ui-text: #e8e8e8;
+  --ui-text-muted: #a0a0a0;
+  --ui-text-subtle: #808080;
+  --ui-border: rgba(255, 255, 255, 0.08);
+  --ui-border-strong: rgba(255, 255, 255, 0.14);
+  --ui-primary: #4fc3c3;
+  --ui-primary-hover: #45b3b3;
+  --ui-primary-text: #121212;
+  --ui-primary-soft: rgba(79, 195, 195, 0.15);
+  --ui-success: #4caf78;
+  --ui-success-soft: rgba(76, 175, 120, 0.15);
+  --ui-warning: #d4a847;
+  --ui-warning-soft: rgba(212, 168, 71, 0.15);
+  --ui-danger: #e57373;
+  --ui-danger-soft: rgba(229, 115, 115, 0.15);
+  --ui-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ui-shadow-strong: 0 4px 12px rgba(0, 0, 0, 0.4);
   --sidebar-width: 240px;
   --sidebar-collapsed: 0px;
   --mobile-nav-height: 52px;

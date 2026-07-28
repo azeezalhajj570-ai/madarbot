@@ -45,13 +45,13 @@ export default function AgentsPage() {
   if (user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.agents" descriptionKey="page.agents.desc">
-        <Card title="My Agent Accounts" subtitle="Linked Telegram accounts for your automated tasks and scraping.">
+        <Card title={t('agents.myAccounts')} subtitle={t('agents.myAccounts.desc')}>
           {myAgentsLoading ? (
             <CardSkeleton />
           ) : (myAgents || []).length > 0 ? (
             <Table<Agent>
               columns={[
-                { key: 'identity', label: 'Agent Identity', render: (agent) => (
+                { key: 'identity', label: t('agent.agentIdentity'), render: (agent) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
                       <Bot size={16} />
@@ -62,18 +62,18 @@ export default function AgentsPage() {
                     </div>
                   </div>
                 )},
-                { key: 'phone', label: 'Phone', hideOnMobile: true, render: (agent) => (
+                { key: 'phone', label: t('agent.phone'), hideOnMobile: true, render: (agent) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Phone size={14} style={{ color: 'var(--ui-text-muted)' }} />
-                    {agent.phone_number || 'N/A'}
+                    {agent.phone_number || t('common.none')}
                   </div>
                 )},
-                { key: 'status', label: 'Status', render: (agent) => (
+                { key: 'status', label: t('agent.status'), render: (agent) => (
                   <Badge tone={agent.status === 'active' ? 'success' : 'warning'}>{agent.status}</Badge>
                 )},
-                { key: 'last_active', label: 'Last Active', render: (agent) => (
+                { key: 'last_active', label: t('agent.lastActivity'), render: (agent) => (
                   <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                    {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : 'Never'}
+                    {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : t('common.never')}
                   </div>
                 )},
               ]}
@@ -81,7 +81,7 @@ export default function AgentsPage() {
               keyExtractor={(agent) => agent.id}
             />
           ) : (
-            <EmptyState title="No agents linked" subtitle="Link a Telegram account to start using automated features." />
+            <EmptyState title={t('agents.noLinked')} subtitle={t('agents.noLinked.desc')} />
           )}
         </Card>
       </PageShell>
@@ -96,32 +96,32 @@ export default function AgentsPage() {
     >
       <ContentGrid columns="repeat(auto-fit, minmax(240px, 1fr))">
         <MetricCard 
-          label="Total Agents" 
+          label={t('agents.totalAgents')} 
           value={stats?.linked_agents?.toString() || '0'} 
-          hint="Linked Telegram accounts" 
+          hint={t('agents.totalAgents.desc')} 
           icon={<Bot size={20} />}
         />
         <MetricCard 
-          label="Active Jobs" 
+          label={t('agents.activeJobs')} 
           value={stats?.pending_agent_jobs?.toString() || '0'} 
-          hint="Currently processing" 
+          hint={t('agents.activeJobs.desc')} 
           icon={<Activity size={20} />}
         />
         <MetricCard 
-          label="Staff Members" 
+          label={t('agents.staffMembers')} 
           value={(users?.length || 0).toString()} 
-          hint="Dashboard login access" 
+          hint={t('agents.staffMembers.desc')} 
           icon={<Shield size={20} />}
         />
       </ContentGrid>
 
-      <Card title="Telegram Agent Accounts" subtitle="All bot agents linked by users for automated tasks and scraping.">
+      <Card title={t('agents.telegramAccounts')} subtitle={t('agents.telegramAccounts.desc')}>
         {agentsLoading ? (
           <CardSkeleton />
         ) : (agents || []).length > 0 ? (
           <Table<Agent>
             columns={[
-              { key: 'identity', label: 'Agent Identity', render: (agent) => (
+              { key: 'identity', label: t('agent.agentIdentity'), render: (agent) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
                     <Bot size={16} />
@@ -132,35 +132,35 @@ export default function AgentsPage() {
                   </div>
                 </div>
               )},
-              { key: 'phone', label: 'Phone', render: (agent) => (
+              { key: 'phone', label: t('agent.phone'), render: (agent) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Phone size={14} style={{ color: 'var(--ui-text-muted)' }} />
-                  {agent.phone_number || 'N/A'}
+                  {agent.phone_number || t('common.none')}
                 </div>
               )},
-              { key: 'status_auth', label: 'Status / Auth', render: (agent) => (
+              { key: 'status_auth', label: t('agents.statusAuth'), render: (agent) => (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <Badge tone={agent.status === 'active' ? 'success' : 'warning'}>{agent.status}</Badge>
                   <Badge tone={agent.auth_state === 'active' ? 'success' : 'warning'}>{agent.auth_state}</Badge>
                 </div>
               )},
-              { key: 'workspace', label: 'Workspace', hideOnMobile: true, render: (agent) => (
+              { key: 'workspace', label: t('agents.workspace'), hideOnMobile: true, render: (agent) => (
                 <div>
-                  <div style={{ fontWeight: 600 }}>{agent.group_title || 'N/A'}</div>
+                  <div style={{ fontWeight: 600 }}>{agent.group_title || t('common.none')}</div>
                   <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>Workspace ID: {agent.group_id}</div>
                 </div>
               )},
-              { key: 'last_active', label: 'Last Active', render: (agent) => (
+              { key: 'last_active', label: t('agent.lastActivity'), render: (agent) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', flex: 1 }}>
-                    {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : 'Never'}
+                    {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : t('common.never')}
                   </div>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     style={{ color: 'var(--ui-danger)', padding: 6 }}
                     onClick={() => {
-                      if (confirm(`Are you sure you want to delete agent ${agent.external_account_id}?`)) {
+                      if (confirm(`${t('agents.deleteConfirm')} ${agent.external_account_id}?`)) {
                         deleteMutation.mutate(agent.id)
                       }
                     }}
@@ -175,17 +175,17 @@ export default function AgentsPage() {
             keyExtractor={(agent) => agent.id}
           />
         ) : (
-          <EmptyState title="No agents found" subtitle="Linked Telegram accounts will appear here." />
+          <EmptyState title={t('agents.noFound')} subtitle={t('agents.noFound.desc')} />
         )}
       </Card>
 
-      <Card title="Dashboard Staff" subtitle="Users with login access to this dashboard (configured in system environment).">
+      <Card title={t('agents.dashboardStaff')} subtitle={t('agents.dashboardStaff.desc')}>
         {usersLoading ? (
           <CardSkeleton />
         ) : (users || []).length > 0 ? (
           <Table
             columns={[
-              { key: 'user', label: 'User', render: (u: any) => (
+              { key: 'user', label: t('agents.user'), render: (u: any) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: 'var(--ui-primary)' }}>
                     <User size={16} />
@@ -196,19 +196,19 @@ export default function AgentsPage() {
                   </div>
                 </div>
               )},
-              { key: 'email', label: 'Email', hideOnMobile: true, render: (u: any) => (
+              { key: 'email', label: t('agents.email'), hideOnMobile: true, render: (u: any) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Mail size={14} style={{ color: 'var(--ui-text-muted)' }} />
                   {u.email}
                 </div>
               )},
-              { key: 'role', label: 'Role', render: (u: any) => (
+              { key: 'role', label: t('agents.role'), render: (u: any) => (
                 <Badge tone={u.role === 'owner' ? 'success' : 'neutral'}>{u.role}</Badge>
               )},
-              { key: 'access_control', label: 'Access Control', hideOnMobile: true, render: () => (
+              { key: 'access_control', label: t('agents.accessControl'), hideOnMobile: true, render: () => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Shield size={14} style={{ color: 'var(--ui-text-muted)' }} />
-                  Login restricted to config
+                  {t('agents.loginRestricted')}
                 </div>
               )},
             ]}
@@ -216,7 +216,7 @@ export default function AgentsPage() {
             keyExtractor={(_: any, i: number) => i}
           />
         ) : (
-          <EmptyState title="No users found" subtitle="Dashboard users will appear here." />
+          <EmptyState title={t('agents.noUsers')} subtitle={t('agents.noUsers.desc')} />
         )}
       </Card>
     </PageShell>

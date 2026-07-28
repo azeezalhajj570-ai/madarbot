@@ -5,6 +5,7 @@ import { Badge, Button, Card, CardSkeleton, ContentGrid, EmptyState, MetricCard 
 import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
+import { useI18n } from '../../lib/i18n'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
 import type { AdminOverview, AdminJob } from '../../lib/types'
@@ -22,12 +23,13 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 export default function AdminJobsPage() {
+  const { t } = useI18n()
   const { toast } = useToast()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -41,7 +43,7 @@ export default function AdminJobsPage() {
       setData(overview)
       setLastRefresh(new Date())
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to load')
+      toast.error(err?.message || t('common.failedToLoad'))
     } finally {
       setLoading(false)
     }
@@ -68,38 +70,38 @@ export default function AdminJobsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{lastRefresh.toLocaleTimeString()}</span>
           <Button variant="outline" size="sm" onClick={refresh}>
-            <RefreshCw size={14} /> Refresh
+            <RefreshCw size={14} /> {t('common.refresh')}
           </Button>
         </div>
       </div>
 
       <ContentGrid columns="repeat(auto-fit, minmax(200px, 1fr))">
-        <MetricCard label="Total Jobs" value={String(js?.total || 0)} hint={`${Object.keys(js?.by_status || {}).length} statuses`} />
-        <MetricCard label="Total Sent" value={String(totalSent)} hint={`${totalContacts} unique contacts`} />
+        <MetricCard label={t('job.totalJobs')} value={String(js?.total || 0)} hint={`${Object.keys(js?.by_status || {}).length} ${t('job.statuses')}`} />
+        <MetricCard label={t('agent.totalSent')} value={String(totalSent)} hint={`${totalContacts} ${t('job.uniqueContacts')}`} />
         <MetricCard
-          label="Failed"
+          label={t('common.failed')}
           value={String((js?.by_status?.failed || 0) + (js?.by_status?.aborted || 0))}
-          hint={js?.total ? `${(((js.by_status.failed || 0) + (js.by_status.aborted || 0)) / js.total * 100).toFixed(1)}% failure rate` : '—'}
+          hint={js?.total ? `${(((js.by_status.failed || 0) + (js.by_status.aborted || 0)) / js.total * 100).toFixed(1)}${t('job.failureRate')}` : '—'}
         />
         <MetricCard
-          label="Running"
+          label={t('common.running')}
           value={String((js?.by_status?.running || 0) + (js?.by_status?.pending || 0))}
-          hint={`${js?.by_status?.completed || 0} completed`}
+          hint={`${js?.by_status?.completed || 0} ${t('common.completed')}`}
         />
       </ContentGrid>
 
       <ContentGrid columns="repeat(auto-fit, minmax(320px, 1fr))">
-        <Card title="Recent Jobs">
+        <Card title={t('job.recentJobs')}>
           <DataTable<AdminJob>
             columns={[
-              { key: 'id', label: 'ID', render: (job) => (
+              { key: 'id', label: t('job.id'), render: (job) => (
                 <span style={{ fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></span>
               )},
-              { key: 'agent', label: 'Agent', render: (job) => `#${job.agent_id}` },
-              { key: 'created', label: 'When', render: (job) => (
+              { key: 'agent', label: t('job.agent'), render: (job) => `#${job.agent_id}` },
+              { key: 'created', label: t('job.when'), render: (job) => (
                 <span style={{ color: 'var(--ui-text-subtle)' }}>{timeAgo(job.created_at)}</span>
               )},
-              { key: 'status', label: 'Status', render: (job) => (
+              { key: 'status', label: t('job.status'), render: (job) => (
                 <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
                   {job.status}
                 </Badge>
@@ -114,18 +116,18 @@ export default function AdminJobsPage() {
           />
         </Card>
 
-        <Card title="Recent Failures (24h)">
+        <Card title={t('job.recentFailures')}>
           <DataTable<AdminJob>
             columns={[
-              { key: 'id', label: 'ID', render: (job) => (
+              { key: 'id', label: t('job.id'), render: (job) => (
                 <span style={{ fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></span>
               )},
-              { key: 'agent', label: 'Agent', render: (job) => `#${job.agent_id}` },
-              { key: 'created', label: 'When', render: (job) => (
+              { key: 'agent', label: t('job.agent'), render: (job) => `#${job.agent_id}` },
+              { key: 'created', label: t('job.when'), render: (job) => (
                 <span style={{ color: 'var(--ui-text-subtle)' }}>{timeAgo(job.created_at)}</span>
               )},
-              { key: 'status', label: 'Status', render: () => (
-                <Badge tone="destructive">Failed</Badge>
+              { key: 'status', label: t('job.status'), render: () => (
+                <Badge tone="destructive">{t('common.failed')}</Badge>
               )},
             ]}
             data={recentFailures}

@@ -315,9 +315,9 @@ function ComparePanel({ groups }: { groups: ScrapedGroupSummary[] }) {
             <Card key={i}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{u.name} — {u.major}</div>
               <div style={{ fontSize: 13 }}>
-                {t('admission.trend')}: <strong>{u.cutoff?.trend || 'insufficient_data'}</strong>
+                  {t('admission.trend')}: <strong>{u.cutoff?.trend || t('common.noData')}</strong>
               </div>
-              <p style={{ fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>{u.cutoff?.summary || 'No data'}</p>
+              <p style={{ fontSize: 13, lineHeight: 1.5, marginTop: 4 }}>{u.cutoff?.summary || t('common.noData')}</p>
             </Card>
           ))}
           {result.notes && (

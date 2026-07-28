@@ -21,7 +21,7 @@ export default function ActivityPage() {
 
   return (
     <PageShell titleKey="page.activity" descriptionKey="page.activity.desc">
-      <Tabs value={tab} onChange={setTab} items={[{ value: 'all', label: 'All' }, { value: 'moderation', label: 'Moderation' }, { value: 'system', label: 'System' }, { value: 'report', label: 'Reports' }]} />
+      <Tabs value={tab} onChange={setTab} items={[{ value: 'all', label: t('activity.all') }, { value: 'moderation', label: t('activity.moderation') }, { value: 'system', label: t('activity.system') }, { value: 'report', label: t('activity.reports') }]} />
       <Card>
         <div style={{ display: 'grid' }}>
           {filtered.map((event) => (
@@ -31,25 +31,25 @@ export default function ActivityPage() {
               title={event.title}
               subtitle={event.subtitle}
               meta={<span style={{ fontSize: 12, color: 'var(--ui-text-muted)', fontWeight: 700 }}>{event.timestamp}</span>}
-              actions={event.type === 'report' ? <Button variant="outline" onClick={() => setSheetOpen(true)}>Reply</Button> : undefined}
+              actions={event.type === 'report' ? <Button variant="outline" onClick={() => setSheetOpen(true)}>{t('activity.reply')}</Button> : undefined}
             />
           ))}
         </div>
       </Card>
       <Sheet
         open={sheetOpen}
-        title="Reply to report"
-        description="Responses follow the same side-panel editing model used for other workspace actions."
+        title={t('activity.replyToReport')}
+        description={t('activity.replySheetDesc')}
         onClose={() => setSheetOpen(false)}
         footer={
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancel</Button>
-            <Button onClick={() => setSheetOpen(false)}>Send reply</Button>
+            <Button variant="outline" onClick={() => setSheetOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={() => setSheetOpen(false)}>{t('activity.sendReply')}</Button>
           </div>
         }
       >
-        <Field label="Reply" hint="Replies are sent through the same structured moderation flow.">
-          <Textarea placeholder="Write your reply" value={reply} onChange={(event) => setReply(event.target.value)} />
+        <Field label={t('activity.replyLabel')} hint={t('activity.replyHint')}>
+          <Textarea placeholder={t('activity.replyPlaceholder')} value={reply} onChange={(event) => setReply(event.target.value)} />
         </Field>
       </Sheet>
     </PageShell>

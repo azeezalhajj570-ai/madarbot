@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
+import { useTheme } from '../lib/theme'
 
 const NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
@@ -21,6 +22,7 @@ const NAV = [
 export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
   const user = getStoredUser()
   const { t, lang, setLang } = useI18n()
+  const { theme, setTheme } = useTheme()
 
   function handleSwitchAccount() {
     const current = getStoredUser()
@@ -36,7 +38,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
         display: 'flex',
         flexDirection: 'column',
         background: uiVars.surface,
-        borderRight: `1px solid ${uiVars.border}`,
+        borderInlineEnd: `1px solid ${uiVars.border}`,
         height: '100%',
       }}
     >
@@ -53,8 +55,20 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
         </div>
       </div>
 
-      {/* Language toggle */}
-      <div style={{ padding: `${spacing.sm}px ${spacing.lg}px`, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Theme + Language toggles */}
+      <div style={{ padding: `${spacing.sm}px ${spacing.lg}px`, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+        <button
+          className="lang-toggle"
+          onClick={() => {
+            const order: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system']
+            const idx = order.indexOf(theme)
+            setTheme(order[(idx + 1) % order.length])
+          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 8px' }}
+          title={theme === 'light' ? t('theme.light') : theme === 'dark' ? t('theme.dark') : t('theme.system')}
+        >
+          {theme === 'light' ? <Moon size={13} /> : theme === 'dark' ? <Monitor size={13} /> : <Sun size={13} />}
+        </button>
         <button className="lang-toggle" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}>
           {t('lang.switch')}
         </button>
