@@ -80,7 +80,7 @@ export default function AdminAISettingsPage() {
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell title="AI Settings" description="Admin access required.">
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Access denied.</div>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
       </PageShell>
     )
   }
@@ -125,7 +125,7 @@ export default function AdminAISettingsPage() {
         </FieldRow>
 
         <FieldRow>
-          <Field label="API Key" hint="Provider API key" grow>
+          <Field label="API Key" hint="Provider API key">
             <Input
               type="password"
               value={apiKey}
@@ -157,10 +157,10 @@ export default function AdminAISettingsPage() {
 
         <FieldRow>
           <ToggleRow
-            label="Enable AI Replies"
-            hint="Allow AI to auto-reply when @mentioned in groups"
+            title="Enable AI Replies"
+            subtitle="Allow AI to auto-reply when @mentioned in groups"
             checked={enabled}
-            onChange={setEnabled}
+            onCheckedChange={setEnabled}
           />
         </FieldRow>
 
@@ -176,23 +176,23 @@ export default function AdminAISettingsPage() {
         </div>
 
         {saveMutation.isSuccess && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-success)' }}>
             <CheckCircle size={16} /> Saved successfully.
           </div>
         )}
         {saveMutation.isError && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-danger)' }}>
             <XCircle size={16} /> Save failed.
           </div>
         )}
 
         {testStatus === 'ok' && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-success)' }}>
             <CheckCircle size={16} /> {testMsg}
           </div>
         )}
         {testStatus === 'error' && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-danger)' }}>
             <XCircle size={16} /> {testMsg}
           </div>
         )}

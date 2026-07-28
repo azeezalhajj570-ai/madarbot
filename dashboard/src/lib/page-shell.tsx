@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
-
-import { spacing, uiVars } from '../../../shared/ui-system/tokens'
+import { spacing } from '../../../shared/ui-system/tokens'
 import { useI18n } from './i18n'
-import { EmptyState, PageFrame, SectionHeader } from '../components/ui/primitives'
+import { LoadingState, PageFrame, SectionHeader } from '../components/ui/primitives'
 
 export function PageShell({
   titleKey,
@@ -12,6 +11,7 @@ export function PageShell({
   actions,
   children,
   loading,
+  icon,
 }: {
   titleKey?: string
   title?: string
@@ -20,6 +20,7 @@ export function PageShell({
   actions?: ReactNode
   children: ReactNode
   loading?: boolean
+  icon?: ReactNode
 }) {
   const { t } = useI18n()
   const resolvedTitle = titleKey ? t(titleKey) : (title || '')
@@ -28,22 +29,14 @@ export function PageShell({
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: spacing.xl }}>
       <PageFrame>
-        <div
-          style={{
-            background: uiVars.bgMuted,
-            border: `1px solid ${uiVars.border}`,
-            borderRadius: 12,
-            padding: spacing.xl,
-            boxShadow: uiVars.shadow,
-          }}
-        >
-          <SectionHeader title={resolvedTitle} subtitle={resolvedDesc} actions={actions} />
+        <SectionHeader title={resolvedTitle} subtitle={resolvedDesc} actions={actions} icon={icon} />
+        <div>
+          {loading ? (
+            <LoadingState />
+          ) : (
+            children
+          )}
         </div>
-        {loading ? (
-          <EmptyState title={t('loading')} subtitle="" />
-        ) : (
-          children
-        )}
       </PageFrame>
     </div>
   )

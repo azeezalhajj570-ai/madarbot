@@ -6,6 +6,7 @@ import { storeAuth, getStoredAccounts, switchAccount, removeAccount, type AuthUs
 import { fetchCurrentUser, login, telegramLogin } from '../lib/api'
 import { Button, Card, Field, Input } from '../components/ui/primitives'
 import { I18nProvider, useI18n } from '../lib/i18n'
+import { uiVars } from '../../../shared/ui-system/tokens'
 
 type TelegramAuthCallback = (user: Record<string, unknown>) => void
 type WindowWithTelegramAuth = Window & typeof globalThis & Record<string, TelegramAuthCallback | undefined>
@@ -128,50 +129,54 @@ function LoginInner() {
 
   return (
     <div className="dashboard-auth-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '1.2fr 1fr', background: 'var(--ui-bg)' }}>
-      <div style={{ padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#1d2b36', color: '#f8fbfb', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ width: 48, height: 48, borderRadius: 10, background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', marginBottom: 20 }}>
+      <div style={{ padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#1a5c63', color: '#f8fbfb' }}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.1)', display: 'grid', placeItems: 'center', marginBottom: 20 }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm5.94 8.19l-2.02 9.52c-.15.68-.54.84-1.08.52l-3-2.21-1.45 1.4c-.16.16-.3.3-.61.3l.21-3.04 5.53-5c.24-.21-.05-.33-.37-.12L6.26 14.5l-2.95-.92c-.64-.2-.65-.64.14-.95l11.56-4.46c.53-.19.99.13.93.02z"/></svg>
         </div>
-        <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 8 }}>{t('app.name')}</div>
-          <div style={{ fontSize: 15, color: 'rgba(248,251,251,0.72)', marginBottom: 24, maxWidth: 420 }}>{t('app.desc')}</div>
-          {[t('nav.rules'), t('nav.automation'), t('nav.owner')].map((item) => (
-          <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, color: 'rgba(255,255,255,0.85)' }}>
-            <span style={{ width: 18, height: 18, borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#dff8fb', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>
+        <div style={{ fontSize: 30, fontWeight: 800, marginBottom: 6 }}>{t('app.name')}</div>
+        <div style={{ fontSize: 15, color: 'rgba(248,251,251,0.72)', marginBottom: 28, maxWidth: 400, lineHeight: '22px' }}>{t('app.desc')}</div>
+        {[t('nav.rules'), t('nav.automation'), t('nav.owner')].map((item) => (
+          <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, color: 'rgba(255,255,255,0.85)', fontSize: 14 }}>
+            <span style={{ width: 20, height: 20, borderRadius: 8, background: 'rgba(255,255,255,0.1)', color: '#b8e6e6', display: 'grid', placeItems: 'center', fontSize: 12, flexShrink: 0 }}>✓</span>
             {item}
           </div>
         ))}
       </div>
       <div style={{ padding: 48, display: 'grid', placeItems: 'center' }}>
-        <Card style={{ width: 'min(460px, 100%)', padding: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 26, fontWeight: 800 }}>{t('login.title')}</div>
+        <div style={{ width: 'min(420px, 100%)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{t('login.title')}</div>
             <button className="lang-toggle" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}>{t('lang.switch')}</button>
           </div>
-          <form onSubmit={handleLogin} style={{ display: 'grid', gap: 12 }}>
-            <Field label={t('login.email')}><Input placeholder={t('login.email')} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-            <Field label={t('login.password')}><Input type="password" placeholder={t('login.password')} value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+          <form onSubmit={handleLogin} style={{ display: 'grid', gap: 14 }}>
+            <Field label={t('login.email')}>
+              <Input placeholder={t('login.email')} value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label={t('login.password')}>
+              <Input type="password" placeholder={t('login.password')} value={password} onChange={(e) => setPassword(e.target.value)} />
+            </Field>
             <Button type="submit" disabled={loading} style={{ width: '100%' }}>
               {loading ? '…' : t('login.submit')}
             </Button>
           </form>
-          <div style={{ position: 'relative', margin: '20px 0', textAlign: 'center' }}>
+          <div style={{ position: 'relative', margin: '24px 0', textAlign: 'center' }}>
             <div style={{ height: 1, background: 'var(--ui-border)' }} />
-            <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-surface)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>or</span>
+            <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>or</span>
           </div>
-          <div id="telegram-login-widget" />
+          <div id="telegram-login-widget" style={{ display: 'grid', justifyContent: 'center' }} />
           <button
             onClick={handleSwitchTelegram}
             disabled={!telegramBotId}
-            style={{ background: 'none', border: 'none', padding: '8px 0 0', color: 'var(--ui-text-muted)', cursor: telegramBotId ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'center', opacity: telegramBotId ? 1 : 0.5 }}
+            style={{ background: 'none', border: 'none', padding: '10px 0 0', color: 'var(--ui-text-muted)', cursor: telegramBotId ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'center', opacity: telegramBotId ? 1 : 0.5 }}
           >
             {telegramBotId ? 'Use another Telegram account' : 'Loading Telegram…'}
           </button>
-          {error ? <div style={{ color: 'var(--ui-danger)', fontSize: 13, marginTop: 12 }}>{error}</div> : null}
+          {error ? <div style={{ color: 'var(--ui-danger)', fontSize: 13, marginTop: 12, textAlign: 'center' }}>{error}</div> : null}
           {!showNewAccount && storedAccounts.length > 0 ? (
             <>
               <div style={{ position: 'relative', margin: '20px 0', textAlign: 'center' }}>
                 <div style={{ height: 1, background: 'var(--ui-border)' }} />
-                <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-surface)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>Accounts</span>
+                <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>Accounts</span>
               </div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {storedAccounts.map(account => (
@@ -181,7 +186,7 @@ function LoginInner() {
                       switchAccount(account)
                       afterLogin()
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--ui-border)', background: 'var(--ui-surface-strong)', cursor: 'pointer', textAlign: 'left' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid var(--ui-border)`, background: 'var(--ui-surface)', cursor: 'pointer', textAlign: 'left' }}
                   >
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-primary)', color: 'var(--ui-primary-text)', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
                       {account.username[0]?.toUpperCase() ?? '?'}
@@ -217,7 +222,7 @@ function LoginInner() {
               ← Back to accounts
             </button>
           ) : null}
-        </Card>
+        </div>
       </div>
     </div>
   )

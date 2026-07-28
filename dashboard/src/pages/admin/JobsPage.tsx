@@ -68,7 +68,7 @@ export default function AdminJobsPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{lastRefresh.toLocaleTimeString()}</span>
+          <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{lastRefresh.toLocaleTimeString()}</span>
           <Button variant="outline" size="sm" onClick={refresh}>
             <RefreshCw size={14} /> Refresh
           </Button>
@@ -95,10 +95,10 @@ export default function AdminJobsPage() {
           {recentJobs.length > 0 ? (
             <div style={{ display: 'grid', gap: 0 }}>
               {recentJobs.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
                   </div>
                   <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
                     {job.status}
@@ -115,10 +115,10 @@ export default function AdminJobsPage() {
           {recentFailures.length > 0 ? (
             <div style={{ display: 'grid', gap: 0 }}>
               {recentFailures.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
                   </div>
                   <Badge tone="destructive">{job.status}</Badge>
                 </div>

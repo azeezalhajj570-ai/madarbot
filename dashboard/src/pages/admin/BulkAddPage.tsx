@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Plus, Send } from 'lucide-react'
 
 import { Badge, Button, Card, ColumnDef, EmptyState, Table } from '../../components/ui/primitives'
+import { SearchInput } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import api, {
   fetchAdminOverview,
@@ -199,7 +200,7 @@ export default function AdminBulkAddPage() {
                 <select
                   value={selectedAgentId ?? ''}
                   onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
-                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border)', background: 'var(--ui-surface)', fontSize: 14 }}
                 >
                   <option value="">Select agent...</option>
                   {agents.map((a) => (
@@ -234,7 +235,7 @@ export default function AdminBulkAddPage() {
                 <select
                   value={selectedSourceGroupId ?? ''}
                   onChange={(e) => setSelectedSourceGroupId(e.target.value ? Number(e.target.value) : null)}
-                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border)', background: 'var(--ui-surface)', fontSize: 14 }}
                   disabled={!sourceGroups.length}
                 >
                   <option value="">{sourceGroups.length ? 'Select source group...' : 'No groups'}</option>
@@ -260,7 +261,7 @@ export default function AdminBulkAddPage() {
               <select
                 value={selectedTargetGroupId ?? ''}
                 onChange={(e) => setSelectedTargetGroupId(e.target.value ? Number(e.target.value) : null)}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border)', background: 'var(--ui-surface)', fontSize: 14 }}
                 disabled={!targetGroups.length}
               >
                 <option value="">{targetGroups.length ? 'Select target group...' : 'No groups with add permission'}</option>
@@ -274,17 +275,17 @@ export default function AdminBulkAddPage() {
             {selectedSourceGroupId && (
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4 }}>Search Members</label>
-                <input
+                <SearchInput
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={setSearchQuery}
                   placeholder="Search by username or name..."
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                  style={{ width: '100%' }}
                 />
-                <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6, border: '1px solid var(--ui-border, #e4e4e7)', borderRadius: 6 }}>
+                <div style={{ maxHeight: 200, overflowY: 'auto', marginTop: 6, border: '1px solid var(--ui-border)', borderRadius: 6 }}>
                   {searching ? (
-                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>Searching...</div>
+                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted)' }}>Searching...</div>
                   ) : members.length === 0 ? (
-                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>No members found. Select a group and search.</div>
+                    <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted)' }}>No members found. Select a group and search.</div>
                   ) : (
                     members.map((m) => {
                       const isSelected = selectedUserIds.includes(m.user_id)
@@ -296,7 +297,7 @@ export default function AdminBulkAddPage() {
                             padding: '6px 10px',
                             cursor: 'pointer',
                             background: isSelected ? 'var(--ui-primary-soft, #eff6ff)' : 'transparent',
-                            borderBottom: '1px solid var(--ui-border, #e4e4e7)',
+                            borderBottom: '1px solid var(--ui-border)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
@@ -304,14 +305,14 @@ export default function AdminBulkAddPage() {
                         >
                           <input type="checkbox" checked={isSelected} onChange={() => toggleUser(m.user_id)} />
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `User ${m.user_id}`}</span>
-                          {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{m.username}</span>}
-                          <span style={{ fontSize: 11, color: 'var(--ui-text-muted, #71717a)', marginLeft: 'auto' }}>{m.user_id}</span>
+                          {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{m.username}</span>}
+                          <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginLeft: 'auto' }}>{m.user_id}</span>
                         </div>
                       )
                     })
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)', marginTop: 4 }}>{selectedUserIds.length} selected</div>
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} selected</div>
               </div>
             )}
 
@@ -323,7 +324,7 @@ export default function AdminBulkAddPage() {
                 value={intervalSeconds}
                 onChange={(e) => setIntervalSeconds(Math.max(1, Number(e.target.value)))}
                 min={1}
-                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border, #e4e4e7)', background: 'var(--ui-surface, #fff)', fontSize: 14 }}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--ui-border)', background: 'var(--ui-surface)', fontSize: 14 }}
               />
             </div>
 
@@ -337,7 +338,7 @@ export default function AdminBulkAddPage() {
 
             {/* Submit */}
             <Button
-              variant="primary"
+              variant="default"
               onClick={handleSubmit}
               disabled={!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length || submitting}
             >
@@ -358,7 +359,7 @@ export default function AdminBulkAddPage() {
             </Button>
           </div>
           {jobs.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)', padding: 12 }}>No member_add jobs yet.</div>
+            <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', padding: 12 }}>No member_add jobs yet.</div>
           ) : (
             <div style={{ maxHeight: 400, overflowY: 'auto' }}>
               <Table<AgentJobRecord>

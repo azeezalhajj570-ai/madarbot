@@ -234,7 +234,7 @@ export default function FAQPage() {
             subtitle={t('faq.safeModeDesc')}
             checked={settings.enabled_safe_mode}
             disabled={currentGroupId == null}
-            onCheckedChange={(checked) => setSettings((current) => current ? { ...current, enabled_safe_mode: checked } : null)}
+            onCheckedChange={(checked) => setSettings((current: any) => current ? { ...current, enabled_safe_mode: checked } : null)}
           />
           <ContentGrid columns="repeat(auto-fit, minmax(240px, 1fr))">
             <Field label={t('faq.suggestionThreshold')} hint={t('faq.suggestionThresholdHint')}>

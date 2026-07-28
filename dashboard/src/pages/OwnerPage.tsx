@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../components/ui/primitives'
+import { Pagination } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { getStoredUser } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
@@ -45,9 +46,8 @@ export default function OwnerPage() {
           data={GROUPS.slice((page - 1) * 2, page * 2)}
           keyExtractor={(_: any, i: number) => i + (page - 1) * 2}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
-          <Button variant="outline" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Prev</Button>
-          <Button variant="outline" disabled={page >= 2} onClick={() => setPage((current) => current + 1)}>Next</Button>
+        <div style={{ marginTop: 12 }}>
+          <Pagination page={page} limit={2} total={GROUPS.length} onPageChange={setPage} />
         </div>
       </Card>
     </PageShell>

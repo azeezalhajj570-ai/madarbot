@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Brain, BookOpen, Trash2, RefreshCw, Loader2, CheckCircle, XCircle, Search } from 'lucide-react'
+import { Brain, BookOpen, Trash2, RefreshCw, Loader2, CheckCircle, XCircle } from 'lucide-react'
 
 import { fetchKnowledgeGroups, fetchAllKnowledge, extractGroupKnowledge, deleteKnowledgeEntry, fetchExtractionStatus } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, Select, Input, Badge, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, Select, Input, Table } from '../../components/ui/primitives'
+import { FilterSelect, Pagination, SearchInput, Toolbar } from '../../components/ui/data-display'
 
 const TYPE_COLORS: Record<string, string> = {
   faq: '#10b981',
@@ -25,6 +26,8 @@ export default function AdminKnowledgePage() {
   const [filterGroupId, setFilterGroupId] = useState<number | undefined>(undefined)
   const [filterType, setFilterType] = useState<string>('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 20
 
   const [extractGroupId, setExtractGroupId] = useState<number | null>(null)
   const [extractCount, setExtractCount] = useState(500)
@@ -104,7 +107,7 @@ export default function AdminKnowledgePage() {
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell title="Knowledge" description="Admin access required.">
-        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>Access denied.</div>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--ui-text-muted)' }}>Access denied.</div>
       </PageShell>
     )
   }
@@ -124,7 +127,7 @@ export default function AdminKnowledgePage() {
       <Card>
         <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ minWidth: 200, flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Extract for Group</label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Extract for Group</label>
             <Select value={extractGroupId ?? ''} onChange={(e) => setExtractGroupId(e.target.value ? Number(e.target.value) : null)}>
               <option value="">Select a group...</option>
               {(groups || []).map((g: any) => (
@@ -133,7 +136,7 @@ export default function AdminKnowledgePage() {
             </Select>
           </div>
           <div style={{ minWidth: 100 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Max Messages</label>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Max Messages</label>
             <Input type="number" value={extractCount} onChange={(e) => setExtractCount(Number(e.target.value))} min={100} max={10000} />
           </div>
           <Button onClick={() => extractMutation.mutate()} disabled={!extractGroupId || isExtracting}>
@@ -141,12 +144,12 @@ export default function AdminKnowledgePage() {
           </Button>
         </div>
         {isExtracting && (
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-warning)' }}>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ui-warning)' }}>
             <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Extraction running in background.
           </div>
         )}
         {extractResult && !isExtracting && (
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: extractResult.type === 'error' ? 'var(--color-danger)' : extractResult.type === 'success' ? 'var(--color-success)' : 'var(--text-muted)' }}>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6, color: extractResult.type === 'error' ? 'var(--ui-danger)' : extractResult.type === 'success' ? 'var(--ui-success)' : 'var(--ui-text-muted)' }}>
             {extractResult.type === 'error' ? <XCircle size={16} /> : <CheckCircle size={16} />} {extractResult.text}
           </div>
         )}
@@ -154,79 +157,85 @@ export default function AdminKnowledgePage() {
 
       {/* Filters */}
       <Card style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 16 }}>
-          <div style={{ minWidth: 200 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Filter by Group</label>
-            <Select value={filterGroupId ?? ''} onChange={(e) => setFilterGroupId(e.target.value ? Number(e.target.value) : undefined)}>
-              <option value="">All groups</option>
-              {(groups || []).map((g: any) => (
-                <option key={g.id} value={g.id}>{g.title} ({g.entry_count})</option>
-              ))}
-            </Select>
-          </div>
-          <div style={{ minWidth: 150 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Filter by Type</label>
-            <Select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-              <option value="">All types</option>
-              {allTypes.map((type) => (
-                <option key={type} value={type}>
-                  <Badge style={{ background: TYPE_COLORS[type] || '#6b7280' }}>{type}</Badge>
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div style={{ minWidth: 200, flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Search</label>
-            <Input
-              placeholder="Search title or content..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
+        <Toolbar style={{ marginBottom: 16 }}>
+          <FilterSelect
+            label="Group"
+            value={filterGroupId !== undefined ? String(filterGroupId) : ''}
+            onChange={(v) => setFilterGroupId(v ? Number(v) : undefined)}
+            options={[
+              { value: '', label: 'All groups' },
+              ...(groups || []).map((g: any) => ({ value: String(g.id), label: `${g.title} (${g.entry_count})` })),
+            ]}
+          />
+          <FilterSelect
+            label="Type"
+            value={filterType}
+            onChange={setFilterType}
+            options={[
+              { value: '', label: 'All types' },
+              ...allTypes.map((type) => ({ value: type, label: type })),
+            ]}
+          />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search title or content..."
+            style={{ minWidth: 200, flex: 1 }}
+          />
+        </Toolbar>
 
         {entriesLoading ? (
           <div style={{ textAlign: 'center', padding: 24 }}>{t('loading')}</div>
         ) : !entries || entries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--ui-text-muted)' }}>
             No knowledge entries found. Select a group above and click "Extract Knowledge".
           </div>
         ) : (
-          <Table<any>
-            columns={[
-              { key: 'type', label: 'Type', render: (entry) => (
-                <Badge style={{ background: TYPE_COLORS[entry.knowledge_type] || '#6b7280', color: '#fff' }}>
-                  {entry.knowledge_type}
-                </Badge>
-              )},
-              { key: 'title', label: 'Title', render: (entry) => (
-                <span style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                  {entry.title || 'Untitled'}
-                </span>
-              )},
-              { key: 'group', label: 'Group', render: (entry) => (
-                <Badge style={{ background: '#374151', color: '#fff' }}>{entry.group_title || `Group ${entry.group_id}`}</Badge>
-              )},
-              { key: 'confidence', label: 'Confidence', render: (entry) => `${(entry.confidence * 100).toFixed(0)}%` },
-              { key: 'embedding', label: 'Embedding', render: (entry) => (
-                entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--color-success)' }} /> : <XCircle size={14} style={{ color: 'var(--text-muted)' }} />
-              )},
-              { key: 'created', label: 'Created', render: (entry) => (
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
-              )},
-              { key: 'actions', label: '', render: (entry) => (
-                <button
-                  onClick={() => { if (confirm('Delete this entry?')) deleteMutation.mutate(entry.id) }}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}
-                  title="Delete"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )},
-            ]}
-            data={entries}
-            keyExtractor={(entry) => entry.id}
-          />
+          <>
+            <Table<any>
+              columns={[
+                { key: 'type', label: 'Type', render: (entry) => (
+                  <Badge style={{ background: TYPE_COLORS[entry.knowledge_type] || '#6b7280', color: '#fff' }}>
+                    {entry.knowledge_type}
+                  </Badge>
+                )},
+                { key: 'title', label: 'Title', render: (entry) => (
+                  <span style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                    {entry.title || 'Untitled'}
+                  </span>
+                )},
+                { key: 'group', label: 'Group', render: (entry) => (
+                  <Badge style={{ background: '#374151', color: '#fff' }}>{entry.group_title || `Group ${entry.group_id}`}</Badge>
+                )},
+                { key: 'confidence', label: 'Confidence', render: (entry) => `${(entry.confidence * 100).toFixed(0)}%` },
+                { key: 'embedding', label: 'Embedding', render: (entry) => (
+                  entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--ui-success)' }} /> : <XCircle size={14} style={{ color: 'var(--ui-text-muted)' }} />
+                )},
+                { key: 'created', label: 'Created', render: (entry) => (
+                  <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
+                )},
+                { key: 'actions', label: '', render: (entry) => (
+                  <button
+                    onClick={() => { if (confirm('Delete this entry?')) deleteMutation.mutate(entry.id) }}
+                    style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )},
+              ]}
+              data={entries.slice((page - 1) * pageSize, page * pageSize)}
+              keyExtractor={(entry) => entry.id}
+            />
+            <div style={{ marginTop: 16 }}>
+              <Pagination
+                page={page}
+                limit={pageSize}
+                total={entries.length}
+                onPageChange={setPage}
+              />
+            </div>
+          </>
         )}
       </Card>
     </PageShell>

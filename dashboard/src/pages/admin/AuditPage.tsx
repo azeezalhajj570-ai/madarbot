@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 
 import { Badge, Button, Card, EmptyState, LoadingState } from '../../components/ui/primitives'
+import { SimplePagination } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerAuditLog } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
@@ -39,16 +40,15 @@ export default function AdminAuditPage() {
   return (
     <PageShell titleKey="page.admin.audit" descriptionKey="page.admin.audit.desc" loading={false}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ fontSize: 13, color: 'var(--ui-text-muted, #71717a)' }}>
-          Showing {page * limit + 1}–{(page + 1) * limit}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</Button>
-          <Button variant="outline" size="sm" disabled={!entries || entries.length < limit} onClick={() => setPage(p => p + 1)}>Next</Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-        </div>
+        <SimplePagination
+          page={page + 1}
+          hasNext={!!(entries && entries.length >= limit)}
+          hasPrev={page > 0}
+          onPageChange={(p) => setPage(p - 1)}
+        />
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw size={14} /> Refresh
+        </Button>
       </div>
 
       <Card title="Audit Log">
@@ -57,23 +57,23 @@ export default function AdminAuditPage() {
         ) : entries && entries.length > 0 ? (
           <div style={{ display: 'grid', gap: 0 }}>
             {entries.map((entry: any, i: number) => (
-              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>
                     {entry.action}
                     {entry.target_type && (
-                      <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>
+                      <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>
                         {' → '}{entry.target_type}#{entry.target_id}
                       </span>
                     )}
                   </div>
                   {entry.detail && (
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', maxWidth: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)', maxWidth: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
                       {typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)}
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)', whiteSpace: 'nowrap', marginLeft: 16 }}>
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted)', whiteSpace: 'nowrap', marginLeft: 16 }}>
                   {timeAgo(entry.created_at)}
                 </span>
               </div>

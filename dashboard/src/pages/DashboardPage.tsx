@@ -94,7 +94,7 @@ export default function DashboardPage() {
             {sh && <HealthBadge status={sh.status} />}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
               {lastRefresh.toLocaleTimeString()}
             </span>
             <Button variant="outline" size="sm" onClick={refresh}>Refresh</Button>
@@ -108,22 +108,22 @@ export default function DashboardPage() {
             { label: 'Agent Worker', check: sh?.agent_worker },
             { label: 'Queue', check: sh?.queue },
           ].map(({ label, check }) => (
-            <div key={label} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--ui-surface-alt, #f4f4f5)', border: '1px solid var(--ui-border, #e4e4e7)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted, #71717a)', marginBottom: 4 }}>{label}</div>
+            <div key={label} style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4 }}>{label}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <StatusDot status={check?.status || 'unknown'} />
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{check?.status || 'unknown'}</span>
               </div>
               {check?.latency_ms !== undefined && (
-                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 2 }}>{check.latency_ms}ms</div>
+                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle)', marginTop: 2 }}>{check.latency_ms}ms</div>
               )}
               {check?.pending !== undefined && (
-                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle)', marginTop: 2 }}>
                   {check.pending} pending, {check.running} running{check.stuck ? `, ${check.stuck} stuck` : ''}
                 </div>
               )}
               {check?.last_seen && (
-                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle, #a1a1aa)', marginTop: 2 }}>seen {timeAgo(check.last_seen)}</div>
+                <div style={{ fontSize: 11, color: 'var(--ui-text-subtle)', marginTop: 2 }}>seen {timeAgo(check.last_seen)}</div>
               )}
             </div>
           ))}
@@ -172,10 +172,10 @@ export default function DashboardPage() {
           {recentJobs.length > 0 ? (
             <div style={{ display: 'grid', gap: 0 }}>
               {recentJobs.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
                   </div>
                   <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
                     {job.status}
@@ -192,10 +192,10 @@ export default function DashboardPage() {
           {recentFailures.length > 0 ? (
             <div style={{ display: 'grid', gap: 0 }}>
               {recentFailures.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
                   </div>
                   <Badge tone="destructive">{job.status}</Badge>
                 </div>
@@ -215,11 +215,11 @@ export default function DashboardPage() {
               { key: 'user', label: 'User', render: (s) => (
                 <div>
                   <div style={{ fontWeight: 700 }}>{s.fullName || 'Telegram User'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>@{s.username || 'no_username'} · {s.tgUserId}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{s.username || 'no_username'} · {s.tgUserId}</div>
                 </div>
               )},
               { key: 'message', label: 'Message', hideOnMobile: true, render: (s) => (
-                <div style={{ maxWidth: 200, fontSize: 13, color: 'var(--ui-text-muted, #71717a)', fontStyle: s.message ? 'normal' : 'italic' }}>
+                <div style={{ maxWidth: 200, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: s.message ? 'normal' : 'italic' }}>
                   {s.message || '—'}
                 </div>
               )},
@@ -230,7 +230,7 @@ export default function DashboardPage() {
               )},
               { key: 'plan', label: 'Plan', render: (s) => s.plan ? <Badge tone={s.plan === 'business' ? 'success' : 'neutral'}>{s.plan}</Badge> : '—' },
               { key: 'requested', label: 'Requested', hideOnMobile: true, render: (s) => (
-                <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{timeAgo(s.createdAt)}</span>
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{timeAgo(s.createdAt)}</span>
               )},
             ]}
             data={subs}
@@ -251,7 +251,7 @@ export default function DashboardPage() {
               { key: 'duration', label: 'Duration', hideOnMobile: true, render: (p) => <span style={{ fontWeight: 600 }}>{p.duration_days}d</span> },
               { key: 'usage', label: 'Usage', render: (p) => <span>{p.used_count} / {p.max_uses || '∞'}</span> },
               { key: 'active', label: 'Active', render: (p) => <Badge tone={p.is_active ? 'success' : 'neutral'}>{p.is_active ? 'yes' : 'no'}</Badge> },
-              { key: 'expires', label: 'Expires', hideOnMobile: true, render: (p) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)' }}>{p.expiry_date ? new Date(p.expiry_date).toLocaleDateString() : '—'}</span> },
+              { key: 'expires', label: 'Expires', hideOnMobile: true, render: (p) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{p.expiry_date ? new Date(p.expiry_date).toLocaleDateString() : '—'}</span> },
             ]}
             data={promos}
             keyExtractor={(p) => p.id}
@@ -266,19 +266,19 @@ export default function DashboardPage() {
         {auditLog.length > 0 ? (
           <div style={{ display: 'grid', gap: 0 }}>
             {auditLog.map((entry: any, i: number) => (
-              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border, #e4e4e7)' }}>
+              <div key={entry.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>
                     {entry.action}
-                    {entry.target_type && <span style={{ fontWeight: 400, color: 'var(--ui-text-muted, #71717a)' }}> → {entry.target_type}#{entry.target_id}</span>}
+                    {entry.target_type && <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}> → {entry.target_type}#{entry.target_id}</span>}
                   </div>
                   {entry.detail && (
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle, #a1a1aa)', maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)', maxWidth: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)}
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--ui-text-muted, #71717a)', whiteSpace: 'nowrap' }}>{timeAgo(entry.created_at)}</span>
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted)', whiteSpace: 'nowrap' }}>{timeAgo(entry.created_at)}</span>
               </div>
             ))}
           </div>

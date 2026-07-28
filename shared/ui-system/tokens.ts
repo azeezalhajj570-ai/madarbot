@@ -10,6 +10,7 @@ export const uiVars = {
   border: 'var(--ui-border)',
   borderStrong: 'var(--ui-border-strong)',
   primary: 'var(--ui-primary)',
+  primaryHover: 'var(--ui-primary-hover)',
   primaryText: 'var(--ui-primary-text)',
   primarySoft: 'var(--ui-primary-soft)',
   success: 'var(--ui-success)',
@@ -33,10 +34,11 @@ export const spacing = {
 }
 
 export const radius = {
+  xs: 6,
   sm: 8,
   md: 10,
   lg: 12,
-  xl: 12,
+  xl: 16,
   pill: 999,
 }
 
@@ -50,8 +52,6 @@ export const typeScale = {
 }
 
 export const contentMaxWidth = 1180
-
 export const shellMaxWidth = 1280
-
 export const surfaceShadow = uiVars.shadow
 export const surfaceShadowStrong = uiVars.shadowStrong
