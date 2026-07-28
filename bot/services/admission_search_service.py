@@ -85,5 +85,5 @@ async def synthesize_search_answer(query: str, messages: list[dict[str, Any]]) -
         return result
     samples = [m.get("message_text", "") for m in messages[:5] if m.get("message_text")]
     if samples:
-        return "Sample messages found:\n" + "\n".join(f"• {s[:200]}" for s in samples)
+        return "Sample messages found:\n" + "\n".join(f"• {s[:300]}" for s in samples)
     return "Messages found but no text content available."

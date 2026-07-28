@@ -66,5 +66,5 @@ async def cluster_concerns(category: str, messages: list[dict[str, Any]]) -> dic
     text = await call_admission_llm(prompt, system_kind="text", max_tokens=250)
     if text:
         return {"name": category, "mentions": len(messages), "examples": [text]}
-    raw = [m.get("message_text", "") for m in messages[:3] if m.get("message_text")]
+    raw = [m.get("message_text", "")[:200] for m in messages[:3] if m.get("message_text")]
     return {"name": category, "mentions": len(messages), "examples": raw}
