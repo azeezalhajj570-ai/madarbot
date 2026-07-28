@@ -1,12 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { uiVars } from '../../../../shared/ui-system/tokens'
-import { RefreshCw } from 'lucide-react'
-
-import { Badge, Button, Card, ColumnDef, EmptyState, Table } from '../../components/ui/primitives'
+import { Badge, Card, EmptyState } from '../../components/ui/primitives'
+import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
-import type { AdminAgent, AdminOverview } from '../../lib/types'
+import type { AdminAgent } from '../../lib/types'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -29,17 +27,16 @@ export default function AdminAgentsPage() {
       </PageShell>
     )
   }
-  const [data, setData] = useState<AdminOverview | null>(null)
+
+  const [agents, setAgents] = useState<AdminAgent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   const refresh = useCallback(async () => {
     try {
       const overview = await fetchAdminOverview()
-      setData(overview)
+      setAgents(overview.agents || [])
       setError(null)
-      setLastRefresh(new Date())
     } catch (err: any) {
       setError(err?.message || 'Failed to load')
     } finally {
@@ -53,67 +50,39 @@ export default function AdminAgentsPage() {
     return () => clearInterval(id)
   }, [refresh])
 
-  const agents = data?.agents || []
   const activeCount = agents.filter(a => a.status === 'active').length
-  const failedCount = agents.filter(a => a.status === 'failed').length
   const totalSent = agents.reduce((s, a) => s + a.total_sent, 0)
-  const totalContacts = agents.reduce((s, a) => s + a.unique_contacts, 0)
 
   return (
-    <PageShell titleKey="page.admin.agents" descriptionKey="page.admin.agents.desc" loading={loading}>
-      {error && (
-        <Card style={{ background: uiVars.dangerSoft, border: `1px solid ${uiVars.danger}` }}>
-          <div style={{ fontSize: 14, color: uiVars.danger }}>Error: {error}</div>
+    <PageShell titleKey="page.admin.agents" descriptionKey="page.admin.agents.desc" loading={false}>
+      {/* Summary cards */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <Card style={{ padding: '12px 18px', display: 'grid', gap: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ui-success)' }}>{activeCount}</div>
         </Card>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Active</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#22c55e' }}>{activeCount}</div>
-          </div>
-          {failedCount > 0 && (
-            <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Failed</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#ef4444' }}>{failedCount}</div>
-            </div>
-          )}
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Total Sent</div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{totalSent}</div>
-          </div>
-          <div style={{ padding: '8px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)' }}>Contacts</div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{totalContacts}</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{lastRefresh.toLocaleTimeString()}</span>
-          <Button variant="outline" size="sm" onClick={refresh}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
-        </div>
+        <Card style={{ padding: '12px 18px', display: 'grid', gap: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ui-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Sent</div>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{totalSent}</div>
+        </Card>
       </div>
 
-      <Card title="Linked Agents">
-        {agents.length > 0 ? (
-          <Table<AdminAgent>
-            columns={[
-              { key: 'phone', label: 'Phone', render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
-              { key: 'status', label: 'Status', render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
-              { key: 'sent', label: 'Sent', hideOnMobile: true, render: (a) => String(a.total_sent) },
-              { key: 'contacts', label: 'Contacts', hideOnMobile: true, render: (a) => String(a.unique_contacts) },
-              { key: 'jobs', label: 'Jobs', hideOnMobile: true, render: (a) => String(a.jobs_count) },
-              { key: 'lastActivity', label: 'Last Activity', render: (a) => timeAgo(a.last_job_at) },
-            ]}
-            data={agents}
-            keyExtractor={(a) => a.id}
-          />
-        ) : (
-          <EmptyState title="No agents" subtitle="No linked Telegram accounts found." />
-        )}
-      </Card>
+      <DataTable<AdminAgent>
+        data={agents}
+        total={agents.length}
+        loading={loading}
+        error={error}
+        columns={[
+          { key: 'phone', label: 'Phone', render: (a) => <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{a.phone}</span> },
+          { key: 'status', label: 'Status', render: (a) => <Badge tone={a.status === 'active' ? 'success' : 'destructive'}>{a.status}</Badge> },
+          { key: 'sent', label: 'Sent', hideOnMobile: true, render: (a) => String(a.total_sent) },
+          { key: 'contacts', label: 'Contacts', hideOnMobile: true, render: (a) => String(a.unique_contacts) },
+          { key: 'jobs', label: 'Jobs', hideOnMobile: true, render: (a) => String(a.jobs_count) },
+          { key: 'lastActivity', label: 'Last Activity', render: (a) => timeAgo(a.last_job_at) },
+        ]}
+        keyExtractor={(a) => a.id}
+        searchPlaceholder="Search agents..."
+      />
     </PageShell>
   )
 }

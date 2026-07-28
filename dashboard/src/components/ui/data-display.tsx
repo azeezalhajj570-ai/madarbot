@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../../shared/ui-system/tokens'
@@ -279,6 +280,91 @@ export interface PageSizeSelectorProps {
   value: number
   onChange: (size: number) => void
   options?: number[]
+}
+
+// ─── Group AutoComplete ──────────────────────────────────────────────────────
+
+export interface GroupAutoCompleteProps<T> {
+  items: T[]
+  value: number | null
+  onChange: (id: number | null) => void
+  placeholder?: string
+  getLabel: (item: T) => string
+  getId?: (item: T) => number
+  style?: CSSProperties
+}
+
+export function GroupAutoComplete<T>({
+  items,
+  value,
+  onChange,
+  placeholder = 'Search groups...',
+  getLabel,
+  getId = (item: any) => item.id ?? item.tg_group_id,
+  style,
+}: GroupAutoCompleteProps<T>) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = useMemo(() => items.find(i => getId(i) === value) ?? null, [items, value, getId])
+
+  const filtered = useMemo(
+    () => query ? items.filter(i => getLabel(i).toLowerCase().includes(query.toLowerCase())) : items,
+    [items, query, getLabel]
+  )
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', ...style }}>
+      <input
+        placeholder={placeholder}
+        value={selected && !open ? getLabel(selected) : query}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        style={{
+          width: '100%', minHeight: 42, borderRadius: radius.md,
+          border: `1px solid ${uiVars.borderStrong}`, padding: '0 12px',
+          background: uiVars.surfaceStrong, color: uiVars.text,
+          fontSize: typeScale.body,
+          cursor: 'text',
+        }}
+        aria-label={placeholder}
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+          marginTop: 4, borderRadius: radius.md, border: `1px solid ${uiVars.border}`,
+          background: uiVars.surface, boxShadow: uiVars.shadow, maxHeight: 240, overflowY: 'auto',
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 13, color: uiVars.textMuted, textAlign: 'center' }}>No results</div>
+          ) : filtered.map(item => (
+            <div
+              key={getId(item)}
+              onClick={() => { onChange(getId(item)); setQuery(''); setOpen(false) }}
+              style={{
+                padding: '10px 12px', cursor: 'pointer', fontSize: typeScale.body,
+                background: selected && getId(item) === getId(selected) ? uiVars.primarySoft : 'transparent',
+                borderBottom: `1px solid ${uiVars.border}`,
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = uiVars.bgMuted }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = selected && getId(item) === getId(selected) ? uiVars.primarySoft : 'transparent' }}
+            >
+              {getLabel(item)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function PageSizeSelector({
