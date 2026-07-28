@@ -397,6 +397,12 @@ export default function ScraperPage() {
               ),
             },
             {
+              key: 'retries', label: 'Retries',
+              render: (job) => job.retry_count ? (
+                <span style={{ color: 'var(--ui-danger)', fontWeight: 700, fontSize: 13 }}>{job.retry_count}</span>
+              ) : <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>0</span>,
+            },
+            {
               key: 'status', label: 'Status',
               render: (job) => (
                 <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>

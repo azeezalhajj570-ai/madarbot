@@ -810,6 +810,7 @@ export interface ScrapeJobSummary {
   group_title?: string | null
   member_count?: number | null
   progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
+  retry_count?: number
   created_at?: string
   updated_at?: string
 }

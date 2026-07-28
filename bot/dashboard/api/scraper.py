@@ -225,6 +225,8 @@ async def list_scrape_jobs(
     from bot.db.models.agent import Agent
     from bot.db.models.scraper import ScrapedGroup
     from sqlalchemy.orm import contains_eager
+    from bot.config import get_settings
+    import json, asyncio
 
     stmt = (
         select(AgentJob)
@@ -254,6 +256,28 @@ async def list_scrape_jobs(
         for g in gs.scalars().all():
             groups_map[int(g.tg_group_id)] = g
 
+    retry_counts: dict[int, int] = {}
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.Redis.from_url(get_settings().redis_url)
+        keys = await r.keys("dramatiq:*msgs")
+        for key in keys:
+            msgs = await r.hgetall(key)
+            for msg_id, raw in msgs.items():
+                try:
+                    data = json.loads(raw)
+                    args = data.get("args", [])
+                    if len(args) >= 2:
+                        jid = args[1]
+                        retry_counts[jid] = retry_counts.get(jid, 0) + 1
+                except Exception:
+                    pass
+        await r.aclose()
+    except Exception:
+        pass
+
+    job_id_set = {j.id for j in jobs}
+
     return [
         {
             "job_id": j.id,
@@ -265,6 +289,7 @@ async def list_scrape_jobs(
             "group_title": groups_map[int(j.job_payload["tg_group_id"])].title if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
             "member_count": groups_map[int(j.job_payload["tg_group_id"])].member_count if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
             "progress": j.job_payload.get("progress") if j.job_payload else None,
+            "retry_count": retry_counts.get(j.id, 0),
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "updated_at": j.updated_at.isoformat() if j.updated_at else None,
         }
