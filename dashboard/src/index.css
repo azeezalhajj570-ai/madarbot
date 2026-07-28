@@ -321,6 +321,34 @@ textarea {
   }
 }
 
+.settings-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .settings-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 8px);
+}
+
+@media (max-width: 480px) {
+  .settings-actions {
+    flex-direction: column;
+  }
+  .settings-actions > * {
+    width: 100%;
+  }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

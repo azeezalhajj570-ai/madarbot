@@ -8,7 +8,7 @@ import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Button, Card, CardSkeleton, Field, FieldRow, InlineMessage, Input, Select, ToggleRow, EmptyState } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
-import { spacing, typeScale, radius, uiVars } from '../../../../shared/ui-system/tokens'
+import { spacing, radius } from '../../../../shared/ui-system/tokens'
 
 const OPENAI_MODELS = [
   'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo',
@@ -124,89 +124,90 @@ export default function AdminAISettingsPage() {
       {isLoading ? (
         <CardSkeleton rows={4} />
       ) : (
-        <div style={{ display: 'grid', gap: spacing.lg, maxWidth: 640 }}>
-          {/* Provider + Model */}
-          <Card title="Provider Configuration" subtitle="Choose your AI provider and inference model.">
-            <FieldRow>
-              <Field label="AI Provider" hint="Which service powers AI features">
-                <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                  {providers.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Model" hint={provider === 'heuristic' ? 'N/A in heuristic mode' : 'Inference model name'}>
-                {modelOptions.length > 0 ? (
-                  <Select value={model} onChange={(e) => setModel(e.target.value)}>
-                    {modelOptions.map((m) => (
-                      <option key={m} value={m}>{m}</option>
+        <div style={{ display: 'grid', gap: spacing.lg }}>
+          {/* Provider + Authentication side by side on desktop */}
+          <div className="settings-card-grid">
+            <Card title="Provider Configuration" subtitle="Choose your AI provider and inference model.">
+              <FieldRow>
+                <Field label="AI Provider" hint="Which service powers AI features">
+                  <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                    {providers.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
                     ))}
                   </Select>
-                ) : (
-                  <Input
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder={provider === 'heuristic' ? 'N/A' : 'gpt-4.1-mini'}
-                    disabled={provider === 'heuristic'}
-                  />
-                )}
-              </Field>
-            </FieldRow>
-            {provider === 'heuristic' && (
-              <div style={{ marginTop: spacing.md }}>
-                <InlineMessage tone="neutral">
-                  <Zap size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                  Heuristic mode uses rule-based matching. No API key or model required.
-                </InlineMessage>
-              </div>
-            )}
-          </Card>
-
-          {/* Authentication */}
-          <Card title="Authentication" subtitle="API credentials for your chosen provider.">
-            <div style={{ display: 'grid', gap: spacing.md }}>
-              {hasApiKey && (
-                <Field label="API Key" hint="Your provider API key">
-                  <div style={{ position: 'relative' }}>
+                </Field>
+                <Field label="Model" hint={provider === 'heuristic' ? 'N/A in heuristic mode' : 'Inference model name'}>
+                  {modelOptions.length > 0 ? (
+                    <Select value={model} onChange={(e) => setModel(e.target.value)}>
+                      {modelOptions.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </Select>
+                  ) : (
                     <Input
-                      type={showKey ? 'text' : 'password'}
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
-                      style={{ paddingRight: 44 }}
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder={provider === 'heuristic' ? 'N/A' : 'gpt-4.1-mini'}
+                      disabled={provider === 'heuristic'}
                     />
-                    <button
-                      onClick={() => setShowKey(!showKey)}
-                      aria-label={showKey ? 'Hide API key' : 'Show API key'}
-                      style={{
-                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: 'var(--ui-text-muted)',
-                        cursor: 'pointer', padding: 4, display: 'flex',
-                      }}
-                    >
-                      {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </Field>
-              )}
-              <FieldRow>
-                <Field label="Base URL" hint="Custom API endpoint (optional)">
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://api.openai.com/v1"
-                  />
-                </Field>
-                <Field label="Embedding Model" hint="Used for vector search">
-                  <Input
-                    value={embedModel}
-                    onChange={(e) => setEmbedModel(e.target.value)}
-                    placeholder="text-embedding-3-small"
-                  />
+                  )}
                 </Field>
               </FieldRow>
-            </div>
-          </Card>
+              {provider === 'heuristic' && (
+                <div style={{ marginTop: spacing.md }}>
+                  <InlineMessage tone="neutral">
+                    <Zap size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                    Heuristic mode uses rule-based matching. No API key or model required.
+                  </InlineMessage>
+                </div>
+              )}
+            </Card>
+
+            <Card title="Authentication" subtitle="API credentials for your chosen provider.">
+              <div style={{ display: 'grid', gap: spacing.md }}>
+                {hasApiKey && (
+                  <Field label="API Key" hint="Your provider API key">
+                    <div style={{ position: 'relative' }}>
+                      <Input
+                        type={showKey ? 'text' : 'password'}
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
+                        style={{ paddingRight: 44 }}
+                      />
+                      <button
+                        onClick={() => setShowKey(!showKey)}
+                        aria-label={showKey ? 'Hide API key' : 'Show API key'}
+                        style={{
+                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', color: 'var(--ui-text-muted)',
+                          cursor: 'pointer', padding: 4, display: 'flex',
+                        }}
+                      >
+                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </Field>
+                )}
+                <FieldRow>
+                  <Field label="Base URL" hint="Custom API endpoint (optional)">
+                    <Input
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      placeholder="https://api.openai.com/v1"
+                    />
+                  </Field>
+                  <Field label="Embedding Model" hint="Used for vector search">
+                    <Input
+                      value={embedModel}
+                      onChange={(e) => setEmbedModel(e.target.value)}
+                      placeholder="text-embedding-3-small"
+                    />
+                  </Field>
+                </FieldRow>
+              </div>
+            </Card>
+          </div>
 
           {/* AI Replies */}
           <Card title="AI Replies" subtitle="Allow the AI to respond to @mentions in group chats.">
@@ -220,16 +221,17 @@ export default function AdminAISettingsPage() {
 
           {/* Actions */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm,
             padding: spacing.lg, borderRadius: radius.lg,
             background: 'var(--ui-surface)', border: '1px solid var(--ui-border)',
           }}>
-            <Button variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending || provider === 'heuristic'}>
-              {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
-            </Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? 'Saving...' : 'Save Configuration'}
-            </Button>
+            <div className="settings-actions">
+              <Button variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending || provider === 'heuristic'}>
+                {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
+              </Button>
+              <Button onClick={handleSave} disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? 'Saving...' : 'Save Configuration'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
