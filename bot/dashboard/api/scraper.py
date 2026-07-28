@@ -216,6 +216,42 @@ async def scrape_members(
     )
 
 
+@router.get("/jobs")
+async def list_scrape_jobs(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> list[dict[str, Any]]:
+    from bot.db.models.agent import Agent
+
+    stmt = (
+        select(AgentJob)
+        .join(Agent, AgentJob.agent_id == Agent.id)
+        .where(
+            Agent.linked_by_user_id == identity.user_id,
+            AgentJob.job_type.in_([
+                "scraper_messages", "scraper_members", "scraper_group_info", "scraper_full_group",
+            ]),
+        )
+        .order_by(AgentJob.created_at.desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    jobs = result.scalars().all()
+    return [
+        {
+            "job_id": j.id,
+            "agent_id": j.agent_id,
+            "job_type": j.job_type,
+            "status": j.status,
+            "progress": j.job_payload.get("progress") if j.job_payload else None,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "updated_at": j.updated_at.isoformat() if j.updated_at else None,
+        }
+        for j in jobs
+    ]
+
+
 @router.get("/jobs/{job_id}/status")
 async def scrape_job_status(
     job_id: int,

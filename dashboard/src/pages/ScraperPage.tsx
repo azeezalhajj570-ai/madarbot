@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { AutoComplete, Badge, Button, Card, EmptyState, Field, InlineMessage, Input, Select } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
@@ -10,6 +10,7 @@ import {
   fetchLeads,
   fetchMemberLeaderboard,
   fetchNudges,
+  fetchRecentScrapeJobs,
   fetchScrapeJobStatus,
   fetchScrapedConversations,
   fetchScrapedGroupDetail,
@@ -20,6 +21,7 @@ import {
   type ConversationMessage,
   type LeaderboardMember,
   type NudgeData,
+  type ScrapeJobSummary,
   type ScrapedConversation,
   type ScrapedGroupSummary,
   type ScrapedLead,
@@ -78,6 +80,28 @@ export default function ScraperPage() {
 
   const [nudges, setNudges] = useState<NudgeData | null>(null)
   const [nudgesLoading, setNudgesLoading] = useState(false)
+
+  const [recentJobs, setRecentJobs] = useState<ScrapeJobSummary[]>([])
+  const recentJobsLoadingRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      if (recentJobsLoadingRef.current) return
+      recentJobsLoadingRef.current = true
+      try {
+        const jobs = await fetchRecentScrapeJobs(20)
+        if (!cancelled) setRecentJobs(jobs)
+      } catch {
+        // ignore
+      } finally {
+        recentJobsLoadingRef.current = false
+      }
+      if (!cancelled) setTimeout(poll, 5000)
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -339,6 +363,42 @@ export default function ScraperPage() {
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {scrapeFeedback ? <InlineMessage tone="success">{scrapeFeedback}</InlineMessage> : null}
+
+      {recentJobs.length > 0 ? (
+        <Card title="Active Jobs" subtitle="Recent and in-progress scrape jobs">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {recentJobs.filter(j => j.status === 'running' || j.status === 'pending').length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>No active jobs.</div>
+            ) : null}
+            {recentJobs.slice(0, 10).map(job => (
+              <div key={job.job_id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+                  <span style={{ fontWeight: 600 }}>#{job.job_id}</span>
+                  <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'destructive' : 'info'}>{job.status}</Badge>
+                  <span style={{ color: 'var(--ui-text-muted)' }}>{job.job_type.replace('scraper_', '').replace('_', ' ')}</span>
+                  {job.progress && job.progress.limit ? (
+                    <span style={{ color: 'var(--ui-text-muted)' }}>
+                      {job.progress.total_fetched ?? 0} / {job.progress.limit}
+                    </span>
+                  ) : null}
+                  {job.created_at ? <span style={{ color: 'var(--ui-text-muted)', fontSize: 11 }}>{new Date(job.created_at).toLocaleString()}</span> : null}
+                </div>
+                {job.status === 'running' && job.progress && job.progress.limit ? (
+                  <div style={{ width: '100%', height: 6, background: 'var(--ui-bg-muted)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${Math.min(100, Math.round(((job.progress.total_fetched ?? 0) / job.progress.limit) * 100))}%`,
+                      height: '100%',
+                      background: 'var(--ui-accent)',
+                      borderRadius: 3,
+                      transition: 'width 1s ease',
+                    }} />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {selectedGroupId == null ? (
         <EmptyState

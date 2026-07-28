@@ -800,6 +800,21 @@ export async function fetchScrapeJobStatus(jobId: number): Promise<{
   return data
 }
 
+export interface ScrapeJobSummary {
+  job_id: number
+  agent_id: number
+  job_type: string
+  status: string
+  progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
+  created_at?: string
+  updated_at?: string
+}
+
+export async function fetchRecentScrapeJobs(limit = 10): Promise<ScrapeJobSummary[]> {
+  const { data } = await api.get(`/webapp/scraper/jobs?limit=${limit}`)
+  return data
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────
 
 export interface SearchResult {
