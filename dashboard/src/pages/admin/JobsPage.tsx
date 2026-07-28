@@ -1,13 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 
 import { Badge, Button, Card, CardSkeleton, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
-import { fetchAdminOverview } from '../../lib/api'
+import { fetchAdminOverview, fetchRecentScrapeJobs } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
-import type { AdminOverview, AdminJob } from '../../lib/types'
+import type { AdminOverview, AdminJob, ScrapeJobSummary } from '../../lib/api'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -53,6 +53,25 @@ export default function AdminJobsPage() {
     return () => clearInterval(id)
   }, [refresh])
 
+  const [scrapeJobs, setScrapeJobs] = useState<ScrapeJobSummary[]>([])
+  const scrapePollRef = useRef(false)
+  useEffect(() => {
+    let cancelled = false
+    async function poll() {
+      if (scrapePollRef.current) return
+      scrapePollRef.current = true
+      try {
+        const jobs = await fetchRecentScrapeJobs(50)
+        if (!cancelled) setScrapeJobs(jobs)
+      } catch { /* ignore */ } finally {
+        scrapePollRef.current = false
+      }
+      if (!cancelled) setTimeout(poll, 5000)
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [])
+
   const js = data?.jobs_summary
   const recentJobs = data?.recent_jobs || []
   const recentFailures = data?.recent_failures || []
@@ -90,27 +109,95 @@ export default function AdminJobsPage() {
 
       <ContentGrid columns="repeat(auto-fit, minmax(320px, 1fr))">
         <Card title="Recent Jobs">
-          <DataTable<AdminJob>
+          <DataTable<ScrapeJobSummary>
             columns={[
-              { key: 'id', label: 'ID', render: (job) => (
-                <span style={{ fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></span>
-              )},
-              { key: 'agent', label: 'Agent', render: (job) => `#${job.agent_id}` },
-              { key: 'created', label: 'When', render: (job) => (
-                <span style={{ color: 'var(--ui-text-subtle)' }}>{timeAgo(job.created_at)}</span>
-              )},
-              { key: 'status', label: 'Status', render: (job) => (
-                <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
-                  {job.status}
-                </Badge>
-              )},
+              {
+                key: 'job_id', label: 'ID',
+                render: (job) => <span style={{ fontWeight: 700 }}>#{job.job_id}</span>,
+              },
+              {
+                key: 'agent', label: 'Agent',
+                render: (job) => <span style={{ fontSize: 13 }}>{job.agent_phone ?? `#${job.agent_id}`}</span>,
+              },
+              {
+                key: 'group', label: 'Group',
+                render: (job) => (
+                  <span style={{ fontSize: 13 }}>
+                    {job.group_title || (job.tg_group_id ? `tg:${job.tg_group_id}` : '-')}
+                    {job.member_count != null ? <span style={{ color: 'var(--ui-text-muted)', fontSize: 11, marginLeft: 6 }}>({job.member_count} members)</span> : null}
+                  </span>
+                ),
+              },
+              {
+                key: 'job_type', label: 'Type',
+                hideOnMobile: true,
+                render: (job) => (
+                  <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>
+                    {job.job_type.replace('scraper_', '').replace('_', ' ')}
+                  </span>
+                ),
+              },
+              {
+                key: 'retries', label: 'Retries',
+                render: (job) => job.retry_count ? (
+                  <span style={{ color: 'var(--ui-danger)', fontWeight: 700, fontSize: 13 }}>{job.retry_count}</span>
+                ) : <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>0</span>,
+              },
+              {
+                key: 'status', label: 'Status',
+                render: (job) => (
+                  <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
+                    {job.status}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'progress', label: 'Progress',
+                render: (job) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', minWidth: 140 }}>
+                    <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                      {job.progress ? `${job.progress.total_fetched ?? 0} / ${job.progress.limit ?? '?'}` : '-'}
+                    </span>
+                    {job.status === 'running' && job.progress && job.progress.limit ? (
+                      <div style={{ width: '100%', height: 6, background: 'var(--ui-bg-muted)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${Math.min(100, Math.round(((job.progress.total_fetched ?? 0) / job.progress.limit) * 100))}%`,
+                          height: '100%',
+                          background: 'var(--ui-accent)',
+                          borderRadius: 3,
+                          transition: 'width 1s ease',
+                        }} />
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+              },
+              {
+                key: 'created_at', label: 'When',
+                hideOnMobile: true,
+                render: (job) => (
+                  <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                    {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                  </span>
+                ),
+              },
             ]}
-            data={recentJobs}
-            total={recentJobs.length}
+            data={scrapeJobs}
+            total={scrapeJobs.length}
             keyExtractor={(job) => job.job_id}
-            pageSize={recentJobs.length}
-            pageSizeOptions={[5, 10, 20]}
-            searchPlaceholder=""
+            searchPlaceholder="Search jobs..."
+            filters={[
+              { key: 'status', label: 'Status', options: [
+                { value: '', label: 'All' },
+                { value: 'running', label: 'Running' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'queued', label: 'Queued' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'failed', label: 'Failed' },
+              ]},
+            ]}
+            pageSize={10}
+            pageSizeOptions={[5, 10, 20, 50]}
           />
         </Card>
 
