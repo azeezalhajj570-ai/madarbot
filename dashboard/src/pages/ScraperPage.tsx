@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { DataTable } from '../components/ui/data-table'
 import { AutoComplete, Badge, Button, Card, EmptyState, Field, InlineMessage, Input, Select } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import {
@@ -364,41 +365,78 @@ export default function ScraperPage() {
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {scrapeFeedback ? <InlineMessage tone="success">{scrapeFeedback}</InlineMessage> : null}
 
-      {recentJobs.length > 0 ? (
-        <Card title="Active Jobs" subtitle="Recent and in-progress scrape jobs">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {recentJobs.filter(j => j.status === 'running' || j.status === 'pending').length === 0 ? (
-              <div style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>No active jobs.</div>
-            ) : null}
-            {recentJobs.slice(0, 10).map(job => (
-              <div key={job.job_id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
-                  <span style={{ fontWeight: 600 }}>#{job.job_id}</span>
-                  <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'destructive' : 'info'}>{job.status}</Badge>
-                  <span style={{ color: 'var(--ui-text-muted)' }}>{job.job_type.replace('scraper_', '').replace('_', ' ')}</span>
-                  {job.progress && job.progress.limit ? (
-                    <span style={{ color: 'var(--ui-text-muted)' }}>
-                      {job.progress.total_fetched ?? 0} / {job.progress.limit}
-                    </span>
+      <Card title="Recent Jobs" subtitle="Recent and in-progress scrape jobs" style={{ marginTop: 16 }}>
+        <DataTable<ScrapeJobSummary>
+          columns={[
+            {
+              key: 'job_id', label: 'ID',
+              render: (job) => <span style={{ fontWeight: 700 }}>#{job.job_id}</span>,
+            },
+            {
+              key: 'job_type', label: 'Type',
+              render: (job) => (
+                <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>
+                  {job.job_type.replace('scraper_', '').replace('_', ' ')}
+                </span>
+              ),
+            },
+            {
+              key: 'status', label: 'Status',
+              render: (job) => (
+                <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
+                  {job.status}
+                </Badge>
+              ),
+            },
+            {
+              key: 'progress', label: 'Progress',
+              render: (job) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', minWidth: 140 }}>
+                  <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                    {job.progress ? `${job.progress.total_fetched ?? 0} / ${job.progress.limit ?? '?'}` : '-'}
+                  </span>
+                  {job.status === 'running' && job.progress && job.progress.limit ? (
+                    <div style={{ width: '100%', height: 6, background: 'var(--ui-bg-muted)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.round(((job.progress.total_fetched ?? 0) / job.progress.limit) * 100))}%`,
+                        height: '100%',
+                        background: 'var(--ui-accent)',
+                        borderRadius: 3,
+                        transition: 'width 1s ease',
+                      }} />
+                    </div>
                   ) : null}
-                  {job.created_at ? <span style={{ color: 'var(--ui-text-muted)', fontSize: 11 }}>{new Date(job.created_at).toLocaleString()}</span> : null}
                 </div>
-                {job.status === 'running' && job.progress && job.progress.limit ? (
-                  <div style={{ width: '100%', height: 6, background: 'var(--ui-bg-muted)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${Math.min(100, Math.round(((job.progress.total_fetched ?? 0) / job.progress.limit) * 100))}%`,
-                      height: '100%',
-                      background: 'var(--ui-accent)',
-                      borderRadius: 3,
-                      transition: 'width 1s ease',
-                    }} />
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
+              ),
+            },
+            {
+              key: 'created_at', label: 'When',
+              hideOnMobile: true,
+              render: (job) => (
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                  {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                </span>
+              ),
+            },
+          ]}
+          data={recentJobs}
+          total={recentJobs.length}
+          keyExtractor={(job) => job.job_id}
+          searchPlaceholder="Search jobs..."
+          filters={[
+            { key: 'status', label: 'Status', options: [
+              { value: '', label: 'All' },
+              { value: 'running', label: 'Running' },
+              { value: 'pending', label: 'Pending' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'failed', label: 'Failed' },
+            ]},
+          ]}
+          pageSize={10}
+          pageSizeOptions={[5, 10, 20, 50]}
+          loading={recentJobs.length === 0}
+        />
+      </Card>
 
       {selectedGroupId == null ? (
         <EmptyState
