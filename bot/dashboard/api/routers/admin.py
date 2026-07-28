@@ -259,6 +259,113 @@ async def webapp_patch_group_settings(
     return {"status": "ok", "group_id": group_id, "changed": changed}
 
 
+AVAILABLE_AI_MODELS: dict[str, list[str]] = {
+    "openai": [
+        "gpt-4.1-mini",
+        "gpt-4.1",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-4-turbo",
+    ],
+    "gemini": [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+    ],
+    "openrouter": [
+        "google/gemini-2.0-flash-001",
+        "google/gemini-2.5-flash-001",
+        "google/gemini-2.5-pro-001",
+        "openai/gpt-4.1-mini",
+        "openai/gpt-4.1",
+        "openai/gpt-4o-mini",
+        "openai/gpt-4o",
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-haiku-4",
+        "meta-llama/llama-4-maverick",
+        "deepseek/deepseek-chat",
+        "qwen/qwen-2.5-72b",
+    ],
+}
+
+
+@router.get("/api/admin/ai-provider-models")
+@router.get("/webapp/ai-provider-models")
+async def webapp_ai_provider_models(
+    _identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, list[str]]:
+    return dict(AVAILABLE_AI_MODELS)
+
+
+@router.post("/api/admin/ai-provider-models/sync")
+@router.post("/webapp/ai-provider-models/sync")
+async def webapp_sync_ai_provider_models(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, Any]:
+    import httpx
+
+    settings = get_settings()
+    updated: dict[str, list[str]] = {}
+
+    if settings.openai_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                )
+                if resp.status_code == 200:
+                    models = [
+                        m["id"]
+                        for m in resp.json().get("data", [])
+                        if not m.get("id", "").startswith("ft:")
+                    ]
+                    if models:
+                        updated["openai"] = sorted(models)
+        except Exception:
+            pass
+
+    if settings.gemini_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": settings.gemini_api_key},
+                )
+                if resp.status_code == 200:
+                    models = [
+                        m["name"].replace("models/", "")
+                        for m in resp.json().get("models", [])
+                        if "generateContent" in m.get("supportedGenerationMethods", [])
+                    ]
+                    if models:
+                        updated["gemini"] = sorted(models)
+        except Exception:
+            pass
+
+    if settings.openrouter_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {settings.openrouter_api_key}"},
+                )
+                if resp.status_code == 200:
+                    models = [m["id"] for m in resp.json().get("data", [])]
+                    if models:
+                        updated["openrouter"] = sorted(models)
+        except Exception:
+            pass
+
+    if updated:
+        AVAILABLE_AI_MODELS.update(updated)
+
+    return {"status": "ok", "models": dict(AVAILABLE_AI_MODELS)}
+
+
 @router.get("/api/admin/ai-provider-defaults")
 @router.get("/webapp/ai-provider-defaults")
 async def webapp_ai_provider_defaults(

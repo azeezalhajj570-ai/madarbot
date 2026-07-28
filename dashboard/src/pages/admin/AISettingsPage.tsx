@@ -1,30 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Brain, Eye, EyeOff, Loader2, Zap } from 'lucide-react'
+import { Brain, Eye, EyeOff, Loader2, RefreshCw, Zap } from 'lucide-react'
 
-import { fetchAIConfig, updateAIConfig, testAIConfig } from '../../lib/api'
+import { fetchAIConfig, fetchAIModels, syncAIModels, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Button, Card, CardSkeleton, Field, FieldRow, InlineMessage, Input, Select, ToggleRow, EmptyState } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
 import { spacing, radius } from '../../../../shared/ui-system/tokens'
-
-const OPENAI_MODELS = [
-  'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo',
-]
-
-const GEMINI_MODELS = [
-  'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite',
-  'gemini-2.5-flash', 'gemini-2.5-pro',
-]
-
-const OPENROUTER_MODELS = [
-  'google/gemini-2.0-flash-001', 'google/gemini-2.5-flash-001', 'google/gemini-2.5-pro-001',
-  'openai/gpt-4.1-mini', 'openai/gpt-4.1', 'openai/gpt-4o-mini', 'openai/gpt-4o',
-  'anthropic/claude-sonnet-4', 'anthropic/claude-haiku-4',
-  'meta-llama/llama-4-maverick', 'deepseek/deepseek-chat', 'qwen/qwen-2.5-72b',
-]
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
@@ -45,6 +29,8 @@ export default function AdminAISettingsPage() {
   const [baseUrl, setBaseUrl] = useState('')
   const [embedModel, setEmbedModel] = useState('')
   const [enabled, setEnabled] = useState(false)
+  const [aiModels, setAIModels] = useState<Record<string, string[]>>({})
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     if (data) {
@@ -56,6 +42,10 @@ export default function AdminAISettingsPage() {
       setEnabled(data.enabled === true || data.enabled === 'true')
     }
   }, [data])
+
+  useEffect(() => {
+    fetchAIModels().then(setAIModels).catch(() => {})
+  }, [])
 
   const saveMutation = useMutation({
     mutationFn: updateAIConfig,
@@ -82,10 +72,7 @@ export default function AdminAISettingsPage() {
     },
   })
 
-  const modelOptions = provider === 'openai' ? OPENAI_MODELS
-    : provider === 'gemini' ? GEMINI_MODELS
-    : provider === 'openrouter' ? OPENROUTER_MODELS
-    : []
+  const modelOptions = aiModels[provider] ?? []
 
   function handleSave() {
     saveMutation.mutate({
@@ -96,6 +83,19 @@ export default function AdminAISettingsPage() {
       ai_embedding_model: embedModel,
       ai_pilot_enabled: enabled ? 'true' : 'false',
     })
+  }
+
+  async function handleSyncModels() {
+    setSyncing(true)
+    try {
+      const result = await syncAIModels()
+      setAIModels(result.models)
+      toast.success('Models synced from providers.')
+    } catch {
+      toast.error('Failed to sync models.')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   if (user?.role !== 'admin' && user?.role !== 'owner') {
@@ -125,7 +125,6 @@ export default function AdminAISettingsPage() {
         <CardSkeleton rows={4} />
       ) : (
         <div style={{ display: 'grid', gap: spacing.lg }}>
-          {/* Provider + Authentication side by side on desktop */}
           <div className="settings-card-grid">
             <Card title="Provider Configuration" subtitle="Choose your AI provider and inference model.">
               <FieldRow>
@@ -209,7 +208,6 @@ export default function AdminAISettingsPage() {
             </Card>
           </div>
 
-          {/* AI Replies */}
           <Card title="AI Replies" subtitle="Allow the AI to respond to @mentions in group chats.">
             <ToggleRow
               title="Enable AI Replies"
@@ -219,12 +217,14 @@ export default function AdminAISettingsPage() {
             />
           </Card>
 
-          {/* Actions */}
           <div style={{
             padding: spacing.lg, borderRadius: radius.lg,
             background: 'var(--ui-surface)', border: '1px solid var(--ui-border)',
           }}>
             <div className="settings-actions">
+              <Button variant="outline" onClick={handleSyncModels} disabled={syncing}>
+                {syncing ? <><Loader2 size={14} className="spin" /> Syncing...</> : <><RefreshCw size={14} /> Sync models</>}
+              </Button>
               <Button variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending || provider === 'heuristic'}>
                 {testMutation.isPending ? <><Loader2 size={14} className="spin" /> Testing...</> : 'Test Connection'}
               </Button>
