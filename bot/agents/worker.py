@@ -617,6 +617,9 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             broadcast_payload["progress"]["retry_after"] = delay_sec
                             job.job_payload = broadcast_payload
                             await session.commit()
+                            if final_attempt:
+                                await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=f"Max retries exhausted, last stop reason: {progress.get('stop_reason')}")
+                                return
                             execute_agent_job.send_with_options(
                                 args=(agent_id, job_id), delay=delay_sec * 1000
                             )
@@ -729,6 +732,15 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     )
                     bound_logger.warning("agent_broadcast_flood_wait_failed", retry_after=exc.retry_after)
                     return
+            if final_attempt:
+                await _set_job_state(
+                    session,
+                    job_id,
+                    JOB_STATUS_FAILED,
+                    error=f"Flood wait for {exc.retry_after} seconds (max retries exhausted)",
+                )
+                bound_logger.warning("agent_job_flood_wait_final", retry_after=exc.retry_after)
+                return
             await _set_job_state(
                 session,
                 job_id,
