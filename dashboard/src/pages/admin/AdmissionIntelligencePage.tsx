@@ -243,6 +243,12 @@ function ConcernsPanel({ groups }: { groups: ScrapedGroupSummary[] }) {
     }
   }, [groups, groupId])
 
+  useEffect(() => {
+    if (groupId && !result && !loading) {
+      handleAnalyze()
+    }
+  }, [groupId])
+
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <Card>

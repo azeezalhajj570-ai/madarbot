@@ -54,7 +54,7 @@ class CutoffAnalyzer:
                 query=term,
                 date_from=parsed_from,
                 date_to=parsed_to,
-                page_size=200,
+                page_size=50,
             )
             messages = result_data.get("messages", [])
 

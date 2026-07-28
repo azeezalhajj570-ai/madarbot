@@ -14,6 +14,13 @@ CONCERN_TOPICS = {
     "major_choice": ["تخصص", "ترتيب التخصصات", "كلية"],
 }
 
+TOPIC_DISPLAY_NAMES = {
+    "acceptance_odds": "فرص القبول",
+    "registration_process": "التسجيل",
+    "housing": "السكن الجامعي",
+    "major_choice": "اختيار التخصص",
+}
+
 
 class ConcernAnalyzer:
     def __init__(self, session: AsyncSession):
@@ -29,7 +36,7 @@ class ConcernAnalyzer:
                 result_data = await self._scraper.search_messages(
                     tg_group_id=tg_group_id,
                     query=term,
-                    page_size=50,
+                    page_size=20,
                 )
                 messages = result_data.get("messages", [])
                 all_results.extend(messages)
@@ -37,12 +44,13 @@ class ConcernAnalyzer:
             if not all_results:
                 continue
 
-            clustered = await cluster_concerns(category, all_results)
+            samples = await cluster_concerns(category, all_results)
+            display_name = TOPIC_DISPLAY_NAMES.get(category, category)
             topics.append(
                 {
-                    "name": category,
+                    "name": display_name,
                     "mentions": len(all_results),
-                    "examples": [clustered.get("raw_summary", "")],
+                    "examples": samples.get("examples", []),
                 }
             )
 
@@ -56,4 +64,7 @@ async def cluster_concerns(category: str, messages: list[dict[str, Any]]) -> dic
         category=category, count=len(messages), messages=joined
     )
     text = await call_admission_llm(prompt, system_kind="text", max_tokens=250)
-    return {"name": category, "mentions": len(messages), "raw_summary": text or ""}
+    if text:
+        return {"name": category, "mentions": len(messages), "examples": [text]}
+    raw = [m.get("message_text", "") for m in messages[:3] if m.get("message_text")]
+    return {"name": category, "mentions": len(messages), "examples": raw}
