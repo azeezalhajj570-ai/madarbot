@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
-import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Select, Textarea, ToggleRow, ContentGrid } from '../components/ui/primitives'
+import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Textarea, ToggleRow, ContentGrid } from '../components/ui/primitives'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import {
   aiAnalyzeGroupMessages,
@@ -212,13 +213,15 @@ export default function FAQPage() {
       descriptionKey="page.faq.desc"
       loading={loading}
       actions={(
-        <div style={{ minWidth: 200 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">{t('faq.noGroups')}</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
+        <div style={{ minWidth: 240 }}>
+          <GroupAutoComplete
+            items={groups || []}
+            value={currentGroupId}
+            onChange={setCurrentGroupId}
+            placeholder={groups.length === 0 ? t('faq.noGroups') : 'Search groups...'}
+            getLabel={(g: any) => g.title}
+            getId={(g: any) => g.id}
+          />
         </div>
       )}
     >

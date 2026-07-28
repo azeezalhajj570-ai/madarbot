@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { CheckCircle2, Clock } from 'lucide-react'
 
-import { Badge, Button, Card, ColumnDef, ContentGrid, EmptyState, MetricCard, Table, LoadingState } from '../../components/ui/primitives'
+import { Badge, Button, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
+import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerSubscriptions, updateOwnerSubscription, fetchOwnerStats } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
@@ -60,75 +61,80 @@ export default function AdminSubscriptionsPage() {
         <MetricCard label="Pending Requests" value={String(stats?.pending_requests ?? pendingCount)} hint="Awaiting review" icon={<Clock size={20} />} />
       </ContentGrid>
 
-      <Card title="Subscription Requests" subtitle="Users requesting access to premium features.">
-        {isLoading ? (
-          <LoadingState />
-        ) : subs && subs.length > 0 ? (
-          <Table
-            columns={[
-              { key: 'requester', label: 'Requester', render: (sub: any) => (
-                <div>
-                  <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
-                </div>
-              )},
-              { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
-                <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
-                  {sub.message || 'No message provided'}
-                </div>
-              )},
-              { key: 'status', label: 'Status', render: (sub: any) => (
-                <Badge tone={sub.status === 'approved' ? 'success' : sub.status === 'pending' ? 'warning' : sub.status === 'declined' ? 'destructive' : 'neutral'}>
-                  {sub.status}
-                </Badge>
-              )},
-              { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                  {new Date(sub.created_at).toLocaleDateString()}
-                </div>
-              )},
-              { key: 'actions', label: 'Actions', render: (sub: any) => (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {sub.status === 'pending' ? (
-                    <>
-                      <div style={{ width: 100 }}>
-                        <select
-                          value={approvalPlans[sub.id] || 'pro'}
-                          onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as any })}
-                          style={{ width: '100%', minHeight: 32, borderRadius: 8, border: '1px solid var(--ui-border)', padding: '0 8px', fontSize: 13, background: 'var(--ui-surface-strong)', color: 'var(--ui-text)' }}
-                        >
-                          <option value="pro">Pro</option>
-                          <option value="business">Business</option>
-                        </select>
-                      </div>
-                      <Button size="sm" variant="default"
-                        onClick={() => subMutation.mutate({ id: sub.id, action: 'approve', plan: approvalPlans[sub.id] || 'pro' })}
-                        disabled={subMutation.isPending}
-                      >
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="outline"
-                        onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
-                        disabled={subMutation.isPending}
-                      >
-                        Decline
-                      </Button>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                      {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
-                    </span>
-                  )}
-                </div>
-              )},
-            ]}
-            data={subs}
-            keyExtractor={(sub: any) => sub.id}
-          />
-        ) : (
-          <EmptyState title="No requests" subtitle="Manual subscription requests will appear here." />
-        )}
-      </Card>
+      <DataTable
+        data={subs || []}
+        total={(subs || []).length}
+        loading={isLoading}
+        title="Subscription Requests"
+        subtitle="Users requesting access to premium features."
+        searchPlaceholder="Search by name or username..."
+        filters={[
+          { key: 'status', label: 'Status', options: [
+            { value: '', label: 'All statuses' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'declined', label: 'Declined' },
+          ]},
+        ]}
+        columns={[
+          { key: 'requester', label: 'Requester', render: (sub: any) => (
+            <div>
+              <div style={{ fontWeight: 700 }}>{sub.full_name || 'Telegram User'}</div>
+              <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{sub.username || 'no_username'} · {sub.tg_user_id}</div>
+            </div>
+          )},
+          { key: 'message', label: 'Message', hideOnMobile: true, render: (sub: any) => (
+            <div style={{ maxWidth: 240, fontSize: 13, color: 'var(--ui-text-muted)', fontStyle: sub.message ? 'normal' : 'italic' }}>
+              {sub.message || 'No message provided'}
+            </div>
+          )},
+          { key: 'status', label: 'Status', render: (sub: any) => (
+            <Badge tone={sub.status === 'approved' ? 'success' : sub.status === 'pending' ? 'warning' : sub.status === 'declined' ? 'destructive' : 'neutral'}>
+              {sub.status}
+            </Badge>
+          )},
+          { key: 'requested', label: 'Requested', hideOnMobile: true, render: (sub: any) => (
+            <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+              {sub.created_at ? new Date(sub.created_at).toLocaleDateString() : '—'}
+            </div>
+          )},
+          { key: 'actions', label: 'Actions', render: (sub: any) => (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {sub.status === 'pending' ? (
+                <>
+                  <div style={{ width: 100 }}>
+                    <select
+                      value={approvalPlans[sub.id] || 'pro'}
+                      onChange={(e) => setApprovalPlans({ ...approvalPlans, [sub.id]: e.target.value as 'pro' | 'business' })}
+                      style={{ width: '100%', minHeight: 32, borderRadius: 8, border: '1px solid var(--ui-border)', padding: '0 8px', fontSize: 13, background: 'var(--ui-surface-strong)', color: 'var(--ui-text)' }}
+                    >
+                      <option value="pro">Pro</option>
+                      <option value="business">Business</option>
+                    </select>
+                  </div>
+                  <Button size="sm" variant="default"
+                    onClick={() => subMutation.mutate({ id: sub.id, action: 'approve', plan: approvalPlans[sub.id] || 'pro' })}
+                    disabled={subMutation.isPending}
+                  >
+                    Approve
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    onClick={() => subMutation.mutate({ id: sub.id, action: 'decline' })}
+                    disabled={subMutation.isPending}
+                  >
+                    Decline
+                  </Button>
+                </>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                  {sub.status === 'approved' ? `Approved as ${sub.plan || 'pro'}` : 'No actions'}
+                </span>
+              )}
+            </div>
+          )},
+        ]}
+        keyExtractor={(sub: any) => sub.id}
+      />
     </PageShell>
   )
 }

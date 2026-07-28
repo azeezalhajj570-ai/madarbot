@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Badge, Button, Card, EmptyState, Field, InlineMessage, Input, ListItem, Select, ToggleRow } from '../components/ui/primitives'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { fetchSummaries, fetchSummarySettings, updateSummarySettings } from '../lib/api'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
@@ -79,16 +80,18 @@ export default function SummariesPage() {
       titleKey="page.summaries"
       descriptionKey="page.summaries.desc"
       loading={loading}
-      actions={(
-        <div style={{ minWidth: 240 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">No managed groups</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
-        </div>
-      )}
+actions={(
+  <div style={{ minWidth: 240 }}>
+    <GroupAutoComplete
+      items={groups || []}
+      value={currentGroupId}
+      onChange={setCurrentGroupId}
+      placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+      getLabel={(g: any) => g.title}
+      getId={(g: any) => g.id}
+    />
+  </div>
+)}
     >
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
       {currentGroup ? <InlineMessage tone="neutral">Viewing summaries for {currentGroup.title}.</InlineMessage> : null}

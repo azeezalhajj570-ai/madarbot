@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Send } from 'lucide-react'
 
 import { Badge, Button, Card, ColumnDef, EmptyState, InlineMessage, Input, Select, Table } from '../../components/ui/primitives'
-import { SearchInput } from '../../components/ui/data-display'
+import { GroupAutoComplete, SearchInput } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import api, { fetchAdminOverview, fetchAgents } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
@@ -357,17 +357,16 @@ export default function AdminBulkAddPage() {
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Source Group</label>
               <div style={{ display: 'flex', gap: 6 }}>
-                <Select
-                  value={selectedSourceGroupId ?? ''}
-                  onChange={(e) => setSelectedSourceGroupId(e.target.value ? Number(e.target.value) : null)}
-                  disabled={!sourceGroups.length}
-                  style={{ flex: 1 }}
-                >
-                  <option value="">{sourceGroups.length ? 'Select source group...' : 'No groups'}</option>
-                  {sourceGroups.map((g) => (
-                    <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
-                  ))}
-                </Select>
+                <div style={{ flex: 1 }}>
+                  <GroupAutoComplete
+                    items={sourceGroups}
+                    value={selectedSourceGroupId}
+                    onChange={setSelectedSourceGroupId}
+                    placeholder={sourceGroups.length ? 'Select source group...' : 'No groups'}
+                    getId={(g: any) => g.tg_group_id}
+                    getLabel={(g: any) => g.title}
+                  />
+                </div>
                 <Button variant="outline" size="sm" onClick={scrapeSourceGroup} disabled={!selectedSourceGroupId || scraping}>
                   {scraping ? 'Scraping...' : 'Scrape'}
                 </Button>
@@ -377,16 +376,14 @@ export default function AdminBulkAddPage() {
             {/* Target group select */}
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Target Group</label>
-              <Select
-                value={selectedTargetGroupId ?? ''}
-                onChange={(e) => setSelectedTargetGroupId(e.target.value ? Number(e.target.value) : null)}
-                disabled={!targetGroups.length}
-              >
-                <option value="">{targetGroups.length ? 'Select target group...' : 'No groups with add permission'}</option>
-                {targetGroups.map((g) => (
-                  <option key={g.tg_group_id} value={g.tg_group_id}>{g.title}</option>
-                ))}
-              </Select>
+              <GroupAutoComplete
+                items={targetGroups}
+                value={selectedTargetGroupId}
+                onChange={setSelectedTargetGroupId}
+                placeholder={targetGroups.length ? 'Select target group...' : 'No groups with add permission'}
+                getId={(g: any) => g.tg_group_id}
+                getLabel={(g: any) => g.title}
+              />
             </div>
 
             {/* Member search */}

@@ -7,7 +7,7 @@ import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Badge, Button, Card, Select, Input, Table } from '../../components/ui/primitives'
-import { FilterSelect, Pagination, SearchInput, Toolbar } from '../../components/ui/data-display'
+import { FilterSelect, GroupAutoComplete, Pagination, SearchInput, Toolbar } from '../../components/ui/data-display'
 
 const TYPE_COLORS: Record<string, string> = {
   faq: '#10b981',
@@ -128,12 +128,14 @@ export default function AdminKnowledgePage() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ minWidth: 200, flex: 1 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Extract for Group</label>
-            <Select value={extractGroupId ?? ''} onChange={(e) => setExtractGroupId(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Select a group...</option>
-              {(groups || []).map((g: any) => (
-                <option key={g.id} value={g.id}>{g.title}</option>
-              ))}
-            </Select>
+            <GroupAutoComplete
+              items={groups || []}
+              value={extractGroupId}
+              onChange={(id) => setExtractGroupId(id)}
+              placeholder="Select a group..."
+              getLabel={(g: any) => g.title}
+              getId={(g: any) => g.id}
+            />
           </div>
           <div style={{ minWidth: 100 }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Max Messages</label>
@@ -158,15 +160,17 @@ export default function AdminKnowledgePage() {
       {/* Filters */}
       <Card style={{ marginTop: 16 }}>
         <Toolbar style={{ marginBottom: 16 }}>
-          <FilterSelect
-            label="Group"
-            value={filterGroupId !== undefined ? String(filterGroupId) : ''}
-            onChange={(v) => setFilterGroupId(v ? Number(v) : undefined)}
-            options={[
-              { value: '', label: 'All groups' },
-              ...(groups || []).map((g: any) => ({ value: String(g.id), label: `${g.title} (${g.entry_count})` })),
-            ]}
-          />
+          <div style={{ minWidth: 200 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ui-text-muted)', marginBottom: 4, display: 'block' }}>Group</label>
+            <GroupAutoComplete
+              items={groups || []}
+              value={filterGroupId ?? null}
+              onChange={(id) => setFilterGroupId(id ?? undefined)}
+              placeholder="All groups"
+              getLabel={(g: any) => `${g.title} (${g.entry_count})`}
+              getId={(g: any) => g.id}
+            />
+          </div>
           <FilterSelect
             label="Type"
             value={filterType}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { Badge, Button, Card, Dialog, EmptyState, Field, FieldRow, InlineMessage, Input, ListItem, Select, Textarea, ToggleRow } from '../components/ui/primitives'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import {
   createScheduledMessage,
@@ -348,12 +349,14 @@ export default function SettingsPage() {
       loading={loading}
       actions={(
         <div style={{ minWidth: 240 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">No managed groups</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
+          <GroupAutoComplete
+            items={groups || []}
+            value={currentGroupId}
+            onChange={setCurrentGroupId}
+            placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+            getLabel={(g: any) => g.title}
+            getId={(g: any) => g.id}
+          />
         </div>
       )}
     >

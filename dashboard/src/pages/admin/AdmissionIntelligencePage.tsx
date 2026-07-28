@@ -7,7 +7,7 @@ import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
 import { Button, Card, Input, Select, Tabs } from '../../components/ui/primitives'
-import { SearchInput, FilterSelect } from '../../components/ui/data-display'
+import { GroupAutoComplete, SearchInput, FilterSelect } from '../../components/ui/data-display'
 
 type Tab = 'search' | 'cutoff' | 'concerns' | 'compare'
 
@@ -62,17 +62,13 @@ function GroupSelector({ groups, value, onChange }: { groups: ScrapedGroupSummar
     : groups.sort((a, b) => (b.member_count || 0) - (a.member_count || 0))
 
   return (
-    <FilterSelect
-      label=""
-      value={value}
-      onChange={onChange}
-      options={[
-        { value: '', label: t('admission.selectGroup') },
-        ...sorted.slice(0, 50).map(g => ({
-          value: String(g.tg_group_id),
-          label: `${g.title} (${g.member_count?.toLocaleString() || '?'})`,
-        })),
-      ]}
+    <GroupAutoComplete
+      items={sorted.slice(0, 50)}
+      value={value ? Number(value) : null}
+      onChange={(id) => onChange(id ? String(id) : '')}
+      placeholder={t('admission.selectGroup')}
+      getLabel={(g: ScrapedGroupSummary) => `${g.title} (${g.member_count?.toLocaleString() || '?'})`}
+      getId={(g: ScrapedGroupSummary) => g.tg_group_id}
     />
   )
 }

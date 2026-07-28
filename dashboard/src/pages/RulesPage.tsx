@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { Button, Card, Field, FieldRow, InlineMessage, Input, Select, ToggleRow } from '../components/ui/primitives'
+import { Button, Card, Field, FieldRow, InlineMessage, Input, ToggleRow } from '../components/ui/primitives'
+import { GroupAutoComplete } from '../components/ui/data-display'
 import { PageShell } from '../lib/page-shell'
 import { fetchGroupSettings, fetchSettingsSchema, updateGroupSettings, testAIPilot } from '../lib/api'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
@@ -248,12 +249,14 @@ export default function RulesPage() {
       loading={loading}
       actions={(
         <div style={{ minWidth: 240 }}>
-          <Select value={currentGroupId ?? ''} onChange={(event) => setCurrentGroupId(Number(event.target.value) || null)} disabled={groupsLoading || groups.length === 0}>
-            {groups.length === 0 ? <option value="">No managed groups</option> : null}
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>{group.title}</option>
-            ))}
-          </Select>
+          <GroupAutoComplete
+            items={groups || []}
+            value={currentGroupId}
+            onChange={setCurrentGroupId}
+            placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+            getLabel={(g: any) => g.title}
+            getId={(g: any) => g.id}
+          />
         </div>
       )}
     >
