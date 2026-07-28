@@ -231,30 +231,32 @@ export function DataTable<Row>({
         marginBottom: spacing.md,
       }}>
         {/* Search */}
-        <div style={{ position: 'relative', minWidth: 200, flex: '1 1 200px' }}>
-          <Search size={14} style={{
-            position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-            color: uiVars.textMuted, pointerEvents: 'none',
-          }} />
-          <input
-            value={searchInput}
-            onChange={e => handleSearchInput(e.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-            style={{
-              width: '100%', minHeight: 38, borderRadius: radius.md,
-              border: `1px solid ${uiVars.borderStrong}`, padding: '0 30px 0 32px',
-              background: uiVars.surfaceStrong, color: uiVars.text,
-              fontSize: typeScale.body, outline: 'none',
-            }}
-          />
-          {searchInput && (
-            <button onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}
-              style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: uiVars.textMuted, cursor: 'pointer', padding: 4 }}>
-              <X size={14} />
-            </button>
-          )}
-        </div>
+        {searchPlaceholder ? (
+          <div style={{ position: 'relative', minWidth: 200, flex: '1 1 200px' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+              color: uiVars.textMuted, pointerEvents: 'none',
+            }} />
+            <input
+              value={searchInput}
+              onChange={e => handleSearchInput(e.target.value)}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              style={{
+                width: '100%', minHeight: 38, borderRadius: radius.md,
+                border: `1px solid ${uiVars.borderStrong}`, padding: '0 30px 0 32px',
+                background: uiVars.surfaceStrong, color: uiVars.text,
+                fontSize: typeScale.body, outline: 'none',
+              }}
+            />
+            {searchInput && (
+              <button onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}
+                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: uiVars.textMuted, cursor: 'pointer', padding: 4 }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {/* Filters */}
         {filters?.map(filter => (

@@ -6,8 +6,9 @@ import { fetchKnowledgeGroups, fetchAllKnowledge, extractGroupKnowledge, deleteK
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Badge, Button, Card, Select, Input, Table } from '../../components/ui/primitives'
-import { FilterSelect, GroupAutoComplete, Pagination, SearchInput, Toolbar } from '../../components/ui/data-display'
+import { Badge, Button, Card, Input } from '../../components/ui/primitives'
+import { DataTable } from '../../components/ui/data-table'
+import { FilterSelect, GroupAutoComplete, Toolbar } from '../../components/ui/data-display'
 
 const TYPE_COLORS: Record<string, string> = {
   faq: '#10b981',
@@ -25,9 +26,6 @@ export default function AdminKnowledgePage() {
 
   const [filterGroupId, setFilterGroupId] = useState<number | undefined>(undefined)
   const [filterType, setFilterType] = useState<string>('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const pageSize = 20
 
   const [extractGroupId, setExtractGroupId] = useState<number | null>(null)
   const [extractCount, setExtractCount] = useState(500)
@@ -44,9 +42,8 @@ export default function AdminKnowledgePage() {
     const p: Record<string, string> = {}
     if (filterGroupId) p.group_id = String(filterGroupId)
     if (filterType) p.knowledge_type = filterType
-    if (search) p.search = search
     return p
-  }, [filterGroupId, filterType, search])
+  }, [filterGroupId, filterType])
 
   const queryKey = ['all-knowledge', params]
   const { data: entries, isLoading: entriesLoading } = useQuery({
@@ -180,67 +177,47 @@ export default function AdminKnowledgePage() {
               ...allTypes.map((type) => ({ value: type, label: type })),
             ]}
           />
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search title or content..."
-            style={{ minWidth: 200, flex: 1 }}
-          />
         </Toolbar>
 
-        {entriesLoading ? (
-          <div style={{ textAlign: 'center', padding: 24 }}>{t('loading')}</div>
-        ) : !entries || entries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--ui-text-muted)' }}>
-            No knowledge entries found. Select a group above and click "Extract Knowledge".
-          </div>
-        ) : (
-          <>
-            <Table<any>
-              columns={[
-                { key: 'type', label: 'Type', render: (entry) => (
-                  <Badge style={{ background: TYPE_COLORS[entry.knowledge_type] || '#6b7280', color: '#fff' }}>
-                    {entry.knowledge_type}
-                  </Badge>
-                )},
-                { key: 'title', label: 'Title', render: (entry) => (
-                  <span style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                    {entry.title || 'Untitled'}
-                  </span>
-                )},
-                { key: 'group', label: 'Group', render: (entry) => (
-                  <Badge style={{ background: '#374151', color: '#fff' }}>{entry.group_title || `Group ${entry.group_id}`}</Badge>
-                )},
-                { key: 'confidence', label: 'Confidence', render: (entry) => `${(entry.confidence * 100).toFixed(0)}%` },
-                { key: 'embedding', label: 'Embedding', render: (entry) => (
-                  entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--ui-success)' }} /> : <XCircle size={14} style={{ color: 'var(--ui-text-muted)' }} />
-                )},
-                { key: 'created', label: 'Created', render: (entry) => (
-                  <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
-                )},
-                { key: 'actions', label: '', render: (entry) => (
-                  <button
-                    onClick={() => { if (confirm('Delete this entry?')) deleteMutation.mutate(entry.id) }}
-                    style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )},
-              ]}
-              data={entries.slice((page - 1) * pageSize, page * pageSize)}
-              keyExtractor={(entry) => entry.id}
-            />
-            <div style={{ marginTop: 16 }}>
-              <Pagination
-                page={page}
-                limit={pageSize}
-                total={entries.length}
-                onPageChange={setPage}
-              />
-            </div>
-          </>
-        )}
+        <DataTable
+          columns={[
+            { key: 'type', label: 'Type', render: (entry: any) => (
+              <Badge style={{ background: TYPE_COLORS[entry.knowledge_type] || '#6b7280', color: '#fff' }}>
+                {entry.knowledge_type}
+              </Badge>
+            )},
+            { key: 'title', label: 'Title', render: (entry: any) => (
+              <span style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                {entry.title || 'Untitled'}
+              </span>
+            )},
+            { key: 'group', label: 'Group', render: (entry: any) => (
+              <Badge style={{ background: '#374151', color: '#fff' }}>{entry.group_title || `Group ${entry.group_id}`}</Badge>
+            )},
+            { key: 'confidence', label: 'Confidence', render: (entry: any) => `${(entry.confidence * 100).toFixed(0)}%` },
+            { key: 'embedding', label: 'Embedding', render: (entry: any) => (
+              entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--ui-success)' }} /> : <XCircle size={14} style={{ color: 'var(--ui-text-muted)' }} />
+            )},
+            { key: 'created', label: 'Created', render: (entry: any) => (
+              <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
+            )},
+            { key: 'actions', label: '', render: (entry: any) => (
+              <button
+                onClick={() => { if (confirm('Delete this entry?')) deleteMutation.mutate(entry.id) }}
+                style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            )},
+          ]}
+          data={entries || []}
+          total={entries?.length || 0}
+          keyExtractor={(entry: any) => entry.id}
+          loading={entriesLoading}
+          searchPlaceholder="Search title or content..."
+          style={{ marginTop: 16 }}
+        />
       </Card>
     </PageShell>
   )

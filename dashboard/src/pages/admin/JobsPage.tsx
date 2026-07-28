@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 
-import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
+import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
-import type { AdminOverview } from '../../lib/types'
+import type { AdminOverview, AdminJob } from '../../lib/types'
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -92,41 +93,51 @@ export default function AdminJobsPage() {
 
       <ContentGrid columns="repeat(auto-fit, minmax(320px, 1fr))">
         <Card title="Recent Jobs">
-          {recentJobs.length > 0 ? (
-            <div style={{ display: 'grid', gap: 0 }}>
-              {recentJobs.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
-                  </div>
-                  <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
-                    {job.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No recent jobs" subtitle="No jobs found." />
-          )}
+          <DataTable<AdminJob>
+            columns={[
+              { key: 'id', label: 'ID', render: (job) => (
+                <span style={{ fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></span>
+              )},
+              { key: 'agent', label: 'Agent', render: (job) => `#${job.agent_id}` },
+              { key: 'created', label: 'When', render: (job) => (
+                <span style={{ color: 'var(--ui-text-subtle)' }}>{timeAgo(job.created_at)}</span>
+              )},
+              { key: 'status', label: 'Status', render: (job) => (
+                <Badge tone={job.status === 'completed' ? 'success' : job.status === 'failed' || job.status === 'aborted' ? 'destructive' : job.status === 'running' ? 'info' : 'neutral'}>
+                  {job.status}
+                </Badge>
+              )},
+            ]}
+            data={recentJobs}
+            total={recentJobs.length}
+            keyExtractor={(job) => job.job_id}
+            pageSize={recentJobs.length}
+            pageSizeOptions={[5, 10, 20]}
+            searchPlaceholder=""
+          />
         </Card>
 
         <Card title="Recent Failures (24h)">
-          {recentFailures.length > 0 ? (
-            <div style={{ display: 'grid', gap: 0 }}>
-              {recentFailures.map((job, i) => (
-                <div key={job.job_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ui-border)' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></div>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-subtle)' }}>agent #{job.agent_id} · {timeAgo(job.created_at)}</div>
-                  </div>
-                  <Badge tone="destructive">{job.status}</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No failures" subtitle="No failed jobs in the last 24 hours." />
-          )}
+          <DataTable<AdminJob>
+            columns={[
+              { key: 'id', label: 'ID', render: (job) => (
+                <span style={{ fontWeight: 700 }}>#{job.job_id} <span style={{ fontWeight: 400, color: 'var(--ui-text-muted)' }}>{job.job_type}</span></span>
+              )},
+              { key: 'agent', label: 'Agent', render: (job) => `#${job.agent_id}` },
+              { key: 'created', label: 'When', render: (job) => (
+                <span style={{ color: 'var(--ui-text-subtle)' }}>{timeAgo(job.created_at)}</span>
+              )},
+              { key: 'status', label: 'Status', render: () => (
+                <Badge tone="destructive">Failed</Badge>
+              )},
+            ]}
+            data={recentFailures}
+            total={recentFailures.length}
+            keyExtractor={(job) => job.job_id}
+            pageSize={recentFailures.length}
+            pageSizeOptions={[5, 10, 20]}
+            searchPlaceholder=""
+          />
         </Card>
       </ContentGrid>
     </PageShell>
