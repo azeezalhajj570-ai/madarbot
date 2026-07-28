@@ -1,12 +1,44 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Brain, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { fetchAIConfig, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, Field, FieldRow, Input, Select, ToggleRow } from '../../components/ui/primitives'
+import { Button, Card, Field, FieldRow, InlineMessage, Input, Select } from '../../components/ui/primitives'
+
+const OPENAI_MODELS = [
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4-turbo',
+]
+
+const GEMINI_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+]
+
+const OPENROUTER_MODELS = [
+  'google/gemini-2.0-flash-001',
+  'google/gemini-2.5-flash-001',
+  'google/gemini-2.5-pro-001',
+  'openai/gpt-4.1-mini',
+  'openai/gpt-4.1',
+  'openai/gpt-4o-mini',
+  'openai/gpt-4o',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-haiku-4',
+  'meta-llama/llama-4-maverick',
+  'deepseek/deepseek-chat',
+  'qwen/qwen-2.5-72b',
+]
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
@@ -45,6 +77,11 @@ export default function AdminAISettingsPage() {
       qc.invalidateQueries({ queryKey: ['ai-config'] })
     },
   })
+
+  const modelOptions = provider === 'openai' ? OPENAI_MODELS
+    : provider === 'gemini' ? GEMINI_MODELS
+    : provider === 'openrouter' ? OPENROUTER_MODELS
+    : []
 
   async function handleSave() {
     setTestStatus('idle')
@@ -94,9 +131,9 @@ export default function AdminAISettingsPage() {
   }
 
   const providers = [
-    { value: 'heuristic', label: 'Heuristic (fallback)' },
+    { value: 'heuristic', label: 'Heuristic (rule-based)' },
     { value: 'openai', label: 'OpenAI' },
-    { value: 'gemini', label: 'Gemini' },
+    { value: 'gemini', label: 'Google Gemini' },
     { value: 'openrouter', label: 'OpenRouter' },
   ]
 
@@ -104,33 +141,40 @@ export default function AdminAISettingsPage() {
     <PageShell
       title="AI Settings"
       description="Configure the AI provider for RAG, knowledge extraction, and AI pilot replies."
-      icon={<Brain size={20} />}
     >
       <Card style={{ maxWidth: 600 }}>
         <FieldRow>
-          <Field label="Provider" hint="openai, gemini, or openrouter">
+          <Field label="Provider" hint="Select the AI provider to use">
             <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
               {providers.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Model" hint="Leave empty for default">
-            <Input
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="gpt-4.1-mini"
-            />
+          <Field label="Model" hint="Select the model to use">
+            {modelOptions.length > 0 ? (
+              <Select value={model} onChange={(e) => setModel(e.target.value)}>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="gpt-4.1-mini"
+              />
+            )}
           </Field>
         </FieldRow>
 
         <FieldRow>
-          <Field label="API Key" hint="Provider API key" grow>
+          <Field label="API Key" hint="Provider API key">
             <Input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
+              placeholder={provider === 'gemini' ? 'AIza...' : provider === 'openrouter' ? 'sk-or-...' : 'sk-...'}
             />
           </Field>
         </FieldRow>
@@ -153,15 +197,17 @@ export default function AdminAISettingsPage() {
               placeholder="text-embedding-3-small"
             />
           </Field>
-        </FieldRow>
-
-        <FieldRow>
-          <ToggleRow
-            label="Enable AI Replies"
-            hint="Allow AI to auto-reply when @mentioned in groups"
-            checked={enabled}
-            onChange={setEnabled}
-          />
+          <Field label="Enable AI Replies" hint="Allow AI to auto-reply when @mentioned in groups">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--ui-primary)' }}
+              />
+              <span>{enabled ? 'Enabled' : 'Disabled'}</span>
+            </label>
+          </Field>
         </FieldRow>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
@@ -176,24 +222,24 @@ export default function AdminAISettingsPage() {
         </div>
 
         {saveMutation.isSuccess && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}>
-            <CheckCircle size={16} /> Saved successfully.
+          <div style={{ marginTop: 12 }}>
+            <InlineMessage tone="success">Saved successfully.</InlineMessage>
           </div>
         )}
         {saveMutation.isError && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}>
-            <XCircle size={16} /> Save failed.
+          <div style={{ marginTop: 12 }}>
+            <InlineMessage tone="destructive">Save failed.</InlineMessage>
           </div>
         )}
 
         {testStatus === 'ok' && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-success)' }}>
-            <CheckCircle size={16} /> {testMsg}
+          <div style={{ marginTop: 12 }}>
+            <InlineMessage tone="success">{testMsg}</InlineMessage>
           </div>
         )}
         {testStatus === 'error' && (
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-danger)' }}>
-            <XCircle size={16} /> {testMsg}
+          <div style={{ marginTop: 12 }}>
+            <InlineMessage tone="destructive">{testMsg}</InlineMessage>
           </div>
         )}
       </Card>

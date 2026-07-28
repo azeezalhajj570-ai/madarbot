@@ -1,18 +1,62 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { Badge, Button, Card, Dialog, EmptyState, Field, FieldRow, InlineMessage, Input, ListItem, Select, Textarea } from '../components/ui/primitives'
+import { Badge, Button, Card, Dialog, EmptyState, Field, FieldRow, InlineMessage, Input, ListItem, Select, Textarea, ToggleRow } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
 import {
   createScheduledMessage,
   deleteScheduledMessage,
   fetchAccessGate,
+  fetchAIProviderDefaults,
+  fetchGroupSettings,
   fetchScheduledMessages,
+  testAIPilot,
   updateAccessGate,
+  updateGroupSettings,
   updateScheduledMessage,
   type ScheduledMessage,
 } from '../lib/api'
+import type { AIProviderDefaults } from '../lib/types'
 import { useDashboardGroups } from '../lib/use-dashboard-groups'
 import { useI18n } from '../lib/i18n'
+
+const PROVIDER_OPTIONS = [
+  { value: 'heuristic', label: 'Heuristic (rule-based)' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'gemini', label: 'Google Gemini' },
+  { value: 'openrouter', label: 'OpenRouter' },
+]
+
+const OPENAI_MODELS = [
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4-turbo',
+]
+
+const GEMINI_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+]
+
+const OPENROUTER_MODELS = [
+  'google/gemini-2.0-flash-001',
+  'google/gemini-2.5-flash-001',
+  'google/gemini-2.5-pro-001',
+  'openai/gpt-4.1-mini',
+  'openai/gpt-4.1',
+  'openai/gpt-4o-mini',
+  'openai/gpt-4o',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-haiku-4',
+  'meta-llama/llama-4-maverick',
+  'deepseek/deepseek-chat',
+  'qwen/qwen-2.5-72b',
+]
 
 export default function SettingsPage() {
   const { t } = useI18n()
@@ -32,6 +76,25 @@ export default function SettingsPage() {
   const [messageDeleteAfter, setMessageDeleteAfter] = useState('0')
   const [savingMessage, setSavingMessage] = useState(false)
 
+  const [aiDefaults, setAIDefaults] = useState<AIProviderDefaults | null>(null)
+  const [aiProvider, setAIProvider] = useState('heuristic')
+  const [aiModel, setAIModel] = useState('')
+  const [openaiApiKey, setOpenaiApiKey] = useState('')
+  const [openaiModel, setOpenaiModel] = useState('gpt-4.1-mini')
+  const [geminiApiKey, setGeminiApiKey] = useState('')
+  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash')
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('')
+  const [openrouterModel, setOpenrouterModel] = useState('google/gemini-2.0-flash-001')
+  const [aiSpamDetection, setAISpamDetection] = useState(false)
+  const [aiReceptionist, setAIReceptionist] = useState(false)
+  const [knowledgeExtraction, setKnowledgeExtraction] = useState(false)
+  const [dailySummary, setDailySummary] = useState(false)
+  const [faqAutoAnswer, setFaqAutoAnswer] = useState(false)
+  const [aiPilot, setAIPilot] = useState(false)
+  const [savingAI, setSavingAI] = useState(false)
+  const [testingAI, setTestingAI] = useState(false)
+  const [aiTestResult, setAITestResult] = useState<{ status: string; reply?: string; error?: string } | null>(null)
+
   useEffect(() => {
     if (currentGroupId == null) {
       setLoading(groupsLoading)
@@ -44,15 +107,34 @@ export default function SettingsPage() {
       setError('')
       setFeedback('')
       try {
-        const [gate, messages] = await Promise.all([
+        const [gate, messages, defaults, groupSettings] = await Promise.all([
           fetchAccessGate(currentGroupId),
           fetchScheduledMessages(currentGroupId),
+          fetchAIProviderDefaults(),
+          fetchGroupSettings(currentGroupId),
         ])
         if (cancelled) return
 
         setRequiredGroupIds(gate.required_group_tg_ids)
         setRequiredGroupCandidates(gate.candidates ?? [])
         setScheduledMessages(messages)
+        setAIDefaults(defaults)
+
+        const overrides = groupSettings.settings
+        setAIProvider(String(overrides.ai_provider ?? defaults.ai_provider))
+        setAIModel(String(overrides.ai_model ?? defaults.ai_model ?? ''))
+        setOpenaiApiKey(String(overrides.openai_api_key ?? ''))
+        setOpenaiModel(String(overrides.openai_model ?? defaults.openai_model))
+        setGeminiApiKey(String(overrides.gemini_api_key ?? ''))
+        setGeminiModel(String(overrides.gemini_model ?? defaults.gemini_model))
+        setOpenrouterApiKey(String(overrides.openrouter_api_key ?? ''))
+        setOpenrouterModel(String(overrides.openrouter_model ?? defaults.openrouter_model))
+        setAISpamDetection(overrides.ai_spam_detection_enabled === true || (overrides.ai_spam_detection_enabled === undefined && defaults.ai_spam_detection_enabled))
+        setAIReceptionist(overrides.ai_receptionist_enabled === true || (overrides.ai_receptionist_enabled === undefined && defaults.ai_receptionist_enabled))
+        setKnowledgeExtraction(overrides.knowledge_extraction_enabled === true || (overrides.knowledge_extraction_enabled === undefined && defaults.knowledge_extraction_enabled))
+        setDailySummary(overrides.daily_summary_enabled === true || (overrides.daily_summary_enabled === undefined && defaults.daily_summary_enabled))
+        setFaqAutoAnswer(overrides.faq_auto_answer_enabled === true || (overrides.faq_auto_answer_enabled === undefined && defaults.faq_auto_answer_enabled))
+        setAIPilot(overrides.ai_pilot_enabled === true || (overrides.ai_pilot_enabled === undefined && defaults.ai_pilot_enabled))
       } catch {
         if (!cancelled) setError('Unable to load group settings right now.')
       } finally {
@@ -84,6 +166,20 @@ export default function SettingsPage() {
         .some((value) => value.toLowerCase().includes(query))
     })
   }, [requiredGroupCandidates, requiredGroupIds, requiredGroupsQuery])
+
+  const modelOptions = useMemo(() => {
+    if (aiProvider === 'openai') return OPENAI_MODELS
+    if (aiProvider === 'gemini') return GEMINI_MODELS
+    if (aiProvider === 'openrouter') return OPENROUTER_MODELS
+    return []
+  }, [aiProvider])
+
+  const currentModel = useMemo(() => {
+    if (aiProvider === 'openai') return openaiModel
+    if (aiProvider === 'gemini') return geminiModel
+    if (aiProvider === 'openrouter') return openrouterModel
+    return aiModel
+  }, [aiProvider, openaiModel, geminiModel, openrouterModel, aiModel])
 
   function openCreateDialog() {
     setEditingMessage(null)
@@ -186,6 +282,64 @@ export default function SettingsPage() {
     setRequiredGroupIds((current) => current.filter((id) => id !== tgGroupId))
   }
 
+  async function handleSaveAI() {
+    if (currentGroupId == null) return
+
+    setSavingAI(true)
+    setError('')
+    setFeedback('')
+    setAITestResult(null)
+    try {
+      const settings: Record<string, string | boolean | number> = {
+        ai_provider: aiProvider,
+        ai_model: aiModel || '',
+        openai_api_key: openaiApiKey,
+        openai_model: aiProvider === 'openai' ? openaiModel : '',
+        gemini_api_key: geminiApiKey,
+        gemini_model: aiProvider === 'gemini' ? geminiModel : '',
+        openrouter_api_key: openrouterApiKey,
+        openrouter_model: aiProvider === 'openrouter' ? openrouterModel : '',
+        ai_spam_detection_enabled: aiSpamDetection,
+        ai_receptionist_enabled: aiReceptionist,
+        knowledge_extraction_enabled: knowledgeExtraction,
+        daily_summary_enabled: dailySummary,
+        faq_auto_answer_enabled: faqAutoAnswer,
+        ai_pilot_enabled: aiPilot,
+      }
+      await updateGroupSettings(currentGroupId, settings)
+      setFeedback('AI provider settings saved.')
+    } catch {
+      setError('Unable to save AI provider settings.')
+    } finally {
+      setSavingAI(false)
+    }
+  }
+
+  async function handleTestAI() {
+    setTestingAI(true)
+    setAITestResult(null)
+    setError('')
+    try {
+      const model = aiProvider === 'openai' ? openaiModel
+        : aiProvider === 'gemini' ? geminiModel
+        : aiProvider === 'openrouter' ? openrouterModel
+        : aiModel || undefined
+
+      const payload: { provider?: string; model?: string } = {}
+      if (aiProvider !== 'heuristic') {
+        payload.provider = aiProvider
+        if (model) payload.model = model
+      }
+
+      const result = await testAIPilot(payload)
+      setAITestResult(result)
+    } catch {
+      setAITestResult({ status: 'error', error: 'Connection test failed.' })
+    } finally {
+      setTestingAI(false)
+    }
+  }
+
   return (
     <PageShell
      
@@ -208,9 +362,8 @@ export default function SettingsPage() {
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {feedback ? <InlineMessage tone="success">{feedback}</InlineMessage> : null}
 
-      <Card>
-        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>Required groups</div>
-        <Field label="Select groups" hint="Search managed groups by name, role, or Telegram ID and add multiple requirements.">
+      <Card title="Required groups" subtitle="Search managed groups by name, role, or Telegram ID and add multiple requirements.">
+        <Field label="Select groups" hint="">
           <Input
             value={requiredGroupsQuery}
             onChange={(event) => setRequiredGroupsQuery(event.target.value)}
@@ -262,12 +415,125 @@ export default function SettingsPage() {
         <div style={{ marginTop: 12 }}><Button onClick={() => void handleSaveAccessGate()} disabled={savingGate || currentGroupId == null}>{savingGate ? 'Saving…' : 'Save required groups'}</Button></div>
       </Card>
 
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Scheduled messages</div>
-            <div style={{ marginTop: 4, fontSize: 14, color: 'var(--ui-text-muted)' }}>Create recurring or one-off reminders for the selected group.</div>
+      <Card title="AI Provider" subtitle="Configure the AI provider and model for this group. Settings here override environment defaults.">
+        <Field label="AI Provider">
+          <Select value={aiProvider} onChange={(e) => setAIProvider(e.target.value)}>
+            {PROVIDER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </Select>
+        </Field>
+
+        {aiProvider === 'openai' && (
+          <FieldRow>
+            <Field label="OpenAI API Key" hint="Leave blank to use env default">
+              <Input type="password" value={openaiApiKey} onChange={(e) => setOpenaiApiKey(e.target.value)} placeholder={aiDefaults?.openai_has_key ? '•••••••• (env default set)' : 'sk-...'} />
+            </Field>
+            <Field label="Model">
+              <Select value={openaiModel} onChange={(e) => setOpenaiModel(e.target.value)}>
+                {OPENAI_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}{m === aiDefaults?.openai_model ? ' (default)' : ''}</option>
+                ))}
+              </Select>
+            </Field>
+          </FieldRow>
+        )}
+
+        {aiProvider === 'gemini' && (
+          <FieldRow>
+            <Field label="Gemini API Key" hint="Leave blank to use env default">
+              <Input type="password" value={geminiApiKey} onChange={(e) => setGeminiApiKey(e.target.value)} placeholder={aiDefaults?.gemini_has_key ? '•••••••• (env default set)' : 'AIza...'} />
+            </Field>
+            <Field label="Model">
+              <Select value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)}>
+                {GEMINI_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}{m === aiDefaults?.gemini_model ? ' (default)' : ''}</option>
+                ))}
+              </Select>
+            </Field>
+          </FieldRow>
+        )}
+
+        {aiProvider === 'openrouter' && (
+          <FieldRow>
+            <Field label="OpenRouter API Key" hint="Leave blank to use env default">
+              <Input type="password" value={openrouterApiKey} onChange={(e) => setOpenrouterApiKey(e.target.value)} placeholder={aiDefaults?.openrouter_has_key ? '•••••••• (env default set)' : 'sk-or-...'} />
+            </Field>
+            <Field label="Model">
+              <Select value={openrouterModel} onChange={(e) => setOpenrouterModel(e.target.value)}>
+                {OPENROUTER_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}{m === aiDefaults?.openrouter_model ? ' (default)' : ''}</option>
+                ))}
+              </Select>
+            </Field>
+          </FieldRow>
+        )}
+
+        {aiProvider === 'heuristic' && (
+          <InlineMessage tone="neutral">Heuristic mode uses rule-based logic without any AI provider. No API key or model needed.</InlineMessage>
+        )}
+
+        <div style={{ marginTop: 16, marginBottom: 16, borderTop: '1px solid var(--ui-border)', paddingTop: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>AI Features</div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <ToggleRow
+              title="AI Spam Detection"
+              subtitle="Use AI to detect and flag spam messages"
+              checked={aiSpamDetection}
+              onCheckedChange={setAISpamDetection}
+            />
+            <ToggleRow
+              title="AI Receptionist"
+              subtitle="Auto-respond to welcome messages using AI"
+              checked={aiReceptionist}
+              onCheckedChange={setAIReceptionist}
+            />
+            <ToggleRow
+              title="Knowledge Extraction"
+              subtitle="Extract structured knowledge from group messages"
+              checked={knowledgeExtraction}
+              onCheckedChange={setKnowledgeExtraction}
+            />
+            <ToggleRow
+              title="Daily Summary"
+              subtitle="Generate AI-powered daily group summaries"
+              checked={dailySummary}
+              onCheckedChange={setDailySummary}
+            />
+            <ToggleRow
+              title="FAQ Auto-Answer"
+              subtitle="Auto-answer frequently asked questions using AI"
+              checked={faqAutoAnswer}
+              onCheckedChange={setFaqAutoAnswer}
+            />
+            <ToggleRow
+              title="AI Pilot"
+              subtitle="Let AI assist with group management tasks"
+              checked={aiPilot}
+              onCheckedChange={setAIPilot}
+            />
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button onClick={() => void handleSaveAI()} disabled={savingAI || currentGroupId == null}>
+            {savingAI ? 'Saving…' : 'Save AI settings'}
+          </Button>
+          <Button variant="outline" onClick={() => void handleTestAI()} disabled={testingAI || aiProvider === 'heuristic'}>
+            {testingAI ? 'Testing…' : 'Test connection'}
+          </Button>
+          {aiTestResult ? (
+            aiTestResult.status === 'ok' ? (
+              <InlineMessage tone="success">Connected! Response: {aiTestResult.reply}</InlineMessage>
+            ) : (
+              <InlineMessage tone="destructive">Failed: {aiTestResult.error}</InlineMessage>
+            )
+          ) : null}
+        </div>
+      </Card>
+
+      <Card title="Scheduled messages" subtitle="Create recurring or one-off reminders for the selected group.">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <Button onClick={openCreateDialog} disabled={currentGroupId == null}>New scheduled message</Button>
         </div>
         {scheduledMessages.length > 0 ? (

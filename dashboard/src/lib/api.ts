@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type {
+  AIProviderDefaults,
   BulkJob,
   Member,
   ModAction,
@@ -131,6 +132,11 @@ export async function updateGroupSettings(groupId: number, settings: Record<stri
 
 export async function fetchSettingsSchema(): Promise<SettingsSchemaCatalog> {
   const { data } = await api.get<SettingsSchemaCatalog>('/settings/schema')
+  return data
+}
+
+export async function fetchAIProviderDefaults(): Promise<AIProviderDefaults> {
+  const { data } = await api.get<AIProviderDefaults>(`${ADMIN_API_PREFIX}/ai-provider-defaults`)
   return data
 }
 

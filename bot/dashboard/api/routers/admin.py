@@ -25,6 +25,7 @@ from bot.services.settings_service import SettingsService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import ensure_group_admin, get_identity, require_bot_owner
+from bot.config import get_settings
 from .auth_boundary import require_admin_boundary
 from ._shared import (
     AccessGateUpdateRequest,
@@ -256,6 +257,66 @@ async def webapp_patch_group_settings(
         changed[key.strip()] = value
 
     return {"status": "ok", "group_id": group_id, "changed": changed}
+
+
+@router.get("/api/admin/ai-provider-defaults")
+@router.get("/webapp/ai-provider-defaults")
+async def webapp_ai_provider_defaults(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, Any]:
+    settings = get_settings()
+    return {
+        "ai_provider": settings.ai_provider,
+        "ai_model": settings.ai_model,
+        "openai_model": settings.openai_model,
+        "openai_model_premium": settings.openai_model_premium,
+        "openai_model_bulk": settings.openai_model_bulk,
+        "openai_has_key": bool(settings.openai_api_key),
+        "gemini_model": settings.gemini_model,
+        "gemini_model_premium": settings.gemini_model_premium,
+        "gemini_has_key": bool(settings.gemini_api_key),
+        "openrouter_model": settings.openrouter_model,
+        "openrouter_model_premium": settings.openrouter_model_premium,
+        "openrouter_model_bulk": settings.openrouter_model_bulk,
+        "openrouter_has_key": bool(settings.openrouter_api_key),
+        "ai_spam_detection_enabled": settings.ai_spam_detection_enabled,
+        "ai_receptionist_enabled": settings.ai_receptionist_enabled,
+        "knowledge_extraction_enabled": settings.knowledge_extraction_enabled,
+        "daily_summary_enabled": settings.daily_summary_enabled,
+        "faq_auto_answer_enabled": settings.faq_auto_answer_enabled,
+        "ai_pilot_enabled": settings.ai_pilot_enabled,
+    }
+
+
+SYSTEM_CONFIG_GROUP_ID = 0  # pseudo group id for system-wide key-value settings
+ALLOWED_AI_CONFIG_KEYS = frozenset({
+    "ai_provider",
+    "ai_provider_api_key",
+    "ai_provider_model",
+    "ai_provider_base_url",
+    "ai_embedding_model",
+    "ai_pilot_enabled",
+})
+
+
+@router.post("/api/admin/ai-config")
+@router.post("/webapp/ai-config")
+async def webapp_update_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(require_bot_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    service = SettingsService(session)
+    changed: dict[str, bool | int | str] = {}
+    for key, value in payload.items():
+        if key not in ALLOWED_AI_CONFIG_KEYS:
+            continue
+        if isinstance(value, str) and len(value) > 2_000:
+            raise HTTPException(status_code=422, detail=f"Field {key} is too long")
+        if isinstance(value, (bool, int, str)):
+            await service.set_value(SYSTEM_CONFIG_GROUP_ID, key, value)
+            changed[key] = value
+    return {"status": "ok", "changed": changed}
 
 
 @router.get("/api/admin/groups/{group_id}/moderation/warnings")
