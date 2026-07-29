@@ -20,6 +20,7 @@ from bot.agents.exceptions import (
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
+    KNOWLEDGE_EXTRACTION_JOB_TYPE,
     MEMBER_ADD_JOB_TYPE,
     JOB_STATUS_PENDING,
     JOB_STATUS_QUEUED,
@@ -564,6 +565,31 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         if job.status in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_ENQUEUE_FAILED}:
             job.status = JOB_STATUS_RUNNING
             await session.commit()
+
+        if job.job_type == KNOWLEDGE_EXTRACTION_JOB_TYPE:
+            from bot.services.knowledge_extractor import KnowledgeExtractor
+
+            payload = dict(job.job_payload or {})
+            scraped_group_id = payload.get("scraped_group_id")
+            max_messages = int(payload.get("max_messages", 2000))
+            try:
+                ext = KnowledgeExtractor(session)
+                result = await ext.extract_knowledge(
+                    scraped_group_id=scraped_group_id, max_messages=max_messages
+                )
+                payload["result"] = result
+                job.job_payload = payload
+                if result.get("status") == "failed":
+                    await _set_job_state(
+                        session, job_id, JOB_STATUS_FAILED,
+                        error=result.get("error", "Extraction failed"),
+                    )
+                else:
+                    await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+            except Exception as exc:
+                bound_logger.exception("knowledge_extraction_failed")
+                await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=str(exc))
+            return
 
         try:
             client = await session_manager.get_client(agent_id)

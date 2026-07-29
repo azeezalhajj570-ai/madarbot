@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -901,16 +900,10 @@ async def webapp_list_all_knowledge(
     ]
 
 
-import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-def _get_redis() -> Any | None:
-    from bot.dashboard.api.main import app
-
-    return getattr(app.state, "redis", None)
 
 
 @router.post("/webapp/owner/knowledge/groups/{group_id}/extract")
@@ -920,49 +913,40 @@ async def webapp_extract_group_knowledge(
     identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    from bot.services.knowledge_extractor import KnowledgeExtractor
-    from bot.plugins.ai_pilot.system_config import load_ai_config
-    from bot.db.session import SessionLocal
+    from bot.agents.dispatch import dispatch_agent_job
+    from bot.agents.jobs import KNOWLEDGE_EXTRACTION_JOB_TYPE
+    from bot.db.models import Agent
 
     await _assert_user_has_scraped_group_access(session, identity, group_id)
-    sys_config = await load_ai_config(session)
     max_messages = (payload or {}).get("max_messages", 2000)
 
-    redis_key = f"knowledge_extraction:{group_id}"
-    redis = _get_redis()
-    if redis is not None:
-        await redis.setex(redis_key, 3600, "running")
+    scraped_group = await session.get(ScrapedGroup, group_id)
+    agent_id = scraped_group.last_agent_id if scraped_group else None
+    if agent_id is None:
+        owner = await session.execute(
+            select(UserModel).where(UserModel.tg_user_id == identity.user_id)
+        )
+        owner = owner.scalar_one_or_none()
+        if owner:
+            first_agent = await session.execute(
+                select(Agent).where(Agent.owner_user_id == owner.id).limit(1)
+            )
+            first_agent = first_agent.scalar_one_or_none()
+            if first_agent:
+                agent_id = first_agent.id
 
-    async def _run_extraction() -> None:
-        async with SessionLocal() as bg_session:
-            ext = KnowledgeExtractor(bg_session, config_override=sys_config)
-            try:
-                result = await ext.extract_knowledge(
-                    scraped_group_id=group_id, max_messages=max_messages
-                )
-                if result.get("status") == "failed":
-                    status_payload = {
-                        "status": "failed",
-                        "error": result.get("error", "Extraction failed"),
-                    }
-                else:
-                    status_payload = {
-                        "status": "done",
-                        "saved": result.get("items_saved", 0),
-                        "cost": result.get("cost_estimate", 0),
-                    }
-                logger.info("webapp_knowledge_extraction_done", scraped_group_id=group_id, result=result)
-            except Exception as exc:
-                logger.exception("webapp_knowledge_extraction_failed")
-                status_payload = {
-                    "status": "failed",
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            if redis is not None:
-                await redis.setex(redis_key, 3600, json.dumps(status_payload))
+    if agent_id is None:
+        raise HTTPException(status_code=400, detail="No agent found for this group")
 
-    asyncio.ensure_future(_run_extraction())
-    return {"status": "started", "message": "Extraction started in background"}
+    job = AgentJob(
+        agent_id=agent_id,
+        job_type=KNOWLEDGE_EXTRACTION_JOB_TYPE,
+        job_payload={"scraped_group_id": group_id, "max_messages": max_messages},
+    )
+    session.add(job)
+    await session.commit()
+    await dispatch_agent_job(job.id)
+    return {"status": "started", "job_id": job.id, "message": "Extraction job created"}
 
 
 @router.get("/webapp/owner/knowledge/groups/{group_id}/extract/status")
@@ -971,19 +955,36 @@ async def webapp_get_extraction_status(
     identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
+    from bot.agents.jobs import KNOWLEDGE_EXTRACTION_JOB_TYPE, JOB_STATUS_COMPLETED
+
     await _assert_user_has_scraped_group_access(session, identity, group_id)
-    redis = _get_redis()
-    if redis is None:
-        return {"status": "unknown", "detail": "redis_unavailable"}
-    raw = await redis.get(f"knowledge_extraction:{group_id}")
-    if raw is None:
+    latest = await session.execute(
+        select(AgentJob)
+        .where(
+            AgentJob.job_type == KNOWLEDGE_EXTRACTION_JOB_TYPE,
+            AgentJob.job_payload["scraped_group_id"].as_string() == str(group_id),
+        )
+        .order_by(AgentJob.id.desc())
+        .limit(1)
+    )
+    latest = latest.scalar_one_or_none()
+    if latest is None:
         return {"status": "idle"}
-    if raw == "running":
-        return {"status": "running"}
-    try:
-        return json.loads(raw)
-    except Exception:
-        return {"status": "unknown", "raw": raw}
+    if latest.status == "running":
+        return {"status": "running", "job_id": latest.id}
+    if latest.status == JOB_STATUS_COMPLETED:
+        result = (latest.job_payload or {}).get("result", {})
+        return {
+            "status": "done",
+            "job_id": latest.id,
+            "saved": result.get("items_saved", 0),
+            "cost": result.get("cost_estimate", 0),
+        }
+    return {
+        "status": "failed",
+        "job_id": latest.id,
+        "error": (latest.job_payload or {}).get("last_error", "Extraction failed"),
+    }
 
 
 @router.delete("/webapp/owner/knowledge/{entry_id}")

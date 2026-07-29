@@ -236,6 +236,7 @@ async def list_scrape_jobs(
             Agent.linked_by_user_id == identity.user_id,
             AgentJob.job_type.in_([
                 "scraper_messages", "scraper_members", "scraper_group_info", "scraper_full_group",
+                "knowledge_extraction",
             ]),
         )
         .order_by(AgentJob.created_at.desc())
