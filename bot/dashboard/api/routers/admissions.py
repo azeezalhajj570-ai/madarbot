@@ -199,13 +199,13 @@ async def get_admission_notifications(
     alerts: list[AdmissionNotification] = []
     now = datetime.utcnow().isoformat()
 
-    for uni in (overview.trending_universities or []):
-        if uni.trend == "rising" and uni.mention_count_1d > 5:
+    for uni in (overview.get("trending_universities") or []):
+        if uni.get("trend") == "rising" and (uni.get("mention_count_1d") or 0) > 5:
             alerts.append(AdmissionNotification(
-                id=f"trend-{uni.name}",
+                id=f"trend-{uni.get('name', '')}",
                 type="trending",
-                title=f"{uni.name} is trending",
-                description=f"{uni.mention_count_1d} mentions today",
+                title=f"{uni.get('name', 'Unknown')} is trending",
+                description=f"{uni.get('mention_count_1d', 0)} mentions today",
                 timestamp=now,
             ))
 
