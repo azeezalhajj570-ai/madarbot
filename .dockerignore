@@ -1,0 +1,11 @@
+.venv
+**/node_modules
+**/__pycache__
+*.pyc
+.git
+.docker
+infra
+*.md
+.env
+.env.*
+docker-compose*.yml
