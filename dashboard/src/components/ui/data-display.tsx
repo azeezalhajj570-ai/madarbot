@@ -305,7 +305,9 @@ export function GroupAutoComplete<T>({
 }: GroupAutoCompleteProps<T>) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const suppressFocus = useRef(false)
   const selected = useMemo(() => items.find(i => getId(i) === value) ?? null, [items, value, getId])
 
   const filtered = useMemo(
@@ -321,13 +323,23 @@ export function GroupAutoComplete<T>({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  function handleSelect(id: number) {
+    onChange(id)
+    setQuery('')
+    setOpen(false)
+    suppressFocus.current = true
+    inputRef.current?.blur()
+    setTimeout(() => { suppressFocus.current = false }, 200)
+  }
+
   return (
     <div ref={ref} style={{ position: 'relative', ...style }}>
       <input
+        ref={inputRef}
         placeholder={placeholder}
         value={selected && !open ? getLabel(selected) : query}
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { if (!suppressFocus.current) setOpen(true) }}
         style={{
           width: '100%', minHeight: 42, borderRadius: radius.md,
           border: `1px solid ${uiVars.borderStrong}`, padding: '0 12px',
@@ -348,7 +360,7 @@ export function GroupAutoComplete<T>({
           ) : filtered.map(item => (
             <div
               key={getId(item)}
-              onClick={() => { onChange(getId(item)); setQuery(''); setOpen(false) }}
+              onClick={() => handleSelect(getId(item))}
               style={{
                 padding: '10px 12px', cursor: 'pointer', fontSize: typeScale.body,
                 background: selected && getId(item) === getId(selected) ? uiVars.primarySoft : 'transparent',

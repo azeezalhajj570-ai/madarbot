@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Plus, RefreshCw, Send, Search, X, Eye, Loader } from 'lucide-react'
+import { Plus, RefreshCw, Send, Search, X, Eye, Loader, UserCheck, Bot, Shield } from 'lucide-react'
 import { useI18n } from '../../lib/i18n'
 
 import { Badge, Button, Card, Dialog, EmptyState, Input, Select, Field } from '../../components/ui/primitives'
@@ -116,29 +116,22 @@ function ResultDetail({ result }: { result: MemberAddResult }) {
   )
 }
 
-function MemberSearchList({ members, searching, selectedUserIds, onToggle }: {
-  members: MemberItem[]; searching: boolean; selectedUserIds: number[]; onToggle: (userId: number) => void
-}) {
-  const { t } = useI18n()
-  if (searching) return <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.searching')}</div>
-  if (members.length === 0) return <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.noMembers')}</div>
+function MemberRow({ m, isSelected, onToggle }: { m: MemberItem; isSelected: boolean; onToggle: (id: number) => void }) {
+  const badges: React.ReactNode[] = []
+  if (m.is_bot) badges.push(<Badge key="bot" tone="default" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Bot size={10} /> Bot</Badge>)
+  else if (m.role === 'creator' || m.role === 'admin') badges.push(<Badge key="admin" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Shield size={10} /> {m.role}</Badge>)
+
   return (
-    <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--ui-border)', borderRadius: 8 }}>
-      {members.map((m) => {
-        const isSelected = selectedUserIds.includes(m.user_id)
-        return (
-          <div key={m.user_id} onClick={() => onToggle(m.user_id)}
-            style={{ padding: '7px 10px', cursor: 'pointer', background: isSelected ? 'var(--ui-primary-soft)' : 'transparent', borderBottom: '1px solid var(--ui-border)', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s' }}
-            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--ui-bg-muted)' }}
-            onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
-          >
-            <input type="checkbox" checked={isSelected} onChange={() => onToggle(m.user_id)} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `${m.user_id}`}</span>
-            {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{m.username}</span>}
-            <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginInlineStart: 'auto' }}>{m.user_id}</span>
-          </div>
-        )
-      })}
+    <div key={m.user_id} onClick={() => onToggle(m.user_id)}
+      style={{ padding: '7px 10px', cursor: 'pointer', background: isSelected ? 'var(--ui-primary-soft)' : 'transparent', borderBottom: '1px solid var(--ui-border)', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s' }}
+      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--ui-bg-muted)' }}
+      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+    >
+      <input type="checkbox" checked={isSelected} onChange={() => onToggle(m.user_id)} />
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `${m.user_id}`}</span>
+      {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{m.username}</span>}
+      <div style={{ display: 'flex', gap: 4, marginInlineStart: 'auto', alignItems: 'center' }}>{badges}</div>
+      <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginInlineStart: badges.length ? 4 : 'auto' }}>{m.user_id}</span>
     </div>
   )
 }
@@ -176,6 +169,7 @@ export default function AdminBulkAddPage() {
   const [syncing, setSyncing] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [detailJob, setDetailJob] = useState<AgentJobRecord | null>(null)
+  const [excludeAdminsAndBots, setExcludeAdminsAndBots] = useState(true)
 
   useEffect(() => {
     setAgentsLoading(true)
@@ -226,10 +220,15 @@ export default function AdminBulkAddPage() {
       .finally(() => setSearching(false))
   }, [formAgentId, formSourceGroupId, searchQuery])
 
+  const visibleMembers = useMemo(() => {
+    if (!excludeAdminsAndBots) return members
+    return members.filter(m => !m.is_bot && m.role !== 'creator' && m.role !== 'admin')
+  }, [members, excludeAdminsAndBots])
+
   function openDialog() {
     setFormAgentId(selectedAgentId); setFormSourceGroupId(null); setFormTargetGroupId(null)
     setSearchQuery(''); setMembers([]); setSelectedUserIds([]); setIntervalSeconds(20)
-    setSendInviteLink(false); setFormErrors({}); setDialogOpen(true)
+    setSendInviteLink(false); setExcludeAdminsAndBots(true); setFormErrors({}); setDialogOpen(true)
   }
 
   function validateForm(): boolean {
@@ -245,6 +244,17 @@ export default function AdminBulkAddPage() {
     setSelectedUserIds((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId])
     if (formErrors.members && selectedUserIds.length === 0) setFormErrors(prev => { const { members, ...rest } = prev; return rest })
   }
+
+  function selectAll() {
+    setSelectedUserIds(visibleMembers.map(m => m.user_id))
+  }
+
+  function unselectAll() {
+    setSelectedUserIds([])
+  }
+
+  const adminCount = useMemo(() => members.filter(m => m.role === 'creator' || m.role === 'admin').length, [members])
+  const botCount = useMemo(() => members.filter(m => m.is_bot).length, [members])
 
   async function handleSubmit() {
     if (!formAgentId || !formTargetGroupId || !selectedUserIds.length) return
@@ -357,7 +367,27 @@ export default function AdminBulkAddPage() {
                 style={{ width: '100%', minHeight: 38, borderRadius: 8, border: '1px solid var(--ui-border-strong)', padding: '0 30px 0 32px', background: 'var(--ui-surface-strong)', color: 'var(--ui-text)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
               {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--ui-text-muted)', cursor: 'pointer', padding: 4 }}><X size={14} /></button>}
             </div>
-            <MemberSearchList members={members} searching={searching} selectedUserIds={selectedUserIds} onToggle={toggleUser} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+              <Button variant="outline" size="sm" onClick={selectAll}><UserCheck size={12} /> Select All</Button>
+              <Button variant="outline" size="sm" onClick={unselectAll}>Unselect All</Button>
+              <div style={{ flex: 1 }} />
+              <Button
+                variant={excludeAdminsAndBots ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => { setExcludeAdminsAndBots(!excludeAdminsAndBots); setSelectedUserIds([]) }}
+              >
+                {excludeAdminsAndBots ? <Shield size={12} /> : <Bot size={12} />} {excludeAdminsAndBots ? 'Admins/Bots excluded' : 'Show all'}
+              </Button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginBottom: 4 }}>
+              {visibleMembers.length} members{excludeAdminsAndBots && (adminCount > 0 || botCount > 0) ? ` (${adminCount} admin, ${botCount} bot hidden)` : ''}
+            </div>
+            {searching ? <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.searching')}</div>
+             : visibleMembers.length === 0 ? <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.noMembers')}</div>
+             : <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--ui-border)', borderRadius: 8 }}>
+                 {visibleMembers.map((m) => <MemberRow key={m.user_id} m={m} isSelected={selectedUserIds.includes(m.user_id)} onToggle={toggleUser} />)}
+               </div>
+            }
             <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
             {formErrors.members && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.members}</div>}
           </Field>
