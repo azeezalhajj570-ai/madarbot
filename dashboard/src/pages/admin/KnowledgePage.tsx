@@ -6,7 +6,7 @@ import { fetchKnowledgeGroups, fetchAllKnowledge, extractGroupKnowledge, deleteK
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Badge, Button, Card, Input, TableSkeleton, Chip } from '../../components/ui/primitives'
+import { Badge, Button, Card, Input, TableSkeleton } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { FilterSelect, GroupAutoComplete, Toolbar } from '../../components/ui/data-display'
@@ -275,7 +275,10 @@ export default function AdminKnowledgePage() {
                   <strong style={{ color: 'var(--ui-text-muted)', display: 'block', marginBottom: 4 }}>Source messages:</strong>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {selectedEntry.source_message_ids.map((id: number) => (
-                      <Chip key={id}>{id}</Chip>
+                      <span key={id} style={{
+                        background: 'var(--ui-surface-strong)', borderRadius: 4, padding: '2px 8px',
+                        fontSize: 12, color: 'var(--ui-text-muted)',
+                      }}>{id}</span>
                     ))}
                   </div>
                 </div>
