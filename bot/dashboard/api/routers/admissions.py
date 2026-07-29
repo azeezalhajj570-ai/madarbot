@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.session import get_session
 from bot.dashboard.api.dependencies import get_identity
 from bot.services.admission_intelligence_service import AdmissionIntelligenceService
+from bot.services.admission_overview_service import AdmissionOverviewService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 router = APIRouter(tags=["Admissions"])
@@ -61,8 +62,72 @@ class CompareResponse(BaseModel):
     notes: str
 
 
+class TrendingUniversity(BaseModel):
+    name: str
+    mention_count_7d: int = 0
+    mention_count_1d: int = 0
+    trend: str = "stable"
+
+
+class HotTopic(BaseModel):
+    topic: str
+    mentions: int = 0
+    trend: str = "stable"
+
+
+class OverviewStats(BaseModel):
+    messages_today: int = 0
+    messages_this_week: int = 0
+    active_groups: int = 0
+    monitored_groups: int = 0
+
+
+class OverviewResponse(BaseModel):
+    stats: OverviewStats
+    trending_universities: list[TrendingUniversity]
+    hot_topics: list[HotTopic]
+    last_updated: str = ""
+
+
+class ActivityPoint(BaseModel):
+    date: str
+    message_count: int
+
+
+class ActivityResponse(BaseModel):
+    daily: list[ActivityPoint]
+
+
 def _service(session: AsyncSession = Depends(get_session)) -> AdmissionIntelligenceService:
     return AdmissionIntelligenceService(session)
+
+
+def _overview_service(session: AsyncSession = Depends(get_session)) -> AdmissionOverviewService:
+    return AdmissionOverviewService(session)
+
+
+@router.get("/api/admissions/overview", response_model=OverviewResponse)
+async def get_admission_overview(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_overview()
+
+
+@router.get("/api/admissions/activity", response_model=ActivityResponse)
+async def get_admission_activity(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_activity()
+
+
+@router.get("/api/admissions/trending-universities")
+async def get_trending_universities(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_trending_universities()
 
 
 @router.get("/api/admissions/search", response_model=SearchResponse)
