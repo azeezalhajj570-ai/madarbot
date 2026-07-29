@@ -2,10 +2,10 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Search, TrendingUp, MessageSquare, GitCompare, Loader2, Settings, Send, GraduationCap, Sparkles,
-  BarChart3, Users, MessageCircle, University, Bookmark, BookmarkCheck, UserPlus,
+  BarChart3, Users, MessageCircle, University, Bookmark, BookmarkCheck, UserPlus, Bell, X,
 } from 'lucide-react'
 
-import {
+import api, {
   fetchScrapedGroups, fetchAdmissionSearch, fetchCutoffTrend, fetchStudentConcerns,
   fetchCompareUniversities, fetchAdmissionOverview, fetchAdmissionLeads,
   type ScrapedGroupSummary, type AdmissionOverview, type TrendingUniversity,
@@ -53,6 +53,24 @@ export default function AdminAdmissionIntelligencePage() {
   })
   const [showLeads, setShowLeads] = useState(false)
   const [leadHours, setLeadHours] = useState(24)
+
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+
+  const { data: notifs, refetch: refetchNotifs } = useQuery({
+    queryKey: ['admission-notifications'],
+    queryFn: () => api.get<{ notifications: any[]; unread_count: number }>('/api/admissions/notifications').then(r => r.data),
+    refetchInterval: 30_000,
+    enabled: user?.role === 'admin' || user?.role === 'owner',
+  })
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   const { data: leads, isLoading: leadsLoading, refetch: refetchLeads } = useQuery({
     queryKey: ['admission-leads', leadHours],
@@ -201,10 +219,55 @@ export default function AdminAdmissionIntelligencePage() {
               <div style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>AI-powered analysis from Telegram group discussions</div>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
-            <Settings size={16} />
-            {showSettings ? 'Hide Settings' : 'Settings'}
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} ref={notifRef}>
+            <div style={{ position: 'relative' }}>
+              <Button variant="ghost" size="sm" onClick={() => { setNotifOpen(!notifOpen); refetchNotifs() }}>
+                <Bell size={16} />
+                {(notifs?.unread_count || 0) > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 0, right: 0,
+                    background: 'var(--ui-danger)', color: '#fff',
+                    fontSize: 10, fontWeight: 700, lineHeight: '14px',
+                    minWidth: 14, height: 14, borderRadius: 7,
+                    textAlign: 'center', padding: '0 3px',
+                  }}>
+                    {notifs!.unread_count > 9 ? '9+' : notifs!.unread_count}
+                  </span>
+                )}
+              </Button>
+              {notifOpen && notifs?.notifications && (
+                <div style={{
+                  position: 'absolute', right: 0, top: '100%', zIndex: 100,
+                  width: 340, maxHeight: 360, overflowY: 'auto',
+                  background: 'var(--ui-surface)', border: '1px solid var(--ui-border)',
+                  borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  marginTop: 4,
+                }}>
+                  <div style={{ padding: '8px 12px', fontWeight: 700, fontSize: 14, borderBottom: '1px solid var(--ui-border)' }}>
+                    Notifications
+                  </div>
+                  {notifs.notifications.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>No new notifications</div>
+                  ) : notifs.notifications.map((n: any) => (
+                    <div key={n.id} style={{
+                      padding: '8px 12px', borderBottom: '1px solid var(--ui-border)',
+                      fontSize: 13, lineHeight: 1.4,
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                        {n.type === 'trending' ? '📈 ' : n.type === 'lead' ? '🎯 ' : '🔔 '}
+                        {n.title}
+                      </div>
+                      <div style={{ color: 'var(--ui-text-muted)', fontSize: 12 }}>{n.description}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
+              <Settings size={16} />
+              {showSettings ? 'Hide Settings' : 'Settings'}
+            </Button>
+          </div>
         </div>
 
         {/* Settings panel (collapsible) */}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -157,6 +158,20 @@ class ExtractLeadsResponse(BaseModel):
     total: int
 
 
+class AdmissionNotification(BaseModel):
+    id: str
+    type: str  # 'lead', 'trending', 'alert'
+    title: str
+    description: str
+    timestamp: str
+    url: str = ""
+
+
+class NotificationsResponse(BaseModel):
+    notifications: list[AdmissionNotification]
+    unread_count: int
+
+
 @router.get("/api/admissions/universities", response_model=UniversitiesResponse)
 async def list_universities(
     identity: TelegramWebAppIdentity = Depends(get_identity),
@@ -173,6 +188,38 @@ async def extract_admission_leads(
     svc: AdmissionOverviewService = Depends(_overview_service),
 ):
     return await svc.extract_admission_leads(hours_back=hours_back, min_confidence=min_confidence)
+
+
+@router.get("/api/admissions/notifications", response_model=NotificationsResponse)
+async def get_admission_notifications(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    overview = await svc.get_overview()
+    alerts: list[AdmissionNotification] = []
+    now = datetime.utcnow().isoformat()
+
+    for uni in (overview.trending_universities or []):
+        if uni.trend == "rising" and uni.mention_count_1d > 5:
+            alerts.append(AdmissionNotification(
+                id=f"trend-{uni.name}",
+                type="trending",
+                title=f"{uni.name} is trending",
+                description=f"{uni.mention_count_1d} mentions today",
+                timestamp=now,
+            ))
+
+    leads_data = await svc.extract_admission_leads(hours_back=6, min_confidence=0.5)
+    for lead in (leads_data.get("leads") or []):
+        alerts.append(AdmissionNotification(
+            id=f"lead-{lead.get('sender_user_id', '')}-{lead.get('message_date', '')}",
+            type="lead",
+            title=f"New lead: {lead.get('sender_name', 'Unknown')}",
+            description=lead.get("message_text", "")[:120],
+            timestamp=lead.get("message_date", now),
+        ))
+
+    return NotificationsResponse(notifications=alerts[:20], unread_count=len(alerts))
 
 
 @router.post("/api/admissions/cache/refresh")
