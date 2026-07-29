@@ -53,7 +53,27 @@ export default function AdminJobsPage() {
       scrapePollRef.current = true
       try {
         const jobs = await fetchRecentScrapeJobs(50)
-        if (!cancelled) setScrapeJobs(jobs)
+        if (cancelled) return
+        const overview = await fetchAdminOverview()
+        if (cancelled) return
+        const seen = new Set(jobs.map(j => j.job_id))
+        const extra: ScrapeJobSummary[] = (overview.recent_jobs || [])
+          .filter(j => !seen.has(j.job_id))
+          .map(j => ({
+            job_id: j.job_id,
+            agent_id: j.agent_id,
+            agent_phone: null,
+            job_type: j.job_type,
+            status: j.status,
+            tg_group_id: null,
+            group_title: null,
+            member_count: null,
+            progress: null,
+            retry_count: 0,
+            created_at: j.created_at ?? null,
+            updated_at: null,
+          }))
+        setScrapeJobs([...jobs, ...extra])
       } catch { /* ignore */ } finally {
         scrapePollRef.current = false
       }

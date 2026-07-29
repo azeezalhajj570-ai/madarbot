@@ -568,12 +568,14 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
 
         if job.job_type == KNOWLEDGE_EXTRACTION_JOB_TYPE:
             from bot.services.knowledge_extractor import KnowledgeExtractor
+            from bot.plugins.ai_pilot.system_config import load_ai_config
 
             payload = dict(job.job_payload or {})
             scraped_group_id = payload.get("scraped_group_id")
             max_messages = int(payload.get("max_messages", 2000))
             try:
-                ext = KnowledgeExtractor(session)
+                sys_config = await load_ai_config(session)
+                ext = KnowledgeExtractor(session, config_override=sys_config)
                 result = await ext.extract_knowledge(
                     scraped_group_id=scraped_group_id, max_messages=max_messages
                 )
