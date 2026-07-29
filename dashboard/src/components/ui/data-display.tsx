@@ -370,7 +370,19 @@ export function GroupAutoComplete<T>({
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = uiVars.bgMuted }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = selected && getId(item) === getId(selected) ? uiVars.primarySoft : 'transparent' }}
             >
-              {getLabel(item)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between', width: '100%' }}>
+                <span>{getLabel(item)}</span>
+                {(item as any).group_type && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                    padding: '1px 6px', borderRadius: 4, lineHeight: '18px',
+                    background: (item as any).group_type === 'channel' ? 'var(--ui-danger-soft, #fce8e6)' : (item as any).group_type === 'supergroup' ? 'var(--ui-primary-soft, #e8f0fe)' : 'var(--ui-bg-muted, #f1f3f4)',
+                    color: (item as any).group_type === 'channel' ? 'var(--ui-danger, #d93025)' : (item as any).group_type === 'supergroup' ? 'var(--ui-primary, #1a73e8)' : 'var(--ui-text-muted, #5f6368)',
+                  }}>
+                    {(item as any).group_type === 'supergroup' ? 'Super' : (item as any).group_type}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
