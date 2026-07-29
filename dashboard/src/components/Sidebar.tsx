@@ -8,6 +8,7 @@ import { useI18n } from '../lib/i18n'
 const NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
+  { to: '/admin/scraper', label: 'nav.scraper', icon: Search },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
   { to: '/admin/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
   { to: '/admin/subscriptions', label: 'nav.admin.subscriptions', icon: Ticket },

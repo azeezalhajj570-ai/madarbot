@@ -54,8 +54,15 @@ export default function AdminAISettingsPage() {
   }, [config])
 
   useEffect(() => {
-    fetchAIModels().then(setAIModels).catch(() => {})
-  }, [])
+    fetchAIModels().then((models) => {
+      setAIModels(models)
+      const chat = models.filter(m => m.provider === provider && m.type === 'chat')
+      const embed = models.filter(m => m.provider === provider && m.type === 'embedding')
+      if (chat.length === 0 && provider !== 'heuristic') {
+        syncAIModels().then((r) => setAIModels(r.models)).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [provider])
 
   const chatModels = useMemo(
     () => aiModels.filter(m => m.provider === provider && m.type === 'chat').sort((a, b) => a.name.localeCompare(b.name)),

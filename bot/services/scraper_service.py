@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from bot.agents.exceptions import AgentFloodWaitError, AgentSessionError
 from bot.agents.session import SessionManager
 from bot.config import get_settings
-from bot.db.models import Agent, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
+from bot.db.models import Agent, AgentJob, ScrapedConversation, ScrapedGroup, ScrapedMember, ScrapedMessage
 from bot.db.models.scraper import ScrapedLead
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
@@ -371,6 +371,7 @@ class ScraperService:
         max_id: int = 0,
         max_age_days: int | None = None,
         client: Any | None = None,
+        job_id: int | None = None,
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
@@ -492,6 +493,12 @@ class ScraperService:
                             message_rows=message_batch,
                         )
                         message_batch = []
+                        await self._update_scrape_progress(
+                            job_id,
+                            total_fetched=success_count,
+                            total_errors=error_count,
+                            limit=limit,
+                        )
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
                         await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
                         member_batch = []
@@ -582,6 +589,21 @@ class ScraperService:
             sender_raw_data,
         )
 
+    async def _update_scrape_progress(self, job_id: int | None, **kwargs: Any) -> None:
+        if job_id is None:
+            return
+        try:
+            job = await self.session.get(AgentJob, job_id)
+            if job is None or job.status != "running":
+                return
+            payload = dict(job.job_payload or {})
+            payload.setdefault("progress", {})
+            payload["progress"].update(kwargs)
+            job.job_payload = payload
+            await self.session.commit()
+        except Exception:
+            pass
+
     async def scrape_messages_checkpointed(
         self,
         *,
@@ -591,6 +613,7 @@ class ScraperService:
         max_age_days: int | None = None,
         checkpoint_batch_size: int = 500,
         client: Any | None = None,
+        job_id: int | None = None,
     ) -> dict[str, Any]:
         agent = await self._get_active_agent(agent_id)
         if agent is None:
@@ -820,6 +843,13 @@ class ScraperService:
                     scraped_group.updated_at = datetime.utcnow()
                     await self.session.commit()
                     last_checkpoint = success_count
+                    await self._update_scrape_progress(
+                        job_id,
+                        total_fetched=total_success + success_count,
+                        total_errors=total_errors + error_count,
+                        batches_completed=batches_completed + batch_count,
+                        limit=limit,
+                    )
 
             if message_batch:
                 await bulk_upsert.bulk_upsert_scraped_messages(message_batch, self.session)
