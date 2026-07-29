@@ -39,7 +39,7 @@ export default function SummariesPage() {
         setSettings(summarySettings)
         setSummaries(summaryList)
       } catch {
-        if (!cancelled) setError('Unable to load summaries right now.')
+        if (!cancelled) setError(t('common.failedToLoad'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -65,9 +65,9 @@ export default function SummariesPage() {
     try {
       const updated = await updateSummarySettings(currentGroupId, settings)
       setSettings(updated)
-      toast.success('Summary settings saved.')
+      toast.success(t('summaries.settingsSaved'))
     } catch {
-      toast.error('Unable to save summary settings.')
+      toast.error(t('summaries.settingsError'))
     } finally {
       setSavingSettings(false)
     }
@@ -85,7 +85,7 @@ actions={(
       items={groups || []}
       value={currentGroupId}
       onChange={setCurrentGroupId}
-      placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+      placeholder={groups.length === 0 ? t('faq.noGroups') : t('settings.searchGroups')}
       getLabel={(g: any) => g.title}
       getId={(g: any) => g.id}
     />
@@ -93,32 +93,32 @@ actions={(
 )}
     >
       {groupsError ? <InlineMessage tone="destructive">{groupsError}</InlineMessage> : null}
-      {currentGroup ? <InlineMessage tone="neutral">Viewing summaries for {currentGroup.title}.</InlineMessage> : null}
+      {currentGroup ? <InlineMessage tone="neutral">{t('summaries.viewingFor')} {currentGroup.title}.</InlineMessage> : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
 
       {settings ? (
-        <Card title="Summary settings" subtitle="Configure summary delivery preferences.">
+        <Card title={t('summaries.settings')} subtitle={t('summaries.settingsDesc')}>
           <ToggleRow
-            title="Enable summaries"
-            subtitle="Toggle daily summary generation for this group."
+            title={t('summaries.enable')}
+            subtitle={t('summaries.enableHint')}
             checked={settings.enabled}
             disabled={currentGroupId == null}
             onCheckedChange={(checked) => setSettings((current: any) => current ? { ...current, enabled: checked } : null)}
           />
           <div style={{ marginTop: 16 }}>
-            <Field label="Delivery mode" hint="How summaries are delivered to admins.">
+            <Field label={t('summaries.deliveryMode')} hint={t('summaries.deliveryHint')}>
               <Select
                 value={settings.delivery_mode}
                 onChange={(event) => setSettings((current: any) => current ? { ...current, delivery_mode: event.target.value } : null)}
               >
-                <option value="private">Private message</option>
-                <option value="group">Group message</option>
-                <option value="both">Both</option>
+                <option value="private">{t('summaries.privateMessage')}</option>
+                <option value="group">{t('summaries.groupMessage')}</option>
+                <option value="both">{t('summaries.both')}</option>
               </Select>
             </Field>
           </div>
           <div style={{ marginTop: 16 }}>
-            <Field label="Delivery time" hint="Time of day for summary delivery (UTC).">
+            <Field label={t('summaries.deliveryTime')} hint={t('summaries.deliveryTimeHint')}>
               <Input
                 type="time"
                 value={settings.delivery_time}
@@ -128,23 +128,23 @@ actions={(
           </div>
           <div style={{ marginTop: 16 }}>
             <Button onClick={() => void handleSaveSettings()} disabled={savingSettings || currentGroupId == null}>
-              {savingSettings ? 'Saving…' : 'Save settings'}
+              {savingSettings ? t('common.saving') : t('summaries.saveSettings')}
             </Button>
           </div>
         </Card>
       ) : null}
 
-      <Card title="Daily summaries" subtitle="Generated summaries for this group.">
+      <Card title={t('summaries.dailySummaries')} subtitle={t('summaries.dailySummariesDesc')}>
         {summaries.length > 0 ? (
           <div style={{ display: 'grid' }}>
             {summaries.map((summary) => (
               <div key={summary.id}>
                 <ListItem
                   title={summary.date}
-                  subtitle={`${summary.total_messages} messages · ${summary.active_users} active users · ${summary.links_count} links`}
+                  subtitle={`${summary.total_messages} ${t('summaries.messages')} · ${summary.active_users} ${t('summaries.activeUsers')} · ${summary.links_count} ${t('summaries.links')}`}
                   actions={(
                     <Button variant="outline" onClick={() => toggleExpanded(summary.id)}>
-                      {expandedIds.has(summary.id) ? 'Collapse' : 'Expand'}
+                      {expandedIds.has(summary.id) ? t('summaries.collapse') : t('summaries.expand')}
                     </Button>
                   )}
                 />
@@ -157,7 +157,7 @@ actions={(
             ))}
           </div>
         ) : (
-          <EmptyState title="No summaries yet" subtitle="Daily summaries will appear here once generated." />
+          <EmptyState title={t('summaries.noSummaries')} subtitle={t('summaries.noSummaries.desc')} />
         )}
       </Card>
     </PageShell>

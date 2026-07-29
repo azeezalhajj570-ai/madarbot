@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { RefreshCw, Send } from 'lucide-react'
+import { useI18n } from '../../lib/i18n'
 
 import { Badge, Button, Card, ColumnDef, EmptyState, Input, Select, Table } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
@@ -54,17 +55,18 @@ function MemberSearchList({
   selectedUserIds: number[]
   onToggle: (userId: number) => void
 }) {
+  const { t } = useI18n()
   if (searching) {
     return (
       <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>
-        Searching...
+        {t('bulkadd.searching')}
       </div>
     )
   }
   if (members.length === 0) {
     return (
       <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>
-        No members found. Select a group and search.
+        {t('bulkadd.noMembers')}
       </div>
     )
   }
@@ -90,9 +92,9 @@ function MemberSearchList({
             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
           >
             <input type="checkbox" checked={isSelected} onChange={() => onToggle(m.user_id)} />
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `User ${m.user_id}`}</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `${m.user_id}`}</span>
             {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{m.username}</span>}
-            <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginLeft: 'auto' }}>{m.user_id}</span>
+            <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginInlineStart: 'auto' }}>{m.user_id}</span>
           </div>
         )
       })}
@@ -105,10 +107,11 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
   selectedAgentId: number | null
   onJobsUpdate: (jobs: AgentJobRecord[]) => void
 }) {
+  const { t } = useI18n()
   if (jobs.length === 0) {
     return (
       <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', padding: spacing.md }}>
-        No member_add jobs yet.
+        {t('bulkadd.noJobs')}
       </div>
     )
   }
@@ -116,9 +119,9 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
     <div style={{ maxHeight: 400, overflowY: 'auto' }}>
       <Table<AgentJobRecord>
         columns={[
-          { key: 'id', label: 'ID', hideOnMobile: true, render: (j) => String(j.id) },
+          { key: 'id', label: t('bulkadd.id'), hideOnMobile: true, render: (j) => String(j.id) },
           {
-            key: 'status', label: 'Status', render: (j) => {
+            key: 'status', label: t('job.status'), render: (j) => {
               const p = j.job_payload || {}
               const result = p.result as Record<string, number> | undefined
               const progress = p.progress as Record<string, number> | undefined
@@ -128,18 +131,18 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
               const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
               const totalProcessed = successCount + failureCount + skipCount
               if (j.status === 'completed') {
-                if (totalProcessed === 0) return <Badge tone="warning">completed (no results)</Badge>
-                return <Badge tone="success">completed</Badge>
+                if (totalProcessed === 0) return <Badge tone="warning">{t('common.completed')} (no results)</Badge>
+                return <Badge tone="success">{t('common.completed')}</Badge>
               }
-              if (j.status === 'running') return <Badge tone="warning">running ({totalProcessed}/{userCount})</Badge>
-              if (j.status === 'failed') return <Badge tone="destructive">failed</Badge>
+              if (j.status === 'running') return <Badge tone="warning">{t('common.running')} ({totalProcessed}/{userCount})</Badge>
+              if (j.status === 'failed') return <Badge tone="destructive">{t('common.failed')}</Badge>
               return <Badge tone="default">{j.status}</Badge>
             }
           },
-          { key: 'target', label: 'Target', hideOnMobile: true, render: (j) => { const p = j.job_payload || {}; return String(p.target_tg_group_id ?? '—') } },
-          { key: 'users', label: 'Users', render: (j) => { const p = j.job_payload || {}; return String((p.user_ids as number[])?.length || 0) } },
+          { key: 'target', label: t('bulkadd.target'), hideOnMobile: true, render: (j) => { const p = j.job_payload || {}; return String(p.target_tg_group_id ?? '—') } },
+          { key: 'users', label: t('bulkadd.users'), render: (j) => { const p = j.job_payload || {}; return String((p.user_ids as number[])?.length || 0) } },
           {
-            key: 'results', label: 'Results', render: (j) => {
+            key: 'results', label: t('bulkadd.results'), render: (j) => {
               const p = j.job_payload || {}
               const result = p.result as Record<string, number> | undefined
               const progress = p.progress as Record<string, number> | undefined
@@ -150,12 +153,12 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
               const userCount = (p.user_ids as number[])?.length || 0
               const isComplete = j.status === 'completed' && totalProcessed > 0
               const resultSummary = isComplete
-                ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed`
+                ? `${successCount} ${t('bulkadd.added')} · ${skipCount} ${t('bulkadd.skipped')} · ${failureCount} ${t('common.failed')}`
                 : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
               return <span style={{ fontSize: 12 }}>{resultSummary}</span>
             }
           },
-          { key: 'created', label: 'Created', hideOnMobile: true, render: (j) => j.created_at ? timeAgo(j.created_at) : '—' },
+          { key: 'created', label: t('bulkadd.created'), hideOnMobile: true, render: (j) => j.created_at ? timeAgo(j.created_at) : '—' },
         ]}
         data={jobs.slice(0, 20)}
         keyExtractor={(j) => j.id}
@@ -165,12 +168,13 @@ function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
 }
 
 export default function AdminBulkAddPage() {
+  const { t } = useI18n()
   const { toast } = useToast()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
-      <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+      <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={false}>
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -202,7 +206,7 @@ export default function AdminBulkAddPage() {
       setData(overview)
       setLastRefresh(new Date())
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to load')
+      toast.error(err?.message || t('common.failedToLoad'))
     } finally {
       setLoading(false)
     }
@@ -309,22 +313,22 @@ export default function AdminBulkAddPage() {
     <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
       <div className="grid-2col" style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         {/* Left: Form */}
-        <Card title="New Bulk Add Job" subtitle="Select agent, target group, and members to invite.">
+        <Card title={t('bulkadd.title')} subtitle={t('bulkadd.desc')}>
           <div style={{ display: 'grid', gap: 14 }}>
 
             {/* Agent select */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Agent</label>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.agent')}</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <Select
                   value={selectedAgentId ?? ''}
                   onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
                   style={{ flex: 1 }}
                 >
-                  <option value="">Select agent...</option>
+                  <option value="">{t('bulkadd.selectAgent')}</option>
                   {agents.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.external_account_id || `Agent ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
+                      {a.external_account_id || `${t('bulkadd.agent')} ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
                     </option>
                   ))}
                 </Select>
@@ -336,44 +340,44 @@ export default function AdminBulkAddPage() {
                     setSourceGroups(freshGroups)
                     setTargetGroups(freshGroups.filter((g) => g.can_add_members))
                   } catch (err: any) {
-                    toast.error(err?.message || 'Failed to sync groups')
+                    toast.error(err?.message || t('bulkadd.syncFailed'))
                   } finally {
                     setSyncingGroups(false)
                   }
                 }} disabled={!selectedAgentId || syncingGroups}>
-                  <RefreshCw size={14} /> {syncingGroups ? 'Syncing...' : 'Sync'}
+                  <RefreshCw size={14} /> {syncingGroups ? t('bulkadd.syncing') : t('bulkadd.sync')}
                 </Button>
               </div>
             </div>
 
             {/* Source group select */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Source Group</label>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.sourceGroup')}</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <div style={{ flex: 1 }}>
                   <GroupAutoComplete
                     items={sourceGroups}
                     value={selectedSourceGroupId}
                     onChange={setSelectedSourceGroupId}
-                    placeholder={sourceGroups.length ? 'Select source group...' : 'No groups'}
+                    placeholder={sourceGroups.length ? t('bulkadd.selectSource') : t('bulkadd.noGroups')}
                     getId={(g: any) => g.tg_group_id}
                     getLabel={(g: any) => g.title}
                   />
                 </div>
                 <Button variant="outline" size="sm" onClick={scrapeSourceGroup} disabled={!selectedSourceGroupId || scraping}>
-                  {scraping ? 'Scraping...' : 'Scrape'}
+                  {scraping ? t('bulkadd.scraping') : t('bulkadd.scrape')}
                 </Button>
               </div>
             </div>
 
             {/* Target group select */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Target Group</label>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.targetGroup')}</label>
               <GroupAutoComplete
                 items={targetGroups}
                 value={selectedTargetGroupId}
                 onChange={setSelectedTargetGroupId}
-                placeholder={targetGroups.length ? 'Select target group...' : 'No groups with add permission'}
+                placeholder={targetGroups.length ? t('bulkadd.selectTarget') : t('bulkadd.noTargetGroups')}
                 getId={(g: any) => g.tg_group_id}
                 getLabel={(g: any) => g.title}
               />
@@ -382,16 +386,16 @@ export default function AdminBulkAddPage() {
             {/* Member search */}
             {selectedSourceGroupId && (
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Search Members</label>
-                <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search by username or name..." style={{ width: '100%' }} />
+                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.searchMembers')}</label>
+                <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={t('bulkadd.searchPlaceholder')} style={{ width: '100%' }} />
                 <MemberSearchList members={members} searching={searching} selectedUserIds={selectedUserIds} onToggle={toggleUser} />
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} selected</div>
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
               </div>
             )}
 
             {/* Interval */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>Interval (seconds)</label>
+              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.interval')}</label>
               <Input
                 type="number"
                 value={intervalSeconds}
@@ -408,7 +412,7 @@ export default function AdminBulkAddPage() {
                 onChange={(e) => setSendInviteLink(e.target.checked)}
                 style={{ width: 16, height: 16, accentColor: 'var(--ui-primary)' }}
               />
-              Send invite link if user has privacy restrictions
+              {t('bulkadd.sendInviteLink')}
             </label>
 
             {/* Submit */}
@@ -417,16 +421,16 @@ export default function AdminBulkAddPage() {
               onClick={handleSubmit}
               disabled={!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length || submitting}
             >
-              <Send size={14} /> {submitting ? 'Queuing...' : `Queue Member Add (${selectedUserIds.length} users)`}
+              <Send size={14} /> {submitting ? t('common.queuing') : `${t('bulkadd.queueJob')} (${selectedUserIds.length} ${t('bulkadd.users')})`}
             </Button>
           </div>
         </Card>
 
         {/* Right: Recent Jobs */}
-        <Card title="Recent Member Add Jobs" subtitle="Latest bulk-add jobs for the selected agent.">
+        <Card title={t('bulkadd.recentJobs')} subtitle={t('bulkadd.recentJobsDesc')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Button variant="outline" size="sm" onClick={refreshJobs}>
-              <RefreshCw size={14} /> Refresh
+              <RefreshCw size={14} /> {t('common.refresh')}
             </Button>
           </div>
           <JobsTable jobs={jobs} selectedAgentId={selectedAgentId} onJobsUpdate={setJobs} />

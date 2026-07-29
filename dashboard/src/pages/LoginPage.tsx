@@ -63,7 +63,7 @@ function LoginInner() {
           })
           afterLogin()
         } catch {
-          setError('Telegram login failed')
+          setError(t('login.telegramFailed'))
         } finally {
           setLoading(false)
         }
@@ -86,7 +86,7 @@ function LoginInner() {
         script.async = true
         container.appendChild(script)
       } catch {
-        setError('Unable to load Telegram login')
+        setError(t('common.failedToLoad'))
       }
     })()
     return () => {
@@ -121,7 +121,7 @@ function LoginInner() {
       })
       afterLogin()
     } catch {
-      setError('Invalid credentials')
+      setError(t('login.error'))
     } finally {
       setLoading(false)
     }
@@ -161,7 +161,7 @@ function LoginInner() {
           </form>
           <div style={{ position: 'relative', margin: '24px 0', textAlign: 'center' }}>
             <div style={{ height: 1, background: 'var(--ui-border)' }} />
-            <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>or</span>
+            <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>{t('login.or')}</span>
           </div>
           <div id="telegram-login-widget" style={{ display: 'grid', justifyContent: 'center' }} />
           <button
@@ -169,14 +169,14 @@ function LoginInner() {
             disabled={!telegramBotId}
             style={{ background: 'none', border: 'none', padding: '10px 0 0', color: 'var(--ui-text-muted)', cursor: telegramBotId ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 600, width: '100%', textAlign: 'center', opacity: telegramBotId ? 1 : 0.5 }}
           >
-            {telegramBotId ? 'Use another Telegram account' : 'Loading Telegram…'}
+            {telegramBotId ? t('login.useAnother') : t('common.loading')}
           </button>
           {error ? <div style={{ color: 'var(--ui-danger)', fontSize: 13, marginTop: 12, textAlign: 'center' }}>{error}</div> : null}
           {!showNewAccount && storedAccounts.length > 0 ? (
             <>
               <div style={{ position: 'relative', margin: '20px 0', textAlign: 'center' }}>
                 <div style={{ height: 1, background: 'var(--ui-border)' }} />
-                <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>Accounts</span>
+                <span style={{ position: 'absolute', left: '50%', top: 0, transform: 'translate(-50%, -50%)', background: 'var(--ui-bg)', padding: '0 8px', fontSize: 12, color: 'var(--ui-text-muted)' }}>{t('login.accounts')}</span>
               </div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {storedAccounts.map(account => (
@@ -186,7 +186,7 @@ function LoginInner() {
                       switchAccount(account)
                       afterLogin()
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid var(--ui-border)`, background: 'var(--ui-surface)', cursor: 'pointer', textAlign: 'left' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid var(--ui-border)`, background: 'var(--ui-surface)', cursor: 'pointer', textAlign: 'start' }}
                   >
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-primary)', color: 'var(--ui-primary-text)', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
                       {account.username[0]?.toUpperCase() ?? '?'}
@@ -202,7 +202,7 @@ function LoginInner() {
                         setStoredAccounts(getStoredAccounts())
                       }}
                       style={{ background: 'none', border: 'none', color: 'var(--ui-text-muted)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', lineHeight: 1 }}
-                      title="Remove account"
+                      title={t('login.removeAccount')}
                     >×</button>
                   </button>
                 ))}
@@ -211,7 +211,7 @@ function LoginInner() {
                 onClick={() => setShowNewAccount(true)}
                 style={{ width: '100%', marginTop: 8, padding: '10px 14px', borderRadius: 10, border: '1px dashed var(--ui-border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--ui-text-muted)', fontWeight: 600 }}
               >
-                + Sign in with another account
+                {t('login.addAnother')}
               </button>
             </>
           ) : storedAccounts.length > 0 ? (
@@ -219,7 +219,7 @@ function LoginInner() {
               onClick={() => setShowNewAccount(false)}
               style={{ width: '100%', marginTop: 16, padding: '10px 14px', borderRadius: 10, border: '1px dashed var(--ui-border)', background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--ui-text-muted)', fontWeight: 600 }}
             >
-              ← Back to accounts
+              {t('login.backToAccounts')}
             </button>
           ) : null}
         </div>

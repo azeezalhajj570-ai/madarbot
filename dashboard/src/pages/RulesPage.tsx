@@ -14,58 +14,58 @@ type ModerationLimitKey = 'anti_spam_mute_limit' | 'anti_ads_mute_limit' | 'warn
 
 const TOGGLE_DEFINITIONS: Array<{
   key: ModerationToggleKey
-  title: string
-  description: string
+  titleKey: string
+  descriptionKey: string
   defaultValue: boolean
 }> = [
   {
     key: 'anti_spam',
-    title: 'Spam detection',
-    description: 'Deletes spammy messages using the existing moderation classifier and warning flow.',
+    titleKey: 'rules.spamDetection',
+    descriptionKey: 'rules.spamDetectionHint',
     defaultValue: true,
   },
   {
     key: 'anti_ads',
-    title: 'Ads detection',
-    description: 'Removes advertising messages so the group can enforce anti-promo policy from the dashboard.',
+    titleKey: 'rules.adsDetection',
+    descriptionKey: 'rules.adsDetectionHint',
     defaultValue: true,
   },
   {
     key: 'anti_spam_mute',
-    title: 'Mute spam senders',
-    description: 'Restricts members automatically after they cross the spam threshold.',
+    titleKey: 'rules.muteSpamSenders',
+    descriptionKey: 'rules.muteSpamSendersHint',
     defaultValue: false,
   },
   {
     key: 'anti_ads_mute',
-    title: 'Mute ad senders',
-    description: 'Restricts members who keep posting ads after the configured threshold.',
+    titleKey: 'rules.muteAdSenders',
+    descriptionKey: 'rules.muteAdSendersHint',
     defaultValue: false,
   },
 ]
 
 const LIMIT_DEFINITIONS: Array<{
   key: ModerationLimitKey
-  label: string
-  hint: string
+  labelKey: string
+  hintKey: string
   defaultValue: number
 }> = [
   {
     key: 'anti_spam_mute_limit',
-    label: 'Spam mute limit',
-    hint: 'How many spam violations trigger a mute.',
+    labelKey: 'rules.spamMuteLimit',
+    hintKey: 'rules.spamMuteLimitHint',
     defaultValue: 1,
   },
   {
     key: 'anti_ads_mute_limit',
-    label: 'Ads mute limit',
-    hint: 'How many ad removals trigger a mute.',
+    labelKey: 'rules.adsMuteLimit',
+    hintKey: 'rules.adsMuteLimitHint',
     defaultValue: 1,
   },
   {
     key: 'warn_remove_limit',
-    label: 'Warn remove limit',
-    hint: 'How many warnings are allowed before auto-removal.',
+    labelKey: 'rules.warnRemoveLimit',
+    hintKey: 'rules.warnRemoveLimitHint',
     defaultValue: 5,
   },
 ]
@@ -138,9 +138,11 @@ export default function RulesPage() {
   const toggleCards = useMemo(
     () => TOGGLE_DEFINITIONS.map((toggle) => ({
       ...toggle,
+      title: t(toggle.titleKey),
+      description: t(toggle.descriptionKey),
       checked: readBoolean(settings, toggle.key, toggle.defaultValue),
     })),
-    [settings],
+    [settings, t],
   )
 
   async function handleToggleChange(key: ModerationToggleKey, nextValue: boolean) {
@@ -150,9 +152,9 @@ export default function RulesPage() {
     try {
       await updateGroupSettings(currentGroupId, { [key]: nextValue })
       setSettings((current) => ({ ...current, [key]: nextValue }))
-      toast.success('Moderation rules updated.')
+      toast.success(t('rules.moderationRulesUpdated'))
     } catch {
-      toast.error('Unable to save moderation changes right now.')
+      toast.error(t('rules.moderationRulesError'))
     } finally {
       setSavingToggle(null)
     }
@@ -165,7 +167,7 @@ export default function RulesPage() {
     for (const item of LIMIT_DEFINITIONS) {
       const parsed = Number(limitDrafts[item.key])
       if (!Number.isInteger(parsed) || parsed < 1) {
-        setError(`${item.label} must be a whole number greater than 0.`)
+        setError(`${t(item.labelKey)} ${t('rules.limitMustBePositive')}`)
         return
       }
       payload[item.key] = parsed
@@ -176,9 +178,9 @@ export default function RulesPage() {
     try {
       await updateGroupSettings(currentGroupId, payload)
       setSettings((current) => ({ ...current, ...payload }))
-      toast.success('Moderation thresholds saved.')
+      toast.success(t('rules.thresholdsSaved'))
     } catch {
-      toast.error('Unable to save moderation thresholds right now.')
+      toast.error(t('rules.thresholdsError'))
     } finally {
       setSavingLimits(false)
     }
@@ -191,9 +193,9 @@ export default function RulesPage() {
     try {
       await updateGroupSettings(currentGroupId, { [key]: value })
       setSettings((current) => ({ ...current, [key]: value }))
-      toast.success(`Setting "${key}" saved.`)
+      toast.success(t('rules.settingSaved'))
     } catch {
-      toast.error('Unable to save setting.')
+      toast.error(t('rules.settingError'))
     } finally {
       setPluginSaving(null)
     }
@@ -213,11 +215,11 @@ export default function RulesPage() {
         api_key: apiKey || undefined,
       })
       if (result.status === 'ok') {
-        setTestResult({ ok: true, text: result.reply || 'No reply' })
-        toast.success(result.reply || 'No reply')
+        setTestResult({ ok: true, text: result.reply || t('rules.noReply') })
+        toast.success(result.reply || t('rules.noReply'))
       } else {
-        setTestResult({ ok: false, text: result.error || result.detail || 'Unknown error' })
-        toast.error(result.error || result.detail || 'Unknown error')
+        setTestResult({ ok: false, text: result.error || result.detail || t('common.unknown') })
+        toast.error(result.error || result.detail || t('common.unknown'))
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || err?.message || 'Test request failed'
@@ -253,7 +255,7 @@ export default function RulesPage() {
             items={groups || []}
             value={currentGroupId}
             onChange={setCurrentGroupId}
-            placeholder={groups.length === 0 ? 'No managed groups' : 'Search groups...'}
+            placeholder={groups.length === 0 ? t('common.noData') : t('common.search')}
             getLabel={(g: any) => g.title}
             getId={(g: any) => g.id}
           />
@@ -265,7 +267,7 @@ export default function RulesPage() {
         <Card>
           <div style={{ textAlign: 'center', padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>&#9888;&#65039;</div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>No groups found</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>{t('rules.noGroups')}</div>
             <div style={{ color: 'var(--ui-text-muted)', maxWidth: 480, margin: '0 auto' }}>
               Add the bot as an administrator in a Telegram group, then select it here.
               For browser users, make sure your user ID is included in <code>DASHBOARD_BROWSER_USERS</code>.
@@ -274,7 +276,7 @@ export default function RulesPage() {
         </Card>
       ) : null}
       {!currentGroup && groups.length > 0 ? (
-        <InlineMessage tone="neutral">Select a group from the dropdown above to manage AI Pilot settings.</InlineMessage>
+        <InlineMessage tone="neutral">{t('rules.selectGroup')}</InlineMessage>
       ) : null}
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
 
@@ -294,7 +296,7 @@ export default function RulesPage() {
                     checked={Boolean(value)}
                     disabled={isSaving || currentGroupId == null}
                     onCheckedChange={(checked) => void handlePluginSettingChange(entry.key, checked)}
-                    action={isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                    action={isSaving ? <span style={{ fontSize: 12 }}>{t('common.saving')}</span> : null}
                   />
                 )
               }
@@ -314,7 +316,7 @@ export default function RulesPage() {
                         disabled={isSaving || currentGroupId == null}
                         style={{ width: 80 }}
                       />
-                      {isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                      {isSaving ? <span style={{ fontSize: 12 }}>{t('common.saving')}</span> : null}
                     </div>
                   </Field>
                 )
@@ -329,7 +331,7 @@ export default function RulesPage() {
                       disabled={isSaving || currentGroupId == null}
                       style={{ flex: 1 }}
                     />
-                    {isSaving ? <span style={{ fontSize: 12 }}>Saving…</span> : null}
+                    {isSaving ? <span style={{ fontSize: 12 }}>{t('common.saving')}</span> : null}
                   </div>
                 </Field>
               )
@@ -337,7 +339,7 @@ export default function RulesPage() {
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
             <Button onClick={() => void handleTestAI()} disabled={testLoading || currentGroupId == null}>
-              {testLoading ? 'Testing…' : 'Test Connection'}
+              {testLoading ? t('common.testing') : t('ai.testConnection')}
             </Button>
           </div>
         </Card>

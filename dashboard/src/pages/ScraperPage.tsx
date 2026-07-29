@@ -94,7 +94,7 @@ export default function ScraperPage() {
           setAgents(agentList)
         }
       } catch {
-        if (!cancelled) setGroupsError('Unable to load scraped groups.')
+        if (!cancelled) setGroupsError(t('common.failedToLoad'))
       } finally {
         if (!cancelled) setGroupsLoading(false)
       }
@@ -127,7 +127,7 @@ export default function ScraperPage() {
         setConversationsPage(1)
         setNudges(null)
       } catch {
-        if (!cancelled) setError('Unable to load group data.')
+        if (!cancelled) setError(t('common.failedToLoad'))
       } finally {
         if (!cancelled) setGroupDetailLoading(false)
       }
@@ -145,7 +145,7 @@ export default function ScraperPage() {
       setConversationsTotal(data.total)
       setConversationsPage(data.page)
     } catch {
-      setConversationsError('Unable to load conversations.')
+      setConversationsError(t('common.failedToLoad'))
     } finally {
       setConversationsLoading(false)
     }
@@ -166,7 +166,7 @@ export default function ScraperPage() {
       const messages = await fetchConversationMessages(selectedGroupId, convId)
       setConvMessages(messages)
     } catch {
-      setError('Unable to load conversation messages.')
+      setError(t('common.failedToLoad'))
     } finally {
       setConvMessagesLoading(false)
     }
@@ -175,19 +175,19 @@ export default function ScraperPage() {
   async function handleScrape() {
     if (selectedGroupId == null) return
     if (!selectedAgent) {
-      setError('Please select an agent account.')
+      setError(t('scraper.selectAgent'))
       return
     }
     const limit = Number(scrapeLimit)
     if (!Number.isFinite(limit) || limit < 1) {
-      setError('Limit must be a positive number.')
+      setError(t('scraper.limitPositive'))
       return
     }
 
     const selectedGroup = groups.find(g => g.id === selectedGroupId)
     const tgGroupId = selectedGroup?.tg_group_id
     if (!tgGroupId) {
-      setError('Selected group missing Telegram ID.')
+      setError(t('scraper.missingTelegramId'))
       return
     }
 
@@ -199,9 +199,9 @@ export default function ScraperPage() {
       const maxAge = Number(scrapeMaxAge)
       const result = await triggerScrapeMessages(tgGroupId, selectedAgent.id, limit, Number.isFinite(maxAge) && maxAge > 0 ? maxAge : undefined)
       setLastScrapeJob({ job_id: result.job_id, status: result.status })
-      setScrapeFeedback(`Scrape job #${result.job_id} dispatched (${result.status}). Refresh to see new conversations.`)
+      setScrapeFeedback(t('scraper.scrapeTriggered'))
     } catch {
-      setError('Unable to trigger scrape.')
+      setError(t('common.failedToLoad'))
     } finally {
       setScraping(false)
     }
@@ -243,7 +243,7 @@ export default function ScraperPage() {
       setSearchTotal(result.total)
       setSearchPage(result.page)
     } catch {
-      setError('Search failed.')
+      setError(t('common.noResults'))
     } finally {
       setSearchLoading(false)
     }
@@ -256,7 +256,7 @@ export default function ScraperPage() {
       const result = await fetchMemberLeaderboard(selectedGroupId, 50, Number(leaderboardDays) || 30)
       setLeaderboard(result.leaderboard)
     } catch {
-      setError('Failed to load leaderboard.')
+      setError(t('common.failedToLoad'))
     } finally {
       setLeaderboardLoading(false)
     }
@@ -271,7 +271,7 @@ export default function ScraperPage() {
       setLeadsFeedback(`${result.leads_found} new leads found (${result.total_leads} total).`)
       await handleLoadLeads(1)
     } catch {
-      setError('Lead extraction failed.')
+      setError(t('scraper.leadExtractionFailed'))
     } finally {
       setExtractingLeads(false)
     }
@@ -286,7 +286,7 @@ export default function ScraperPage() {
       setLeadsTotal(result.total)
       setLeadsPage(result.page)
     } catch {
-      setError('Failed to load leads.')
+      setError(t('common.failedToLoad'))
     } finally {
       setLeadsLoading(false)
     }
@@ -298,7 +298,7 @@ export default function ScraperPage() {
       await updateLead(selectedGroupId, leadId, newStatus)
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l))
     } catch {
-      setError('Failed to update lead.')
+      setError(t('scraper.updateLeadFailed'))
     }
   }
 
@@ -309,7 +309,7 @@ export default function ScraperPage() {
       const result = await fetchNudges(selectedGroupId)
       setNudges(result)
     } catch {
-      setError('Failed to load engagement data.')
+      setError(t('common.failedToLoad'))
     } finally {
       setNudgesLoading(false)
     }
@@ -329,7 +329,7 @@ export default function ScraperPage() {
             items={groups}
             value={groups.find(g => g.id === selectedGroupId) ?? null}
             onChange={(item) => setSelectedGroupId(item?.id ?? null)}
-            placeholder="Search groups..."
+            placeholder={t('scraper.searchGroups')}
             getLabel={(g) => `${g.title} (${g.group_type})`}
             getKey={(g) => String(g.id)}
           />
@@ -344,55 +344,55 @@ export default function ScraperPage() {
 
       {selectedGroupId == null ? (
         <EmptyState
-          title="No group selected"
-          subtitle="Select a scraped group from the dropdown above to browse its conversations."
+          title={t('scraper.noGroupSelected')}
+          subtitle={t('scraper.noGroupSelected.desc')}
         />
       ) : (
         <>
           {groupDetailLoading ? (
-            <Card title="Group Info" subtitle="Loading group details...">
+            <Card title={t('scraper.groupInfo')} subtitle="Loading group details...">
               <EmptyState title="Loading group info" subtitle="Fetching group details." />
             </Card>
           ) : groupDetail ? (
-            <Card title="Group Info" subtitle="Details about the scraped Telegram group.">
+            <Card title={t('scraper.groupInfo')} subtitle={t('scraper.desc')}>
               <div style={{ display: 'grid', gap: 8 }}>
                 <div>
-                  <strong>Title:</strong> {groupDetail.title ?? 'N/A'}
+                  <strong>{t('scraper.titleLabel')}</strong> {groupDetail.title ?? t('scraper.na')}
                 </div>
                 <div>
-                  <strong>Type:</strong> {groupDetail.group_type ?? 'N/A'}
+                  <strong>{t('scraper.typeLabel')}</strong> {groupDetail.group_type ?? t('scraper.na')}
                 </div>
                 <div>
-                  <strong>Member count:</strong> {groupDetail.member_count ?? 'N/A'}
+                  <strong>{t('scraper.memberCount')}</strong> {groupDetail.member_count ?? t('scraper.na')}
                 </div>
                 <div>
-                  <strong>Scraped members:</strong> {groupDetail.members_total ?? 0}
+                  <strong>{t('scraper.scrapedMembers')}</strong> {groupDetail.members_total ?? 0}
                 </div>
                 <div>
-                  <strong>Scraped messages:</strong> {groupDetail.messages_total ?? 0}
+                  <strong>{t('scraper.scrapedMessages')}</strong> {groupDetail.messages_total ?? 0}
                 </div>
                 <div>
-                  <strong>Last updated:</strong>{' '}
-                  {groupDetail.updated_at ? new Date(groupDetail.updated_at).toLocaleString() : 'N/A'}
+                  <strong>{t('scraper.lastUpdated')}</strong>{' '}
+                  {groupDetail.updated_at ? new Date(groupDetail.updated_at).toLocaleString() : t('scraper.na')}
                 </div>
               </div>
             </Card>
           ) : null}
 
-          <Card title="Scrape Messages" subtitle="Trigger a new scrape of messages from this group.">
+          <Card title={t('scraper.scrapeMessages')} subtitle={t('scraper.scrapeDesc')}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <Field label="Agent Account" hint="Telegram account to scrape with">
+              <Field label={t('scraper.agentAccount')} hint={t('scraper.agentHint')}>
                 <AutoComplete
                   items={agents}
                   value={selectedAgent}
                   onChange={setSelectedAgent}
-                  placeholder="Select agent..."
+                  placeholder={t('bulkadd.selectAgent')}
                   getLabel={(a) => `${a.external_account_id ?? a.id}`}
                   getKey={(a) => String(a.id)}
                   style={{ width: 200 }}
                 />
               </Field>
-              <Field label="Message limit">
+              <Field label={t('scraper.messageLimit')}>
                 <Input
                   type="number"
                   min={1}
@@ -401,7 +401,7 @@ export default function ScraperPage() {
                   style={{ width: 100 }}
                 />
               </Field>
-              <Field label="Max age (days)">
+              <Field label={t('scraper.maxAge')}>
                 <Input
                   type="number"
                   min={0}
@@ -411,7 +411,7 @@ export default function ScraperPage() {
                 />
               </Field>
               <Button onClick={() => void handleScrape()} disabled={scraping}>
-                {scraping ? 'Scraping…' : 'Scrape Messages'}
+                {scraping ? t('common.scraping') : t('scraper.scrapeBtn')}
               </Button>
               {lastScrapeJob ? (
                 <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', padding: '4px 0', width: '100%' }}>
@@ -475,22 +475,22 @@ export default function ScraperPage() {
           {/* ─── Conversations Tab ───────────────────────────────────────────── */}
 
           {activeTab === 'conversations' ? (
-          <Card title={`Conversations (${conversationsTotal})`} subtitle="Click a conversation to expand and view messages.">
+          <Card title={`${t('scraper.conversations')} (${conversationsTotal})`} subtitle={t('scraper.conversationsDesc')}>
             {conversationsLoading ? (
               <EmptyState title="Loading conversations" subtitle="Fetching conversation list." />
             ) : conversationsError ? (
               <InlineMessage tone="destructive">{conversationsError}</InlineMessage>
             ) : conversations.length === 0 ? (
               <EmptyState
-                title="No conversations"
-                subtitle="No scraped conversations found for this group. Trigger a scrape to get started."
+                title={t('scraper.noConversations')}
+                subtitle={t('scraper.noConversations.desc')}
               />
             ) : (
               <>
                 {selectedGroupId ? (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'csv', 'conversations')}>Export CSV</Button>
-                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'json', 'conversations')}>Export JSON</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'csv', 'conversations')}>{t('common.exportCsv')}</Button>
+                    <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId, 'json', 'conversations')}>{t('common.exportJson')}</Button>
                   </div>
                 ) : null}
                 <div style={{ display: 'grid' }}>
@@ -508,14 +508,14 @@ export default function ScraperPage() {
                           borderTop: '1px solid var(--ui-border)',
                           background: 'transparent',
                           padding: '12px 0',
-                          textAlign: 'left',
+                          textAlign: 'start',
                           cursor: 'pointer',
                         }}
                       >
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 700 }}>
                             {conv.title || `Conversation #${conv.id}`}
-                            {conv.is_topic ? <Badge tone="info" style={{ marginLeft: 8 }}>Topic</Badge> : null}
+                            {conv.is_topic ? <Badge tone="info" style={{ marginInlineStart: 8 }}>{t('scraper.topic')}</Badge> : null}
                           </div>
                           <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', marginTop: 2 }}>
                             {conv.message_count} messages · {conv.participant_count} participants
@@ -538,7 +538,7 @@ export default function ScraperPage() {
                           {convMessagesLoading ? (
                             <div style={{ padding: 12, color: 'var(--ui-text-muted)', fontSize: 13 }}>Loading messages…</div>
                           ) : convMessages.length === 0 ? (
-                            <div style={{ padding: 12, color: 'var(--ui-text-muted)', fontSize: 13 }}>No messages in this conversation.</div>
+                            <div style={{ padding: 12, color: 'var(--ui-text-muted)', fontSize: 13 }}>{t('scraper.noMessages')}</div>
                           ) : (
                             <div style={{ display: 'grid', gap: 6 }}>
                               {convMessages.map((msg) => (
@@ -563,7 +563,7 @@ export default function ScraperPage() {
                                     <Badge tone="neutral">{msg.message_type}</Badge>
                                   </div>
                                   <div style={{ fontSize: 13, lineHeight: '18px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                    {msg.message_text || <span style={{ color: 'var(--ui-text-muted)', fontStyle: 'italic' }}>no text</span>}
+                                    {msg.message_text || <span style={{ color: 'var(--ui-text-muted)', fontStyle: 'italic' }}>{t('scraper.noText')}</span>}
                                   </div>
                                 </div>
                               ))}
@@ -582,10 +582,10 @@ export default function ScraperPage() {
                       disabled={conversationsPage <= 1}
                       onClick={() => void loadConversations(conversationsPage - 1)}
                     >
-                      Previous
+                      {t('common.previous')}
                     </Button>
                     <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
-                      Page {conversationsPage} of {totalPages}
+                      {t('scraper.page')} {conversationsPage} {t('scraper.of')} {totalPages}
                     </span>
                     <Button
                       variant="outline"
@@ -593,7 +593,7 @@ export default function ScraperPage() {
                       disabled={conversationsPage >= totalPages}
                       onClick={() => void loadConversations(conversationsPage + 1)}
                     >
-                      Next
+                      {t('common.next')}
                     </Button>
                   </div>
                 ) : null}
@@ -601,28 +601,28 @@ export default function ScraperPage() {
             )}
           </Card>
           ) : activeTab === 'search' ? (
-          <Card title={`Search Messages`} subtitle="Find messages by keyword across scraped data.">
+          <Card title={t('scraper.searchMessages')} subtitle={t('scraper.searchDesc')}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <Input
                 type="text"
-                placeholder="Search messages..."
+                placeholder={t('scraper.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(1) }}
                 style={{ flex: 1 }}
               />
               <Button onClick={() => handleSearch(1)} disabled={searchLoading || !searchQuery.trim()}>
-                Search
+                {t('scraper.searchBtn')}
               </Button>
             </div>
             {searchLoading ? (
-              <EmptyState title="Searching..." subtitle="Searching scraped messages." />
+              <EmptyState title={t('common.searching')} subtitle="Searching scraped messages." />
             ) : searchResults.length === 0 ? (
-              <EmptyState title="No results" subtitle={searchQuery ? 'No messages match your search.' : 'Enter a search term to find messages.'} />
+              <EmptyState title={t('common.noResults')} subtitle={searchQuery ? 'No messages match your search.' : 'Enter a search term to find messages.'} />
             ) : (
               <>
                 <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginBottom: 8 }}>
-                  {searchTotal} results (page {searchPage})
+                  {searchTotal} {t('scraper.searchResults')} ({t('scraper.page')} {searchPage})
                 </div>
                 <div style={{ display: 'grid', gap: 6 }}>
                   {searchResults.map(msg => (
@@ -638,27 +638,27 @@ export default function ScraperPage() {
                 </div>
                 {searchTotal > 50 ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
-                    <Button variant="outline" size="sm" disabled={searchPage <= 1} onClick={() => handleSearch(searchPage - 1)}>Previous</Button>
-                    <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>Page {searchPage}</span>
-                    <Button variant="outline" size="sm" disabled={searchPage * 50 >= searchTotal} onClick={() => handleSearch(searchPage + 1)}>Next</Button>
+                    <Button variant="outline" size="sm" disabled={searchPage <= 1} onClick={() => handleSearch(searchPage - 1)}>{t('common.previous')}</Button>
+                    <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('scraper.page')} {searchPage}</span>
+                    <Button variant="outline" size="sm" disabled={searchPage * 50 >= searchTotal} onClick={() => handleSearch(searchPage + 1)}>{t('common.next')}</Button>
                   </div>
                 ) : null}
               </>
             )}
           </Card>
           ) : activeTab === 'leaderboard' ? (
-          <Card title="Member Leaderboard" subtitle={`Top contributors by message count.`}>
+          <Card title={t('scraper.memberLeaderboard')} subtitle={t('scraper.leaderboardDesc')}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
-              <Field label="Period (days)">
+              <Field label={t('scraper.periodDays')}>
                 <Input type="number" min={1} max={365} value={leaderboardDays} onChange={(e) => setLeaderboardDays(e.target.value)} style={{ width: 80 }} />
               </Field>
-              <Button onClick={() => handleLoadLeaderboard()} disabled={leaderboardLoading}>Load</Button>
-              <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'members')}>Export CSV</Button>
+              <Button onClick={() => handleLoadLeaderboard()} disabled={leaderboardLoading}>{t('scraper.load')}</Button>
+              <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'members')}>{t('common.exportCsv')}</Button>
             </div>
             {leaderboardLoading ? (
               <EmptyState title="Loading..." subtitle="Computing member rankings." />
             ) : leaderboard.length === 0 ? (
-              <EmptyState title="No data" subtitle="Click Load to compute member rankings." />
+              <EmptyState title={t('common.noData')} subtitle="Click Load to compute member rankings." />
             ) : (
               <div style={{ display: 'grid', gap: 4 }}>
                 {leaderboard.map((m, i) => (
@@ -668,9 +668,9 @@ export default function ScraperPage() {
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.first_name || m.username || `User ${m.user_id}`}</span>
-                      {m.role ? <Badge tone="info" style={{ marginLeft: 6 }}>{m.role}</Badge> : null}
+                      {m.role ? <Badge tone="info" style={{ marginInlineStart: 6 }}>{m.role}</Badge> : null}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'end' }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>{m.message_count}</div>
                       <div style={{ fontSize: 11, color: 'var(--ui-text-muted)' }}>{m.share_pct}%</div>
                     </div>
@@ -680,27 +680,27 @@ export default function ScraperPage() {
             )}
           </Card>
           ) : activeTab === 'leads' ? (
-          <Card title={`Lead CRM`} subtitle="Extracted leads from group messages.">
+          <Card title={t('scraper.leadCrm')} subtitle={t('scraper.leadCrmDesc')}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <Button onClick={() => handleExtractLeads()} disabled={extractingLeads}>{extractingLeads ? 'Extracting...' : 'Extract Leads'}</Button>
-              <Field label="Filter">
+              <Button onClick={() => handleExtractLeads()} disabled={extractingLeads}>{extractingLeads ? t('common.extracting') : t('scraper.extractLeads')}</Button>
+              <Field label={t('common.filter')}>
                 <Input type="text" placeholder="new/contacted/converted" value={leadsFilter} onChange={(e) => setLeadsFilter(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLoadLeads(1) }} style={{ width: 140 }} />
               </Field>
-              <Button variant="outline" size="sm" onClick={() => handleLoadLeads()}>Refresh</Button>
+              <Button variant="outline" size="sm" onClick={() => handleLoadLeads()}>{t('common.refresh')}</Button>
             </div>
             {leadsFeedback ? <InlineMessage tone="success">{leadsFeedback}</InlineMessage> : null}
             {leadsLoading ? (
               <EmptyState title="Loading..." subtitle="Fetching leads." />
             ) : leads.length === 0 ? (
-              <EmptyState title="No leads" subtitle="Click 'Extract Leads' to scan messages for buying signals, contact requests, and more." />
+              <EmptyState title={t('scraper.noLeads')} subtitle="Click 'Extract Leads' to scan messages for buying signals, contact requests, and more." />
             ) : (
               <>
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginBottom: 8 }}>{leadsTotal} leads (page {leadsPage})</div>
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginBottom: 8 }}>{leadsTotal} {t('scraper.leads')} ({t('scraper.page')} {leadsPage})</div>
                 <div style={{ display: 'grid', gap: 8 }}>
                   {leads.map(lead => (
                     <div key={lead.id} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--ui-surface-alt)', border: '1px solid var(--ui-border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700 }}>{lead.sender_name || 'Unknown'}</span>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{lead.sender_name || t('common.unknown')}</span>
                         <Badge tone={lead.signal === 'buying_intent' ? 'success' : lead.signal === 'support_need' ? 'destructive' : 'info'}>{lead.signal}</Badge>
                       </div>
                       <div style={{ fontSize: 13, color: 'var(--ui-text)', marginBottom: 4 }}>{lead.excerpt}</div>
@@ -735,18 +735,18 @@ export default function ScraperPage() {
                 </div>
                 {leadsTotal > 50 ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
-                    <Button variant="outline" size="sm" disabled={leadsPage <= 1} onClick={() => handleLoadLeads(leadsPage - 1)}>Previous</Button>
-                    <span style={{ fontSize: 13 }}>Page {leadsPage}</span>
-                    <Button variant="outline" size="sm" disabled={leadsPage * 50 >= leadsTotal} onClick={() => handleLoadLeads(leadsPage + 1)}>Next</Button>
+                    <Button variant="outline" size="sm" disabled={leadsPage <= 1} onClick={() => handleLoadLeads(leadsPage - 1)}>{t('common.previous')}</Button>
+                    <span style={{ fontSize: 13 }}>{t('scraper.page')} {leadsPage}</span>
+                    <Button variant="outline" size="sm" disabled={leadsPage * 50 >= leadsTotal} onClick={() => handleLoadLeads(leadsPage + 1)}>{t('common.next')}</Button>
                   </div>
                 ) : null}
               </>
             )}
           </Card>
           ) : activeTab === 'nudges' ? (
-          <Card title="Engagement Nudges" subtitle="Activity insights and re-engagement suggestions.">
+          <Card title={t('scraper.engagementNudges')} subtitle={t('scraper.engagementDesc')}>
             <div style={{ marginBottom: 12 }}>
-              <Button onClick={() => handleLoadNudges()} disabled={nudgesLoading}>{nudgesLoading ? 'Loading...' : 'Check Activity'}</Button>
+              <Button onClick={() => handleLoadNudges()} disabled={nudgesLoading}>{nudgesLoading ? t('loading') : t('scraper.checkActivity')}</Button>
             </div>
             {nudgesLoading ? (
               <EmptyState title="Loading..." subtitle="Analyzing group activity." />
@@ -754,21 +754,21 @@ export default function ScraperPage() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ padding: '10px 16px', borderRadius: 8, background: 'var(--ui-surface-alt)', flex: 1, minWidth: 140 }}>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>Messages (24h)</div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{t('scraper.messages24h')}</div>
                     <div style={{ fontSize: 24, fontWeight: 700 }}>{nudges.messages_24h}</div>
                   </div>
                   <div style={{ padding: '10px 16px', borderRadius: 8, background: 'var(--ui-surface-alt)', flex: 1, minWidth: 140 }}>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>Messages (7d)</div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{t('scraper.messages7d')}</div>
                     <div style={{ fontSize: 24, fontWeight: 700 }}>{nudges.messages_7d}</div>
                   </div>
                   <div style={{ padding: '10px 16px', borderRadius: 8, background: 'var(--ui-surface-alt)', flex: 1, minWidth: 140 }}>
-                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>Last Message</div>
-                    <div style={{ fontSize: 24, fontWeight: 700 }}>{nudges.last_message_days != null ? `${nudges.last_message_days}d ago` : 'N/A'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{t('scraper.lastMessage')}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>{nudges.last_message_days != null ? `${nudges.last_message_days}${t('scraper.dAgo')}` : t('scraper.na')}</div>
                   </div>
                 </div>
                 {nudges.peak_hours && nudges.peak_hours.length > 0 ? (
                   <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--ui-surface-alt)', fontSize: 13 }}>
-                    <strong>Peak activity hours:</strong>{' '}
+                    <strong>{t('scraper.peakActivity')}</strong>{' '}
                     {nudges.peak_hours.map(([h, c]) => `${h}:00 (${c})`).join(', ')}
                   </div>
                 ) : null}
@@ -785,12 +785,12 @@ export default function ScraperPage() {
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'messages')}>Export Messages CSV</Button>
-                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'json', 'messages')}>Export Messages JSON</Button>
+                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'csv', 'messages')}>{t('scraper.exportMessagesCsv')}</Button>
+                  <Button variant="outline" size="sm" onClick={() => exportData(selectedGroupId!, 'json', 'messages')}>{t('scraper.exportMessagesJson')}</Button>
                 </div>
               </div>
             ) : (
-              <EmptyState title="No data" subtitle="Click 'Check Activity' to load engagement metrics." />
+              <EmptyState title={t('common.noData')} subtitle="Click 'Check Activity' to load engagement metrics." />
             )}
           </Card>
           ) : null}

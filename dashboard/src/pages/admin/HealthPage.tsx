@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react'
 
 import { Badge, Button, Card, ContentGrid, EmptyState, MetricCard } from '../../components/ui/primitives'
 import { PageShell } from '../../lib/page-shell'
+import { useI18n } from '../../lib/i18n'
 import { fetchAdminOverview } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
 import type { AdminOverview } from '../../lib/types'
@@ -22,7 +23,7 @@ function timeAgo(iso: string | null | undefined): string {
 
 function StatusDot({ status }: { status: string }) {
   const color = status === 'ok' ? 'var(--ui-success)' : status === 'degraded' ? 'var(--ui-warning)' : status === 'down' ? 'var(--ui-danger)' : 'var(--ui-text-muted)'
-  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: color, marginRight: 6 }} />
+  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: color, marginInlineEnd: 6 }} />
 }
 
 function HealthBadge({ status }: { status: string }) {
@@ -31,11 +32,12 @@ function HealthBadge({ status }: { status: string }) {
 }
 
 export default function AdminHealthPage() {
+  const { t } = useI18n()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -51,7 +53,7 @@ export default function AdminHealthPage() {
       setError(null)
       setLastRefresh(new Date())
     } catch (err: any) {
-      setError(err?.message || 'Failed to load')
+      setError(err?.message || t('common.failedToLoad'))
     } finally {
       setLoading(false)
     }
@@ -65,11 +67,11 @@ export default function AdminHealthPage() {
 
   const sh = data?.system_health
   const checks = [
-    { label: 'Database', check: sh?.database },
-    { label: 'Redis', check: sh?.redis },
-    { label: 'Bot Worker', check: sh?.bot_worker },
-    { label: 'Agent Worker', check: sh?.agent_worker },
-    { label: 'Queue', check: sh?.queue },
+    { label: t('health.database'), check: sh?.database },
+    { label: t('health.redis'), check: sh?.redis },
+    { label: t('health.botWorker'), check: sh?.bot_worker },
+    { label: t('health.agentWorker'), check: sh?.agent_worker },
+    { label: t('health.queue'), check: sh?.queue },
   ]
   const okCount = checks.filter(c => c.check?.status === 'ok').length
 
@@ -84,16 +86,16 @@ export default function AdminHealthPage() {
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 16, fontWeight: 800 }}>System Status</span>
+            <span style={{ fontSize: 16, fontWeight: 800 }}>{t('health.systemStatus')}</span>
             {sh && <HealthBadge status={sh.status} />}
-            <span style={{ fontSize: 12, color: uiVars.textMuted }}>{okCount}/{checks.length} healthy</span>
+            <span style={{ fontSize: 12, color: uiVars.textMuted }}>{okCount}/{checks.length} {t('health.systemStatus').toLowerCase()}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: uiVars.textMuted }}>
               {lastRefresh.toLocaleTimeString()}
             </span>
             <Button variant="outline" size="sm" onClick={refresh}>
-              <RefreshCw size={14} style={{ marginRight: 4 }} /> Refresh
+              <RefreshCw size={14} style={{ marginInlineEnd: 4 }} /> {t('common.refresh')}
             </Button>
           </div>
         </div>
@@ -106,15 +108,15 @@ export default function AdminHealthPage() {
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{check?.status || 'unknown'}</span>
               </div>
               {check?.latency_ms !== undefined && (
-                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>{check.latency_ms}ms latency</div>
+                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>{check.latency_ms}{t('health.msLatency')}</div>
               )}
               {check?.pending !== undefined && (
                 <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>
-                  {check.pending} pending · {check.running} running{check.stuck ? ` · ${check.stuck} stuck` : ''}
+                  {check.pending} {t('common.pending')} · {check.running} {t('common.running')}{check.stuck ? ` · ${check.stuck} ${t('health.stuck')}` : ''}
                 </div>
               )}
               {check?.last_seen && (
-                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>Last seen {timeAgo(check.last_seen)}</div>
+                <div style={{ fontSize: 12, color: uiVars.textSubtle, marginTop: 4 }}>{t('health.lastSeen')}{timeAgo(check.last_seen)}</div>
               )}
             </div>
           ))}
@@ -124,7 +126,7 @@ export default function AdminHealthPage() {
       <ContentGrid columns="repeat(auto-fit, minmax(200px, 1fr))">
         <MetricCard label="Agents" value={String(data?.agents?.length || 0)} hint={`${data?.agents?.filter(a => a.status === 'active').length || 0} active`} />
         <MetricCard label="Total Jobs" value={String(data?.jobs_summary?.total || 0)} hint={`${data?.jobs_summary?.by_status?.completed || 0} completed`} />
-        <MetricCard label="Total Sent" value={String(data?.agents?.reduce((s, a) => s + a.total_sent, 0) || 0)} hint="messages sent" />
+        <MetricCard label="Total Sent" value={String(data?.agents?.reduce((s, a) => s + a.total_sent, 0) || 0)} hint={t('health.messagesSent')} />
       </ContentGrid>
     </PageShell>
   )

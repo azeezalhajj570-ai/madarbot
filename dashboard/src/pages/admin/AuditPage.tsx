@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Shield, UserCheck, AlertTriangle, Info, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { Badge, Button, Card, EmptyState, LoadingState } from '../../components/ui/primitives'
+import { useI18n } from '../../lib/i18n'
 import { SimplePagination } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import { fetchOwnerAuditLog } from '../../lib/api'
@@ -42,6 +43,7 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 function AuditEntry({ entry, index }: { entry: any; index: number }) {
+  const { t } = useI18n()
   const [expanded, setExpanded] = useState(false)
   const detailText = entry.detail
     ? typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)
@@ -115,7 +117,7 @@ function AuditEntry({ entry, index }: { entry: any; index: number }) {
                 }}
               >
                 {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                {expanded ? 'Show less' : 'Show more'}
+                {expanded ? t('audit.showLess') : t('audit.showMore')}
               </button>
             )}
           </div>
@@ -141,11 +143,12 @@ function AuditEntry({ entry, index }: { entry: any; index: number }) {
 }
 
 export default function AdminAuditPage() {
+  const { t } = useI18n()
   const user = getStoredUser()
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin" descriptionKey="page.admin.desc" loading={false}>
-        <EmptyState title="Access denied" subtitle="This area is available to admin accounts only." />
+        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
       </PageShell>
     )
   }
@@ -167,7 +170,7 @@ export default function AdminAuditPage() {
           onPageChange={(p) => setPage(p - 1)}
         />
         <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw size={14} /> Refresh
+          <RefreshCw size={14} /> {t('common.refresh')}
         </Button>
       </div>
 
@@ -181,7 +184,7 @@ export default function AdminAuditPage() {
             ))}
           </div>
         ) : (
-          <EmptyState title="No audit entries" subtitle="No audit log entries found." />
+          <EmptyState title={t('audit.noEntries')} subtitle={t('audit.noEntries.desc')} />
         )}
       </Card>
     </PageShell>
