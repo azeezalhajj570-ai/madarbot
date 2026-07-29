@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Brain, BookOpen, Trash2, RefreshCw, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Brain, BookOpen, Trash2, RefreshCw, Loader2, CheckCircle, XCircle, Eye, X } from 'lucide-react'
 
 import { fetchKnowledgeGroups, fetchAllKnowledge, extractGroupKnowledge, deleteKnowledgeEntry, fetchExtractionStatus } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
@@ -28,6 +28,7 @@ export default function AdminKnowledgePage() {
 
   const [filterGroupId, setFilterGroupId] = useState<number | undefined>(undefined)
   const [filterType, setFilterType] = useState<string>('')
+  const [selectedEntry, setSelectedEntry] = useState<any | null>(null)
 
   const [extractGroupId, setExtractGroupId] = useState<number | null>(null)
   const [extractCount, setExtractCount] = useState(500)
@@ -198,16 +199,27 @@ export default function AdminKnowledgePage() {
               entry.has_embedding ? <CheckCircle size={14} style={{ color: 'var(--ui-success)' }} /> : <XCircle size={14} style={{ color: 'var(--ui-text-muted)' }} />
             )},
             { key: 'created', label: t('knowledge.created'), render: (entry: any) => (
-              <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-'}</span>
+              <span style={{ fontSize: 12, color: 'var(--ui-text-muted)', whiteSpace: 'nowrap' }}>
+                {entry.created_at ? new Date(entry.created_at).toLocaleString() : '-'}
+              </span>
             )},
             { key: 'actions', label: '', render: (entry: any) => (
-              <button
-                onClick={() => { if (confirm(t('knowledge.deleteConfirm'))) deleteMutation.mutate(entry.id) }}
-                style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
-                title="Delete"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button
+                  onClick={() => setSelectedEntry(entry)}
+                  style={{ background: 'none', border: 'none', color: 'var(--ui-text-muted)', cursor: 'pointer' }}
+                  title="View details"
+                >
+                  <Eye size={14} />
+                </button>
+                <button
+                  onClick={() => { if (confirm(t('knowledge.deleteConfirm'))) deleteMutation.mutate(entry.id) }}
+                  style={{ background: 'none', border: 'none', color: 'var(--ui-danger)', cursor: 'pointer' }}
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             )},
           ]}
           data={entries || []}
@@ -218,6 +230,63 @@ export default function AdminKnowledgePage() {
           style={{ marginTop: 16 }}
         />
       </Card>
+      {/* Detail Modal */}
+      {selectedEntry && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)', padding: 24,
+        }} onClick={() => setSelectedEntry(null)}>
+          <div style={{
+            background: 'var(--ui-surface)', borderRadius: 12,
+            maxWidth: 640, width: '100%', maxHeight: '80vh', overflow: 'auto',
+            padding: 24, position: 'relative',
+          }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSelectedEntry(null)}
+              style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--ui-text-muted)', cursor: 'pointer', padding: 4 }}>
+              <X size={18} />
+            </button>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700 }}>
+              {selectedEntry.title || t('knowledge.untitled')}
+            </h3>
+            <div style={{ display: 'grid', gap: 12, fontSize: 14, lineHeight: 1.6 }}>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>{t('knowledge.type')}:</strong>{' '}
+                <Badge style={{ background: TYPE_COLORS[selectedEntry.knowledge_type] || '#6b7280', color: '#fff' }}>
+                  {selectedEntry.knowledge_type}
+                </Badge>
+              </div>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>{t('knowledge.group')}:</strong> {selectedEntry.group_title}</div>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>{t('knowledge.confidence')}:</strong> {(selectedEntry.confidence * 100).toFixed(0)}%</div>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>Created:</strong> {selectedEntry.created_at ? new Date(selectedEntry.created_at).toLocaleString() : '-'}</div>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>First seen:</strong> {selectedEntry.first_seen ? new Date(selectedEntry.first_seen).toLocaleString() : '-'}</div>
+              <div><strong style={{ color: 'var(--ui-text-muted)' }}>Embedding:</strong> {selectedEntry.has_embedding ? 'Yes' : 'No'}</div>
+              {selectedEntry.content && (
+                <div>
+                  <strong style={{ color: 'var(--ui-text-muted)', display: 'block', marginBottom: 4 }}>Content:</strong>
+                  <div style={{
+                    background: 'var(--ui-surface-strong)', borderRadius: 8, padding: 12,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13,
+                    maxHeight: 200, overflow: 'auto',
+                  }}>{selectedEntry.content}</div>
+                </div>
+              )}
+              {selectedEntry.source_message_ids?.length > 0 && (
+                <div>
+                  <strong style={{ color: 'var(--ui-text-muted)', display: 'block', marginBottom: 4 }}>Source messages:</strong>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {selectedEntry.source_message_ids.map((id: number) => (
+                      <span key={id} style={{
+                        background: 'var(--ui-surface-strong)', borderRadius: 4, padding: '2px 8px',
+                        fontSize: 12, color: 'var(--ui-text-muted)',
+                      }}>{id}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   )
 }
