@@ -1,15 +1,16 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Send } from 'lucide-react'
+import { Plus, RefreshCw, Send, Search, X } from 'lucide-react'
 import { useI18n } from '../../lib/i18n'
 
-import { Badge, Button, Card, ColumnDef, EmptyState, Input, Select, Table } from '../../components/ui/primitives'
+import { Badge, Button, Card, Dialog, EmptyState, Input, Select, Field } from '../../components/ui/primitives'
+import { DataTable, type ColumnDef, type DataTableFilter } from '../../components/ui/data-table'
 import { useToast } from '../../components/ui/toast'
-import { GroupAutoComplete, SearchInput } from '../../components/ui/data-display'
+import { GroupAutoComplete } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
-import api, { fetchAdminOverview, fetchAgents } from '../../lib/api'
+import api, { fetchAgents } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
 import { spacing } from '../../../../shared/ui-system/tokens'
-import type { AdminOverview, Agent, AgentJobRecord } from '../../lib/types'
+import type { Agent, AgentJobRecord } from '../../lib/types'
 
 interface AgentGroup {
   id: number
@@ -42,6 +43,25 @@ function timeAgo(iso: string | null | undefined): string {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
+}
+
+function statusBadge(status: string, payload?: Record<string, unknown>) {
+  const p = payload || {}
+  const result = p.result as Record<string, number> | undefined
+  const progress = p.progress as Record<string, number> | undefined
+  const userCount = (p.user_ids as number[])?.length || 0
+  const successCount = result?.success_count ?? progress?.success_count ?? 0
+  const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
+  const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
+  const totalProcessed = successCount + failureCount + skipCount
+
+  if (status === 'completed') {
+    if (totalProcessed === 0) return <Badge tone="warning">Completed (no results)</Badge>
+    return <Badge tone="success">Completed</Badge>
+  }
+  if (status === 'running') return <Badge tone="warning">Running ({totalProcessed}/{userCount})</Badge>
+  if (status === 'failed') return <Badge tone="destructive">Failed</Badge>
+  return <Badge tone="default">{status}</Badge>
 }
 
 function MemberSearchList({
@@ -102,75 +122,11 @@ function MemberSearchList({
   )
 }
 
-function JobsTable({ jobs, selectedAgentId, onJobsUpdate }: {
-  jobs: AgentJobRecord[]
-  selectedAgentId: number | null
-  onJobsUpdate: (jobs: AgentJobRecord[]) => void
-}) {
-  const { t } = useI18n()
-  if (jobs.length === 0) {
-    return (
-      <div style={{ fontSize: 13, color: 'var(--ui-text-muted)', padding: spacing.md }}>
-        {t('bulkadd.noJobs')}
-      </div>
-    )
-  }
-  return (
-    <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-      <Table<AgentJobRecord>
-        columns={[
-          { key: 'id', label: t('bulkadd.id'), hideOnMobile: true, render: (j) => String(j.id) },
-          {
-            key: 'status', label: t('job.status'), render: (j) => {
-              const p = j.job_payload || {}
-              const result = p.result as Record<string, number> | undefined
-              const progress = p.progress as Record<string, number> | undefined
-              const userCount = (p.user_ids as number[])?.length || 0
-              const successCount = result?.success_count ?? progress?.success_count ?? 0
-              const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
-              const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
-              const totalProcessed = successCount + failureCount + skipCount
-              if (j.status === 'completed') {
-                if (totalProcessed === 0) return <Badge tone="warning">{t('common.completed')} (no results)</Badge>
-                return <Badge tone="success">{t('common.completed')}</Badge>
-              }
-              if (j.status === 'running') return <Badge tone="warning">{t('common.running')} ({totalProcessed}/{userCount})</Badge>
-              if (j.status === 'failed') return <Badge tone="destructive">{t('common.failed')}</Badge>
-              return <Badge tone="default">{j.status}</Badge>
-            }
-          },
-          { key: 'target', label: t('bulkadd.target'), hideOnMobile: true, render: (j) => { const p = j.job_payload || {}; return String(p.target_tg_group_id ?? '—') } },
-          { key: 'users', label: t('bulkadd.users'), render: (j) => { const p = j.job_payload || {}; return String((p.user_ids as number[])?.length || 0) } },
-          {
-            key: 'results', label: t('bulkadd.results'), render: (j) => {
-              const p = j.job_payload || {}
-              const result = p.result as Record<string, number> | undefined
-              const progress = p.progress as Record<string, number> | undefined
-              const successCount = result?.success_count ?? progress?.success_count ?? 0
-              const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
-              const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
-              const totalProcessed = successCount + failureCount + skipCount
-              const userCount = (p.user_ids as number[])?.length || 0
-              const isComplete = j.status === 'completed' && totalProcessed > 0
-              const resultSummary = isComplete
-                ? `${successCount} ${t('bulkadd.added')} · ${skipCount} ${t('bulkadd.skipped')} · ${failureCount} ${t('common.failed')}`
-                : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
-              return <span style={{ fontSize: 12 }}>{resultSummary}</span>
-            }
-          },
-          { key: 'created', label: t('bulkadd.created'), hideOnMobile: true, render: (j) => j.created_at ? timeAgo(j.created_at) : '—' },
-        ]}
-        data={jobs.slice(0, 20)}
-        keyExtractor={(j) => j.id}
-      />
-    </div>
-  )
-}
-
 export default function AdminBulkAddPage() {
   const { t } = useI18n()
   const { toast } = useToast()
   const user = getStoredUser()
+
   if (user?.role !== 'admin' && user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={false}>
@@ -179,90 +135,101 @@ export default function AdminBulkAddPage() {
     )
   }
 
-  const [data, setData] = useState<AdminOverview | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  // ─── DataTable state ──────────────────────────────────────────────────────
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
-  const [groups, setGroups] = useState<AgentGroup[]>([])
+  const [jobs, setJobs] = useState<AgentJobRecord[]>([])
+  const [jobsLoading, setJobsLoading] = useState(false)
+
+  // ─── Dialog state ─────────────────────────────────────────────────────────
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+
+  const [formAgentId, setFormAgentId] = useState<number | null>(null)
+  const [formSourceGroupId, setFormSourceGroupId] = useState<number | null>(null)
+  const [formTargetGroupId, setFormTargetGroupId] = useState<number | null>(null)
   const [sourceGroups, setSourceGroups] = useState<AgentGroup[]>([])
   const [targetGroups, setTargetGroups] = useState<AgentGroup[]>([])
-  const [selectedSourceGroupId, setSelectedSourceGroupId] = useState<number | null>(null)
-  const [selectedTargetGroupId, setSelectedTargetGroupId] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<MemberItem[]>([])
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
   const [intervalSeconds, setIntervalSeconds] = useState(20)
   const [sendInviteLink, setSendInviteLink] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [searching, setSearching] = useState(false)
-  const [scraping, setScraping] = useState(false)
-  const [syncingGroups, setSyncingGroups] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
-  const refresh = useCallback(async () => {
-    try {
-      const overview = await fetchAdminOverview()
-      setData(overview)
-      setLastRefresh(new Date())
-    } catch (err: any) {
-      toast.error(err?.message || t('common.failedToLoad'))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 30_000)
-    return () => clearInterval(id)
-  }, [refresh])
+  // ─── Effects ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetchAgents().then(setAgents).catch(() => {})
   }, [])
 
+  const loadJobs = useCallback(async (agentId: number) => {
+    setJobsLoading(true)
+    try {
+      const { data } = await api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`)
+      setJobs(data.filter((j) => j.job_type === 'member_add'))
+    } catch {
+      setJobs([])
+    } finally {
+      setJobsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (!selectedAgentId) {
-      setGroups([])
+    if (!selectedAgentId) { setJobs([]); return }
+    loadJobs(selectedAgentId)
+  }, [selectedAgentId, loadJobs])
+
+  // Load groups when dialog form agent changes
+  useEffect(() => {
+    if (!formAgentId) {
       setSourceGroups([])
       setTargetGroups([])
-      setSelectedSourceGroupId(null)
-      setSelectedTargetGroupId(null)
+      setFormSourceGroupId(null)
+      setFormTargetGroupId(null)
       setMembers([])
       return
     }
-    api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`).then(({ data }) => {
-      setGroups(data)
+    api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${formAgentId}/groups`).then(({ data }) => {
       setSourceGroups(data)
       setTargetGroups(data.filter((g) => g.can_add_members))
     }).catch(() => {
-      setGroups([])
       setSourceGroups([])
       setTargetGroups([])
     })
-  }, [selectedAgentId])
+  }, [formAgentId])
 
+  // Search members in dialog
   useEffect(() => {
-    if (!selectedAgentId || !selectedSourceGroupId) {
+    if (!formAgentId || !formSourceGroupId) {
       setMembers([])
       return
     }
     setSearching(true)
-    const params: Record<string, unknown> = { tg_group_id: selectedSourceGroupId, limit: 50 }
+    const params: Record<string, unknown> = { tg_group_id: formSourceGroupId, limit: 50 }
     if (searchQuery.trim()) params.q = searchQuery.trim()
-    api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${selectedAgentId}/member-search`, { params })
+    api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${formAgentId}/member-search`, { params })
       .then(({ data }) => setMembers(data.members || []))
       .catch(() => setMembers([]))
       .finally(() => setSearching(false))
-  }, [selectedAgentId, selectedSourceGroupId, searchQuery])
+  }, [formAgentId, formSourceGroupId, searchQuery])
 
-  useEffect(() => {
-    if (!selectedAgentId) { setJobs([]); return }
-    api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/jobs`)
-      .then(({ data }) => setJobs(data.filter((j) => j.job_type === 'member_add')))
-      .catch(() => setJobs([]))
-  }, [selectedAgentId])
+  // ─── Handlers ─────────────────────────────────────────────────────────────
+
+  function openDialog() {
+    setFormAgentId(selectedAgentId)
+    setFormSourceGroupId(null)
+    setFormTargetGroupId(null)
+    setSearchQuery('')
+    setMembers([])
+    setSelectedUserIds([])
+    setIntervalSeconds(20)
+    setSendInviteLink(false)
+    setDialogOpen(true)
+  }
 
   function toggleUser(userId: number) {
     setSelectedUserIds((prev) =>
@@ -270,38 +237,21 @@ export default function AdminBulkAddPage() {
     )
   }
 
-  async function scrapeSourceGroup() {
-    if (!selectedAgentId || !selectedSourceGroupId) return
-    setScraping(true)
-    try {
-      await api.post(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups/${selectedSourceGroupId}/scrape-members`)
-      setSearchQuery((prev) => prev || ' ')
-      setTimeout(() => setSearchQuery((prev) => prev.trim() || ''), 100)
-    } catch (err: any) {
-      toast.error(err?.message || 'Scrape failed')
-    } finally {
-      setScraping(false)
-    }
-  }
-
-  async function refreshJobs() {
-    if (!selectedAgentId) return
-    const { data } = await api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/jobs`)
-    setJobs(data.filter((j) => j.job_type === 'member_add'))
-  }
-
   async function handleSubmit() {
-    if (!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length) return
+    if (!formAgentId || !formTargetGroupId || !selectedUserIds.length) return
     setSubmitting(true)
     try {
-      await api.post(`${AGENTS_API_PREFIX}/${selectedAgentId}/member-adds`, {
-        target_tg_group_id: selectedTargetGroupId,
+      await api.post(`${AGENTS_API_PREFIX}/${formAgentId}/member-adds`, {
+        target_tg_group_id: formTargetGroupId,
         interval_seconds: intervalSeconds,
         user_ids: selectedUserIds,
         send_invite_link_on_privacy_restricted: sendInviteLink,
       })
-      setSelectedUserIds([])
-      await refreshJobs()
+      toast.success(t('bulkadd.jobCreated'))
+      setDialogOpen(false)
+      if (selectedAgentId === formAgentId) {
+        loadJobs(selectedAgentId)
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Failed to create job')
     } finally {
@@ -309,133 +259,263 @@ export default function AdminBulkAddPage() {
     }
   }
 
+  async function syncAgentGroups() {
+    if (!selectedAgentId) return
+    setSyncing(true)
+    try {
+      const { data } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
+      setSourceGroups(data)
+      setTargetGroups(data.filter((g) => g.can_add_members))
+    } catch (err: any) {
+      toast.error(err?.message || t('bulkadd.syncFailed'))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // ─── DataTable definition ─────────────────────────────────────────────────
+
+  const columns: ColumnDef<AgentJobRecord>[] = [
+    {
+      key: 'id',
+      label: t('bulkadd.id'),
+      hideOnMobile: true,
+      render: (j) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>#{j.id}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (j) => statusBadge(j.status, j.job_payload),
+    },
+    {
+      key: 'target',
+      label: t('bulkadd.target'),
+      hideOnMobile: true,
+      render: (j) => {
+        const p = j.job_payload || {}
+        return <span style={{ fontSize: 13 }}>{String(p.target_tg_group_id ?? '—')}</span>
+      },
+    },
+    {
+      key: 'users',
+      label: t('bulkadd.users'),
+      render: (j) => {
+        const p = j.job_payload || {}
+        return String((p.user_ids as number[])?.length || 0)
+      },
+    },
+    {
+      key: 'results',
+      label: t('bulkadd.results'),
+      render: (j) => {
+        const p = j.job_payload || {}
+        const result = p.result as Record<string, number> | undefined
+        const progress = p.progress as Record<string, number> | undefined
+        const successCount = result?.success_count ?? progress?.success_count ?? 0
+        const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
+        const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
+        const totalProcessed = successCount + failureCount + skipCount
+        const userCount = (p.user_ids as number[])?.length || 0
+        const isComplete = j.status === 'completed' && totalProcessed > 0
+        const summary = isComplete
+          ? `${successCount} ${t('bulkadd.added')} · ${skipCount} ${t('bulkadd.skipped')} · ${failureCount} ${t('common.failed')}`
+          : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
+        return <span style={{ fontSize: 12 }}>{summary}</span>
+      },
+    },
+    {
+      key: 'created',
+      label: t('bulkadd.created'),
+      hideOnMobile: true,
+      render: (j) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{timeAgo(j.created_at)}</span>,
+    },
+  ]
+
+  const filters: DataTableFilter[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      options: [
+        { value: '', label: 'All statuses' },
+        { value: 'completed', label: 'Completed' },
+        { value: 'running', label: 'Running' },
+        { value: 'failed', label: 'Failed' },
+        { value: 'queued', label: 'Queued' },
+        { value: 'pending', label: 'Pending' },
+      ],
+    },
+  ]
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
-    <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={loading}>
-      <div className="grid-2col" style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
-        {/* Left: Form */}
-        <Card title={t('bulkadd.title')} subtitle={t('bulkadd.desc')}>
-          <div style={{ display: 'grid', gap: 14 }}>
+    <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={false}>
+      {/* Agent selector + actions bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: spacing.sm,
+        flexWrap: 'wrap',
+        marginBottom: spacing.lg,
+      }}>
+        <div style={{ minWidth: 220, flex: '1 1 220px' }}>
+          <Select
+            value={selectedAgentId ?? ''}
+            onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">{t('bulkadd.selectAgent')}</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.external_account_id || `${t('bulkadd.agent')} ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button variant="outline" size="sm" onClick={syncAgentGroups} disabled={!selectedAgentId || syncing}>
+          <RefreshCw size={14} /> {syncing ? t('bulkadd.syncing') : t('bulkadd.sync')}
+        </Button>
+        <div style={{ flex: 1 }} />
+        <Button onClick={openDialog} disabled={!selectedAgentId}>
+          <Plus size={14} /> {t('bulkadd.newJob')}
+        </Button>
+      </div>
 
-            {/* Agent select */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.agent')}</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <Select
-                  value={selectedAgentId ?? ''}
-                  onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
-                  style={{ flex: 1 }}
-                >
-                  <option value="">{t('bulkadd.selectAgent')}</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.external_account_id || `${t('bulkadd.agent')} ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}
-                    </option>
-                  ))}
-                </Select>
-                <Button variant="outline" size="sm" onClick={async () => {
-                  if (!selectedAgentId) return
-                  setSyncingGroups(true)
-                  try {
-                    const { data: freshGroups } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
-                    setSourceGroups(freshGroups)
-                    setTargetGroups(freshGroups.filter((g) => g.can_add_members))
-                  } catch (err: any) {
-                    toast.error(err?.message || t('bulkadd.syncFailed'))
-                  } finally {
-                    setSyncingGroups(false)
-                  }
-                }} disabled={!selectedAgentId || syncingGroups}>
-                  <RefreshCw size={14} /> {syncingGroups ? t('bulkadd.syncing') : t('bulkadd.sync')}
-                </Button>
-              </div>
-            </div>
+      {/* DataTable or empty state */}
+      {!selectedAgentId ? (
+        <Card>
+          <EmptyState
+            title={t('bulkadd.selectAgentPrompt')}
+            subtitle={t('bulkadd.selectAgentDesc')}
+          />
+        </Card>
+      ) : (
+        <DataTable<AgentJobRecord>
+          columns={columns}
+          data={jobs}
+          keyExtractor={(j) => j.id}
+          loading={jobsLoading}
+          searchPlaceholder={t('bulkadd.searchJobs')}
+          filters={filters}
+          title={t('bulkadd.recentJobs')}
+          subtitle={`${jobs.length} job${jobs.length !== 1 ? 's' : ''} for ${agents.find(a => a.id === selectedAgentId)?.external_account_id || `agent #${selectedAgentId}`}`}
+        />
+      )}
 
-            {/* Source group select */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.sourceGroup')}</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <div style={{ flex: 1 }}>
-                  <GroupAutoComplete
-                    items={sourceGroups}
-                    value={selectedSourceGroupId}
-                    onChange={setSelectedSourceGroupId}
-                    placeholder={sourceGroups.length ? t('bulkadd.selectSource') : t('bulkadd.noGroups')}
-                    getId={(g: any) => g.tg_group_id}
-                    getLabel={(g: any) => g.title}
-                  />
-                </div>
-                <Button variant="outline" size="sm" onClick={scrapeSourceGroup} disabled={!selectedSourceGroupId || scraping}>
-                  {scraping ? t('bulkadd.scraping') : t('bulkadd.scrape')}
-                </Button>
-              </div>
-            </div>
+      {/* ─── Dialog: New Bulk Add ─────────────────────────────────────────────── */}
+      <Dialog
+        open={dialogOpen}
+        title={t('bulkadd.title')}
+        description={t('bulkadd.desc')}
+        onClose={() => setDialogOpen(false)}
+      >
+        {/* Agent */}
+        <Field label={t('bulkadd.agent')}>
+          <Select
+            value={formAgentId ?? ''}
+            onChange={(e) => setFormAgentId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">{t('bulkadd.selectAgent')}</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.external_account_id || `${t('bulkadd.agent')} ${a.id}`}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-            {/* Target group select */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.targetGroup')}</label>
+        {/* Source Group */}
+        <Field label={t('bulkadd.sourceGroup')}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ flex: 1 }}>
               <GroupAutoComplete
-                items={targetGroups}
-                value={selectedTargetGroupId}
-                onChange={setSelectedTargetGroupId}
-                placeholder={targetGroups.length ? t('bulkadd.selectTarget') : t('bulkadd.noTargetGroups')}
+                items={sourceGroups}
+                value={formSourceGroupId}
+                onChange={setFormSourceGroupId}
+                placeholder={sourceGroups.length ? t('bulkadd.selectSource') : t('bulkadd.noGroups')}
                 getId={(g: any) => g.tg_group_id}
                 getLabel={(g: any) => g.title}
               />
             </div>
+          </div>
+        </Field>
 
-            {/* Member search */}
-            {selectedSourceGroupId && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.searchMembers')}</label>
-                <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder={t('bulkadd.searchPlaceholder')} style={{ width: '100%' }} />
-                <MemberSearchList members={members} searching={searching} selectedUserIds={selectedUserIds} onToggle={toggleUser} />
-                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
-              </div>
-            )}
+        {/* Target Group */}
+        <Field label={t('bulkadd.targetGroup')}>
+          <GroupAutoComplete
+            items={targetGroups}
+            value={formTargetGroupId}
+            onChange={setFormTargetGroupId}
+            placeholder={targetGroups.length ? t('bulkadd.selectTarget') : t('bulkadd.noTargetGroups')}
+            getId={(g: any) => g.tg_group_id}
+            getLabel={(g: any) => g.title}
+          />
+        </Field>
 
-            {/* Interval */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--ui-text-muted)' }}>{t('bulkadd.interval')}</label>
-              <Input
-                type="number"
-                value={intervalSeconds}
-                onChange={(e) => setIntervalSeconds(Math.max(1, Number(e.target.value)))}
-                min={1}
-              />
-            </div>
-
-            {/* Invite link checkbox */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+        {/* Member search */}
+        {formSourceGroupId && (
+          <Field label={t('bulkadd.searchMembers')}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{
+                position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                color: 'var(--ui-text-muted)', pointerEvents: 'none',
+              }} />
               <input
-                type="checkbox"
-                checked={sendInviteLink}
-                onChange={(e) => setSendInviteLink(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: 'var(--ui-primary)' }}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={t('bulkadd.searchPlaceholder')}
+                style={{
+                  width: '100%', minHeight: 38, borderRadius: 8,
+                  border: '1px solid var(--ui-border-strong)', padding: '0 30px 0 32px',
+                  background: 'var(--ui-surface-strong)', color: 'var(--ui-text)',
+                  fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                }}
               />
-              {t('bulkadd.sendInviteLink')}
-            </label>
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--ui-text-muted)', cursor: 'pointer', padding: 4 }}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <MemberSearchList members={members} searching={searching} selectedUserIds={selectedUserIds} onToggle={toggleUser} />
+            <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
+          </Field>
+        )}
 
-            {/* Submit */}
-            <Button
-              variant="default"
-              onClick={handleSubmit}
-              disabled={!selectedAgentId || !selectedTargetGroupId || !selectedUserIds.length || submitting}
-            >
-              <Send size={14} /> {submitting ? t('common.queuing') : `${t('bulkadd.queueJob')} (${selectedUserIds.length} ${t('bulkadd.users')})`}
-            </Button>
-          </div>
-        </Card>
+        {/* Interval */}
+        <Field label={t('bulkadd.interval')}>
+          <Input
+            type="number"
+            value={intervalSeconds}
+            onChange={(e) => setIntervalSeconds(Math.max(1, Number(e.target.value)))}
+            min={1}
+          />
+        </Field>
 
-        {/* Right: Recent Jobs */}
-        <Card title={t('bulkadd.recentJobs')} subtitle={t('bulkadd.recentJobsDesc')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <Button variant="outline" size="sm" onClick={refreshJobs}>
-              <RefreshCw size={14} /> {t('common.refresh')}
-            </Button>
-          </div>
-          <JobsTable jobs={jobs} selectedAgentId={selectedAgentId} onJobsUpdate={setJobs} />
-        </Card>
-      </div>
+        {/* Invite link checkbox */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={sendInviteLink}
+            onChange={(e) => setSendInviteLink(e.target.checked)}
+            style={{ width: 16, height: 16, accentColor: 'var(--ui-primary)' }}
+          />
+          {t('bulkadd.sendInviteLink')}
+        </label>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm }}>
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!formAgentId || !formTargetGroupId || !selectedUserIds.length || submitting}
+          >
+            <Send size={14} /> {submitting ? t('common.queuing') : `${t('bulkadd.queueJob')} (${selectedUserIds.length} ${t('bulkadd.users')})`}
+          </Button>
+        </div>
+      </Dialog>
     </PageShell>
   )
 }
