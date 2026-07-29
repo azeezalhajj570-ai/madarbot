@@ -167,6 +167,8 @@ export default function AdminBulkAddPage() {
   const [submitting, setSubmitting] = useState(false)
   const [searching, setSearching] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [memberPage, setMemberPage] = useState(1)
+  const [memberTotal, setMemberTotal] = useState(0)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [detailJob, setDetailJob] = useState<AgentJobRecord | null>(null)
   const [excludeAdminsAndBots, setExcludeAdminsAndBots] = useState(true)
@@ -216,16 +218,20 @@ export default function AdminBulkAddPage() {
     }).catch(() => { setSourceGroups([]); setTargetGroups([]) })
   }, [formAgentId])
 
+  const MEMBER_PAGE_SIZE = 50
+
   useEffect(() => {
-    if (!formAgentId || !formSourceGroupId) { setMembers([]); return }
+    if (!formAgentId || !formSourceGroupId) { setMembers([]); setMemberTotal(0); return }
     setSearching(true)
-    const params: Record<string, unknown> = { tg_group_id: formSourceGroupId, limit: 50 }
+    const params: Record<string, unknown> = { tg_group_id: formSourceGroupId, limit: MEMBER_PAGE_SIZE, page: memberPage }
     if (searchQuery.trim()) params.q = searchQuery.trim()
     api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${formAgentId}/member-search`, { params })
-      .then(({ data }) => setMembers(data.members || []))
-      .catch(() => setMembers([]))
+      .then(({ data }) => { setMembers(data.members || []); setMemberTotal(data.total) })
+      .catch(() => { setMembers([]); setMemberTotal(0) })
       .finally(() => setSearching(false))
-  }, [formAgentId, formSourceGroupId, searchQuery])
+  }, [formAgentId, formSourceGroupId, searchQuery, memberPage])
+
+  useEffect(() => { setMemberPage(1) }, [formSourceGroupId, searchQuery])
 
   const visibleMembers = useMemo(() => {
     if (!excludeAdminsAndBots) return members
@@ -234,7 +240,7 @@ export default function AdminBulkAddPage() {
 
   function openDialog() {
     setFormAgentId(selectedAgentId); setFormSourceGroupId(null); setFormTargetGroupId(null)
-    setSearchQuery(''); setMembers([]); setSelectedUserIds([]); setIntervalSeconds(20)
+    setSearchQuery(''); setMembers([]); setMemberTotal(0); setMemberPage(1); setSelectedUserIds([]); setIntervalSeconds(20)
     setSendInviteLink(false); setExcludeAdminsAndBots(true); setFormErrors({}); setDialogOpen(true)
   }
 
@@ -395,8 +401,17 @@ export default function AdminBulkAddPage() {
                  {visibleMembers.map((m) => <MemberRow key={m.user_id} m={m} isSelected={selectedUserIds.includes(m.user_id)} onToggle={toggleUser} />)}
                </div>
             }
-            <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
-            {formErrors.members && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.members}</div>}
+             <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
+             {memberTotal > MEMBER_PAGE_SIZE && !searching && (
+               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 6 }}>
+                 <button onClick={() => setMemberPage(Math.max(1, memberPage - 1))} disabled={memberPage <= 1}
+                   style={{ background: 'var(--ui-surface-strong)', border: '1px solid var(--ui-border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: memberPage <= 1 ? 'var(--ui-text-muted)' : 'var(--ui-text)' }}>Prev</button>
+                 <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{memberPage} / {Math.ceil(memberTotal / MEMBER_PAGE_SIZE)}</span>
+                 <button onClick={() => setMemberPage(memberPage + 1)} disabled={memberPage >= Math.ceil(memberTotal / MEMBER_PAGE_SIZE)}
+                   style={{ background: 'var(--ui-surface-strong)', border: '1px solid var(--ui-border)', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: memberPage >= Math.ceil(memberTotal / MEMBER_PAGE_SIZE) ? 'var(--ui-text-muted)' : 'var(--ui-text)' }}>Next</button>
+               </div>
+             )}
+             {formErrors.members && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.members}</div>}
           </Field>
         )}
         <Field label={t('bulkadd.interval')}>
