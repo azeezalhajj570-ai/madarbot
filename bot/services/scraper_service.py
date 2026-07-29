@@ -21,6 +21,7 @@ from bot.db.models import Agent, AgentJob, ScrapedConversation, ScrapedGroup, Sc
 from bot.db.models.scraper import ScrapedLead
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
+from bot.services.scrapers.conversation_builder import build_conversations_from_scrape
 
 logger = structlog.get_logger(__name__)
 
