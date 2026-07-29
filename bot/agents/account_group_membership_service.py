@@ -114,7 +114,16 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .limit(100 if normalized_query else 500)
             )
 
-            scraped_rows = (await self.session.execute(stmt)).scalars().all()
+            scraped_rows_all = (await self.session.execute(stmt)).scalars().all()
+            seen_tg_ids: set[int] = set()
+            scraped_rows: list[ScrapedGroup] = []
+            for row in scraped_rows_all:
+                tg_id = int(row.tg_group_id)
+                if tg_id in seen_tg_ids:
+                    continue
+                seen_tg_ids.add(tg_id)
+                scraped_rows.append(row)
+
             if not scraped_rows:
                 return []
 
