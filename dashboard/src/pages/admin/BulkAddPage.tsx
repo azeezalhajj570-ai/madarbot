@@ -204,8 +204,15 @@ export default function AdminBulkAddPage() {
   useEffect(() => {
     if (!formAgentId) { setSourceGroups([]); setTargetGroups([]); setFormSourceGroupId(null); setFormTargetGroupId(null); setMembers([]); return }
     api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${formAgentId}/groups`).then(({ data }) => {
-      setSourceGroups(data)
-      setTargetGroups(data.filter((g) => g.can_add_members))
+      const seen = new Set<number>()
+      const deduped: AgentGroup[] = []
+      for (const g of data) {
+        if (seen.has(g.tg_group_id)) continue
+        seen.add(g.tg_group_id)
+        deduped.push(g)
+      }
+      setSourceGroups(deduped)
+      setTargetGroups(deduped.filter((g) => g.can_add_members))
     }).catch(() => { setSourceGroups([]); setTargetGroups([]) })
   }, [formAgentId])
 
