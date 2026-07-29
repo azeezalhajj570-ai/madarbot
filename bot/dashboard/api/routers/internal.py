@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
 from bot.core.plugin_manager import PluginManager
 from bot.core.runtime.replay import RuntimeReplayService
-from bot.db.models import Group, GroupSetting, ModerationLog, PluginEnabled, Warning, AgentJob, SystemConfig, User as UserModel
+from bot.agents.service import AgentService
+from bot.db.models import Group, GroupAdminRole, GroupSetting, ModerationLog, PluginEnabled, Warning, AgentJob, SystemConfig, User as UserModel
 from bot.db.models.scraper import GroupKnowledge, ScrapedGroup
 from bot.db.session import get_session
+from bot.services.group_service import tg_group_id_candidates
 from bot.services.plugin_service import PluginService
 from bot.services.settings_service import SettingsService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
@@ -688,6 +690,43 @@ async def webapp_list_knowledge_groups(
     ).scalars().all()
     owned_tg_set = set(owned_tg_ids)
 
+    all_mg = (
+        await session.execute(select(Group.id, Group.tg_group_id).where(Group.tg_group_id.in_(list(owned_tg_set))))
+    ).all()
+    mg_ids = [row.id for row in all_mg]
+    mg_tg_to_id = {int(row.tg_group_id): row.id for row in all_mg}
+
+    accessible_mg_ids: set[int] = set()
+    if mg_ids:
+        role_rows = await session.execute(
+            select(GroupAdminRole.group_id).where(
+                GroupAdminRole.group_id.in_(mg_ids),
+                GroupAdminRole.user_id == identity.user_id,
+            )
+        )
+        accessible_mg_ids.update(row[0] for row in role_rows.all())
+
+        owner_rows = await session.execute(
+            select(Group.id)
+            .join(UserModel, Group.owner_user_id == UserModel.id)
+            .where(Group.id.in_(mg_ids), UserModel.tg_user_id == identity.user_id)
+        )
+        accessible_mg_ids.update(row[0] for row in owner_rows.all())
+
+    accessible_candidates: set[int] = set()
+    for tg_id, mg_id in mg_tg_to_id.items():
+        if mg_id in accessible_mg_ids:
+            accessible_candidates.update(tg_group_id_candidates(tg_id))
+
+    active_agent_ids: set[int] = set()
+    try:
+        active_agents = await AgentService(session).list_all_active_agents(
+            actor_user_id=identity.user_id
+        )
+        active_agent_ids = {int(a.id) for a in active_agents}
+    except Exception:
+        pass
+
     subq = (
         select(
             GroupKnowledge.scraped_group_id,
@@ -702,14 +741,25 @@ async def webapp_list_knowledge_groups(
             ScrapedGroup.id,
             ScrapedGroup.title,
             ScrapedGroup.tg_group_id,
+            ScrapedGroup.last_agent_id,
             subq.c.entry_count,
             subq.c.knowledge_types,
         )
         .outerjoin(subq, ScrapedGroup.id == subq.c.scraped_group_id)
-        .where(ScrapedGroup.tg_group_id.in_(owned_tg_set))
         .order_by(subq.c.entry_count.desc().nullsfirst())
     )
     result = await session.execute(stmt)
+    all_rows = result.all()
+
+    accessible_sg_ids: set[int] = set()
+    for row in all_rows:
+        candidates = tg_group_id_candidates(int(row.tg_group_id))
+        if any(c in accessible_candidates for c in candidates):
+            accessible_sg_ids.add(row.id)
+            continue
+        if row.last_agent_id is not None and int(row.last_agent_id) in active_agent_ids:
+            accessible_sg_ids.add(row.id)
+
     return [
         {
             "id": row.id,
@@ -718,11 +768,16 @@ async def webapp_list_knowledge_groups(
             "entry_count": row.entry_count or 0,
             "knowledge_types": row.knowledge_types or [],
         }
-        for row in result.all()
+        for row in all_rows
+        if row.id in accessible_sg_ids
     ]
 
 
-async def _assert_owner_has_scraped_group(session: AsyncSession, identity: TelegramWebAppIdentity, scraped_group_id: int) -> None:
+async def _assert_user_has_scraped_group_access(session: AsyncSession, identity: TelegramWebAppIdentity, scraped_group_id: int) -> None:
+    sg = await session.get(ScrapedGroup, scraped_group_id)
+    if sg is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+
     owned_tg_ids = (
         await session.execute(
             select(Group.tg_group_id)
@@ -731,9 +786,36 @@ async def _assert_owner_has_scraped_group(session: AsyncSession, identity: Teleg
         )
     ).scalars().all()
     owned_set = set(owned_tg_ids)
-    sg = await session.get(ScrapedGroup, scraped_group_id)
-    if sg is None or sg.tg_group_id not in owned_set:
-        raise HTTPException(status_code=404, detail="Group not found")
+    if sg.tg_group_id in owned_set:
+        return
+
+    candidates = tg_group_id_candidates(int(sg.tg_group_id))
+    mg_rows = await session.execute(
+        select(Group.id).where(Group.tg_group_id.in_(list(candidates)))
+    )
+    mg_ids = [row[0] for row in mg_rows.all()]
+
+    if mg_ids:
+        role_row = await session.execute(
+            select(GroupAdminRole.group_id).where(
+                GroupAdminRole.group_id.in_(mg_ids),
+                GroupAdminRole.user_id == identity.user_id,
+            )
+        )
+        if role_row.first() is not None:
+            return
+
+    try:
+        active_agents = await AgentService(session).list_all_active_agents(
+            actor_user_id=identity.user_id
+        )
+        active_agent_ids = {int(a.id) for a in active_agents}
+        if sg.last_agent_id is not None and int(sg.last_agent_id) in active_agent_ids:
+            return
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail="Group not found")
 
 
 @router.get("/webapp/owner/knowledge/groups/{group_id}")
@@ -742,7 +824,7 @@ async def webapp_list_group_knowledge(
     identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
-    await _assert_owner_has_scraped_group(session, identity, group_id)
+    await _assert_user_has_scraped_group_access(session, identity, group_id)
     stmt = (
         select(GroupKnowledge)
         .where(GroupKnowledge.scraped_group_id == group_id)
@@ -842,7 +924,7 @@ async def webapp_extract_group_knowledge(
     from bot.plugins.ai_pilot.system_config import load_ai_config
     from bot.db.session import SessionLocal
 
-    await _assert_owner_has_scraped_group(session, identity, group_id)
+    await _assert_user_has_scraped_group_access(session, identity, group_id)
     sys_config = await load_ai_config(session)
     max_messages = (payload or {}).get("max_messages", 2000)
 
@@ -889,7 +971,7 @@ async def webapp_get_extraction_status(
     identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _assert_owner_has_scraped_group(session, identity, group_id)
+    await _assert_user_has_scraped_group_access(session, identity, group_id)
     redis = _get_redis()
     if redis is None:
         return {"status": "unknown", "detail": "redis_unavailable"}
@@ -913,7 +995,7 @@ async def webapp_delete_knowledge_entry(
     entry = await session.get(GroupKnowledge, entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Entry not found")
-    await _assert_owner_has_scraped_group(session, identity, entry.scraped_group_id)
+    await _assert_user_has_scraped_group_access(session, identity, entry.scraped_group_id)
     await session.delete(entry)
     await session.commit()
     return {"status": "ok"}

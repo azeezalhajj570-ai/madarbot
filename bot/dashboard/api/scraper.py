@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,6 +214,110 @@ async def scrape_members(
         status=job.status,
         message="Member scraping job dispatched successfully",
     )
+
+
+@router.get("/jobs")
+async def list_scrape_jobs(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> list[dict[str, Any]]:
+    from bot.db.models.agent import Agent
+    from bot.db.models.scraper import ScrapedGroup
+    from sqlalchemy.orm import contains_eager
+    from bot.config import get_settings
+    import json, asyncio
+
+    stmt = (
+        select(AgentJob)
+        .join(Agent, AgentJob.agent_id == Agent.id)
+        .options(contains_eager(AgentJob.agent))
+        .where(
+            Agent.linked_by_user_id == identity.user_id,
+            AgentJob.job_type.in_([
+                "scraper_messages", "scraper_members", "scraper_group_info", "scraper_full_group",
+            ]),
+        )
+        .order_by(AgentJob.created_at.desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    jobs = result.unique().scalars().all()
+
+    tg_group_ids = {
+        int(j.job_payload["tg_group_id"])
+        for j in jobs if j.job_payload and j.job_payload.get("tg_group_id")
+    }
+    groups_map: dict[int, ScrapedGroup] = {}
+    if tg_group_ids:
+        gs = await session.execute(
+            select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(tg_group_ids))
+        )
+        for g in gs.scalars().all():
+            groups_map[int(g.tg_group_id)] = g
+
+    retry_counts: dict[int, int] = {}
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.Redis.from_url(get_settings().redis_url)
+        keys = await r.keys("dramatiq:*msgs")
+        for key in keys:
+            msgs = await r.hgetall(key)
+            for msg_id, raw in msgs.items():
+                try:
+                    data = json.loads(raw)
+                    args = data.get("args", [])
+                    if len(args) >= 2:
+                        jid = args[1]
+                        retry_counts[jid] = retry_counts.get(jid, 0) + 1
+                except Exception:
+                    pass
+        await r.aclose()
+    except Exception:
+        pass
+
+    job_id_set = {j.id for j in jobs}
+
+    return [
+        {
+            "job_id": j.id,
+            "agent_id": j.agent_id,
+            "agent_phone": j.agent.phone_number or j.agent.external_account_id,
+            "job_type": j.job_type,
+            "status": j.status,
+            "tg_group_id": int(j.job_payload["tg_group_id"]) if j.job_payload and j.job_payload.get("tg_group_id") else None,
+            "group_title": groups_map[int(j.job_payload["tg_group_id"])].title if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
+            "member_count": groups_map[int(j.job_payload["tg_group_id"])].member_count if j.job_payload and j.job_payload.get("tg_group_id") and int(j.job_payload["tg_group_id"]) in groups_map else None,
+            "progress": j.job_payload.get("progress") if j.job_payload else None,
+            "retry_count": retry_counts.get(j.id, 0),
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "updated_at": j.updated_at.isoformat() if j.updated_at else None,
+        }
+        for j in jobs
+    ]
+
+
+@router.get("/jobs/{job_id}/status")
+async def scrape_job_status(
+    job_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    job = await session.get(AgentJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    progress = None
+    if job.job_payload:
+        progress = job.job_payload.get("progress")
+    return {
+        "job_id": job.id,
+        "agent_id": job.agent_id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "progress": progress,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
 
 
 @router.post("/scrape/messages", response_model=ScrapeJobResponse)

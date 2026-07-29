@@ -789,6 +789,37 @@ export async function triggerScrapeMessages(
   return data
 }
 
+export async function fetchScrapeJobStatus(jobId: number): Promise<{
+  job_id: number
+  status: string
+  progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
+  created_at?: string
+  updated_at?: string
+}> {
+  const { data } = await api.get(`/webapp/scraper/jobs/${jobId}/status`)
+  return data
+}
+
+export interface ScrapeJobSummary {
+  job_id: number
+  agent_id: number
+  agent_phone?: string
+  job_type: string
+  status: string
+  tg_group_id?: number | null
+  group_title?: string | null
+  member_count?: number | null
+  progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
+  retry_count?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export async function fetchRecentScrapeJobs(limit = 10): Promise<ScrapeJobSummary[]> {
+  const { data } = await api.get(`/webapp/scraper/jobs?limit=${limit}`)
+  return data
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────
 
 export interface SearchResult {

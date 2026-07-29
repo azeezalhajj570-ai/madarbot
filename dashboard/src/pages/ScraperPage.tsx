@@ -10,6 +10,7 @@ import {
   fetchLeads,
   fetchMemberLeaderboard,
   fetchNudges,
+  fetchScrapeJobStatus,
   fetchScrapedConversations,
   fetchScrapedGroupDetail,
   fetchScrapedGroups,
@@ -52,6 +53,7 @@ export default function ScraperPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [scraping, setScraping] = useState(false)
   const [scrapeFeedback, setScrapeFeedback] = useState('')
+  const [lastScrapeJob, setLastScrapeJob] = useState<{ job_id: number; status: string; progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number } } | null>(null)
 
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'conversations' | 'search' | 'leaderboard' | 'leads' | 'nudges'>('conversations')
@@ -192,9 +194,11 @@ export default function ScraperPage() {
     setScraping(true)
     setError('')
     setScrapeFeedback('')
+    setLastScrapeJob(null)
     try {
       const maxAge = Number(scrapeMaxAge)
-      await triggerScrapeMessages(tgGroupId, selectedAgent.id, limit, Number.isFinite(maxAge) && maxAge > 0 ? maxAge : undefined)
+      const result = await triggerScrapeMessages(tgGroupId, selectedAgent.id, limit, Number.isFinite(maxAge) && maxAge > 0 ? maxAge : undefined)
+      setLastScrapeJob({ job_id: result.job_id, status: result.status })
       setScrapeFeedback(t('scraper.scrapeTriggered'))
     } catch {
       setError(t('common.failedToLoad'))
@@ -202,6 +206,33 @@ export default function ScraperPage() {
       setScraping(false)
     }
   }
+
+  useEffect(() => {
+    if (!lastScrapeJob) return
+    const activeJobIds = new Set<number>()
+    let cancelled = false
+
+    async function poll() {
+      if (cancelled || !lastScrapeJob) return
+      activeJobIds.add(lastScrapeJob.job_id)
+      try {
+        const status = await fetchScrapeJobStatus(lastScrapeJob.job_id)
+        if (cancelled) return
+        setLastScrapeJob({ job_id: status.job_id, status: status.status })
+        if (status.status === 'running' || status.status === 'pending') {
+          setTimeout(poll, 3000)
+        }
+      } catch {
+        if (!cancelled) setTimeout(poll, 5000)
+      }
+    }
+
+    if (lastScrapeJob.status === 'pending' || lastScrapeJob.status === 'running') {
+      setTimeout(poll, 1000)
+    }
+
+    return () => { cancelled = true }
+  }, [lastScrapeJob?.job_id])
 
   async function handleSearch(page = 1) {
     if (selectedGroupId == null || !searchQuery.trim()) return
@@ -309,6 +340,8 @@ export default function ScraperPage() {
       {error ? <InlineMessage tone="destructive">{error}</InlineMessage> : null}
       {scrapeFeedback ? <InlineMessage tone="success">{scrapeFeedback}</InlineMessage> : null}
 
+
+
       {selectedGroupId == null ? (
         <EmptyState
           title={t('scraper.noGroupSelected')}
@@ -380,6 +413,38 @@ export default function ScraperPage() {
               <Button onClick={() => void handleScrape()} disabled={scraping}>
                 {scraping ? t('common.scraping') : t('scraper.scrapeBtn')}
               </Button>
+              {lastScrapeJob ? (
+                <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', padding: '4px 0', width: '100%' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span>Job <strong>#{lastScrapeJob.job_id}</strong></span>
+                    <Badge tone={lastScrapeJob.status === 'completed' ? 'success' : lastScrapeJob.status === 'failed' ? 'destructive' : 'info'}>{lastScrapeJob.status}</Badge>
+                    {lastScrapeJob.progress && lastScrapeJob.progress.limit ? (
+                      <span style={{ color: 'var(--ui-text-muted)' }}>
+                        {lastScrapeJob.progress.total_fetched ?? 0} / {lastScrapeJob.progress.limit} messages
+                        {lastScrapeJob.progress.total_errors ? ` (${lastScrapeJob.progress.total_errors} errors)` : ''}
+                      </span>
+                    ) : null}
+                  </div>
+                  {lastScrapeJob.progress && lastScrapeJob.progress.limit ? (
+                    <div style={{
+                      marginTop: 6,
+                      width: '100%',
+                      height: 8,
+                      background: 'var(--ui-bg-muted)',
+                      borderRadius: 4,
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.round(((lastScrapeJob.progress.total_fetched ?? 0) / lastScrapeJob.progress.limit) * 100))}%`,
+                        height: '100%',
+                        background: lastScrapeJob.status === 'completed' ? 'var(--ui-success)' : lastScrapeJob.status === 'failed' ? 'var(--ui-destructive)' : 'var(--ui-accent)',
+                        borderRadius: 4,
+                        transition: 'width 1s ease',
+                      }} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </Card>
 
