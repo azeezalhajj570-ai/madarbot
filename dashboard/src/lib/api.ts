@@ -990,6 +990,73 @@ export async function fetchCompareUniversities(
   return data
 }
 
+// ─── Admission Overview ─────────────────────────────────────────────────
+
+export interface OverviewStats {
+  messages_today: number
+  messages_this_week: number
+  active_groups: number
+  monitored_groups: number
+}
+
+export interface TrendingUniversity {
+  name: string
+  mention_count_7d: number
+  mention_count_1d: number
+  trend: string
+}
+
+export interface HotTopic {
+  topic: string
+  mentions: number
+  trend: string
+}
+
+export interface AdmissionOverview {
+  stats: OverviewStats
+  trending_universities: TrendingUniversity[]
+  hot_topics: HotTopic[]
+  last_updated: string
+}
+
+export async function fetchAdmissionOverview(): Promise<AdmissionOverview> {
+  const { data } = await api.get('/api/admissions/overview')
+  return data
+}
+
+export interface ActivityPoint {
+  date: string
+  message_count: number
+}
+
+export async function fetchAdmissionActivity(): Promise<{ daily: ActivityPoint[] }> {
+  const { data } = await api.get('/api/admissions/activity')
+  return data
+}
+
+export async function fetchAdmissionUniversities(): Promise<{ universities: string[]; total: number }> {
+  const { data } = await api.get('/api/admissions/universities')
+  return data
+}
+
+export interface AdmissionLead {
+  sender_user_id: number | null
+  sender_name: string
+  message_text: string
+  signal: string
+  confidence: number
+  mentioned_universities: string[]
+  message_date: string
+  tg_group_id: number | null
+}
+
+export async function fetchAdmissionLeads(hoursBack = 24, minConfidence = 0.3): Promise<{ leads: AdmissionLead[]; total: number }> {
+  const { data } = await api.get('/api/admissions/extract-leads', {
+    params: { hours_back: hoursBack, min_confidence: minConfidence },
+  })
+  return data
+}
+
 // ─── Engagement Nudges ──────────────────────────────────────────────────
 
 export interface NudgeSuggestion {

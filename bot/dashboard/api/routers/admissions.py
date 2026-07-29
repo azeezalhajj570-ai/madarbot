@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.session import get_session
 from bot.dashboard.api.dependencies import get_identity
 from bot.services.admission_intelligence_service import AdmissionIntelligenceService
+from bot.services.admission_overview_service import AdmissionOverviewService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 router = APIRouter(tags=["Admissions"])
@@ -61,8 +63,125 @@ class CompareResponse(BaseModel):
     notes: str
 
 
+class TrendingUniversity(BaseModel):
+    name: str
+    mention_count_7d: int = 0
+    mention_count_1d: int = 0
+    trend: str = "stable"
+
+
+class HotTopic(BaseModel):
+    topic: str
+    mentions: int = 0
+    trend: str = "stable"
+
+
+class OverviewStats(BaseModel):
+    messages_today: int = 0
+    messages_this_week: int = 0
+    active_groups: int = 0
+    monitored_groups: int = 0
+
+
+class OverviewResponse(BaseModel):
+    stats: OverviewStats
+    trending_universities: list[TrendingUniversity]
+    hot_topics: list[HotTopic]
+    last_updated: str = ""
+
+
+class ActivityPoint(BaseModel):
+    date: str
+    message_count: int
+
+
+class ActivityResponse(BaseModel):
+    daily: list[ActivityPoint]
+
+
 def _service(session: AsyncSession = Depends(get_session)) -> AdmissionIntelligenceService:
     return AdmissionIntelligenceService(session)
+
+
+def _overview_service(request: Request, session: AsyncSession = Depends(get_session)) -> AdmissionOverviewService:
+    redis: Redis | None = getattr(request.app.state, "redis", None)
+    return AdmissionOverviewService(session, redis=redis)
+
+
+@router.get("/api/admissions/overview", response_model=OverviewResponse)
+async def get_admission_overview(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_overview()
+
+
+@router.get("/api/admissions/activity", response_model=ActivityResponse)
+async def get_admission_activity(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_activity()
+
+
+@router.get("/api/admissions/trending-universities")
+async def get_trending_universities(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_trending_universities()
+
+
+class UniversityInfo(BaseModel):
+    name: str
+
+
+class UniversitiesResponse(BaseModel):
+    universities: list[str]
+    total: int
+
+
+class AdmissionLead(BaseModel):
+    sender_user_id: int | None = None
+    sender_name: str = ""
+    message_text: str = ""
+    signal: str = ""
+    confidence: float = 0.0
+    mentioned_universities: list[str] = []
+    message_date: str = ""
+    tg_group_id: int | None = None
+
+
+class ExtractLeadsResponse(BaseModel):
+    leads: list[AdmissionLead]
+    total: int
+
+
+@router.get("/api/admissions/universities", response_model=UniversitiesResponse)
+async def list_universities(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_universities()
+
+
+@router.get("/api/admissions/extract-leads", response_model=ExtractLeadsResponse)
+async def extract_admission_leads(
+    hours_back: int = Query(24, description="Hours of history to scan"),
+    min_confidence: float = Query(0.3, description="Minimum confidence threshold"),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.extract_admission_leads(hours_back=hours_back, min_confidence=min_confidence)
+
+
+@router.post("/api/admissions/cache/refresh")
+async def refresh_admission_cache(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    await svc.clear_cache()
+    return {"status": "ok"}
 
 
 @router.get("/api/admissions/search", response_model=SearchResponse)
