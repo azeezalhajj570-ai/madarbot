@@ -71,21 +71,6 @@ class AccountGroupMembershipService(AgentServiceSupport):
             return []
 
         try:
-            # Scope groups to the current user's owned Group records
-            user_stmt = select(User).where(User.tg_user_id == actor_user_id)
-            user_result = await self.session.execute(user_stmt)
-            owner_user = user_result.scalar_one_or_none()
-            owned_tg_ids: set[int] = set()
-            if owner_user is not None:
-                group_rows = (
-                    await self.session.execute(
-                        select(Group.tg_group_id).where(Group.owner_user_id == owner_user.id)
-                    )
-                ).all()
-                owned_tg_ids = {int(r.tg_group_id) for r in group_rows}
-            if not owned_tg_ids:
-                return []
-
             normalized_query = str(query or "").strip()
             word_conditions = []
 
@@ -113,7 +98,6 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .distinct()
             )
             filters = [
-                ScrapedGroup.tg_group_id.in_(owned_tg_ids),
                 or_(
                     ScrapedGroup.id.in_(agent_group_ids_subq),
                     ScrapedGroup.last_agent_id == agent.id,
@@ -128,7 +112,15 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .limit(100 if normalized_query else 500)
             )
 
-            scraped_rows = list((await self.session.execute(stmt)).scalars().all())
+            scraped_rows_all = (await self.session.execute(stmt)).scalars().all()
+            seen: set[int] = set()
+            scraped_rows: list[ScrapedGroup] = []
+            for row in scraped_rows_all:
+                tid = int(row.tg_group_id)
+                if tid in seen:
+                    continue
+                seen.add(tid)
+                scraped_rows.append(row)
 
             if not scraped_rows:
                 return []
