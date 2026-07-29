@@ -1034,6 +1034,29 @@ export async function fetchAdmissionActivity(): Promise<{ daily: ActivityPoint[]
   return data
 }
 
+export async function fetchAdmissionUniversities(): Promise<{ universities: string[]; total: number }> {
+  const { data } = await api.get('/api/admissions/universities')
+  return data
+}
+
+export interface AdmissionLead {
+  sender_user_id: number | null
+  sender_name: string
+  message_text: string
+  signal: string
+  confidence: number
+  mentioned_universities: string[]
+  message_date: string
+  tg_group_id: number | null
+}
+
+export async function fetchAdmissionLeads(hoursBack = 24, minConfidence = 0.3): Promise<{ leads: AdmissionLead[]; total: number }> {
+  const { data } = await api.get('/api/admissions/extract-leads', {
+    params: { hours_back: hoursBack, min_confidence: minConfidence },
+  })
+  return data
+}
+
 // ─── Engagement Nudges ──────────────────────────────────────────────────
 
 export interface NudgeSuggestion {

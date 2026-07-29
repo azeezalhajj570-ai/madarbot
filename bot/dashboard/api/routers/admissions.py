@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.session import get_session
@@ -102,8 +103,9 @@ def _service(session: AsyncSession = Depends(get_session)) -> AdmissionIntellige
     return AdmissionIntelligenceService(session)
 
 
-def _overview_service(session: AsyncSession = Depends(get_session)) -> AdmissionOverviewService:
-    return AdmissionOverviewService(session)
+def _overview_service(request: Request, session: AsyncSession = Depends(get_session)) -> AdmissionOverviewService:
+    redis: Redis | None = getattr(request.app.state, "redis", None)
+    return AdmissionOverviewService(session, redis=redis)
 
 
 @router.get("/api/admissions/overview", response_model=OverviewResponse)
@@ -128,6 +130,58 @@ async def get_trending_universities(
     svc: AdmissionOverviewService = Depends(_overview_service),
 ):
     return await svc.get_trending_universities()
+
+
+class UniversityInfo(BaseModel):
+    name: str
+
+
+class UniversitiesResponse(BaseModel):
+    universities: list[str]
+    total: int
+
+
+class AdmissionLead(BaseModel):
+    sender_user_id: int | None = None
+    sender_name: str = ""
+    message_text: str = ""
+    signal: str = ""
+    confidence: float = 0.0
+    mentioned_universities: list[str] = []
+    message_date: str = ""
+    tg_group_id: int | None = None
+
+
+class ExtractLeadsResponse(BaseModel):
+    leads: list[AdmissionLead]
+    total: int
+
+
+@router.get("/api/admissions/universities", response_model=UniversitiesResponse)
+async def list_universities(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.get_universities()
+
+
+@router.get("/api/admissions/extract-leads", response_model=ExtractLeadsResponse)
+async def extract_admission_leads(
+    hours_back: int = Query(24, description="Hours of history to scan"),
+    min_confidence: float = Query(0.3, description="Minimum confidence threshold"),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    return await svc.extract_admission_leads(hours_back=hours_back, min_confidence=min_confidence)
+
+
+@router.post("/api/admissions/cache/refresh")
+async def refresh_admission_cache(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    await svc.clear_cache()
+    return {"status": "ok"}
 
 
 @router.get("/api/admissions/search", response_model=SearchResponse)

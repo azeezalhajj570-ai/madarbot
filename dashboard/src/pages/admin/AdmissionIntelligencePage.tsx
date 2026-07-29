@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Search, TrendingUp, MessageSquare, GitCompare, Loader2, Settings, Send, GraduationCap, Sparkles,
-  BarChart3, Users, MessageCircle, University,
+  BarChart3, Users, MessageCircle, University, Bookmark, BookmarkCheck, UserPlus,
 } from 'lucide-react'
 
 import {
   fetchScrapedGroups, fetchAdmissionSearch, fetchCutoffTrend, fetchStudentConcerns,
-  fetchCompareUniversities, fetchAdmissionOverview, type ScrapedGroupSummary,
-  type AdmissionOverview, type TrendingUniversity, type HotTopic,
+  fetchCompareUniversities, fetchAdmissionOverview, fetchAdmissionLeads,
+  type ScrapedGroupSummary, type AdmissionOverview, type TrendingUniversity,
+  type HotTopic, type AdmissionLead,
 } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { getStoredUser } from '../../lib/auth'
@@ -46,6 +47,26 @@ export default function AdminAdmissionIntelligencePage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const [savedUnis, setSavedUnis] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('admission:saved_unis') || '[]') } catch { return [] }
+  })
+  const [showLeads, setShowLeads] = useState(false)
+  const [leadHours, setLeadHours] = useState(24)
+
+  const { data: leads, isLoading: leadsLoading, refetch: refetchLeads } = useQuery({
+    queryKey: ['admission-leads', leadHours],
+    queryFn: () => fetchAdmissionLeads(leadHours),
+    enabled: false,
+  })
+
+  const toggleSavedUni = useCallback((name: string) => {
+    setSavedUnis(prev => {
+      const next = prev.includes(name) ? prev.filter(u => u !== name) : [...prev, name]
+      localStorage.setItem('admission:saved_unis', JSON.stringify(next))
+      return next
+    })
+  }, [])
 
   const { data: groups, isLoading: groupsLoading } = useQuery({
     queryKey: ['scraped-groups'],
@@ -235,20 +256,55 @@ export default function AdminAdmissionIntelligencePage() {
             {trending.length > 0 && (
               <Card title="Trending Universities">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {trending.slice(0, 8).map((u: TrendingUniversity, i: number) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                          {u.mention_count_7d} messages this week
+                  {trending.slice(0, 8).map((u: TrendingUniversity, i: number) => {
+                    const isSaved = savedUnis.includes(u.name)
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
+                            {u.mention_count_7d} messages this week
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            role="button" tabIndex={0}
+                            onClick={() => toggleSavedUni(u.name)}
+                            style={{ cursor: 'pointer', display: 'flex', color: isSaved ? 'var(--ui-primary)' : 'var(--ui-text-muted)' }}
+                            title={isSaved ? 'Unwatch' : 'Watch'}
+                          >
+                            {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                          </span>
+                          <TrendBadge trend={u.trend} />
+                          <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{u.mention_count_1d} today</span>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <TrendBadge trend={u.trend} />
-                        <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{u.mention_count_1d} today</span>
+                    )
+                  })}
+                </div>
+              </Card>
+            )}
+            {savedUnis.length > 0 && (
+              <Card title="Watched Universities">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {savedUnis.map((name, i) => {
+                    const match = trending.find(u => u.name === name)
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {match && <TrendBadge trend={match.trend} />}
+                          <span
+                            role="button" tabIndex={0}
+                            onClick={() => toggleSavedUni(name)}
+                            style={{ cursor: 'pointer', color: 'var(--ui-text-muted)', fontSize: 12 }}
+                          >
+                            Remove
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </Card>
             )}
@@ -275,6 +331,90 @@ export default function AdminAdmissionIntelligencePage() {
             </div>
           </Card>
         ) : null}
+
+        {/* Leads section */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Button variant="outline" size="sm" onClick={() => { setShowLeads(!showLeads); if (!showLeads) refetchLeads() }}>
+            <UserPlus size={14} />
+            {showLeads ? 'Hide Leads' : `Find Interested Students (${leadHours}h)`}
+          </Button>
+          {showLeads && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>Look back:</span>
+              {[6, 12, 24, 48].map(h => (
+                <span key={h} role="button" tabIndex={0}
+                  onClick={() => setLeadHours(h)}
+                  style={{
+                    fontSize: 12, cursor: 'pointer', padding: '2px 8px', borderRadius: 4,
+                    background: leadHours === h ? 'var(--ui-primary)' : 'var(--ui-bg-muted)',
+                    color: leadHours === h ? 'var(--ui-primary-text)' : 'var(--ui-text-muted)',
+                  }}
+                >{h}h</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {showLeads && (
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>Potential Admission Leads</div>
+              <Button variant="ghost" size="sm" onClick={() => refetchLeads()}>
+                <Loader2 size={12} style={leadsLoading ? { animation: 'spin 1s linear infinite' } : undefined} />
+                Refresh
+              </Button>
+            </div>
+            {leadsLoading ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--ui-text-muted)', fontSize: 14 }}>
+                Scanning discussions...
+              </div>
+            ) : leads && leads.leads.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                {leads.leads.map((lead: AdmissionLead, i: number) => (
+                  <div key={i} style={{
+                    padding: 10, border: '1px solid var(--ui-border)', borderRadius: 8,
+                    fontSize: 13,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>{lead.sender_name}</span>
+                      <span style={{
+                        fontSize: 12, fontWeight: 700,
+                        color: lead.confidence > 0.7 ? 'var(--ui-success)' : lead.confidence > 0.5 ? 'var(--ui-warning)' : 'var(--ui-text-muted)',
+                      }}>
+                        {Math.round(lead.confidence * 100)}% match
+                      </span>
+                    </div>
+                    <div style={{ color: 'var(--ui-text-secondary)', marginBottom: 4, lineHeight: 1.5 }}>
+                      "{lead.message_text.slice(0, 200)}{lead.message_text.length > 200 ? '...' : ''}"
+                    </div>
+                    {lead.mentioned_universities.length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                        {lead.mentioned_universities.map((u, j) => (
+                          <span key={j} style={{
+                            fontSize: 11, padding: '1px 6px', background: 'var(--ui-bg-muted)',
+                            borderRadius: 4, color: 'var(--ui-text-muted)',
+                          }}>{u}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: 'var(--ui-text-subtle)', marginTop: 4 }}>
+                      Signal: {lead.signal} · {lead.message_date?.slice(0, 10) || ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--ui-text-muted)', fontSize: 14 }}>
+                {leads ? 'No high-confidence leads found in this period.' : 'Click "Find Interested Students" to scan.'}
+              </div>
+            )}
+            {leads && leads.total > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 8 }}>
+                Showing {leads.leads.length} of {leads.total} potential leads
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* AI Query bar */}
         <Card>
