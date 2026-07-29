@@ -71,13 +71,26 @@ class AccountGroupMembershipService(AgentServiceSupport):
             return []
 
         try:
+            # Scope groups to the current user's owned Group records
+            user_stmt = select(User).where(User.tg_user_id == actor_user_id)
+            user_result = await self.session.execute(user_stmt)
+            owner_user = user_result.scalar_one_or_none()
+            owned_tg_ids: set[int] = set()
+            if owner_user is not None:
+                group_rows = (
+                    await self.session.execute(
+                        select(Group.tg_group_id).where(Group.owner_user_id == owner_user.id)
+                    )
+                ).all()
+                owned_tg_ids = {int(r.tg_group_id) for r in group_rows}
+            if not owned_tg_ids:
+                return []
+
             normalized_query = str(query or "").strip()
             word_conditions = []
 
-            # Multi-word "AND" search
             query_words = [w.strip() for w in normalized_query.split() if len(w.strip()) >= 1]
             for word in query_words:
-                # Ignore very short special chars if there are better words
                 if word in {"-", "_", ".", ","} and len(query_words) > 1:
                     continue
 
@@ -100,6 +113,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .distinct()
             )
             filters = [
+                ScrapedGroup.tg_group_id.in_(owned_tg_ids),
                 or_(
                     ScrapedGroup.id.in_(agent_group_ids_subq),
                     ScrapedGroup.last_agent_id == agent.id,
@@ -114,15 +128,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .limit(100 if normalized_query else 500)
             )
 
-            scraped_rows_all = (await self.session.execute(stmt)).scalars().all()
-            seen_tg_ids: set[int] = set()
-            scraped_rows: list[ScrapedGroup] = []
-            for row in scraped_rows_all:
-                tg_id = int(row.tg_group_id)
-                if tg_id in seen_tg_ids:
-                    continue
-                seen_tg_ids.add(tg_id)
-                scraped_rows.append(row)
+            scraped_rows = list((await self.session.execute(stmt)).scalars().all())
 
             if not scraped_rows:
                 return []
