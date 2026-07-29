@@ -375,12 +375,15 @@ class AgentListenerManager:
             ).scalar_one_or_none()
             group_id = int(agent.group_id) if agent and agent.group_id is not None else None
 
+            from bot.ai.config import get_user_ai_config
             from bot.plugins.ai_pilot.system_config import load_ai_config
-            sys_config = await load_ai_config(session)
-            provider_name = sys_config.get("ai_provider")
-            api_key = api_key or sys_config.get("ai_provider_api_key") or None
-            model = model or sys_config.get("ai_provider_model") or None
-            provider_url = provider_url or sys_config.get("ai_provider_base_url") or None
+
+            user_id = agent.linked_by_user_id or 0
+            user_cfg = await get_user_ai_config(session, user_id)
+            provider_name = user_cfg.get("provider", "")
+            api_key = api_key or user_cfg.get("api_key") or None
+            model = model or user_cfg.get("model") or None
+            provider_url = provider_url or user_cfg.get("base_url") or None
 
             if group_id is not None:
                 ssvc = SettingsService(session)

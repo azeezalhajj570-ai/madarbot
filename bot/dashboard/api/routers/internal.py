@@ -675,6 +675,66 @@ async def webapp_test_ai_config(
         return {"status": "error", "error": str(exc)}
 
 
+# ─── Per-User AI Config ─────────────────────────────────────────────────────
+
+USER_AI_ALLOWED = {"provider", "api_key", "model", "base_url", "embedding_api_key", "embedding_model", "pilot_enabled"}
+
+
+@router.get("/webapp/ai/config")
+async def webapp_get_user_ai_config(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.ai.config import get_user_ai_config
+    cfg = await get_user_ai_config(session, identity.user_id)
+    return {
+        "provider": cfg["provider"],
+        "api_key": cfg["api_key"],
+        "model": cfg["model"],
+        "base_url": cfg["base_url"],
+        "embedding_api_key": cfg["embedding_api_key"],
+        "embedding_model": cfg["embedding_model"],
+        "pilot_enabled": cfg["pilot_enabled"],
+    }
+
+
+@router.put("/webapp/ai/config")
+async def webapp_update_user_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    from bot.ai.config import save_user_ai_config
+    filtered = {k: v for k, v in payload.items() if k in USER_AI_ALLOWED}
+    if not filtered:
+        return {"status": "error", "error": "No valid keys"}
+    await save_user_ai_config(session, identity.user_id, filtered)
+    return {"status": "ok"}
+
+
+@router.post("/webapp/ai/config/test")
+async def webapp_test_user_ai_config(
+    payload: dict[str, Any],
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, Any]:
+    from bot.plugins.ai_pilot.provider import build_pilot_provider
+    provider = payload.get("provider", "openai")
+    api_key = payload.get("api_key", "")
+    model = payload.get("model", "")
+    base_url = payload.get("base_url", "")
+    try:
+        pilot = build_pilot_provider(
+            api_key=api_key or None, model=model or None,
+            base_url=base_url or None, provider_override=provider,
+        )
+        reply = await pilot.chat(
+            messages=[{"role": "user", "content": "Say exactly: connected"}],
+        )
+        return {"status": "ok", "reply": reply}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 @router.get("/webapp/owner/knowledge/groups")
 async def webapp_list_knowledge_groups(
     identity: TelegramWebAppIdentity = Depends(_require_bot_owner),
