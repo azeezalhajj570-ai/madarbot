@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Gift } from 'lucide-react'
 
-import { Badge, Card } from '../../components/ui/primitives'
+import { Badge, Button, Card, CardSkeleton, Field, Input, InlineMessage } from '../../components/ui/primitives'
 import { useI18n } from '../../lib/i18n'
+import { useToast } from '../../components/ui/toast'
 import { PageShell } from '../../lib/page-shell'
-import { fetchWorkspaceUsage } from '../../lib/api'
+import { fetchWorkspaceUsage, redeemPromoCode } from '../../lib/api'
 import { radius, spacing, typeScale, uiVars } from '../../../../shared/ui-system/tokens'
 
 function usagePct(active: number, limit: number | null): number {
@@ -17,15 +20,7 @@ function barTone(pct: number): string {
   return uiVars.primary
 }
 
-function ResourceUsageRow({
-  label,
-  active,
-  limit,
-}: {
-  label: string
-  active: number
-  limit: number | null
-}) {
+function ResourceUsageRow({ label, active, limit }: { label: string; active: number; limit: number | null }) {
   const pct = usagePct(active, limit)
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -37,14 +32,7 @@ function ResourceUsageRow({
       </div>
       <div style={{ height: 8, borderRadius: radius.xs, background: uiVars.bgMuted, overflow: 'hidden' }}>
         {limit !== null ? (
-          <div
-            style={{
-              height: '100%',
-              width: `${pct}%`,
-              background: barTone(pct),
-              transition: 'width 0.2s',
-            }}
-          />
+          <div style={{ height: '100%', width: `${pct}%`, background: barTone(pct), transition: 'width 0.2s' }} />
         ) : null}
       </div>
     </div>
@@ -53,10 +41,25 @@ function ResourceUsageRow({
 
 export default function AdminUsagePage() {
   const { t } = useI18n()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [code, setCode] = useState('')
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['workspace-usage'],
     queryFn: fetchWorkspaceUsage,
+  })
+
+  const redeemMutation = useMutation({
+    mutationFn: () => redeemPromoCode(code),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['workspace-usage'] })
+      setCode('')
+      toast.success(result.message || 'Code redeemed!')
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || 'Failed to redeem code')
+    },
   })
 
   return (
@@ -74,30 +77,44 @@ export default function AdminUsagePage() {
                 </div>
               </div>
               {usage.status ? (
-                <Badge tone={usage.status === 'active' ? 'success' : 'neutral'}>
+                <Badge tone={usage.status === 'active' ? 'success' : 'warning'}>
                   {usage.status}
                 </Badge>
               ) : null}
             </div>
-            {usage.source === 'none' ? (
-              <div style={{ fontSize: typeScale.caption, color: uiVars.textSubtle }}>
-                {t('usage.noPlanDesc')}
-              </div>
-            ) : null}
+            <div style={{ fontSize: typeScale.caption, color: uiVars.textSubtle }}>
+              {usage.source === 'none'
+                ? t('usage.noPlanDesc')
+                : usage.source === 'legacy'
+                  ? 'Legacy subscription'
+                  : 'Workspace subscription'}
+            </div>
           </Card>
 
           <Card style={{ display: 'grid', gap: spacing.lg }}>
             <div style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('usage.resources')}</div>
-            <ResourceUsageRow
-              label={t('usage.agents')}
-              active={usage.resources.agents.active}
-              limit={usage.resources.agents.limit}
-            />
-            <ResourceUsageRow
-              label={t('usage.groups')}
-              active={usage.resources.groups.active}
-              limit={usage.resources.groups.limit}
-            />
+            <ResourceUsageRow label={t('usage.agents')} active={usage.resources.agents.active} limit={usage.resources.agents.limit} />
+            <ResourceUsageRow label={t('usage.groups')} active={usage.resources.groups.active} limit={usage.resources.groups.limit} />
+          </Card>
+
+          <Card style={{ display: 'grid', gap: spacing.md }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Gift size={16} />
+              <span style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('usage.redeemCode')}</span>
+            </div>
+            <Field label={t('usage.code')} hint={t('usage.codeHint')}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input value={code} onChange={e => setCode(e.target.value)} placeholder="XXXX-XXXX" style={{ flex: 1 }} />
+                <Button onClick={() => redeemMutation.mutate()} disabled={!code.trim() || redeemMutation.isPending}>
+                  {redeemMutation.isPending ? t('common.redeeming') : t('common.redeem')}
+                </Button>
+              </div>
+            </Field>
+            {redeemMutation.isError && (
+              <InlineMessage tone="destructive">
+                {(redeemMutation.error as any)?.response?.data?.detail || 'Failed to redeem code'}
+              </InlineMessage>
+            )}
           </Card>
         </div>
       ) : null}
