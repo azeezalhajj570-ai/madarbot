@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.responses import Response
@@ -521,45 +522,24 @@ async def get_scraped_group(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped group not found")
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
-    member_total = (
-        select(func.count(ScrapedMember.id))
-        .where(ScrapedMember.scraped_group_id == ScrapedGroup.id)
-        .correlate(ScrapedGroup)
-        .scalar_subquery()
+    members_total, messages_total = await asyncio.gather(
+        session.scalar(select(func.count(ScrapedMember.id)).where(ScrapedMember.scraped_group_id == group.id)),
+        session.scalar(select(func.count(ScrapedMessage.id)).where(ScrapedMessage.scraped_group_id == group.id)),
     )
-    message_total = (
-        select(func.count(ScrapedMessage.id))
-        .where(ScrapedMessage.scraped_group_id == ScrapedGroup.id)
-        .correlate(ScrapedGroup)
-        .scalar_subquery()
-    )
-    row = (
-        await session.execute(
-            select(
-                ScrapedGroup,
-                member_total.label("members_total"),
-                message_total.label("messages_total"),
-            ).where(ScrapedGroup.id == group_id)
-        )
-    ).one()
 
     return {
-        "id": row.ScrapedGroup.id,
-        "tg_group_id": row.ScrapedGroup.tg_group_id,
-        "last_agent_id": row.ScrapedGroup.last_agent_id,
-        "title": row.ScrapedGroup.title,
-        "username": row.ScrapedGroup.username,
-        "group_type": row.ScrapedGroup.group_type,
-        "member_count": row.ScrapedGroup.member_count,
-        "description": row.ScrapedGroup.description,
-        "members_total": int(row.members_total or 0),
-        "messages_total": int(row.messages_total or 0),
-        "created_at": row.ScrapedGroup.created_at.isoformat()
-        if row.ScrapedGroup.created_at
-        else None,
-        "updated_at": row.ScrapedGroup.updated_at.isoformat()
-        if row.ScrapedGroup.updated_at
-        else None,
+        "id": group.id,
+        "tg_group_id": group.tg_group_id,
+        "last_agent_id": group.last_agent_id,
+        "title": group.title,
+        "username": group.username,
+        "group_type": group.group_type,
+        "member_count": group.member_count,
+        "description": group.description,
+        "members_total": int(members_total or 0),
+        "messages_total": int(messages_total or 0),
+        "created_at": group.created_at.isoformat() if group.created_at else None,
+        "updated_at": group.updated_at.isoformat() if group.updated_at else None,
     }
 
 
