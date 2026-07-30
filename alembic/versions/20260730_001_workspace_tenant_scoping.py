@@ -133,8 +133,8 @@ def upgrade() -> None:
     # =========================================================================
     op.execute(
         """
-        INSERT INTO tenants (owner_user_id, name, is_active, business_profile, settings)
-        SELECT u.id, COALESCE(NULLIF(u.full_name, ''), 'My Workspace'), true, '{}', '{}'
+        INSERT INTO tenants (owner_user_id, name, is_active, business_profile, settings, created_at, updated_at)
+        SELECT u.id, COALESCE(NULLIF(u.full_name, ''), 'My Workspace'), true, '{}', '{}', NOW(), NOW()
         FROM users u
         WHERE NOT EXISTS (
             SELECT 1 FROM tenants t WHERE t.owner_user_id = u.id
@@ -143,8 +143,8 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        INSERT INTO tenant_memberships (tenant_id, user_id, role, is_active)
-        SELECT t.id, t.owner_user_id, 'owner', true
+        INSERT INTO tenant_memberships (tenant_id, user_id, role, is_active, joined_at, created_at, updated_at)
+        SELECT t.id, t.owner_user_id, 'owner', true, NOW(), NOW(), NOW()
         FROM tenants t
         WHERE NOT EXISTS (
             SELECT 1 FROM tenant_memberships tm
