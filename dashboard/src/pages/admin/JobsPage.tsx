@@ -6,7 +6,7 @@ import { useToast } from '../../components/ui/toast'
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { useI18n } from '../../lib/i18n'
-import { fetchAdminOverview, fetchRecentScrapeJobs } from '../../lib/api'
+import { fetchAdminOverview, fetchRecentAgentJobs, fetchRecentScrapeJobs } from '../../lib/api'
 import { getStoredUser } from '../../lib/auth'
 import type { AdminOverview } from '../../lib/types'
 import type { ScrapeJobSummary } from '../../lib/api'
@@ -56,22 +56,25 @@ export default function AdminJobsPage() {
         if (cancelled) return
         const overview = await fetchAdminOverview()
         if (cancelled) return
+        const [knowledgeJobs] = await Promise.all([
+          fetchRecentAgentJobs('knowledge_extraction', 20).catch(() => []),
+        ])
         const seen = new Set(jobs.map(j => j.job_id))
-        const extra: ScrapeJobSummary[] = (overview.recent_jobs || [])
+        const extra: ScrapeJobSummary[] = [...knowledgeJobs, ...(overview.recent_jobs || [])]
           .filter(j => !seen.has(j.job_id))
           .map(j => ({
             job_id: j.job_id,
             agent_id: j.agent_id,
-            agent_phone: null,
+            agent_phone: undefined,
             job_type: j.job_type,
             status: j.status,
-            tg_group_id: null,
-            group_title: null,
-            member_count: null,
-            progress: null,
+            tg_group_id: undefined,
+            group_title: undefined,
+            member_count: undefined,
+            progress: undefined,
             retry_count: 0,
-            created_at: j.created_at ?? null,
-            updated_at: null,
+            created_at: j.created_at ?? undefined,
+            updated_at: undefined,
           }))
         setScrapeJobs([...jobs, ...extra])
       } catch { /* ignore */ } finally {

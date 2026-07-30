@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.core.runtime.moderation import ModerationRuntimeService
-from bot.db.models import Group, GroupAdminRole, GroupMember, ModerationLog, ScrapedGroup, User
+from bot.db.models import Agent, AgentJob, Group, GroupAdminRole, GroupMember, ModerationLog, ScrapedGroup, User
 from bot.db.session import get_session
 from bot.services.admin_activity_service import AdminActivityService
 from bot.services.admin_group_member_service import (
@@ -862,6 +862,31 @@ async def webapp_cancel_subscription(
     if not cancelled:
         raise HTTPException(status_code=404, detail="No active subscription found for this user")
     return {"status": "ok", "message": "Subscription cancelled"}
+
+
+@router.get("/api/admin/jobs")
+async def admin_list_jobs(
+    job_type: str = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    stmt = select(
+        AgentJob.id, AgentJob.agent_id, AgentJob.job_type, AgentJob.status, AgentJob.created_at
+    ).order_by(AgentJob.created_at.desc()).limit(limit)
+    if job_type:
+        stmt = stmt.where(AgentJob.job_type == job_type)
+    rows = (await session.execute(stmt)).all()
+    return [
+        {
+            "job_id": row.id,
+            "agent_id": row.agent_id,
+            "job_type": row.job_type,
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
 
 
 __all__ = ["router"]

@@ -17,14 +17,17 @@ from bot.db.models.scraper import GroupKnowledge
 logger = structlog.get_logger(__name__)
 
 KNOWLEDGE_EXTRACTION_PROMPT = """Analyze these Telegram group messages and extract structured knowledge.
-Return a JSON object with these keys:
+Return a valid JSON object. The outermost value MUST be a JSON object wrapped in curly braces { }. Do NOT return just an array or a bare key.
 
-"faqs": Array of {question, answer, category, keywords[]} for frequently asked questions with clear answers.
-"topics": Array of {topic, description, message_count, sentiment (positive/neutral/negative)} for discussion themes.
-"entities": Array of {name, type(person/organization/product/link/event), mentions, context} for mentioned things.
-"decisions": Array of {decision, rationale, participants[], confidence (0.0-1.0)} for group decisions/consensus.
-"trends": Array of {trend, direction(rising/stable/declining), evidence} for observable patterns.
-"insights": Array of {insight, importance (low/medium/high), actionable (true/false)} for key takeaways.
+Expected format:
+{
+  "faqs": [{"question": "...", "answer": "...", "category": "...", "keywords": ["..."]}],
+  "topics": [{"topic": "...", "description": "...", "message_count": 0, "sentiment": "neutral"}],
+  "entities": [{"name": "...", "type": "person", "mentions": 0, "context": "..."}],
+  "decisions": [{"decision": "...", "rationale": "...", "participants": [], "confidence": 0.0}],
+  "trends": [{"trend": "...", "direction": "stable", "evidence": "..."}],
+  "insights": [{"insight": "...", "importance": "medium", "actionable": false}]
+}
 
 Only include items with confidence >= 0.6. Be concise. Focus on actionable knowledge.
 
@@ -507,6 +510,7 @@ class KnowledgeExtractor:
         if text.startswith("```"):
             lines = text.split("\n")
             text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            text = text.strip()
         try:
             return json.loads(text)
         except json.JSONDecodeError:
@@ -516,5 +520,13 @@ class KnowledgeExtractor:
                 if start >= 0 and end > start:
                     return json.loads(text[start:end])
             except json.JSONDecodeError:
-                return None
+                pass
+            # Some models return unwrapped JSON: "key": [...] instead of {"key": [...]}
+            try:
+                if text.startswith('"') or text.startswith("'"):
+                    wrapped = "{" + text + "}"
+                    return json.loads(wrapped)
+            except json.JSONDecodeError:
+                pass
+            return None
         return None
