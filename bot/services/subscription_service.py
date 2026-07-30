@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import SubscriptionRequest, SubscriptionStatus
+from bot.db.models import (
+    Agent,
+    Group,
+    Plan,
+    PlanFeature,
+    Subscription,
+    SubscriptionRequest,
+    SubscriptionStatus,
+)
 
 
 def build_owner_notification(
@@ -272,3 +280,92 @@ class SubscriptionService:
         active.response_by = responder_id
         await self.session.commit()
         return True
+
+    # ─── Tenant-scoped (workspace) usage — see specs/015-workspace-mvp ────────
+
+    async def get_active_subscription_for_tenant(self, tenant_id: int) -> Subscription | None:
+        return (
+            await self.session.execute(
+                select(Subscription).where(
+                    Subscription.tenant_id == tenant_id,
+                    Subscription.status == "active",
+                )
+            )
+        ).scalar_one_or_none()
+
+    async def get_workspace_usage(self, *, tenant_id: int, tg_user_id: int) -> dict:
+        """Plan + resource usage for a workspace's dashboard usage page.
+
+        Prefers the tenant-scoped Subscription (bot/db/models/billing.py)
+        when one exists. Nothing populates those yet in practice, so this
+        falls back to the legacy per-user SubscriptionRequest for the plan
+        label — resource counts (agents/groups) are always real, queried
+        directly from the tenant_id-scoped tables, regardless of which
+        subscription source is used.
+        """
+        subscription = await self.get_active_subscription_for_tenant(tenant_id)
+        plan_features: dict[str, PlanFeature] = {}
+        plan_label: str | None = None
+        plan_slug: str | None = None
+        status_value: str | None = None
+        source = "none"
+
+        if subscription is not None:
+            plan = (
+                await self.session.execute(select(Plan).where(Plan.id == subscription.plan_id))
+            ).scalar_one_or_none()
+            if plan is not None:
+                plan_label = plan.name
+                plan_slug = plan.slug
+                rows = (
+                    (
+                        await self.session.execute(
+                            select(PlanFeature).where(PlanFeature.plan_id == plan.id)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                plan_features = {row.feature_key: row for row in rows}
+            status_value = subscription.status
+            source = "workspace"
+        else:
+            legacy = await self.get_active_subscription(tg_user_id=tg_user_id)
+            if legacy is not None:
+                plan_label = legacy.plan
+                plan_slug = legacy.plan
+                status_value = legacy.status
+                source = "legacy"
+
+        from bot.config import get_settings
+
+        free_limits = get_settings().FREE_PLAN_LIMITS
+
+        agent_count = await self.session.scalar(
+            select(func.count(Agent.id)).where(Agent.tenant_id == tenant_id)
+        )
+        group_count = await self.session.scalar(
+            select(func.count(Group.id)).where(Group.tenant_id == tenant_id)
+        )
+
+        def _limit(feature_key: str, legacy_key: str | None) -> int | None:
+            pf = plan_features.get(feature_key)
+            if pf is not None:
+                return pf.limit_value if pf.enabled else 0
+            if source == "legacy" and legacy_key:
+                return free_limits.get(legacy_key)
+            return None
+
+        return {
+            "plan": plan_label,
+            "plan_slug": plan_slug,
+            "status": status_value,
+            "source": source,
+            "resources": {
+                "agents": {"active": int(agent_count or 0), "limit": _limit("max_agents", None)},
+                "groups": {
+                    "active": int(group_count or 0),
+                    "limit": _limit("max_groups", "max_groups"),
+                },
+            },
+        }

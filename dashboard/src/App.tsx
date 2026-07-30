@@ -19,6 +19,7 @@ import AdminKnowledgePage from './pages/admin/KnowledgePage'
 import AgentsPage from './pages/AgentsPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminWorkspacePage from './pages/admin/WorkspacePage'
+import AdminUsagePage from './pages/admin/UsagePage'
 import ScraperPage from './pages/ScraperPage'
 
 const queryClient = new QueryClient()
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/admin/knowledge" element={<GuardRoute path="/admin/knowledge"><AdminKnowledgePage /></GuardRoute>} />
             <Route path="/admin/admissions" element={<GuardRoute path="/admin/admissions"><AdminAdmissionIntelligencePage /></GuardRoute>} />
             <Route path="/admin/workspace" element={<GuardRoute path="/admin/workspace"><AdminWorkspacePage /></GuardRoute>} />
+            <Route path="/admin/usage" element={<GuardRoute path="/admin/usage"><AdminUsagePage /></GuardRoute>} />
             <Route path="/admin/scraper" element={<GuardRoute path="/admin/scraper"><ScraperPage /></GuardRoute>} />
             <Route path="*" element={<Navigate to="/workspace" replace />} />
           </Route>
