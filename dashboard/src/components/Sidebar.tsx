@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2 } from 'lucide-react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
@@ -8,6 +8,7 @@ import { useTheme } from '../lib/theme'
 
 const NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
+  { to: '/admin/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
   { to: '/admin/scraper', label: 'nav.scraper', icon: Search },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },

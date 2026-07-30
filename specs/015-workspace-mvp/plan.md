@@ -8,6 +8,13 @@
 
 Reuse the existing `Tenant` model as the workspace entity to let multiple Telegram users share management of agents, groups, and a single subscription. Each existing user gets an auto-created single-member workspace via migration. The hidden `AGENTS_WORKSPACE_TG_GROUP_BASE` hack is replaced by the `Tenant` model. Minimal API additions: workspace CRUD, member invitations, and re-scoping existing agent/group queries to `tenant_id`.
 
+**Revised 2026-07-30** after investigation surfaced three gaps in the original plan (see `research.md` for full rationale):
+1. `billing.py`'s `Subscription`/`Entitlement` is currently dead code (not "already integrated" as first assumed) — this branch is what actually wires it up, and adds `PlanFeature`/`FeatureUsage` to also cover branch `feature/015-saas-subscription-architecture`'s (#164) usage-tracking needs, avoiding two incompatible `plans`/`subscriptions` schemas.
+2. `groups.tenant_id` already exists as a DB column (added by `20260504_db_redesign.py`) but was never mapped in the `Group` ORM model — this is a surfacing job, not a new migration, for `Group`.
+3. Every live `actor_user_id` in the dashboard API is a raw `tg_user_id`, while `TenantMembership`/`Tenant` key on `users.id` — a new `get_or_create_user_by_tg_id` resolver is required before any membership check can run.
+
+`LinkedAccount`/`ChannelAccount` (a separate tenant-scoped schema already built to replace `Agent`, but only wired to the WhatsApp/Evolution product line) is explicitly **not** reused here — see research.md's "Do Not Reuse LinkedAccount" decision.
+
 ## Technical Context
 
 **Language/Version**: Python 3.11+
@@ -66,15 +73,23 @@ specs/015-workspace-mvp/
 bot/
 ├── db/models/
 │   ├── tenant.py          # Already exists: Tenant, TenantMembership, UserIdentity
-│   └── billing.py         # Already exists: Subscription, Entitlement, etc.
+│   ├── billing.py         # Already exists (unused today): Subscription, Entitlement, etc.
+│   │                      #   MODIFY: add PlanFeature, FeatureUsage
+│   ├── agent.py           # MODIFY: add tenant_id column
+│   └── group.py           # MODIFY: map already-existing tenant_id DB column
 ├── services/
 │   ├── workspace_service.py      # NEW: workspace CRUD + member management
-│   └── subscription_service.py   # EXISTING: extend for tenant-scoped checks
-├── dashboard/api/routers/
-│   └── workspace.py              # NEW: API endpoints
+│   ├── user_service.py           # MODIFY: add get_or_create_user_by_tg_id
+│   ├── subscription_service.py   # EXISTING: extend for tenant-scoped checks
+│   └── linked_account_service.py # MODIFY: drop AGENTS_WORKSPACE_TG_GROUP_BASE hack
+├── dashboard/api/
+│   ├── routers/workspace.py      # NEW: API endpoints
+│   └── dependencies.py           # MODIFY: resolve users.id + active_workspace_id in get_identity
 ├── dashboard/frontend/
 │   └── index.html                # MODIFY: add workspace switcher + invite UI
 ```
+
+**Out of scope, flagged for a separate branch**: `specs/015-saas-subscription-architecture/data-model.md` (branch `feature/015-saas-subscription-architecture`) still specs a standalone `plans`/`subscriptions`/`features`/`plan_features`/`resources`/`feature_usage` schema that collides table-for-table with `billing.py`. That branch needs to be updated to build on `billing.py` + `PlanFeature` + `FeatureUsage` (introduced here) instead, before it ships.
 
 **Structure Decision**: Follow existing patterns — new service file for workspace logic, new router file for API endpoints, minimal frontend changes integrated into the existing SPA.
 

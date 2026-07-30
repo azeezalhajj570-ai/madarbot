@@ -20,6 +20,26 @@ export interface Workspace {
   isOwner: boolean
 }
 
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer'
+
+export interface TeamWorkspace {
+  id: number
+  name: string
+  slug: string | null
+  role: WorkspaceRole
+  member_count: number
+  subscription: { plan: string | null; status: string } | null
+}
+
+export interface TeamWorkspaceMember {
+  user_id: number
+  tg_user_id: number | null
+  username: string | null
+  full_name: string | null
+  role: WorkspaceRole
+  joined_at: string
+}
+
 export interface ModQueueItem {
   id: number
   userId: number

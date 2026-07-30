@@ -38,6 +38,11 @@ class Group(Base):
     registered_by_user_id: Mapped[Optional[int]] = mapped_column(
         BigInteger, nullable=True, index=True
     )
+    # Column already exists in the DB (added by 20260504_db_redesign.py) — this just
+    # surfaces it to the ORM. See specs/015-workspace-mvp/research.md.
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 

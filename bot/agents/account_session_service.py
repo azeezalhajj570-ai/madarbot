@@ -14,7 +14,6 @@ from bot.agents.session import SessionManager
 from bot.core.event_bus import EventBus
 from bot.db.models import Agent
 
-from .linked_account_service import LinkedAccountService
 from .phone import normalize_agent_phone_number
 from .service_errors import AgentAuthStateError
 from .service_support import AgentServiceSupport
@@ -96,17 +95,12 @@ class AccountSessionService(AgentServiceSupport):
         auth_service = auth_service or AgentTelegramAuthService()
         auth_session = await auth_service.start_login(phone_number=normalized_phone)
         if agent is None:
-            resolved_group_id = (
-                group_id
-                if group_id
-                else await LinkedAccountService(self.session).ensure_agents_workspace_group(
-                    actor_user_id=actor_user_id
-                )
-            )
+            tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
             agent = Agent(
                 telegram_user_id=None,
                 linked_by_user_id=actor_user_id,
-                group_id=resolved_group_id,
+                tenant_id=tenant_id,
+                group_id=group_id or None,
                 phone_number=normalized_phone,
                 external_account_id=normalized_phone,
                 status="pending",

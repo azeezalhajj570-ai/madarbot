@@ -8,6 +8,9 @@ import type {
   RuleKey,
   TimelineEvent,
   Workspace,
+  TeamWorkspace,
+  TeamWorkspaceMember,
+  WorkspaceRole,
   OwnerGroup,
   OwnerMetrics,
   OwnerSubscriptionRequest,
@@ -67,6 +70,7 @@ const AUTH_API_PREFIX = '/api/auth'
 const ADMIN_API_PREFIX = '/api/admin'
 const AGENTS_API_PREFIX = '/api/agents'
 const OWNER_API_PREFIX = '/webapp/owner'
+const WORKSPACE_API_PREFIX = '/api/workspace'
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token')
@@ -104,6 +108,52 @@ export async function telegramLogin(payload: Record<string, unknown>) {
 export async function fetchCurrentUser(token?: string) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined
   const { data } = await api.get(`${AUTH_API_PREFIX}/me`, { headers })
+  return data
+}
+
+// ─── Team Workspaces ──────────────────────────────────────────────────────────
+
+export async function fetchTeamWorkspaces(): Promise<{ workspaces: TeamWorkspace[] }> {
+  const { data } = await api.get<{ workspaces: TeamWorkspace[] }>(WORKSPACE_API_PREFIX)
+  return data
+}
+
+export async function createTeamWorkspace(name: string): Promise<TeamWorkspace> {
+  const { data } = await api.post<TeamWorkspace>(WORKSPACE_API_PREFIX, { name })
+  return data
+}
+
+export async function fetchTeamWorkspaceMembers(
+  workspaceId: number,
+): Promise<{ members: TeamWorkspaceMember[] }> {
+  const { data } = await api.get<{ members: TeamWorkspaceMember[] }>(
+    `${WORKSPACE_API_PREFIX}/${workspaceId}/members`,
+  )
+  return data
+}
+
+export async function inviteTeamWorkspaceMember(
+  workspaceId: number,
+  identifier: string,
+  role: WorkspaceRole = 'member',
+): Promise<{ user_id: number; role: WorkspaceRole }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/${workspaceId}/invite`, { identifier, role })
+  return data
+}
+
+export async function removeTeamWorkspaceMember(workspaceId: number, memberUserId: number): Promise<void> {
+  await api.delete(`${WORKSPACE_API_PREFIX}/${workspaceId}/members/${memberUserId}`)
+}
+
+export async function changeTeamWorkspaceMemberRole(
+  workspaceId: number,
+  memberUserId: number,
+  role: WorkspaceRole,
+): Promise<{ user_id: number; role: WorkspaceRole }> {
+  const { data } = await api.patch(
+    `${WORKSPACE_API_PREFIX}/${workspaceId}/members/${memberUserId}/role`,
+    { role },
+  )
   return data
 }
 
