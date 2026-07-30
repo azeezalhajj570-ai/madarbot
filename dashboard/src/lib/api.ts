@@ -74,9 +74,14 @@ const OWNER_API_PREFIX = '/webapp/owner'
 const WORKSPACE_API_PREFIX = '/api/workspace'
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  // Don't clobber an explicitly-set Authorization header (e.g. fetchCurrentUser
+  // during login, which must use the freshly-issued token, not whatever stale
+  // token from a previous session is still sitting in localStorage).
+  if (!config.headers.Authorization) {
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
   config.headers['X-App-Boundary'] = 'admin'
   return config

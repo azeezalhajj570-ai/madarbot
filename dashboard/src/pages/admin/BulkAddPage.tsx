@@ -8,7 +8,6 @@ import { useToast } from '../../components/ui/toast'
 import { GroupAutoComplete } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import api, { fetchAgents } from '../../lib/api'
-import { getStoredUser } from '../../lib/auth'
 import { spacing } from '../../../../shared/ui-system/tokens'
 import type { Agent, AgentJobRecord } from '../../lib/types'
 
@@ -139,13 +138,6 @@ function MemberRow({ m, isSelected, onToggle }: { m: MemberItem; isSelected: boo
 export default function AdminBulkAddPage() {
   const { t } = useI18n()
   const { toast } = useToast()
-  const user = getStoredUser()
-
-  if (user?.role !== 'admin' && user?.role !== 'owner') {
-    return <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={false}>
-      <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
-    </PageShell>
-  }
 
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentsLoading, setAgentsLoading] = useState(true)
