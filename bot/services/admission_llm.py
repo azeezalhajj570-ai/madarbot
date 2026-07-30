@@ -7,24 +7,54 @@ import aiohttp
 import structlog
 
 from bot.config import get_settings
+from bot.db.models.system_config import SystemConfig
 from bot.db.models.user_ai_config import UserAIConfig
 from bot.db.session import SessionLocal
 
 logger = structlog.get_logger(__name__)
 
 _USER_AI_CONFIG_CACHE: dict[int, dict[str, Any]] = {}
+_SYSTEM_AI_CONFIG_CACHE: dict[str, Any] | None = None
 
 
-async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
-    """Load per-user AI config from DB, falling back to env defaults."""
-    if user_id and user_id in _USER_AI_CONFIG_CACHE:
-        return _USER_AI_CONFIG_CACHE[user_id]
+async def get_system_ai_config() -> dict[str, Any]:
+    """Load global AI config from system_config table, falling back to env vars."""
+    global _SYSTEM_AI_CONFIG_CACHE
+    if _SYSTEM_AI_CONFIG_CACHE is not None:
+        return _SYSTEM_AI_CONFIG_CACHE
     result: dict[str, Any] = {
         "provider": get_settings().ai_provider,
         "api_key": None,
         "model": None,
         "base_url": None,
     }
+    try:
+        async with SessionLocal() as session:
+            from sqlalchemy import select
+            rows = (await session.execute(
+                select(SystemConfig).where(SystemConfig.key.like('ai_%'))
+            )).scalars().all()
+            cfg = {r.key: r.value for r in rows}
+            if cfg.get("ai_provider") and cfg["ai_provider"] != "heuristic":
+                result["provider"] = cfg["ai_provider"]
+                result["api_key"] = cfg.get("ai_provider_api_key")
+                result["model"] = cfg.get("ai_provider_model")
+                result["base_url"] = cfg.get("ai_provider_base_url")
+    except Exception as exc:
+        logger.warning("system_ai_config_load_failed", error=str(exc))
+    _SYSTEM_AI_CONFIG_CACHE = result
+    return result
+
+
+async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
+    """Load per-user AI config from DB, falling back to system_config then env."""
+    if user_id and user_id in _USER_AI_CONFIG_CACHE:
+        return _USER_AI_CONFIG_CACHE[user_id]
+
+    # Start with system-level config (from system_config table or env)
+    result = await get_system_ai_config()
+
+    # Check per-user override
     if user_id:
         try:
             async with SessionLocal() as session:
@@ -34,9 +64,12 @@ async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
                 )).scalar_one_or_none()
                 if row and row.provider != "heuristic":
                     result["provider"] = row.provider
-                    result["api_key"] = row.api_key
-                    result["model"] = row.model
-                    result["base_url"] = row.base_url
+                    if row.api_key:
+                        result["api_key"] = row.api_key
+                    if row.model:
+                        result["model"] = row.model
+                    if row.base_url:
+                        result["base_url"] = row.base_url
                     _USER_AI_CONFIG_CACHE[user_id] = result
         except Exception as exc:
             logger.warning("user_ai_config_load_failed", user_id=user_id, error=str(exc))
