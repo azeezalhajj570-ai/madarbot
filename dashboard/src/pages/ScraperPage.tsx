@@ -56,7 +56,7 @@ export default function ScraperPage() {
   const [lastScrapeJob, setLastScrapeJob] = useState<{ job_id: number; status: string; progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number } } | null>(null)
 
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'conversations' | 'search' | 'leaderboard' | 'leads' | 'nudges'>('conversations')
+  const [activeTab, setActiveTab] = useState<'conversations' | 'search' | 'leaderboard' | 'leads' | 'nudges'>('leaderboard')
 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -116,15 +116,9 @@ export default function ScraperPage() {
       setGroupDetailLoading(true)
       setError('')
       try {
-        const [detail, convData] = await Promise.all([
-          fetchScrapedGroupDetail(selectedGroupId),
-          fetchScrapedConversations(selectedGroupId, 1),
-        ])
+        const detail = await fetchScrapedGroupDetail(selectedGroupId)
         if (cancelled) return
         setGroupDetail(detail)
-        setConversations(convData.conversations)
-        setConversationsTotal(convData.total)
-        setConversationsPage(1)
         setNudges(null)
       } catch {
         if (!cancelled) setError(t('common.failedToLoad'))
@@ -134,6 +128,17 @@ export default function ScraperPage() {
     })()
     return () => { cancelled = true }
   }, [selectedGroupId])
+
+  useEffect(() => {
+    if (selectedGroupId == null) return
+    if (activeTab !== 'conversations') {
+      setConversations([])
+      setConversationsTotal(0)
+      setConversationsPage(1)
+      return
+    }
+    loadConversations(1)
+  }, [selectedGroupId, activeTab])
 
   async function loadConversations(page: number) {
     if (selectedGroupId == null) return
