@@ -16,6 +16,7 @@ from bot.db.models import (
     AdmissionMajor,
     AdmissionFAQ,
 )
+from bot.services.admission_intelligence_layer import classify_intent, generate_suggestions
 from bot.services.admission_intelligence_service import AdmissionIntelligenceService
 from bot.services.admission_knowledge_service import (
     extract_and_seed,
@@ -260,6 +261,43 @@ async def compare_universities(
         university_b=university_b,
         major=major,
     )
+
+
+# ─── AI Intelligence Layer ───────────────────────────────────────────────────
+
+
+class ClassifyResponse(BaseModel):
+    intent: str
+    reason: str
+    entities: dict[str, Any] = {}
+
+
+@router.get("/api/admissions/classify", response_model=ClassifyResponse)
+async def classify_query(
+    q: str = Query(..., description="User question"),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    return await classify_intent(q)
+
+
+class SuggestionItem(BaseModel):
+    label: str
+    query: str
+
+
+@router.get("/api/admissions/suggestions", response_model=list[SuggestionItem])
+async def get_suggestions(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    overview_svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    try:
+        overview = await overview_svc.get_overview()
+        trending = overview.get("trending_universities", [])
+        hot_topics = overview.get("hot_topics", [])
+    except Exception:
+        trending = []
+        hot_topics = []
+    return await generate_suggestions(trending, hot_topics)
 
 
 # ─── Knowledge Endpoints ────────────────────────────────────────────────────
