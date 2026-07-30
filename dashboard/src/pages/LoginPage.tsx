@@ -42,6 +42,41 @@ function LoginInner() {
     }
   }, [loggingOut])
 
+  async function completeTelegramLogin(telegramUser: Record<string, unknown>) {
+    setLoading(true)
+    setError('')
+    try {
+      const { token } = await telegramLogin(telegramUser)
+      const me = await fetchCurrentUser(token)
+      storeAuth(token, {
+        id: me.user.id,
+        username: me.user.username || me.user.first_name || 'telegram',
+        role: me.is_bot_owner ? 'owner' : 'user',
+        telegramId: me.user.id,
+      })
+      afterLogin()
+    } catch {
+      setError(t('login.telegramFailed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // handleSwitchTelegram sends the user to oauth.telegram.org's account
+  // picker (the embedded widget below has no way to force one — it just
+  // silently re-authenticates whichever Telegram account is already active
+  // in this browser). Telegram redirects back here with the chosen
+  // account's auth payload as query params instead of invoking a JS
+  // callback, so it has to be picked up on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (!params.get('hash') || !params.get('auth_date') || !params.get('id')) return
+    const telegramUser: Record<string, unknown> = Object.fromEntries(params.entries())
+    void completeTelegramLogin(telegramUser)
+    navigate(location.pathname, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const container = document.getElementById('telegram-login-widget')
     if (!container) return
@@ -49,25 +84,7 @@ function LoginInner() {
     const callbackName = 'onTelegramDashboardAuth'
     const authWindow = window as WindowWithTelegramAuth
     authWindow[callbackName] = (telegramUser) => {
-      void (async () => {
-        setLoading(true)
-        setError('')
-        try {
-          const { token } = await telegramLogin(telegramUser)
-          const me = await fetchCurrentUser(token)
-          storeAuth(token, {
-            id: me.user.id,
-            username: me.user.username || me.user.first_name || 'telegram',
-            role: me.is_bot_owner ? 'owner' : 'user',
-            telegramId: me.user.id,
-          })
-          afterLogin()
-        } catch {
-          setError(t('login.telegramFailed'))
-        } finally {
-          setLoading(false)
-        }
-      })()
+      void completeTelegramLogin(telegramUser)
     }
     void (async () => {
       try {
