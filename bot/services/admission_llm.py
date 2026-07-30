@@ -14,13 +14,18 @@ from bot.db.session import SessionLocal
 logger = structlog.get_logger(__name__)
 
 _USER_AI_CONFIG_CACHE: dict[int, dict[str, Any]] = {}
+_USER_AI_CONFIG_CACHE_TIME: dict[int, float] = {}
 _SYSTEM_AI_CONFIG_CACHE: dict[str, Any] | None = None
+_SYSTEM_AI_CONFIG_CACHE_TIME: float = 0.0
+_CONFIG_CACHE_TTL: float = 60.0
 
 
-async def get_system_ai_config() -> dict[str, Any]:
+async def get_system_ai_config(force_refresh: bool = False) -> dict[str, Any]:
     """Load global AI config from system_config table, falling back to env vars."""
-    global _SYSTEM_AI_CONFIG_CACHE
-    if _SYSTEM_AI_CONFIG_CACHE is not None:
+    global _SYSTEM_AI_CONFIG_CACHE, _SYSTEM_AI_CONFIG_CACHE_TIME
+    import time
+    now = time.time()
+    if not force_refresh and _SYSTEM_AI_CONFIG_CACHE is not None and (now - _SYSTEM_AI_CONFIG_CACHE_TIME) < _CONFIG_CACHE_TTL:
         return _SYSTEM_AI_CONFIG_CACHE
     result: dict[str, Any] = {
         "provider": get_settings().ai_provider,
@@ -43,16 +48,33 @@ async def get_system_ai_config() -> dict[str, Any]:
     except Exception as exc:
         logger.warning("system_ai_config_load_failed", error=str(exc))
     _SYSTEM_AI_CONFIG_CACHE = result
+    _SYSTEM_AI_CONFIG_CACHE_TIME = time.time()
     return result
 
 
-async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
+async def clear_ai_config_cache(user_id: int | None = None) -> None:
+    """Invalidate AI config cache for a user or all users."""
+    global _SYSTEM_AI_CONFIG_CACHE, _SYSTEM_AI_CONFIG_CACHE_TIME
+    if user_id:
+        _USER_AI_CONFIG_CACHE.pop(user_id, None)
+        _USER_AI_CONFIG_CACHE_TIME.pop(user_id, None)
+    else:
+        _USER_AI_CONFIG_CACHE.clear()
+        _USER_AI_CONFIG_CACHE_TIME.clear()
+        _SYSTEM_AI_CONFIG_CACHE = None
+        _SYSTEM_AI_CONFIG_CACHE_TIME = 0.0
+    logger.info("ai_config_cache_cleared", user_id=user_id)
+
+
+async def get_user_ai_config(user_id: int | None, force_refresh: bool = False) -> dict[str, Any]:
     """Load per-user AI config from DB, falling back to system_config then env."""
-    if user_id and user_id in _USER_AI_CONFIG_CACHE:
+    import time
+    now = time.time()
+    if not force_refresh and user_id and user_id in _USER_AI_CONFIG_CACHE and (now - _USER_AI_CONFIG_CACHE_TIME.get(user_id, 0)) < _CONFIG_CACHE_TTL:
         return _USER_AI_CONFIG_CACHE[user_id]
 
     # Start with system-level config (from system_config table or env)
-    result = await get_system_ai_config()
+    result = await get_system_ai_config(force_refresh=force_refresh)
 
     # Check per-user override
     if user_id:
@@ -71,6 +93,7 @@ async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
                     if row.base_url:
                         result["base_url"] = row.base_url
                     _USER_AI_CONFIG_CACHE[user_id] = result
+                    _USER_AI_CONFIG_CACHE_TIME[user_id] = time.time()
         except Exception as exc:
             logger.warning("user_ai_config_load_failed", user_id=user_id, error=str(exc))
     return result
@@ -104,7 +127,7 @@ async def call_admission_llm(
         key = user_config["api_key"] or settings.gemini_api_key
         if not key:
             return None
-        return await _call_gemini(prompt, max_tokens, timeout_seconds, settings, model)
+        return await _call_gemini(prompt, max_tokens, timeout_seconds, settings, model_override=model)
     elif provider == "openrouter":
         key = user_config["api_key"] or settings.openrouter_api_key
         if not key:
@@ -155,11 +178,12 @@ async def _call_gemini(
     max_tokens: int,
     timeout_seconds: int,
     settings: Any,
+    model_override: str | None = None,
 ) -> str | None:
     api_key = settings.gemini_api_key
     if not api_key:
         return None
-    model = settings.ai_model or settings.gemini_model
+    model = model_override or settings.ai_model or settings.gemini_model
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": max_tokens},
