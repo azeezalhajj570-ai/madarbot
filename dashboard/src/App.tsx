@@ -21,6 +21,7 @@ import SettingsPage from './pages/SettingsPage'
 import AdminWorkspacePage from './pages/admin/WorkspacePage'
 import AdminUsagePage from './pages/admin/UsagePage'
 import ScraperPage from './pages/ScraperPage'
+import UsagePage from './pages/admin/UsagePage'
 
 const queryClient = new QueryClient()
 
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/jobs" element={<GuardRoute path="/jobs"><AdminJobsPage /></GuardRoute>} />
             <Route path="/bulk-add" element={<GuardRoute path="/bulk-add"><AdminBulkAddPage /></GuardRoute>} />
             <Route path="/settings" element={<GuardRoute path="/settings"><SettingsPage /></GuardRoute>} />
+            <Route path="/usage" element={<GuardRoute path="/admin/usage"><UsagePage /></GuardRoute>} />
             <Route path="/settings/ai" element={<GuardRoute path="/settings/ai"><AdminAISettingsPage /></GuardRoute>} />
             <Route path="/admin/health" element={<GuardRoute path="/admin/health"><AdminHealthPage /></GuardRoute>} />
             <Route path="/admin/agents" element={<GuardRoute path="/admin/agents"><AdminAgentsPage /></GuardRoute>} />

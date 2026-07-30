@@ -11,6 +11,7 @@ const USER_NAV = [
   { to: '/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/agents', label: 'nav.agents', icon: Bot },
   { to: '/scraper', label: 'nav.scraper', icon: Search },
+  { to: '/usage', label: 'nav.admin.usage', icon: Gauge },
   { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
   { to: '/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },

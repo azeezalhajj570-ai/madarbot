@@ -14,8 +14,8 @@ const GUARDS: Record<string, Role[]> = {
   '/scraper': [],
   '/jobs': [],
   '/bulk-add': [],
-  '/settings': ['owner', 'admin'],
-  '/settings/ai': ['owner', 'admin'],
+  '/settings': [],
+  '/settings/ai': [],
   '/admin/health': ['owner', 'admin'],
   '/admin/agents': ['owner', 'admin'],
   '/admin/jobs': ['owner', 'admin'],
@@ -27,7 +27,7 @@ const GUARDS: Record<string, Role[]> = {
   '/admin/knowledge': ['owner', 'admin'],
   '/admin/admissions': ['owner', 'admin'],
   '/admin/workspace': ['owner', 'admin'],
-  '/admin/usage': ['owner', 'admin'],
+  '/admin/usage': [],
   '/admin/scraper': ['owner', 'admin'],
 }
 
