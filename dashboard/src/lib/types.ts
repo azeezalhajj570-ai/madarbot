@@ -40,6 +40,17 @@ export interface TeamWorkspaceMember {
   joined_at: string
 }
 
+export interface WorkspaceUsage {
+  plan: string | null
+  plan_slug: string | null
+  status: string | null
+  source: 'workspace' | 'legacy' | 'none'
+  resources: {
+    agents: { active: number; limit: number | null }
+    groups: { active: number; limit: number | null }
+  }
+}
+
 export interface ModQueueItem {
   id: number
   userId: number

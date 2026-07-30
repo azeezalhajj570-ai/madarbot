@@ -16,6 +16,7 @@ import AdminAISettingsPage from './pages/admin/AISettingsPage'
 import AdminAdmissionIntelligencePage from './pages/admin/AdmissionIntelligencePage'
 import AdminKnowledgePage from './pages/admin/KnowledgePage'
 import AdminWorkspacePage from './pages/admin/WorkspacePage'
+import AdminUsagePage from './pages/admin/UsagePage'
 import ScraperPage from './pages/ScraperPage'
 
 const queryClient = new QueryClient()
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/admin/knowledge" element={<AdminKnowledgePage />} />
             <Route path="/admin/admissions" element={<AdminAdmissionIntelligencePage />} />
             <Route path="/admin/workspace" element={<AdminWorkspacePage />} />
+            <Route path="/admin/usage" element={<AdminUsagePage />} />
             <Route path="/admin/scraper" element={<ScraperPage />} />
             <Route path="*" element={<Navigate to="/admin/health" replace />} />
           </Route>

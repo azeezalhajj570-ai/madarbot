@@ -11,6 +11,7 @@ import type {
   TeamWorkspace,
   TeamWorkspaceMember,
   WorkspaceRole,
+  WorkspaceUsage,
   OwnerGroup,
   OwnerMetrics,
   OwnerSubscriptionRequest,
@@ -154,6 +155,11 @@ export async function changeTeamWorkspaceMemberRole(
     `${WORKSPACE_API_PREFIX}/${workspaceId}/members/${memberUserId}/role`,
     { role },
   )
+  return data
+}
+
+export async function fetchWorkspaceUsage(): Promise<WorkspaceUsage> {
+  const { data } = await api.get<WorkspaceUsage>('/api/usage')
   return data
 }
 

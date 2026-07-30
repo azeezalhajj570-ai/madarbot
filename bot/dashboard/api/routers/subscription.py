@@ -15,7 +15,7 @@ from bot.services.promotion_service import PromotionError, PromotionService
 from bot.services.subscription_service import SubscriptionService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
-from ..dependencies import get_identity
+from ..dependencies import WorkspaceContext, get_identity, get_workspace_context
 from .auth_boundary import require_agents_boundary, require_any_boundary
 from ._shared import RedeemCodeRequest
 
@@ -89,6 +89,17 @@ async def webapp_subscription_status(
         "bot_kind": subscription.bot_kind or bot_kind,
         "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
     }
+
+
+@router.get("/api/usage", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+@router.get("/webapp/usage", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+async def workspace_usage(
+    ctx: WorkspaceContext = Depends(get_workspace_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await SubscriptionService(session).get_workspace_usage(
+        tenant_id=ctx.tenant_id, tg_user_id=ctx.identity.user_id
+    )
 
 
 @router.post("/api/agents/subscription/redeem", dependencies=[Depends(require_agents_boundary)])
