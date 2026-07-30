@@ -163,6 +163,67 @@ class SubscriptionItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class PlanFeature(Base):
+    """Per-plan feature template — what every subscriber to a plan gets.
+
+    Materialized into per-subscription Entitlement rows when a Subscription
+    is created or renewed. Replaces the standalone `plan_features` table
+    proposed on feature/015-saas-subscription-architecture (#164), keyed to
+    this Integer `plans.id` instead of a separate UUID `plans` table.
+    """
+
+    __tablename__ = "plan_features"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "feature_key", name="uq_plan_feature_plan_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("plans.id", ondelete="CASCADE"), index=True)
+    feature_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    limit_value: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # NULL = unlimited
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class FeatureUsage(Base):
+    """Per-subscription usage counter, one row per feature per billing period.
+
+    Replaces the standalone `feature_usage` table proposed on
+    feature/015-saas-subscription-architecture (#164) — subscription_id
+    scoped instead of raw user_id, so usage is naturally pooled across all
+    members of a workspace's shared subscription.
+    """
+
+    __tablename__ = "feature_usage"
+    __table_args__ = (
+        UniqueConstraint(
+            "subscription_id", "feature_key", "period", name="uq_feature_usage_sub_key_period"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subscription_id: Mapped[int] = mapped_column(
+        ForeignKey("subscriptions.id", ondelete="CASCADE"), index=True
+    )
+    feature_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    period: Mapped[str] = mapped_column(String(7), nullable=False, index=True)
+    # "2026-07" (YYYY-MM)
+    reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
 class Entitlement(Base):
     """Runtime feature limit or capability granted by a subscription.
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
@@ -12,12 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
 from bot.dashboard.api.auth import extract_dashboard_identity
-from bot.db.models import Agent, Group, GroupAdminRole
+from bot.db.models import Agent, Group, GroupAdminRole, User
 from bot.db.session import get_session
 from bot.services.group_service import canonical_tg_group_id, upsert_group
 from bot.services.permission_service import PermissionService
 from bot.services.subscription_service import SubscriptionService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
+from bot.services.user_service import UserService
+from bot.services.workspace_service import WorkspaceService
 
 PLAN_LIMIT_KEYS: dict[str, str] = {
     "groups": "max_groups",
@@ -196,6 +199,53 @@ async def get_identity(
     identity: TelegramWebAppIdentity = Depends(extract_dashboard_identity),
 ) -> TelegramWebAppIdentity:
     return identity
+
+
+@dataclass
+class WorkspaceContext:
+    """`identity` plus the resolved `users.id` row and active workspace (tenant).
+
+    `identity.user_id` is the raw Telegram user id — most existing code reads
+    that directly. This is the new, additive path for anything that needs
+    `TenantMembership`-based access (which is keyed on `users.id`), without
+    changing what `get_identity` returns for existing callers.
+    """
+
+    identity: TelegramWebAppIdentity
+    user: User
+    tenant_id: int
+    role: str
+
+
+async def get_workspace_context(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+    x_workspace_id: int | None = Header(default=None, alias="X-Workspace-Id"),
+) -> WorkspaceContext:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+
+    memberships = await workspace_service.list_user_memberships(user.id)
+    if not memberships:
+        tenant = await workspace_service.get_or_create_user_workspace(user.id)
+        memberships = await workspace_service.list_user_memberships(user.id)
+        tenant_id = tenant.id
+        role = "owner"
+    elif x_workspace_id is not None:
+        selected = next((m for m in memberships if m.tenant_id == x_workspace_id), None)
+        if selected is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of the requested workspace",
+            )
+        tenant_id = selected.tenant_id
+        role = selected.role
+    else:
+        owned = next((m for m in memberships if m.role == "owner"), memberships[0])
+        tenant_id = owned.tenant_id
+        role = owned.role
+
+    return WorkspaceContext(identity=identity, user=user, tenant_id=tenant_id, role=role)
 
 
 async def require_active_subscription(
@@ -395,6 +445,21 @@ async def ensure_agent_admin(
     agent = (await session.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    if agent.tenant_id is not None:
+        user = await UserService(session).get_by_tg_id(identity.user_id)
+        membership = (
+            await WorkspaceService(session).get_membership(
+                tenant_id=agent.tenant_id, user_id=user.id
+            )
+            if user is not None
+            else None
+        )
+        if membership is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your agent")
+        return agent
+
+    # Agent predates the tenant_id backfill — fall back to the legacy check.
     if agent.linked_by_user_id is not None and agent.linked_by_user_id != identity.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your agent")
     return agent

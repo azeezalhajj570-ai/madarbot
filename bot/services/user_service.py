@@ -17,6 +17,28 @@ class UserService:
             await self.session.execute(select(User).where(User.tg_user_id == tg_user_id))
         ).scalar_one_or_none()
 
+    async def get_or_create_user_by_tg_id(self, tg_user_id: int) -> User:
+        """Resolve the `users.id` row for a raw Telegram user id, creating it if needed.
+
+        Every dashboard `actor_user_id` today is a raw `tg_user_id`, but
+        `TenantMembership`/`Tenant` are keyed on `users.id`. This is the
+        resolution step between the two — call it before any workspace
+        membership lookup.
+        """
+        user = await self.get_by_tg_id(tg_user_id)
+        if user is not None:
+            return user
+
+        statement = insert(User).values(tg_user_id=tg_user_id)
+        statement = statement.on_conflict_do_nothing(index_elements=[User.tg_user_id])
+        await self.session.execute(statement)
+        await self.session.commit()
+
+        user = await self.get_by_tg_id(tg_user_id)
+        if user is None:
+            raise RuntimeError(f"Failed to resolve or create user for tg_user_id={tg_user_id}")
+        return user
+
     async def get_language(self, tg_user_id: int) -> str | None:
         user = await self.get_by_tg_id(tg_user_id)
         return user.language_code if user else None

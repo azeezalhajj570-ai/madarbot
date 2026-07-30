@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.jobs import (
@@ -35,7 +35,7 @@ from bot.services.permission_service import PermissionService
 from bot.services.scraper_service import ScraperService
 from bot.dashboard.api.auth import extract_dashboard_identity
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
-from bot.db.models import GroupAdminRole, User
+from bot.db.models import GroupAdminRole, TenantMembership, User
 from datetime import datetime
 
 router = APIRouter(prefix="/webapp/scraper", tags=["scraper"])
@@ -226,14 +226,19 @@ async def list_scrape_jobs(
     from bot.db.models.scraper import ScrapedGroup
     from sqlalchemy.orm import contains_eager
     from bot.config import get_settings
+    from bot.agents.service_support import AgentServiceSupport
     import json, asyncio
 
+    tenant_id = await AgentServiceSupport(session).resolve_actor_tenant_id(identity.user_id)
     stmt = (
         select(AgentJob)
         .join(Agent, AgentJob.agent_id == Agent.id)
         .options(contains_eager(AgentJob.agent))
         .where(
-            Agent.linked_by_user_id == identity.user_id,
+            or_(
+                Agent.tenant_id == tenant_id,
+                and_(Agent.tenant_id.is_(None), Agent.linked_by_user_id == identity.user_id),
+            ),
             AgentJob.job_type.in_([
                 "scraper_messages", "scraper_members", "scraper_group_info", "scraper_full_group",
                 "knowledge_extraction",
@@ -446,6 +451,21 @@ async def list_scraped_groups(
             .where(Group.id.in_(mg_ids), User.tg_user_id == identity.user_id)
         )
         accessible_group_ids.update(row[0] for row in owner_rows.all())
+
+        # Workspace members share visibility of all groups in the tenant (US2),
+        # not just groups they personally registered or have an explicit
+        # GroupAdminRole for.
+        tenant_member_rows = await session.execute(
+            select(Group.id)
+            .join(TenantMembership, TenantMembership.tenant_id == Group.tenant_id)
+            .join(User, User.id == TenantMembership.user_id)
+            .where(
+                Group.id.in_(mg_ids),
+                User.tg_user_id == identity.user_id,
+                TenantMembership.is_active.is_(True),
+            )
+        )
+        accessible_group_ids.update(row[0] for row in tenant_member_rows.all())
 
     accessible_candidates: set[int] = set()
     for tg_id, mg in mg_tg_to_group.items():

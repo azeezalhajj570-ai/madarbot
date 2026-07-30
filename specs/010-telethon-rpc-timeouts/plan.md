@@ -1,110 +1,113 @@
-# Implementation Plan: Telethon RPC Timeouts, Retries & Instrumentation
+# Implementation Plan: [FEATURE]
 
-**Branch**: `010-telethon-rpc-timeouts` | **Date**: 2026-07-05 | **Spec**: [spec.md](./spec.md)
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Create a shared `call_with_retry()` wrapper for all Telethon RPCs that adds configurable timeout, exponential backoff retry, and automatic timing instrumentation. Add a `get_me()` health check before expensive broadcast operations. Replace all bare `get_entity()` and `iter_participants()` calls in `runtime.py` and session files with the wrapper. Leave `send_message()` unchanged initially.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: Python 3.11
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
-**Primary Dependencies**: Telethon, asyncio, structlog, time
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
 
-**Storage**: None (pure logic + logging)
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
-**Testing**: pytest (unit tests for wrapper, integration tests for runtime)
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
-**Target Platform**: Linux server (Docker)
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
 
-**Constraints**: Must not add new dependencies; must not change send_message() behavior; must preserve existing error handling (FloodWait, banned agent detection)
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
 
-## Architecture
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
 
-### New Module: `bot/agents/rpc_wrapper.py`
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
 
-```
-rpc_wrapper.py
-├── Constants (DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT, etc.)
-├── call_with_retry(client, rpc_factory, rpc_name, ...)
-│   └── Logs: rpc_completed / rpc_timed_out / rpc_failed
-├── iter_participants_with_timeout(client, entity, timeout, ...)
-│   └── Async generator, wraps each __anext__ with timeout
-│   └── Logs: iter_participants_completed / iter_participants_batch_timed_out
-└── check_agent_health(client)
-    └── Calls get_me() with 10s timeout
-    └── Logs: agent_health_check_passed / agent_health_check_failed
-```
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
 
-### Call Pattern
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
-```python
-# Before (bare call):
-entity = await client.get_entity(group_id)
+## Constitution Check
 
-# After (wrapped):
-entity = await call_with_retry(
-    client,
-    lambda: client.get_entity(group_id),
-    rpc_name="get_entity",
-    timeout=20,
-)
-```
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-```python
-# Before:
-async for participant in client.iter_participants(group_entity):
-    ...
-
-# After:
-async for participant in iter_participants_with_timeout(client, group_entity):
-    ...
-```
-
-```python
-# Before broadcast:
-# (nothing)
-
-# After broadcast:
-await check_agent_health(client)
-```
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `bot/agents/rpc_wrapper.py` | **NEW** — shared wrapper module |
-| `bot/agents/runtime.py` | Replace `get_entity()` → `call_with_retry()`; replace `iter_participants` → `iter_participants_with_timeout()`; add health check |
-| `bot/agents/session.py` | Replace `get_entity()` in `check_group_accessibility()` |
-| Various | (Future: other files that call `get_entity` / `iter_participants` bare) |
-
-## Testing Strategy
-
-- Unit test `call_with_retry()` with mocked coroutines:
-  - Success on first attempt
-  - Timeout then retry succeeds
-  - All retries exhausted
-  - Non-timeout error (not retried)
-  - Fast call (< 500ms) does not log
-- Unit test `iter_participants_with_timeout()` with mocked async iterator:
-  - Normal iteration completes
-  - Batch timeout raises properly
-- Unit test `check_agent_health()`:
-  - Healthy agent returns
-  - Unhealthy agent raises
+[Gates determined based on constitution file]
 
 ## Project Structure
 
-```
-bot/agents/
-├── rpc_wrapper.py          # NEW — shared Telethon RPC wrapper
-├── runtime.py              # MODIFIED — use wrappers
-├── session.py              # MODIFIED — use wrapper for get_entity
-├── (other files unchanged)
+### Documentation (this feature)
 
-specs/010-telethon-rpc-timeouts/
-├── spec.md
-├── plan.md
-└── tasks.md
+```text
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
+
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
+
+```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
+```
+
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
+
+## Complexity Tracking
+
+> **Fill ONLY if Constitution Check has violations that must be justified**
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

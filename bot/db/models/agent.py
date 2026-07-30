@@ -75,6 +75,9 @@ class Agent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     telegram_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
     linked_by_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     group_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("groups.id", ondelete="SET NULL"), index=True, nullable=True
     )

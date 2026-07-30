@@ -26,11 +26,44 @@ class AgentServiceSupport:
         if not can_manage:
             raise PermissionError("User does not have permission to manage agents for this group")
 
+    async def resolve_actor_tenant_id(self, actor_user_id: int) -> int:
+        """Resolve the tenant (workspace) a raw tg_user_id acts on behalf of.
+
+        `actor_user_id` throughout bot.agents is a raw Telegram user id.
+        Auto-creates a single-member workspace on first use, same as the
+        dashboard's `get_workspace_context`. See specs/015-workspace-mvp.
+        """
+        from bot.services.user_service import UserService
+        from bot.services.workspace_service import WorkspaceService
+
+        user = await UserService(self.session).get_or_create_user_by_tg_id(actor_user_id)
+        tenant = await WorkspaceService(self.session).get_or_create_user_workspace(user.id)
+        return tenant.id
+
     async def ensure_agent_owner(self, agent: Agent, actor_user_id: int) -> None:
         from bot.config import get_settings
 
         if actor_user_id in get_settings().bot_owner_ids:
             return
+
+        if agent.tenant_id is not None:
+            from bot.services.user_service import UserService
+            from bot.services.workspace_service import WorkspaceService
+
+            user = await UserService(self.session).get_by_tg_id(actor_user_id)
+            membership = (
+                await WorkspaceService(self.session).get_membership(
+                    tenant_id=agent.tenant_id, user_id=user.id
+                )
+                if user is not None
+                else None
+            )
+            if membership is None:
+                raise PermissionError("You do not have access to this agent's workspace")
+            return
+
+        # Agent predates the tenant_id backfill (or backfill hasn't run yet) —
+        # fall back to the legacy single-owner check.
         if agent.linked_by_user_id is not None and int(agent.linked_by_user_id) != int(
             actor_user_id
         ):

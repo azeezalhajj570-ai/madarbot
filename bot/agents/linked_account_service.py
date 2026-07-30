@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import LinkedAccountIdentity
 from bot.core.event_bus import EventBus
-from bot.db.models import Agent, GroupAdminRole
-from bot.services.group_service import upsert_group
+from bot.db.models import Agent
 
 from .phone import normalize_optional_agent_phone_number
 from .service_support import AgentServiceSupport
-
-AGENTS_WORKSPACE_TG_GROUP_BASE = -8_000_000_000_000_000
 
 
 class LinkedAccountService(AgentServiceSupport):
@@ -32,9 +29,7 @@ class LinkedAccountService(AgentServiceSupport):
         if not normalized_account_id:
             raise ValueError("Agent account identifier is required")
         normalized_phone_number = normalize_optional_agent_phone_number(phone_number)
-
-        if group_id is None:
-            group_id = await self.ensure_agents_workspace_group(actor_user_id=actor_user_id)
+        tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
 
         existing = (
             (
@@ -75,6 +70,7 @@ class LinkedAccountService(AgentServiceSupport):
         agent = Agent(
             telegram_user_id=telegram_user_id,
             linked_by_user_id=actor_user_id,
+            tenant_id=tenant_id,
             group_id=group_id,
             phone_number=normalized_phone_number,
             external_account_id=normalized_account_id,
@@ -194,14 +190,21 @@ class LinkedAccountService(AgentServiceSupport):
         return True
 
     async def list_agents(self, *, actor_user_id: int, group_id: int | None = None) -> list[Agent]:
+        tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+        # Workspace members share visibility of all agents in the tenant (US2).
+        # The linked_by_user_id fallback covers agents from before the
+        # tenant_id backfill ran — should be empty once the migration completes.
         stmt = (
             select(Agent)
-            .where(Agent.linked_by_user_id == actor_user_id)
+            .where(
+                or_(
+                    Agent.tenant_id == tenant_id,
+                    and_(Agent.tenant_id.is_(None), Agent.linked_by_user_id == actor_user_id),
+                )
+            )
             .order_by(Agent.created_at.desc(), Agent.id.desc())
         )
         if group_id is not None:
-            from sqlalchemy import or_
-
             stmt = stmt.where(or_(Agent.group_id == group_id, Agent.group_id.is_(None)))
         return list((await self.session.execute(stmt)).scalars())
 
@@ -240,28 +243,6 @@ class LinkedAccountService(AgentServiceSupport):
     ) -> list[LinkedAccountIdentity]:
         agents = await self.list_agents(actor_user_id=actor_user_id, group_id=group_id)
         return [self._to_identity(agent) for agent in agents]
-
-    async def ensure_agents_workspace_group(self, *, actor_user_id: int) -> int:
-        workspace_tg_group_id = AGENTS_WORKSPACE_TG_GROUP_BASE - actor_user_id
-        group = await upsert_group(
-            self.session,
-            tg_group_id=workspace_tg_group_id,
-            title="Agents Workspace",
-            is_active=False,
-        )
-
-        role = (
-            await self.session.execute(
-                select(GroupAdminRole).where(
-                    GroupAdminRole.group_id == group.id,
-                    GroupAdminRole.user_id == actor_user_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if role is None:
-            self.session.add(GroupAdminRole(group_id=group.id, user_id=actor_user_id, role="owner"))
-            await self.session.commit()
-        return group.id
 
     @staticmethod
     def _to_identity(agent: Agent) -> LinkedAccountIdentity:
