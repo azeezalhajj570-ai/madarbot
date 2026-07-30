@@ -15,7 +15,7 @@ from bot.agents.exceptions import AgentBannedError, AgentSessionRevokedError
 from bot.agents.session import SessionManager
 from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
-from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, Group, GroupAdminRole, GroupSetting, ModerationLog, SentBroadcastMessage
+from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, Group, GroupAdminRole, GroupSetting, SentBroadcastMessage
 from bot.db.session import SessionLocal
 from bot.services.agent_lead_service import AgentLeadService
 from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
@@ -620,27 +620,6 @@ class AgentListenerManager:
                         role="member",
                         source="agent_message_seen",
                     )
-                session.add(
-                    ModerationLog(
-                        group_id=group.id,
-                        action="agent_message_seen",
-                        target_user_id=user_id,
-                        admin_user_id=int(agent.telegram_user_id)
-                        if agent is not None and agent.telegram_user_id is not None
-                        else None,
-                        reason=text or None,
-                        details={
-                            "agent_id": agent_id,
-                            "chat_id": int(chat_id),
-                            "group_title": group_title,
-                            "message_id": int(message_id) if message_id is not None else None,
-                            "text": text,
-                            "username": username,
-                            "first_name": first_name,
-                            "full_name": full_name,
-                        },
-                    )
-                )
                 await session.commit()
         except Exception:
             logger.exception(
