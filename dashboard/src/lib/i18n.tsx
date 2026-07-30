@@ -14,7 +14,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     'nav.workspace': 'Home',
     'nav.accounts': 'Accounts',
     'nav.groups': 'Groups & Sources',
-    'nav.scraper': 'Scraping Center',
+    'nav.scraper': 'Scraping',
     'nav.leads': 'Leads CRM',
     'nav.replies': 'AI Replies',
     'nav.campaigns': 'Outreach',

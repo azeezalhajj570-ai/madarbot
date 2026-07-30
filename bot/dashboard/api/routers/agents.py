@@ -191,8 +191,8 @@ async def webapp_complete_agent_auth_password(
     return {"status": "ok", "agent": serialize_agent(updated)}
 
 
-@router.get("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
-@router.get("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
+@router.get("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.get("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_agent_jobs(
     agent_id: int,
     job_type: str | None = None,
@@ -424,9 +424,9 @@ async def webapp_agent_groups(
     )
 
 
-@router.get("/api/agents/{agent_id}/member-search", dependencies=[Depends(require_agents_boundary)])
+@router.get("/api/agents/{agent_id}/member-search", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 @router.get(
-    "/webapp/agents/{agent_id}/member-search", dependencies=[Depends(require_agents_boundary)]
+    "/webapp/agents/{agent_id}/member-search", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
 )
 async def webapp_agent_member_search(
     agent_id: int,
@@ -464,13 +464,36 @@ async def webapp_agent_member_search(
         ) from exc
 
 
+@router.get("/api/agents/{agent_id}/target-group-members/{tg_group_id}", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.get(
+    "/webapp/agents/{agent_id}/target-group-members/{tg_group_id}", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+async def webapp_agent_target_group_members(
+    agent_id: int,
+    tg_group_id: int,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    try:
+        return await AccountGroupMembershipService(session).fetch_and_store_target_group_members(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            tg_group_id=tg_group_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+
 @router.get(
     "/api/agents/{agent_id}/groups/{tg_group_id}/members",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.get(
     "/webapp/agents/{agent_id}/groups/{tg_group_id}/members",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_agent_group_members(
     agent_id: int,
@@ -500,8 +523,12 @@ async def webapp_agent_group_members(
 
 
 @router.get(
+    "/api/groups/{scraped_group_id}/stored-members",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.get(
     "/webapp/groups/{scraped_group_id}/stored-members",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_stored_members(
     scraped_group_id: int,
@@ -731,10 +758,10 @@ async def webapp_bulk_preflight(
 
 
 @router.post(
-    "/api/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+    "/api/agents/{agent_id}/member-adds", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
 )
 @router.post(
-    "/webapp/agents/{agent_id}/member-adds", dependencies=[Depends(require_agents_boundary)]
+    "/webapp/agents/{agent_id}/member-adds", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
 )
 async def webapp_bulk_add_members(
     agent_id: int,
@@ -1191,7 +1218,8 @@ async def webapp_reconcile_stale_jobs(
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
 
 
-@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+@router.get("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_get_blacklist(
     agent_id: int,
     page: int = Query(default=1, ge=1),
@@ -1213,7 +1241,8 @@ async def webapp_get_blacklist(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_agents_boundary)])
+@router.post("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_add_blacklist_entries(
     agent_id: int,
     payload: BlacklistAddRequest,
@@ -1239,8 +1268,12 @@ async def webapp_add_blacklist_entries(
 
 
 @router.delete(
+    "/api/agents/{agent_id}/blacklist/{entry_id}",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.delete(
     "/webapp/agents/{agent_id}/blacklist/{entry_id}",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_delete_blacklist_entry(
     agent_id: int,
@@ -1265,8 +1298,12 @@ async def webapp_delete_blacklist_entry(
 
 
 @router.post(
+    "/api/agents/{agent_id}/blacklist/resolve",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.post(
     "/webapp/agents/{agent_id}/blacklist/resolve",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_resolve_blacklist_phones(
     agent_id: int,

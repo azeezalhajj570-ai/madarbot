@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge, UserCircle } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge, UserCircle } from 'lucide-react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
-import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
+import { clearAuth, getStoredUser } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
 import { filterNav } from '../lib/permissions'
@@ -15,13 +15,13 @@ const USER_NAV = [
   { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
   { to: '/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
+  { to: '/blacklist', label: 'Blacklist', icon: Shield },
   { to: '/profile', label: 'nav.admin.profile', icon: UserCircle },
 ]
 
 const ADMIN_NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
   { to: '/admin/workspace', label: 'nav.admin.workspace', icon: Building2 },
-  { to: '/admin/usage', label: 'nav.admin.usage', icon: Gauge },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
   { to: '/admin/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
@@ -41,13 +41,6 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
   const user = getStoredUser()
   const { t, lang, setLang } = useI18n()
   const { theme, setTheme } = useTheme()
-
-  function handleSwitchAccount() {
-    const current = getStoredUser()
-    if (current) addAccount(current)
-    clearAuth()
-    window.location.href = '/dashboard/login?switch=1'
-  }
 
   return (
     <aside
@@ -126,39 +119,43 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
             {t(label)}
           </NavLink>
         ))}
-        <div style={{
-          fontSize: typeScale.micro,
-          fontWeight: 700,
-          color: uiVars.textMuted,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          padding: `${spacing.md}px ${spacing.sm}px ${spacing.xs}px`,
-          marginTop: spacing.sm,
-        }}>
-          Admin
-        </div>
-        {visibleAdminNav.length > 0 && visibleAdminNav.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onNavClick}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '9px 10px',
-              borderRadius: radius.md,
-              color: isActive ? uiVars.text : uiVars.textMuted,
-              background: isActive ? uiVars.primarySoft : 'transparent',
-              fontWeight: isActive ? 700 : 500,
-              fontSize: 14,
-              transition: 'background 0.1s, color 0.1s',
-            })}
-          >
-            <Icon size={15} />
-            {t(label)}
-          </NavLink>
-        ))}
+        {visibleAdminNav.length > 0 && (
+          <>
+            <div style={{
+              fontSize: typeScale.micro,
+              fontWeight: 700,
+              color: uiVars.textMuted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              padding: `${spacing.md}px ${spacing.sm}px ${spacing.xs}px`,
+              marginTop: spacing.sm,
+            }}>
+              Admin
+            </div>
+            {visibleAdminNav.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onNavClick}
+                style={({ isActive }) => ({
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 10px',
+                  borderRadius: radius.md,
+                  color: isActive ? uiVars.text : uiVars.textMuted,
+                  background: isActive ? uiVars.primarySoft : 'transparent',
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 14,
+                  transition: 'background 0.1s, color 0.1s',
+                })}
+              >
+                <Icon size={15} />
+                {t(label)}
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* User section */}
@@ -172,10 +169,6 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
             <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>{user?.role ?? 'admin'}</div>
           </div>
         </div>
-        <button onClick={handleSwitchAccount} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textMuted, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>
-          <RefreshCw size={11} />
-          {t('sidebar.switchAccount')}
-        </button>
         <button onClick={() => { clearAuth(); window.location.href = '/dashboard/login?logout=1' }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textSubtle, cursor: 'pointer', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
           <LogOut size={10} />
           {t('sidebar.logout')}

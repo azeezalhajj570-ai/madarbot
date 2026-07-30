@@ -45,6 +45,7 @@ export interface WorkspaceUsage {
   plan_slug: string | null
   status: string | null
   source: 'workspace' | 'legacy' | 'none'
+  expires_at: string | null
   resources: {
     agents: { active: number; limit: number | null }
     groups: { active: number; limit: number | null }

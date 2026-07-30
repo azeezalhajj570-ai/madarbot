@@ -630,17 +630,17 @@ export async function deleteOwnerPromoCode(promoCodeId: number) {
 // ─── AI Config ─────────────────────────────────────────────────────────────────
 
 export async function fetchAIConfig() {
-  const { data } = await api.get(`${OWNER_API_PREFIX}/ai-config`)
+  const { data } = await api.get('/api/ai/config')
   return data
 }
 
 export async function updateAIConfig(payload: Record<string, string>) {
-  const { data } = await api.put(`${OWNER_API_PREFIX}/ai-config`, payload)
+  const { data } = await api.put('/api/ai/config', payload)
   return data
 }
 
 export async function testAIConfig(payload: { provider: string; api_key: string; model: string; base_url: string }) {
-  const { data } = await api.post(`${OWNER_API_PREFIX}/ai-config/test`, payload)
+  const { data } = await api.post('/api/ai/config/test', payload)
   return data
 }
 
@@ -1177,6 +1177,21 @@ export interface NudgeData {
 
 export async function fetchNudges(groupId: number): Promise<NudgeData> {
   const { data } = await api.get(`/webapp/scraper/groups/${groupId}/nudges`)
+  return data
+}
+
+export async function fetchBlacklist(agentId: number, page = 1, pageSize = 50) {
+  const { data } = await api.get(`/api/agents/${agentId}/blacklist`, { params: { page, page_size: pageSize } })
+  return data
+}
+
+export async function addBlacklistEntry(agentId: number, entry: { tg_user_id?: number; username?: string; phone?: string; reason?: string }) {
+  const { data } = await api.post(`/api/agents/${agentId}/blacklist`, { entries: [entry] })
+  return data
+}
+
+export async function deleteBlacklistEntry(agentId: number, entryId: number) {
+  const { data } = await api.delete(`/api/agents/${agentId}/blacklist/${entryId}`)
   return data
 }
 

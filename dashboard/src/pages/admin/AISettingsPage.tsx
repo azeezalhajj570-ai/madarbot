@@ -4,23 +4,20 @@ import { Brain, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react'
 
 import { fetchAIConfig, fetchAIModels, syncAIModels, updateAIConfig, testAIConfig } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
-import { getStoredUser } from '../../lib/auth'
 import { PageShell } from '../../lib/page-shell'
-import { Button, Card, CardSkeleton, Field, InlineMessage, Input, Select, ToggleRow, EmptyState } from '../../components/ui/primitives'
+import { Button, Card, CardSkeleton, Field, InlineMessage, Input, Select, ToggleRow } from '../../components/ui/primitives'
 import { useToast } from '../../components/ui/toast'
 import { spacing, radius } from '../../../../shared/ui-system/tokens'
 import type { AIModel } from '../../lib/types'
 
 export default function AdminAISettingsPage() {
   const { t } = useI18n()
-  const user = getStoredUser()
   const qc = useQueryClient()
   const { toast } = useToast()
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ['ai-config'],
     queryFn: fetchAIConfig,
-    enabled: user?.role === 'admin' || user?.role === 'owner',
   })
 
   const [provider, setProvider] = useState<string>('openrouter')
@@ -130,14 +127,6 @@ export default function AdminAISettingsPage() {
   }
 
   const needsSync = chatModels.length === 0 && provider !== 'heuristic'
-
-  if (user?.role !== 'admin' && user?.role !== 'owner') {
-    return (
-      <PageShell title={t('ai.settings')} description={t('common.accessDenied.desc')} loading={false}>
-        <EmptyState title={t('common.accessDenied')} subtitle={t('common.accessDenied.desc')} />
-      </PageShell>
-    )
-  }
 
   return (
     <PageShell

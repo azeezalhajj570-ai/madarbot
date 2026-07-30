@@ -35,20 +35,18 @@ export default function AdminProfilePage() {
   const user: ProfileUser | undefined = me?.user
 
   const [fullName, setFullName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
-  useEffect(() => {
-    if (user) {
-      setFullName(user.full_name || '')
-      setPhoneNumber(user.phone_number || '')
-    }
-  }, [user?.full_name, user?.phone_number])
-
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name || user.username || '')
+    }
+  }, [user?.full_name, user?.username])
+
   const profileMutation = useMutation({
-    mutationFn: () => updateProfile({ full_name: fullName, phone_number: phoneNumber || undefined }),
+    mutationFn: () => updateProfile({ full_name: fullName || undefined }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth', 'me'] })
       toast.success(t('profile.saved'))
@@ -78,79 +76,97 @@ export default function AdminProfilePage() {
     !passwordsMismatch &&
     (!user?.has_password || currentPassword.length > 0)
 
+  function handleSaveProfile() {
+    profileMutation.mutate()
+  }
+
+  function handleSavePassword() {
+    passwordMutation.mutate()
+  }
+
   return (
     <PageShell titleKey="page.admin.profile" descriptionKey="page.admin.profile.desc" loading={isLoading}>
       {user ? (
-        <div style={{ display: 'grid', gap: 20, maxWidth: 480 }}>
-          <Card style={{ display: 'grid', gap: spacing.md }}>
-            <div style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('profile.details')}</div>
-            <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>
-              {t('profile.telegramUsername')}: {user.username ? `@${user.username}` : t('profile.none')}
+        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', alignItems: 'start' }}>
+          <Card style={{ display: 'grid', gap: spacing.lg }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: typeScale.body, marginBottom: 4 }}>{t('profile.details')}</div>
+              <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>
+                {t('profile.telegramUsername')}: {user.username ? `@${user.username}` : t('profile.none')}
+              </div>
             </div>
+
+            <Field label={t('profile.phoneNumber')}>
+              {user.phone_number ? (
+                <Input type="tel" value={user.phone_number} disabled style={{ opacity: 0.6 }} />
+              ) : (
+                <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted, padding: '8px 0' }}>
+                  {t('common.none')} — set via phone login
+                </div>
+              )}
+            </Field>
+
             <Field label={t('profile.fullName')}>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </Field>
-            <Field label={t('profile.phoneNumber')} hint={t('profile.phoneNumberHint')}>
-              <Input
-                type="tel"
-                placeholder={t('login.phonePlaceholder')}
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
-            </Field>
-            <Button
-              onClick={() => profileMutation.mutate()}
-              disabled={profileMutation.isPending}
-              style={{ justifySelf: 'start' }}
-            >
-              {profileMutation.isPending ? t('profile.saving') : t('profile.save')}
-            </Button>
-          </Card>
 
-          <Card style={{ display: 'grid', gap: spacing.md }}>
-            <div style={{ fontWeight: 800, fontSize: typeScale.body }}>
-              {user.has_password ? t('profile.changePassword') : t('profile.setPassword')}
-            </div>
-            {!user.has_password ? (
-              <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>
-                {t('profile.setPasswordDesc')}
+            <div style={{ borderTop: `1px solid ${uiVars.border}`, paddingTop: spacing.md, display: 'grid', gap: spacing.md }}>
+              <div style={{ fontWeight: 800, fontSize: typeScale.body }}>
+                {user.has_password ? t('profile.changePassword') : t('profile.setPassword')}
               </div>
-            ) : null}
-            {user.has_password ? (
-              <Field label={t('profile.currentPassword')}>
+
+              {user.has_password ? (
+                <Field label={t('profile.currentPassword')}>
+                  <Input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </Field>
+              ) : (
+                <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>
+                  {t('profile.setPasswordDesc')}
+                </div>
+              )}
+
+              <Field label={t('profile.newPassword')} hint={t('profile.newPasswordHint')}>
+                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              </Field>
+
+              <Field label={t('profile.confirmPassword')}>
                 <Input
                   type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </Field>
-            ) : null}
-            <Field label={t('profile.newPassword')} hint={t('profile.newPasswordHint')}>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-            </Field>
-            <Field label={t('profile.confirmPassword')}>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </Field>
-            {passwordsMismatch ? (
-              <div style={{ fontSize: typeScale.caption, color: uiVars.danger }}>
-                {t('profile.passwordMismatch')}
-              </div>
-            ) : null}
-            <Button
-              onClick={() => passwordMutation.mutate()}
-              disabled={passwordMutation.isPending || !canSubmitPassword}
-              style={{ justifySelf: 'start' }}
-            >
-              {passwordMutation.isPending
-                ? t('profile.saving')
-                : user.has_password
-                  ? t('profile.changePassword')
-                  : t('profile.setPassword')}
-            </Button>
+
+              {passwordsMismatch ? (
+                <div style={{ fontSize: typeScale.caption, color: uiVars.danger }}>
+                  {t('profile.passwordMismatch')}
+                </div>
+              ) : null}
+            </div>
+
+            <div style={{ display: 'flex', gap: spacing.sm, justifyContent: 'flex-end', borderTop: `1px solid ${uiVars.border}`, paddingTop: spacing.md }}>
+              <Button
+                onClick={handleSavePassword}
+                disabled={passwordMutation.isPending || !canSubmitPassword}
+                variant="outline"
+              >
+                {passwordMutation.isPending
+                  ? t('profile.saving')
+                  : user.has_password
+                    ? t('profile.changePassword')
+                    : t('profile.setPassword')}
+              </Button>
+              <Button
+                onClick={handleSaveProfile}
+                disabled={profileMutation.isPending}
+              >
+                {profileMutation.isPending ? t('profile.saving') : t('profile.save')}
+              </Button>
+            </div>
           </Card>
         </div>
       ) : null}

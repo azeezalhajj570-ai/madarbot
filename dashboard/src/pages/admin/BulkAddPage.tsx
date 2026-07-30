@@ -32,6 +32,7 @@ interface MemberItem {
 
 interface MemberAddPayload {
   target_tg_group_id?: number
+  source_tg_group_id?: number
   interval_seconds?: number
   user_ids?: number[]
   send_invite_link_on_privacy_restricted?: boolean
@@ -59,16 +60,10 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
 ]
 
-function timeAgo(iso: string | null | undefined): string {
+function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const diff = Date.now() - new Date(iso).getTime()
-  const s = Math.floor(diff / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function extractJobStats(payload: Record<string, unknown> | undefined) {
@@ -94,39 +89,19 @@ function statusBadge(status: string, payload?: Record<string, unknown>) {
   return <Badge tone="default">{status}</Badge>
 }
 
-function ResultDetail({ result }: { result: MemberAddResult }) {
-  const statusIcon = result.success
-    ? { icon: '✓', color: 'var(--ui-success)' }
-    : result.skipped
-      ? { icon: '–', color: 'var(--ui-warning)' }
-      : { icon: '✗', color: 'var(--ui-danger)' }
-  const methodLabel = result.method === 'invite_link' ? ' (via invite link)' : ''
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', fontSize: 13, borderBottom: '1px solid var(--ui-border)' }}>
-      <span style={{ color: statusIcon.color, fontWeight: 700, width: 16 }}>{statusIcon.icon}</span>
-      <span style={{ fontWeight: 600 }}>{result.user_id}</span>
-      {result.success
-        ? <span style={{ color: 'var(--ui-success)' }}>Added{methodLabel}</span>
-        : result.skipped
-          ? <span style={{ color: 'var(--ui-warning)' }}>Skipped{result.error_code ? ` (${result.error_code})` : ''}</span>
-          : <span style={{ color: 'var(--ui-danger)' }}>Failed{result.error_code ? ` (${result.error_code})` : ''}</span>
-      }
-    </div>
-  )
-}
-
-function MemberRow({ m, isSelected, onToggle }: { m: MemberItem; isSelected: boolean; onToggle: (id: number) => void }) {
+function MemberRow({ m, isSelected, disabled, onToggle }: { m: MemberItem; isSelected: boolean; disabled?: boolean; onToggle: (id: number) => void }) {
   const badges: React.ReactNode[] = []
-  if (m.is_bot) badges.push(<Badge key="bot" tone="default" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Bot size={10} /> Bot</Badge>)
+  if (disabled) badges.push(<Badge key="already" tone="neutral" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>Already</Badge>)
+  else if (m.is_bot) badges.push(<Badge key="bot" tone="default" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Bot size={10} /> Bot</Badge>)
   else if (m.role === 'creator' || m.role === 'admin') badges.push(<Badge key="admin" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Shield size={10} /> {m.role}</Badge>)
 
   return (
-    <div key={m.user_id} onClick={() => onToggle(m.user_id)}
-      style={{ padding: '7px 10px', cursor: 'pointer', background: isSelected ? 'var(--ui-primary-soft)' : 'transparent', borderBottom: '1px solid var(--ui-border)', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s' }}
-      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--ui-bg-muted)' }}
-      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+    <div key={m.user_id} onClick={() => { if (!disabled) onToggle(m.user_id) }}
+      style={{ padding: '7px 10px', cursor: disabled ? 'default' : 'pointer', background: isSelected ? 'var(--ui-primary-soft)' : 'transparent', borderBottom: '1px solid var(--ui-border)', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.1s', opacity: disabled ? 0.5 : 1 }}
+      onMouseEnter={(e) => { if (!isSelected && !disabled) e.currentTarget.style.background = 'var(--ui-bg-muted)' }}
+      onMouseLeave={(e) => { if (!isSelected && !disabled) e.currentTarget.style.background = 'transparent' }}
     >
-      <input type="checkbox" checked={isSelected} onChange={() => onToggle(m.user_id)} />
+      <input type="checkbox" checked={isSelected} disabled={disabled} onChange={() => { if (!disabled) onToggle(m.user_id) }} />
       <span style={{ fontSize: 13, fontWeight: 600 }}>{m.full_name || m.username || `${m.user_id}`}</span>
       {m.username && <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>@{m.username}</span>}
       <div style={{ display: 'flex', gap: 4, marginInlineStart: 'auto', alignItems: 'center' }}>{badges}</div>
@@ -134,6 +109,17 @@ function MemberRow({ m, isSelected, onToggle }: { m: MemberItem; isSelected: boo
     </div>
   )
 }
+
+const detailResultColumns: ColumnDef<MemberAddResult>[] = [
+  { key: 'user_id', label: 'User ID', render: (r) => <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{r.user_id}</span> },
+  { key: 'status', label: 'Status', render: (r) => r.success
+    ? <Badge tone="success">Added{r.method === 'invite_link' ? ' (via invite link)' : ''}</Badge>
+    : r.skipped
+      ? <Badge tone="warning">Skipped{r.error_code ? ` (${r.error_code})` : ''}</Badge>
+      : <Badge tone="destructive">Failed{r.error_code ? ` (${r.error_code})` : ''}</Badge>
+  },
+  { key: 'method', label: 'Method', hideOnMobile: true, render: (r) => r.method === 'invite_link' ? 'Invite link' : r.success ? 'Direct' : '—' },
+]
 
 export default function AdminBulkAddPage() {
   const { t } = useI18n()
@@ -144,6 +130,7 @@ export default function AdminBulkAddPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
+  const [groupsMap, setGroupsMap] = useState<Map<number, string>>(new Map())
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formAgentId, setFormAgentId] = useState<number | null>(null)
@@ -158,16 +145,31 @@ export default function AdminBulkAddPage() {
   const [sendInviteLink, setSendInviteLink] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [fetchingTarget, setFetchingTarget] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [memberPage, setMemberPage] = useState(1)
   const [memberTotal, setMemberTotal] = useState(0)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [detailJob, setDetailJob] = useState<AgentJobRecord | null>(null)
   const [excludeAdminsAndBots, setExcludeAdminsAndBots] = useState(true)
+  const [targetMemberIds, setTargetMemberIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     setAgentsLoading(true)
     fetchAgents().then(setAgents).catch(() => {}).finally(() => setAgentsLoading(false))
+  }, [])
+
+  const loadGroups = useCallback(async (agentId: number) => {
+    try {
+      const { data } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`)
+      const map = new Map<number, string>()
+      for (const g of data) {
+        map.set(g.tg_group_id, g.title)
+      }
+      setGroupsMap(map)
+    } catch {
+      setGroupsMap(new Map())
+    }
   }, [])
 
   const loadJobs = useCallback(async (agentId: number) => {
@@ -181,6 +183,17 @@ export default function AdminBulkAddPage() {
       setJobsLoading(false)
     }
   }, [])
+
+  const handleAgentChange = useCallback((agentId: number | null) => {
+    setSelectedAgentId(agentId)
+    if (agentId) {
+      loadGroups(agentId)
+      loadJobs(agentId)
+    } else {
+      setJobs([])
+      setGroupsMap(new Map())
+    }
+  }, [loadGroups, loadJobs])
 
   useEffect(() => {
     if (!selectedAgentId) { setJobs([]); return }
@@ -225,10 +238,32 @@ export default function AdminBulkAddPage() {
 
   useEffect(() => { setMemberPage(1) }, [formSourceGroupId, searchQuery])
 
+  useEffect(() => {
+    if (!formAgentId || !formTargetGroupId) { setTargetMemberIds(new Set()); return }
+    setFetchingTarget(true)
+    api.get<{ user_ids: number[]; total: number }>(
+      `${AGENTS_API_PREFIX}/${formAgentId}/target-group-members/${formTargetGroupId}`,
+    ).then(({ data }) => {
+      const ids = new Set(data.user_ids || [])
+      setTargetMemberIds(ids)
+      setSelectedUserIds(prev => prev.filter(id => !ids.has(id)))
+    }).catch(() => {
+      setTargetMemberIds(new Set())
+    }).finally(() => setFetchingTarget(false))
+  }, [formAgentId, formTargetGroupId])
+
   const visibleMembers = useMemo(() => {
-    if (!excludeAdminsAndBots) return members
-    return members.filter(m => !m.is_bot && m.role !== 'creator' && m.role !== 'admin')
-  }, [members, excludeAdminsAndBots])
+    let list = members
+    if (excludeAdminsAndBots) {
+      list = list.filter(m => !m.is_bot && m.role !== 'creator' && m.role !== 'admin')
+    }
+    return list.map(m => ({ ...m, alreadyInTarget: targetMemberIds.has(m.user_id) }))
+  }, [members, excludeAdminsAndBots, targetMemberIds])
+
+  function getGroupName(tgGroupId: number | null | undefined): string {
+    if (tgGroupId == null) return '—'
+    return groupsMap.get(tgGroupId) || `#${tgGroupId}`
+  }
 
   function openDialog() {
     setFormAgentId(selectedAgentId); setFormSourceGroupId(null); setFormTargetGroupId(null)
@@ -251,7 +286,7 @@ export default function AdminBulkAddPage() {
   }
 
   function selectAll() {
-    setSelectedUserIds(visibleMembers.map(m => m.user_id))
+    setSelectedUserIds(visibleMembers.filter((m: any) => !m.alreadyInTarget).map(m => m.user_id))
   }
 
   function unselectAll() {
@@ -267,8 +302,11 @@ export default function AdminBulkAddPage() {
     setSubmitting(true)
     try {
       await api.post(`${AGENTS_API_PREFIX}/${formAgentId}/member-adds`, {
-        target_tg_group_id: formTargetGroupId, interval_seconds: intervalSeconds,
-        user_ids: selectedUserIds, send_invite_link_on_privacy_restricted: sendInviteLink,
+        target_tg_group_id: formTargetGroupId,
+        source_tg_group_id: formSourceGroupId,
+        interval_seconds: intervalSeconds,
+        user_ids: selectedUserIds,
+        send_invite_link_on_privacy_restricted: sendInviteLink,
       })
       toast.success(t('bulkadd.jobCreated'))
       setDialogOpen(false)
@@ -283,28 +321,39 @@ export default function AdminBulkAddPage() {
     setSyncing(true)
     try {
       const { data } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${selectedAgentId}/groups`)
+      const map = new Map<number, string>()
+      for (const g of data) {
+        map.set(g.tg_group_id, g.title)
+      }
+      setGroupsMap(map)
       setSourceGroups(data); setTargetGroups(data.filter((g) => g.can_add_members))
+      toast.success(`Synced ${data.length} groups`)
     } catch (err: any) { toast.error(err?.message || t('bulkadd.syncFailed')) }
     finally { setSyncing(false) }
   }
 
   const columns: ColumnDef<AgentJobRecord>[] = [
     { key: 'id', label: t('bulkadd.id'), hideOnMobile: true, render: (j) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>#{j.id}</span> },
+    { key: 'source', label: 'Source', hideOnMobile: true, render: (j) => {
+      const p = (j.job_payload || {}) as MemberAddPayload
+      return <span style={{ fontSize: 13 }}>{getGroupName(p.source_tg_group_id)}</span>
+    }},
+    { key: 'target', label: 'Dest', render: (j) => {
+      const p = (j.job_payload || {}) as MemberAddPayload
+      return <span style={{ fontSize: 13 }}>{getGroupName(p.target_tg_group_id)}</span>
+    }},
     { key: 'status', label: 'Status', render: (j) => statusBadge(j.status, j.job_payload) },
-    { key: 'target', label: t('bulkadd.target'), hideOnMobile: true, render: (j) => { const p = (j.job_payload || {}) as MemberAddPayload; return <span style={{ fontSize: 13 }}>{String(p.target_tg_group_id ?? '—')}</span> } },
-    { key: 'users', label: t('bulkadd.users'), render: (j) => { const p = (j.job_payload || {}) as MemberAddPayload; return String(p.user_ids?.length || 0) } },
-    { key: 'results', label: t('bulkadd.results'), render: (j) => {
+    { key: 'users', label: 'Users', hideOnMobile: true, render: (j) => { const p = (j.job_payload || {}) as MemberAddPayload; return String(p.user_ids?.length || 0) } },
+    { key: 'results', label: 'Results', render: (j) => {
       const { successCount, failureCount, skipCount, totalProcessed, userCount } = extractJobStats(j.job_payload)
       const isComplete = j.status === 'completed' && totalProcessed > 0
       const summary = isComplete ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed` : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
       return <span style={{ fontSize: 12 }}>{summary}</span>
     }},
-    { key: 'created', label: t('bulkadd.created'), hideOnMobile: true, render: (j) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{timeAgo(j.created_at)}</span> },
-    { key: 'actions', label: '', hideOnMobile: false, render: (j) => {
-      const { details } = extractJobStats(j.job_payload)
-      if (!details?.length) return null
-      return <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDetailJob(j) }}><Eye size={14} /></Button>
-    }},
+    { key: 'created', label: 'Created', hideOnMobile: true, render: (j) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{formatDate(j.created_at)}</span> },
+    { key: 'actions', label: '', hideOnMobile: false, render: (j) => (
+      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setDetailJob(j) }}><Eye size={14} /> View</Button>
+    )},
   ]
 
   const filters: DataTableFilter[] = [{ key: 'status', label: 'Status', options: STATUS_OPTIONS }]
@@ -313,7 +362,7 @@ export default function AdminBulkAddPage() {
     <PageShell titleKey="page.admin.bulkadd" descriptionKey="page.admin.bulkadd.desc" loading={false}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.lg }}>
         <div style={{ minWidth: 220, flex: '1 1 220px', position: 'relative' }}>
-          <Select value={selectedAgentId ?? ''} onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}>
+          <Select value={selectedAgentId ?? ''} onChange={(e) => handleAgentChange(e.target.value ? Number(e.target.value) : null)}>
             <option value="">{agentsLoading ? t('common.loading') : t('bulkadd.selectAgent')}</option>
             {agents.map((a) => (
               <option key={a.id} value={a.id}>{a.external_account_id || `${t('bulkadd.agent')} ${a.id}`} {a.status !== 'active' ? `(${a.status})` : ''}</option>
@@ -363,6 +412,7 @@ export default function AdminBulkAddPage() {
             placeholder={targetGroups.length ? t('bulkadd.selectTarget') : t('bulkadd.noTargetGroups')}
             getId={(g: any) => g.tg_group_id} getLabel={(g: any) => g.title} />
           {formErrors.target && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.target}</div>}
+          {fetchingTarget && <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Loader size={12} className="spin" /> Fetching target group members from Telegram...</div>}
         </Field>
         {formSourceGroupId && (
           <Field label={t('bulkadd.searchMembers')}>
@@ -390,7 +440,7 @@ export default function AdminBulkAddPage() {
             {searching ? <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.searching')}</div>
              : visibleMembers.length === 0 ? <div style={{ padding: spacing.xl, textAlign: 'center', fontSize: 13, color: 'var(--ui-text-muted)' }}>{t('bulkadd.noMembers')}</div>
              : <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--ui-border)', borderRadius: 8 }}>
-                 {visibleMembers.map((m) => <MemberRow key={m.user_id} m={m} isSelected={selectedUserIds.includes(m.user_id)} onToggle={toggleUser} />)}
+                 {visibleMembers.map((m: any) => <MemberRow key={m.user_id} m={m} isSelected={selectedUserIds.includes(m.user_id)} disabled={m.alreadyInTarget} onToggle={toggleUser} />)}
                </div>
             }
              <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4 }}>{selectedUserIds.length} {t('bulkadd.selected')}</div>
@@ -422,19 +472,23 @@ export default function AdminBulkAddPage() {
         </div>
       </Dialog>
 
-      <Dialog open={!!detailJob} title={`Job #${detailJob?.id} — Per-User Results`} onClose={() => setDetailJob(null)}>
+      <Dialog open={!!detailJob} title={`Job #${detailJob?.id} — Per-User Results`} onClose={() => setDetailJob(null)} style={{ width: 'min(90vw, 680px)' }}>
         {detailJob && (() => {
           const { details, successCount, failureCount, skipCount } = extractJobStats(detailJob.job_payload)
-          if (!details?.length) return <div style={{ padding: spacing.lg, textAlign: 'center', color: 'var(--ui-text-muted)', fontSize: 13 }}>No per-user details available.</div>
           return <div>
             <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.md, fontSize: 13 }}>
               <Badge tone="success">{successCount} added</Badge>
               <Badge tone="warning">{skipCount} skipped</Badge>
               <Badge tone="destructive">{failureCount} failed</Badge>
             </div>
-            <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid var(--ui-border)', borderRadius: 8 }}>
-              {details.map((r) => <ResultDetail key={r.user_id} result={r} />)}
-            </div>
+            {details?.length ? (
+              <DataTable<MemberAddResult>
+                columns={detailResultColumns} data={details} keyExtractor={(r) => r.user_id}
+                searchPlaceholder="Search by user ID..."
+              />
+            ) : (
+              <div style={{ padding: spacing.lg, textAlign: 'center', color: 'var(--ui-text-muted)', fontSize: 13 }}>No per-user details available.</div>
+            )}
           </div>
         })()}
       </Dialog>
