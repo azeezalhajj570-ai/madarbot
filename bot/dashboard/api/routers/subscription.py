@@ -9,10 +9,11 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
-from bot.db.models import SubscriptionRequest, SubscriptionStatus
+from bot.db.models import SubscriptionRequest, SubscriptionStatus, SystemConfig
 from bot.db.session import get_session
 from bot.services.promotion_service import PromotionError, PromotionService
 from bot.services.subscription_service import SubscriptionService
+from bot.services.settings_service import SettingsService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import WorkspaceContext, get_identity, get_workspace_context
@@ -230,6 +231,79 @@ async def webapp_cancel_subscription(
             status_code=status.HTTP_404_NOT_FOUND, detail="No active subscription found"
         )
     return {"status": "ok", "message": "Subscription cancelled"}
+
+
+SYSTEM_CONFIG_GROUP_ID = 0  # pseudo group id for system-wide key-value settings
+
+# ─── AI Config (user-level, accessible to all authenticated users) ────────
+
+ALLOWED_AI_CONFIG_KEYS = frozenset({
+    "ai_provider",
+    "ai_provider_api_key",
+    "ai_provider_model",
+    "ai_provider_base_url",
+    "ai_embedding_model",
+    "ai_pilot_enabled",
+})
+
+
+@router.get("/api/ai/config", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+async def user_ai_config_get(
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    result = await session.execute(select(SystemConfig))
+    db_config = {row.key: row.value for row in result.scalars().all()}
+    settings = get_settings()
+    return {
+        "provider": db_config.get("ai_provider", settings.ai_provider),
+        "api_key": db_config.get("ai_provider_api_key", ""),
+        "model": db_config.get("ai_provider_model", settings.ai_model or ""),
+        "base_url": db_config.get("ai_provider_base_url", ""),
+        "embedding_api_key": db_config.get("ai_embedding_api_key", settings.openai_api_key or ""),
+        "embedding_model": db_config.get("ai_embedding_model", "text-embedding-3-small"),
+        "embedding_dimensions": 512,
+        "enabled": db_config.get("ai_pilot_enabled", str(settings.ai_pilot_enabled).lower()),
+    }
+
+
+@router.put("/api/ai/config", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+async def user_ai_config_update(
+    payload: dict[str, Any],
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    service = SettingsService(session)
+    changed: dict[str, bool | int | str] = {}
+    for key, value in payload.items():
+        if key not in ALLOWED_AI_CONFIG_KEYS:
+            continue
+        if isinstance(value, str) and len(value) > 2_000:
+            raise HTTPException(status_code=422, detail=f"Field {key} is too long")
+        if isinstance(value, (bool, int, str)):
+            await service.set_value(SYSTEM_CONFIG_GROUP_ID, key, value)
+            changed[key] = value
+    return {"status": "ok", "changed": changed}
+
+
+@router.post("/api/ai/config/test", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+async def user_ai_config_test(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    from bot.plugins.ai_pilot.provider import build_pilot_provider
+    provider = payload.get("provider", "openai")
+    api_key = payload.get("api_key", "")
+    model = payload.get("model", "")
+    base_url = payload.get("base_url", "")
+    try:
+        pilot = build_pilot_provider(
+            api_key=api_key or None, model=model or None,
+            base_url=base_url or None, provider_override=provider,
+        )
+        reply = await pilot.chat(
+            messages=[{"role": "user", "content": "Say exactly: connected"}],
+        )
+        return {"status": "ok", "reply": reply}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 __all__ = ["router"]

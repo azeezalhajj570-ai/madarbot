@@ -308,6 +308,7 @@ class SubscriptionService:
         plan_label: str | None = None
         plan_slug: str | None = None
         status_value: str | None = None
+        expires_at: str | None = None
         source = "none"
 
         if subscription is not None:
@@ -317,6 +318,8 @@ class SubscriptionService:
             if plan is not None:
                 plan_label = plan.name
                 plan_slug = plan.slug
+                if subscription.current_period_end:
+                    expires_at = subscription.current_period_end.isoformat()
                 rows = (
                     (
                         await self.session.execute(
@@ -335,6 +338,8 @@ class SubscriptionService:
                 plan_label = legacy.plan
                 plan_slug = legacy.plan
                 status_value = legacy.status
+                if legacy.expires_at:
+                    expires_at = legacy.expires_at.isoformat()
                 source = "legacy"
 
         from bot.config import get_settings
@@ -361,6 +366,7 @@ class SubscriptionService:
             "plan_slug": plan_slug,
             "status": status_value,
             "source": source,
+            "expires_at": expires_at,
             "resources": {
                 "agents": {"active": int(agent_count or 0), "limit": _limit("max_agents", None)},
                 "groups": {

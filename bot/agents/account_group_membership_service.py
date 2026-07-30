@@ -171,6 +171,19 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 ).all()
                 admin_group_ids = {int(r.tg_group_id) for r in admin_rows}
 
+            agent_member_group_ids: set[int] = set()
+            if agent_tg_id is not None and scraped_rows:
+                tg_ids = [int(r.tg_group_id) for r in scraped_rows]
+                member_rows = (
+                    await self.session.execute(
+                        select(ScrapedMember.tg_group_id).where(
+                            ScrapedMember.tg_user_id == agent_tg_id,
+                            ScrapedMember.tg_group_id.in_(tg_ids),
+                        )
+                    )
+                ).all()
+                agent_member_group_ids = {int(r.tg_group_id) for r in member_rows}
+
             results = []
             for row in scraped_rows:
                 tg_group_id = int(row.tg_group_id)
@@ -183,7 +196,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "group_type": row.group_type,
                         "member_count": member_counts.get(int(row.id), int(row.member_count or 0)),
                         "messages_count": message_counts.get(int(row.id), 0),
-                        "can_add_members": tg_group_id in admin_group_ids or row.last_agent_id == agent.id,
+                        "can_add_members": tg_group_id in agent_member_group_ids or row.last_agent_id == agent.id,
                     }
                 )
             return results
@@ -982,6 +995,83 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 },
             )
             return {"admins_count": admin_count, "bots_count": bot_count}
+        finally:
+            await client.disconnect()
+
+    async def fetch_and_store_target_group_members(
+        self,
+        *,
+        actor_user_id: int,
+        agent_id: int,
+        tg_group_id: int,
+        limit: int = 10000,
+    ) -> dict[str, Any]:
+        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
+        from bot.services.group_service import canonical_tg_group_id
+
+        agent = await self.get_agent(agent_id=agent_id)
+        if agent is None:
+            raise ValueError("Agent not found")
+        await self.ensure_agent_owner(agent, actor_user_id)
+        session_string = agent.session_string
+        if agent.auth_state != "active" or not session_string:
+            raise ValueError("Link an active agent first to fetch group members")
+
+        from bot.agents.session import SessionManager
+
+        client = await SessionManager().get_client(agent_id)
+        try:
+            scraped_group = await entity_resolver.get_or_create_group_from_client(
+                client=client,
+                agent_id=agent_id,
+                tg_group_id=tg_group_id,
+                session=self.session,
+            )
+            try:
+                entity = await entity_resolver.resolve_group_entity(
+                    client, int(tg_group_id), self.session
+                )
+            except ValueError:
+                raise ValueError(
+                    "This agent account cannot access this group. "
+                    "Make sure the account is a member of the group and the group is not deleted or private."
+                )
+            canonical_id = canonical_tg_group_id(int(tg_group_id))
+
+            member_batch: list[dict] = []
+            user_ids: list[int] = []
+            total_count = 0
+
+            async for participant in client.iter_participants(entity=entity, limit=limit):
+                uid = int(getattr(participant, "id", 0) or getattr(participant, "user_id", 0))
+                if uid <= 0:
+                    continue
+
+                row = serializers.build_member_row_from_participant(
+                    participant, scraped_group.id, canonical_id, uid,
+                )
+                role = "member"
+                if hasattr(participant, "creator") and participant.creator:
+                    role = "creator"
+                elif hasattr(participant, "admin_rights") and participant.admin_rights:
+                    role = "admin"
+                elif hasattr(participant, "banned_rights") and participant.banned_rights:
+                    role = "restricted"
+                row["role"] = role
+
+                member_batch.append(row)
+                user_ids.append(uid)
+                total_count += 1
+
+                if len(member_batch) >= 1800:
+                    await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                    member_batch = []
+
+            if member_batch:
+                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+            await self.session.commit()
+
+            return {"user_ids": user_ids, "total": total_count}
         finally:
             await client.disconnect()
 

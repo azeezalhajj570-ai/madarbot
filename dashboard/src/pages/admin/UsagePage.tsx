@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Gift } from 'lucide-react'
+import { CalendarDays, CreditCard, Gift, Info } from 'lucide-react'
 
 import { Badge, Button, Card, CardSkeleton, Field, Input, InlineMessage } from '../../components/ui/primitives'
 import { useI18n } from '../../lib/i18n'
@@ -65,39 +65,61 @@ export default function AdminUsagePage() {
   return (
     <PageShell titleKey="page.admin.usage" descriptionKey="page.admin.usage.desc" loading={isLoading}>
       {usage ? (
-        <div style={{ display: 'grid', gap: 20, maxWidth: 560 }}>
-          <Card style={{ display: 'grid', gap: spacing.md }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted, fontWeight: 700 }}>
-                  {t('usage.currentPlan')}
+        <div style={{
+          display: 'grid',
+          gap: 20,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))',
+        }}>
+          {/* Plan card */}
+          <Card style={{ display: 'grid', gap: spacing.md, alignContent: 'start' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: radius.md, background: uiVars.primarySoft, color: uiVars.primary, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <CreditCard size={18} />
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted, fontWeight: 700 }}>
+                    {t('usage.currentPlan')}
+                  </div>
+                  {usage.status ? (
+                    <Badge tone={usage.status === 'active' ? 'success' : 'warning'}>
+                      {usage.status}
+                    </Badge>
+                  ) : null}
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>
+                <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>
                   {usage.plan || t('usage.noPlan')}
                 </div>
+                <div style={{ fontSize: typeScale.caption, color: uiVars.textSubtle, marginTop: 2 }}>
+                  {usage.source === 'none'
+                    ? t('usage.noPlanDesc')
+                    : usage.source === 'legacy'
+                      ? 'Legacy subscription'
+                      : 'Workspace subscription'}
+                </div>
               </div>
-              {usage.status ? (
-                <Badge tone={usage.status === 'active' ? 'success' : 'warning'}>
-                  {usage.status}
-                </Badge>
-              ) : null}
             </div>
-            <div style={{ fontSize: typeScale.caption, color: uiVars.textSubtle }}>
-              {usage.source === 'none'
-                ? t('usage.noPlanDesc')
-                : usage.source === 'legacy'
-                  ? 'Legacy subscription'
-                  : 'Workspace subscription'}
-            </div>
+
+            {usage.expires_at ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: typeScale.caption, color: uiVars.textMuted, padding: '8px 0', borderTop: `1px solid ${uiVars.border}` }}>
+                <CalendarDays size={14} />
+                <span style={{ fontWeight: 600 }}>Expires: {new Date(usage.expires_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              </div>
+            ) : null}
           </Card>
 
-          <Card style={{ display: 'grid', gap: spacing.lg }}>
-            <div style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('usage.resources')}</div>
+          {/* Resources card */}
+          <Card style={{ display: 'grid', gap: spacing.lg, alignContent: 'start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Info size={16} />
+              <span style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('usage.resources')}</span>
+            </div>
             <ResourceUsageRow label={t('usage.agents')} active={usage.resources.agents.active} limit={usage.resources.agents.limit} />
             <ResourceUsageRow label={t('usage.groups')} active={usage.resources.groups.active} limit={usage.resources.groups.limit} />
           </Card>
 
-          <Card style={{ display: 'grid', gap: spacing.md }}>
+          {/* Promo code card */}
+          <Card style={{ display: 'grid', gap: spacing.md, alignContent: 'start' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Gift size={16} />
               <span style={{ fontWeight: 800, fontSize: typeScale.body }}>{t('usage.redeemCode')}</span>
