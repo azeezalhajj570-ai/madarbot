@@ -815,6 +815,16 @@ export interface ScrapeJobSummary {
   updated_at?: string
 }
 
+export async function fetchRecentAgentJobs(
+  jobType?: string,
+  limit = 50,
+): Promise<{ job_id: number; agent_id: number; job_type: string; status: string; created_at: string | null }[]> {
+  const params: Record<string, any> = { limit }
+  if (jobType) params.job_type = jobType
+  const { data } = await api.get('/api/admin/jobs', { params })
+  return data
+}
+
 export async function fetchRecentScrapeJobs(limit = 10): Promise<ScrapeJobSummary[]> {
   const { data } = await api.get(`/webapp/scraper/jobs?limit=${limit}`)
   return data
