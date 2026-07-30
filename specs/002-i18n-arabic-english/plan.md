@@ -1,96 +1,113 @@
-# Implementation Plan: Arabic and English Language Support (i18n)
+# Implementation Plan: [FEATURE]
 
-**Branch**: `002-i18n-arabic-english` | **Date**: 2026-06-16 | **Spec**: `specs/002-i18n-arabic-english/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Feature specification from specs/002-i18n-arabic-english/spec.md + GitHub issue #40
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Add a client-side i18n system to the miniapp SPA with centralized JSON translation dictionaries for English and Arabic. Implement a `useTranslation` hook/provider, language persistence via localStorage, a language switcher on the Settings page, RTL layout support for Arabic, and locale-aware date/number formatting. No backend changes required.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.5, React 18.3
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
-**Primary Dependencies**: `i18next` + `react-i18next` (to be added), existing: React, Vite, `@miniapp/shared`
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
 
-**Storage**: localStorage for language preference (no backend persistence for V1)
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
 
-**Testing**: Manual verification + `tsc --noEmit` for type safety
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
-**Target Platform**: Telegram miniapp WebView (mobile + desktop)
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
 
-**Project Type**: SPA (React + Vite)
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
 
-**Constraints**: Must work inside Telegram WebView; no backend API changes; only display text is translated
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
 
-**Scale/Scope**: 2 languages (en, ar), ~5 pages, ~15 components, ~300 translatable strings
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
-No constitution violations identified. This feature adds a new client-side capability without modifying backend APIs, routes, or data models.
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+[Gates determined based on constitution file]
 
 ## Project Structure
 
+### Documentation (this feature)
+
+```text
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
-apps/miniapp-agents/
+
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
+
+```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+src/
+├── models/
+├── services/
+├── cli/
+└── lib/
+
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
 ├── src/
-│   ├── i18n/
-│   │   ├── index.ts              # i18next init & export
-│   │   ├── locales/
-│   │   │   ├── en.json            # English translation dictionary
-│   │   │   └── ar.json            # Arabic translation dictionary
-│   │   └── useLanguage.ts         # React hook for language state + switcher
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
 │   ├── components/
-│   │   └── LanguageSwitcher.tsx   # Dropdown/select for language selection
-│   ├── App.tsx                    # Wrap with TranslationProvider, add dir=rtl/ltr
-│   └── main.tsx                   # Initialize i18n before React render
-packages/
-└── miniapp-shared/
-    └── src/
-        └── ui/
-            └── index.tsx          # Shared components unchanged; translations passed via props
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
-**Structure Decision**: Single frontend project (`apps/miniapp-agents`) with a new `i18n/` module. Shared UI components in `@miniapp/shared` receive translated strings as props rather than adding i18n dependency to the shared package.
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
-## Phases
+## Complexity Tracking
 
-### Phase 1: i18n Infrastructure (Foundation)
-- Add `i18next` + `react-i18next` dependencies
-- Create translation dictionaries (`en.json`, `ar.json`) with all app strings
-- Initialize i18next in `src/i18n/index.ts`
-- Create `useLanguage` hook for language state and persistence
-- Wire i18n init into `main.tsx`
+> **Fill ONLY if Constitution Check has violations that must be justified**
 
-### Phase 2: RTL Support + Language Switcher
-- Add RTL CSS utilities (mirrored margins/padding/icons via CSS variables or `[dir="rtl"]` selectors)
-- Set `<html dir="rtl|ltr">` based on active language
-- Create `LanguageSwitcher` component
-- Add language switcher to Settings page
-- Persist language choice to localStorage; restore on load
-
-### Phase 3: Translate Page-by-Page
-- Replace hardcoded strings with `t()` calls in:
-  - Navigation / BottomNav tab labels
-  - Dashboard / analytics page
-  - Leads page (LeadsAcquisitionSection)
-  - Campaigns page (CampaignsPage)
-  - Tasks page (AutomationTasksSection)
-  - Settings page (account cards, MCP tokens, notifications)
-  - Shared components (Button, Card, InputField labels passed as props)
-  - Status/enum labels (pending, queued, running, completed, failed, cancelled, scheduled)
-  - Empty states, error messages, success toasts
-  - Form labels, placeholders, validation messages
-
-### Phase 4: Locale-aware Formatting
-- Localize date/time display using `toLocaleString(locale)`
-- Localize number/count formatting using `toLocaleString(locale)`
-- Ensure RTL dates display numbers LTR within RTL context
-
-### Phase 5: Polish & Edge Cases
-- Add missing key detection (console.warn in dev mode)
-- Test all pages in both languages
-- Verify RTL layout on all pages
-- Verify Telegram language detection for initial locale
-- Handle edge cases: missing keys, rapid language switching, unsaved form state
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

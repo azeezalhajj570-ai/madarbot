@@ -314,6 +314,10 @@ class KnowledgeExtractor:
     ) -> tuple[dict[str, Any] | None, float]:
         api_key = self._cfg("ai_provider_api_key", self._settings.gemini_api_key or "")
         if not api_key:
+            logger.warning("gemini_missing_api_key provider=%s model=%s cfg_keys=%s",
+                           self._cfg("ai_provider", ""),
+                           self._cfg("ai_provider_model", ""),
+                           list(self._config_override.keys()))
             return None, 0.0
 
         prompt = _format_prompt(prompt_template, chunk_text, **extra)
@@ -333,12 +337,15 @@ class KnowledgeExtractor:
                     timeout=aiohttp.ClientTimeout(total=timeout),
                 ) as resp:
                     data = await resp.json()
+                    logger.info("gemini_full_response status=%s keys=%s", resp.status, list(data.keys()))
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        logger.warning("gemini_no_candidates full_response=%s", str(data)[:500])
                     text = (
-                        data.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "") or ""
-                    )
+                        candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        if candidates else ""
+                    ) or ""
+                    logger.info("gemini_response_text_len=%d text_start=%s", len(text), text[:200] if text else "EMPTY")
                     usage = data.get("usageMetadata", {})
                     cost = (
                         usage.get("promptTokenCount", 0) * 0.0000375

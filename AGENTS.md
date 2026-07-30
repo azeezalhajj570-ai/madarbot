@@ -202,3 +202,15 @@ Each bot owner only sees their own groups, agents, and statistics.
 - Use `.env.example` for placeholder values
 - MCP tokens are scoped to a `tg_user_id`
 - Dashboard auth via Telegram WebApp or `DASHBOARD_BROWSER_USERS`
+
+<!-- SPECKIT START -->
+## Current Plan
+
+**Multi-User Workspace MVP** (`015-workspace-mvp`)
+- Spec: `specs/015-workspace-mvp/spec.md`
+- Plan: `specs/015-workspace-mvp/plan.md`
+- Research: `specs/015-workspace-mvp/research.md`
+- Data Model: `specs/015-workspace-mvp/data-model.md`
+- API Contracts: `specs/015-workspace-mvp/contracts/api.md`
+- Quickstart: `specs/015-workspace-mvp/quickstart.md`
+<!-- SPECKIT END -->
