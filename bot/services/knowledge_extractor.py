@@ -59,9 +59,33 @@ class KnowledgeExtractor:
         self.session = session
         self._settings = get_settings()
         self._config_override = config_override or {}
+        self._system_config: dict[str, str] = {}
+
+    async def load_system_config(self) -> None:
+        """Load AI provider settings from system_config table."""
+        try:
+            from bot.db.models.system_config import SystemConfig
+            rows = (await self.session.execute(
+                select(SystemConfig).where(SystemConfig.key.like('ai_%'))
+            )).scalars().all()
+            self._system_config = {r.key: r.value for r in rows}
+        except Exception:
+            self._system_config = {}
 
     def _cfg(self, key: str, default: str = "") -> str:
-        return self._config_override.get(key, default) or default
+        # Priority: config_override > system_config > env default
+        if key in self._config_override and self._config_override[key]:
+            return self._config_override[key]
+        system_key = key.replace("ai_provider", "ai_provider")
+        if key == "ai_provider" and self._system_config.get("ai_provider"):
+            return self._system_config["ai_provider"]
+        if key == "ai_provider_api_key" and self._system_config.get("ai_provider_api_key"):
+            return self._system_config["ai_provider_api_key"]
+        if key == "ai_provider_model" and self._system_config.get("ai_provider_model"):
+            return self._system_config["ai_provider_model"]
+        if key == "ai_provider_base_url" and self._system_config.get("ai_provider_base_url"):
+            return self._system_config["ai_provider_base_url"]
+        return default or ""
 
     async def extract_knowledge(
         self, *, scraped_group_id: int, max_messages: int = 2000
