@@ -324,7 +324,7 @@ async def classify_query(
     q: str = Query(..., description="User question"),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ):
-    return await classify_intent(q)
+    return await classify_intent(q, user_id=identity.user_id)
 
 
 class SuggestionItem(BaseModel):

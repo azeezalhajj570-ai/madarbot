@@ -23,16 +23,16 @@ INTENT_CLASSIFICATION_PROMPT = """You are an admission intent classifier. Given 
 - search: Any other admission-related question (requirements, deadlines, documents, general info)
 
 Return ONLY a JSON object with:
-{"intent": "<category>", "reason": "<one-line explanation>", "entities": {"university": "<detected or null>", "major": "<detected or null>"}}
+{{"intent": "<category>", "reason": "<one-line explanation>", "entities": {{"university": "<detected or null>", "major": "<detected or null>"}}}}
 
 Question: {query}
 """
 
 
-async def classify_intent(query: str) -> dict[str, Any]:
+async def classify_intent(query: str, user_id: int | None = None) -> dict[str, Any]:
     """Classify an admission query into an intent category using LLM."""
     prompt = INTENT_CLASSIFICATION_PROMPT.format(query=query)
-    result = await call_admission_llm(prompt, system_kind="json", max_tokens=200)
+    result = await call_admission_llm(prompt, system_kind="json", max_tokens=200, user_id=user_id)
     if result:
         try:
             parsed = json.loads(result)
