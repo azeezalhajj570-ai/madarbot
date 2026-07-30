@@ -74,10 +74,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
             normalized_query = str(query or "").strip()
             word_conditions = []
 
-            # Multi-word "AND" search
             query_words = [w.strip() for w in normalized_query.split() if len(w.strip()) >= 1]
             for word in query_words:
-                # Ignore very short special chars if there are better words
                 if word in {"-", "_", ".", ","} and len(query_words) > 1:
                     continue
 
@@ -114,7 +112,16 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 .limit(100 if normalized_query else 500)
             )
 
-            scraped_rows = (await self.session.execute(stmt)).scalars().all()
+            scraped_rows_all = (await self.session.execute(stmt)).scalars().all()
+            seen: set[int] = set()
+            scraped_rows: list[ScrapedGroup] = []
+            for row in scraped_rows_all:
+                tid = int(row.tg_group_id)
+                if tid in seen:
+                    continue
+                seen.add(tid)
+                scraped_rows.append(row)
+
             if not scraped_rows:
                 return []
 

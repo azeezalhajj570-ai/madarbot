@@ -868,8 +868,8 @@
       ];
       if (state.isOwner) {
         items.push({ route: "#/owner", label: t("navPlatform"), icon: "shield", badge: { text: "owner", tone: "accent" } });
-        items.push({ route: "#/ai-settings", label: "AI Settings", icon: "cpu" });
       }
+      items.push({ route: "#/ai-settings", label: "AI Settings", icon: "cpu" });
       return items;
     }
 
@@ -2925,8 +2925,7 @@
     }
 
     async function loadAIConfig(force = false) {
-      if (!state.isOwner) return;
-      if (!state.cache.aiConfig || force) state.cache.aiConfig = await apiRequest("/webapp/owner/ai-config");
+      if (!state.cache.aiConfig || force) state.cache.aiConfig = await apiRequest("/webapp/ai/config");
     }
 
     async function loadScraper(force = false) {
@@ -3004,8 +3003,9 @@
         await loadSettings();
       } else if (state.route === "#/owner" && state.isOwner) {
         await loadOwner();
-      } else if (state.route === "#/ai-settings" && state.isOwner) {
+      } else if (state.route === "#/ai-settings") {
         await loadAIConfig();
+        roots.content.innerHTML = renderAISettingsView();
       }
     }
 
@@ -4533,7 +4533,6 @@
     }
 
     function renderAISettingsView() {
-      if (!state.isOwner) return emptyState("Owner access required.");
       const config = state.cache.aiConfig || {};
       const provider = config.provider || "heuristic";
       const apiKey = config.api_key || "";
@@ -4541,7 +4540,7 @@
       const baseUrl = config.base_url || "";
       const embedKey = config.embedding_api_key || "";
       const embedModel = config.embedding_model || "text-embedding-3-small";
-      const enabled = config.enabled === "true";
+      const pilotEnabled = config.pilot_enabled === true;
 
       return \`
         <div class="view">
@@ -4614,7 +4613,7 @@
                     <div class="settings-label-hint">Allow AI to auto-reply when @mentioned</div>
                   </div>
                   <label class="switch">
-                    <input type="checkbox" id="ai-pilot-enabled" \${enabled ? "checked" : ""} />
+                    <input type="checkbox" id="ai-pilot-enabled" \${pilotEnabled ? "checked" : ""} />
                     <span class="switch-slider"></span>
                   </label>
                 </div>
@@ -6344,20 +6343,22 @@
         const modelEl = document.getElementById("ai-model");
         const baseUrlEl = document.getElementById("ai-base-url");
         const embedKeyEl = document.getElementById("ai-embed-key");
+        const embedModelEl = document.getElementById("ai-embed-model");
         const enabledEl = document.getElementById("ai-pilot-enabled");
         const statusEl = document.getElementById("ai-config-status");
         if (!providerEl || !statusEl) return;
         try {
           statusEl.textContent = "Saving...";
           const body = {
-            ai_provider: providerEl.value,
-            ai_provider_api_key: apiKeyEl ? apiKeyEl.value : "",
-            ai_provider_model: modelEl ? modelEl.value : "",
-            ai_provider_base_url: baseUrlEl ? baseUrlEl.value : "",
-            ai_embedding_api_key: embedKeyEl ? embedKeyEl.value : "",
-            ai_pilot_enabled: enabledEl ? enabledEl.checked.toString() : "false",
+            provider: providerEl.value,
+            api_key: apiKeyEl ? apiKeyEl.value : "",
+            model: modelEl ? modelEl.value : "",
+            base_url: baseUrlEl ? baseUrlEl.value : "",
+            embedding_api_key: embedKeyEl ? embedKeyEl.value : "",
+            embedding_model: embedModelEl ? embedModelEl.value : "text-embedding-3-small",
+            pilot_enabled: enabledEl ? enabledEl.checked : false,
           };
-          await apiRequest("/webapp/owner/ai-config", { method: "PUT", body: JSON.stringify(body) });
+          await apiRequest("/webapp/ai/config", { method: "PUT", body: JSON.stringify(body) });
           state.cache.aiConfig = null;
           await loadAIConfig(true);
           statusEl.textContent = "Saved successfully.";
@@ -6376,7 +6377,7 @@
         try {
           statusEl.textContent = "Testing connection...";
           statusEl.style.color = "var(--color-text-secondary)";
-          const result = await apiRequest("/webapp/owner/ai-config/test", {
+          const result = await apiRequest("/webapp/ai/config/test", {
             method: "POST",
             body: JSON.stringify({
               provider: providerEl ? providerEl.value : "heuristic",
@@ -7498,10 +7499,6 @@
         location.hash = "#/home";
         return;
       }
-      if (nextRoute === "#/ai-settings" && !state.isOwner) {
-        location.hash = "#/home";
-        return;
-      }
       state.route = nextRoute;
       await ensureRouteData();
       renderSidebar();
@@ -7527,10 +7524,6 @@
         location.hash = state.route;
       }
       if (state.route === "#/owner" && !state.isOwner) {
-        state.route = "#/home";
-        location.hash = state.route;
-      }
-      if (state.route === "#/ai-settings" && !state.isOwner) {
         state.route = "#/home";
         location.hash = state.route;
       }
