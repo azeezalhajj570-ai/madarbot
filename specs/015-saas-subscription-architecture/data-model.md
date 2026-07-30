@@ -1,154 +1,164 @@
 # SaaS MVP — Data Model & Architecture
 
+> **Revised 2026-07-30.** The original version of this document specified
+> a standalone 6-table schema (`plans`, `features`, `plan_features`,
+> `subscriptions`, `resources`, `feature_usage`), UUID-keyed and scoped to
+> a raw Telegram `user_id`. That collides table-for-table with the
+> already-migrated, tenant-scoped `bot/db/models/billing.py` schema and
+> can't represent a shared workspace subscription. See `research.md` for
+> the full rationale. This version builds on `billing.py` +
+> `PlanFeature`/`FeatureUsage` (added by branch `015-workspace-mvp` —
+> **this feature depends on that branch**) instead of forking a second
+> schema.
+
 ## Overview
 
-Six tables. Configuration-driven. Simple counters. Extensible.
+Configuration-driven. Simple counters. Extensible. Four tables carry the
+whole feature — two already exist, two are new (added on `015-workspace-mvp`):
 
 ```
-plans             → What we sell
-features          → What we offer
-plan_features     → Which features each plan gets + limits
-subscriptions     → Who has what plan
-resources         → What the user owns
-feature_usage     → How much they've used
+Product / Plan / PlanPrice   → What we sell (existing, billing.py)
+Subscription                 → Which tenant (workspace) has what plan (existing, billing.py)
+PlanFeature                  → Which features each plan gets + limits (new, billing.py)
+FeatureUsage                 → How much a subscription has used (new, billing.py)
 ```
+
+No `features` catalog table and no polymorphic `resources` table — see
+`research.md`'s "Why Not a Polymorphic resources Table" for why resource
+counts are queried directly from their real tables instead.
 
 ---
 
 ## 1. Tables
 
-### plans
+### Product, Plan, PlanPrice (`bot/db/models/billing.py` — existing, unchanged)
 
-```sql
-CREATE TABLE plans (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            TEXT NOT NULL,            -- 'Free', 'Pro', 'Business', 'Enterprise'
-    description     TEXT,
-    price           INTEGER NOT NULL,         -- in cents ($9.99 = 999)
-    billing_period  TEXT NOT NULL DEFAULT 'monthly',  -- 'monthly', 'yearly'
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    sort_order      INTEGER NOT NULL DEFAULT 0,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+Already migrated by `20260504_db_redesign.py`, already seeded with a
+`madarbot` product and `starter`/`business`/`enterprise` plans + monthly/
+yearly prices.
+
+```
+Plan
+├── id: int (PK)
+├── product_id: FK → products.id
+├── name, slug, description, sort_order, is_active
 ```
 
-### features
+### Subscription (`bot/db/models/billing.py` — existing, unchanged)
 
-```sql
-CREATE TABLE features (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key         TEXT NOT NULL UNIQUE,     -- 'chat', 'ocr', 'voice', 'api'
-    name        TEXT NOT NULL,
-    description TEXT,
-    category    TEXT,                     -- 'ai', 'communication', 'integration'
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    sort_order  INTEGER NOT NULL DEFAULT 0,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+```
+Subscription
+├── id: int (PK)
+├── tenant_id: FK → tenants.id            -- the workspace, not a user
+├── plan_id: FK → plans.id (nullable)
+├── status: 'pending' | 'active' | 'past_due' | 'cancelled' | 'expired'
+├── current_period_start, current_period_end, trial_end
+├── UNIQUE active subscription per tenant (partial index)
 ```
 
-### plan_features
+This is the load-bearing change from the original draft: subscriptions
+are per-workspace (`tenant_id`), not per-Telegram-user. Every member of a
+workspace shares the same plan and the same usage counters.
 
-The single most important table. Controls what every plan allows.
+### PlanFeature (`bot/db/models/billing.py` — new, from `015-workspace-mvp`)
+
+Per-plan feature template — what every subscriber to a plan gets. This is
+the table this doc's original `plan_features` mapped onto, minus the UUID
+PK and the separate `features` catalog FK (a bare string key is enough
+for MVP — see research.md).
 
 ```sql
+-- Already added by 015-workspace-mvp's migration 20260730_001
 CREATE TABLE plan_features (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    plan_id     UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
-    feature_id  UUID NOT NULL REFERENCES features(id) ON DELETE CASCADE,
-    enabled     BOOLEAN NOT NULL DEFAULT false,
-    limit_value BIGINT,                  -- NULL = unlimited, 0 = disabled, >0 = max allowed
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(plan_id, feature_id)
+    id           INTEGER PRIMARY KEY,
+    plan_id      INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+    feature_key  VARCHAR(128) NOT NULL,       -- 'chat', 'ocr', 'voice', 'api', 'max_agents', ...
+    enabled      BOOLEAN NOT NULL DEFAULT true,
+    limit_value  INTEGER,                     -- NULL = unlimited
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(plan_id, feature_key)
 );
-
-CREATE INDEX idx_plan_features_plan ON plan_features(plan_id);
+CREATE INDEX ix_plan_features_plan_id ON plan_features(plan_id);
+CREATE INDEX ix_plan_features_feature_key ON plan_features(feature_key);
 ```
 
-### subscriptions
+`015-workspace-mvp` already seeds `max_agents`/`max_groups` rows for
+starter/business/enterprise. This feature adds the remaining product
+feature keys this doc originally proposed (`chat`, `ocr`, `voice`, `api`,
+`knowledge_base`, `whatsapp`, `telegram`, `workflow`, `analytics`) as
+additional `PlanFeature` rows on the same three plans — no schema change,
+just more rows, matching the "config-driven" principle from the original
+draft.
+
+### FeatureUsage (`bot/db/models/billing.py` — new, from `015-workspace-mvp`)
+
+Per-subscription usage counters, one row per feature per billing period.
+This is the table this doc's original `feature_usage` mapped onto,
+`subscription_id`-scoped instead of raw `user_id`.
 
 ```sql
-CREATE TABLE subscriptions (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     BIGINT NOT NULL,          -- Telegram user ID (matches existing system)
-    plan_id     UUID NOT NULL REFERENCES plans(id),
-    status      TEXT NOT NULL DEFAULT 'active',  -- 'trial', 'active', 'expired', 'cancelled'
-    started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    expires_at  TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-```
-
-### resources
-
-Tracks what the user owns — one table for all resource types.
-
-```sql
-CREATE TABLE resources (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     BIGINT NOT NULL,
-    type        TEXT NOT NULL,            -- 'agent', 'knowledge_base', 'workflow', 'api_key', 'channel'
-    name        TEXT NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'active',  -- 'active', 'archived', 'deleted'
-    metadata    JSONB DEFAULT '{}',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    archived_at TIMESTAMPTZ,
-    deleted_at  TIMESTAMPTZ
-);
-
-CREATE INDEX idx_resources_user_type ON resources(user_id, type);
-CREATE INDEX idx_resources_user_status ON resources(user_id, status);
-```
-
-### feature_usage
-
-Simple integer counters. One row per user per feature per billing period.
-
-```sql
+-- Already added by 015-workspace-mvp's migration 20260730_001
 CREATE TABLE feature_usage (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id       BIGINT NOT NULL,
-    feature_id    UUID NOT NULL REFERENCES features(id),
-    used_count    BIGINT NOT NULL DEFAULT 0,
-    period        TEXT NOT NULL,           -- '2026-07' (YYYY-MM)
-    source        TEXT NOT NULL DEFAULT 'web',  -- 'web', 'telegram', 'whatsapp', 'api'
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(user_id, feature_id, period)
+    id               INTEGER PRIMARY KEY,
+    subscription_id  INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    feature_key      VARCHAR(128) NOT NULL,
+    used_count       INTEGER NOT NULL DEFAULT 0,
+    period           VARCHAR(7) NOT NULL,        -- '2026-07' (YYYY-MM)
+    reset_at         TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(subscription_id, feature_key, period)
 );
-
-CREATE INDEX idx_feature_usage_user ON feature_usage(user_id);
-CREATE INDEX idx_feature_usage_period ON feature_usage(period);
+CREATE INDEX ix_feature_usage_subscription_id ON feature_usage(subscription_id);
+CREATE INDEX ix_feature_usage_feature_key ON feature_usage(feature_key);
+CREATE INDEX ix_feature_usage_period ON feature_usage(period);
 ```
+
+Because usage is keyed by `subscription_id` (the workspace's one shared
+subscription), every member of a workspace draws from the same quota —
+this is what makes "one subscription covers a team" actually work,
+instead of each member separately hitting their own limit.
+
+### Resource counts — no table
+
+Original draft: a polymorphic `resources` table (`type`, `status`, ...)
+tracking agent/knowledge-base/workflow counts against `PlanFeature.limit_value`
+for keys like `max_agents`. Instead, count directly from the real,
+already `tenant_id`-scoped tables:
+
+```sql
+SELECT COUNT(*) FROM agents WHERE tenant_id = :tenant_id;
+SELECT COUNT(*) FROM groups WHERE tenant_id = :tenant_id;
+```
+
+No new table, no second number to keep in sync with the real one.
 
 ---
 
 ## 2. Permission Flow
 
+Unchanged in shape from the original draft — only the lookup key changes
+(`tenant_id`'s active subscription, not a raw `user_id`):
+
 ```
-Request Feature X
+Request Feature X (on behalf of tenant_id)
     ↓
-Lookup user's subscription
+Lookup tenant's active Subscription
     ↓
-Resolve plan from subscription
+Resolve Plan from subscription.plan_id
     ↓
-Lookup plan_features for (plan_id, feature_id)
+Lookup PlanFeature for (plan_id, feature_key)
     ↓
 Is enabled?  →  No → 403 Feature not available
     ↓
 Yes
     ↓
-Has limit?  →  NULL →  Allow (unlimited)
+Has limit_value?  →  NULL →  Allow (unlimited)
     ↓
 Numeric
     ↓
-Lookup feature_usage.used_count for current period
+Lookup FeatureUsage.used_count for (subscription_id, feature_key, current period)
     ↓
 used_count < limit_value?  →  No → 429 Limit exceeded
     ↓
@@ -156,62 +166,60 @@ Yes
     ↓
 ALLOW
     ↓
-INCREMENT feature_usage.used_count (+1)
+INCREMENT FeatureUsage.used_count (+1)
 ```
 
 ### Service Layer Implementation
 
 ```python
-def can_use_feature(user, feature_key: str) -> bool:
-    subscription = get_subscription(user)
-    if not subscription or subscription.status not in ('active', 'trial'):
+# bot/services/subscription_service.py — extend, don't fork a new bot/billing/ module
+# (SubscriptionService already exists; add feature-gate methods to it)
+
+async def can_use_feature(self, *, tenant_id: int, feature_key: str) -> bool:
+    subscription = await self.get_active_subscription_for_tenant(tenant_id)
+    if subscription is None:
         return False
 
-    pf = get_plan_feature(subscription.plan_id, feature_key)
-    if not pf or not pf.enabled:
+    plan_feature = await self._get_plan_feature(subscription.plan_id, feature_key)
+    if plan_feature is None or not plan_feature.enabled:
         return False
 
-    if pf.limit_value is None:
+    if plan_feature.limit_value is None:
         return True  # unlimited
 
-    usage = get_usage(user, feature_key)
-    return usage.used_count < pf.limit_value
+    usage = await self._get_usage(subscription.id, feature_key)
+    return usage.used_count < plan_feature.limit_value
 
 
-def record_usage(user, feature_key: str, source: str = 'web'):
+async def record_usage(self, *, tenant_id: int, feature_key: str) -> None:
+    subscription = await self.get_active_subscription_for_tenant(tenant_id)
     period = current_period()  # '2026-07'
-    upsert_usage(
-        user_id=user.id,
-        feature_key=feature_key,
-        period=period,
-        source=source,
-    )
+    await self._upsert_usage(subscription.id, feature_key, period)
 ```
 
 ---
 
 ## 3. Quota Calculation
 
-Computed dynamically — never stored.
+Computed dynamically — never stored. Unchanged from the original draft:
 
 ```
-remaining = plan_features.limit_value - feature_usage.used_count
+remaining = plan_feature.limit_value - feature_usage.used_count
 ```
 
 ```python
-def get_quota(user):
-    subscription = get_subscription(user)
-    features = get_plan_features(subscription.plan_id)
+async def get_quota(self, tenant_id: int) -> list[dict]:
+    subscription = await self.get_active_subscription_for_tenant(tenant_id)
+    plan_features = await self._list_plan_features(subscription.plan_id)
 
     result = []
-    for pf in features:
-        usage = get_usage(user, pf.feature_key)
+    for pf in plan_features:
+        usage = await self._get_usage(subscription.id, pf.feature_key)
         remaining = None
         if pf.limit_value is not None:
             remaining = max(0, pf.limit_value - usage.used_count)
         result.append({
             "feature": pf.feature_key,
-            "name": pf.feature_name,
             "limit": pf.limit_value,
             "used": usage.used_count,
             "remaining": remaining,
@@ -223,57 +231,63 @@ def get_quota(user):
 
 ## 4. API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/subscription` | Current subscription + plan |
-| `POST` | `/api/v1/subscription/change` | Change plan (upgrade/downgrade) |
-| `GET` | `/api/v1/plans` | List available plans |
-| `GET` | `/api/v1/features` | All features with entitlement for current user |
-| `GET` | `/api/v1/usage` | Current usage + remaining quota |
-| `POST` | `/api/v1/usage/check` | Check quota + record usage atomically |
-| `GET` | `/api/v1/resources` | List owned resources |
-| `POST` | `/api/v1/resources` | Create a resource |
-| `DELETE` | `/api/v1/resources/{id}` | Delete a resource |
-| `GET` | `/api/v1/dashboard` | Composite dashboard data |
+Paths follow this repo's actual router convention (`/api/...` +
+`/webapp/...` dual registration, see `bot/dashboard/api/routers/`) instead
+of the original draft's `/api/v1/...` — there is no `/api/v1` prefix
+anywhere else in this codebase.
 
-### Response: GET /api/v1/usage
+| Method | Path | Description |
+|--------|------|--------------|
+| `GET` | `/api/subscription` | Current workspace's subscription + plan (uses `active_workspace_id` from `WorkspaceContext`, see `015-workspace-mvp`) |
+| `POST` | `/api/subscription/change` | Change plan (upgrade/downgrade) |
+| `GET` | `/api/plans` | List available plans (existing `Plan`/`PlanPrice` + their `PlanFeature`s) |
+| `GET` | `/api/usage` | Current usage + remaining quota for the active workspace |
+| `POST` | `/api/usage/check` | Check quota + record usage atomically |
+
+### Response: GET /api/usage
 
 ```json
 {
-    "plan": "Pro",
+    "plan": "business",
     "period": {"start": "2026-07-01", "end": "2026-07-31"},
     "features": [
-        {"key": "chat", "name": "Chat", "limit": 10000, "used": 385, "remaining": 9615},
-        {"key": "ocr", "name": "OCR", "limit": 500, "used": 12, "remaining": 488},
-        {"key": "api", "name": "API", "limit": 100000, "used": 2500, "remaining": 97500},
-        {"key": "voice", "name": "Voice", "enabled": false}
+        {"key": "chat", "limit": 10000, "used": 385, "remaining": 9615},
+        {"key": "ocr", "limit": 500, "used": 12, "remaining": 488},
+        {"key": "api", "limit": 100000, "used": 2500, "remaining": 97500},
+        {"key": "voice", "enabled": false}
     ],
     "resources": {
-        "agents": {"active": 2, "limit": 10},
-        "knowledge_bases": {"active": 1, "limit": 3}
+        "agents": {"active": 2, "limit": 3},
+        "groups": {"active": 14, "limit": 50}
     }
 }
 ```
 
-### Response: GET /api/v1/plans
+### Response: GET /api/plans
 
 ```json
 {
     "plans": [
         {
-            "name": "Free",
-            "price": 0,
+            "slug": "starter",
+            "name": "Starter",
+            "price_monthly_cents": 2900,
             "features": [
-                {"key": "chat", "name": "Chat", "enabled": true, "limit": 500},
-                {"key": "ocr", "name": "OCR", "enabled": false}
+                {"key": "chat", "enabled": true, "limit": 500},
+                {"key": "ocr", "enabled": false},
+                {"key": "max_agents", "enabled": true, "limit": 1},
+                {"key": "max_groups", "enabled": true, "limit": 5}
             ]
         },
         {
-            "name": "Pro",
-            "price": 2900,
+            "slug": "business",
+            "name": "Business",
+            "price_monthly_cents": 7900,
             "features": [
-                {"key": "chat", "name": "Chat", "enabled": true, "limit": 10000},
-                {"key": "ocr", "name": "OCR", "enabled": true, "limit": 500}
+                {"key": "chat", "enabled": true, "limit": 10000},
+                {"key": "ocr", "enabled": true, "limit": 500},
+                {"key": "max_agents", "enabled": true, "limit": 3},
+                {"key": "max_groups", "enabled": true, "limit": 50}
             ]
         }
     ]
@@ -284,9 +298,11 @@ def get_quota(user):
 
 ## 5. Dashboard
 
+Unchanged from the original draft (this is UI, not schema):
+
 ```
 ┌─────────────────────────────────────────┐
-│  Plan: Pro                              │
+│  Plan: Business                          │
 │  Status: Active · Renews: Jul 31        │
 ├─────────────────────────────────────────┤
 │  Chat        385 / 10,000  ████░░░░  4% │
@@ -294,13 +310,11 @@ def get_quota(user):
 │  API       2,500 / 100,000 ██░░░░░░  3% │
 │  Voice        -- / --      disabled     │
 ├─────────────────────────────────────────┤
-│  Agents: 2 / 10   KBs: 1 / 3           │
+│  Agents: 2 / 3    Groups: 14 / 50       │
 ├─────────────────────────────────────────┤
-│  [Upgrade to Business]                  │
+│  [Upgrade to Enterprise]                 │
 └─────────────────────────────────────────┘
 ```
-
-All values computed from simple queries:
 
 ```python
 remaining = limit - used  # for each feature
@@ -311,69 +325,57 @@ usage_pct = (used / limit * 100) if limit else 0
 
 ## 6. Seed Data
 
+`starter`/`business`/`enterprise` plans and their `max_agents`/`max_groups`
+`PlanFeature` rows are already seeded by `015-workspace-mvp`'s migration.
+This feature adds the remaining product feature keys as more `PlanFeature`
+rows on the same plans — no new plans, no new schema:
+
 ```sql
--- Plans
-INSERT INTO plans (id, name, price, billing_period, sort_order) VALUES
-    ('p_free', 'Free', 0, 'monthly', 0),
-    ('p_pro', 'Pro', 2900, 'monthly', 1),
-    ('p_business', 'Business', 9900, 'monthly', 2),
-    ('p_enterprise', 'Enterprise', 0, 'yearly', 3);
+INSERT INTO plan_features (plan_id, feature_key, enabled, limit_value)
+SELECT id, 'chat', true, 500 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'knowledge_base', true, 1 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'whatsapp', false, 0 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'telegram', true, 1 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'voice', false, 0 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'ocr', false, 0 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'api', true, 1000 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'workflow', false, 0 FROM plans WHERE slug = 'starter'
+UNION ALL SELECT id, 'analytics', false, 0 FROM plans WHERE slug = 'starter'
 
--- Features
-INSERT INTO features (id, key, name, category, sort_order) VALUES
-    ('f_chat', 'chat', 'AI Chat', 'ai', 0),
-    ('f_kb', 'knowledge_base', 'Knowledge Base', 'ai', 1),
-    ('f_whatsapp', 'whatsapp', 'WhatsApp', 'communication', 2),
-    ('f_telegram', 'telegram', 'Telegram', 'communication', 3),
-    ('f_voice', 'voice', 'Voice', 'ai', 4),
-    ('f_ocr', 'ocr', 'OCR', 'ai', 5),
-    ('f_api', 'api', 'API Access', 'integration', 6),
-    ('f_workflow', 'workflow', 'Workflows', 'automation', 7),
-    ('f_analytics', 'analytics', 'Analytics', 'admin', 8);
+UNION ALL SELECT id, 'chat', true, 10000 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'knowledge_base', true, 5 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'whatsapp', true, 3 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'telegram', true, 10 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'voice', true, 500 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'ocr', true, 500 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'api', true, 100000 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'workflow', true, 20 FROM plans WHERE slug = 'business'
+UNION ALL SELECT id, 'analytics', true, NULL FROM plans WHERE slug = 'business'
 
--- Plan Features (Free)
-INSERT INTO plan_features (plan_id, feature_id, enabled, limit_value) VALUES
-    ('p_free', 'f_chat', true, 500),
-    ('p_free', 'f_kb', true, 1),
-    ('p_free', 'f_whatsapp', false, 0),
-    ('p_free', 'f_telegram', true, 1),
-    ('p_free', 'f_voice', false, 0),
-    ('p_free', 'f_ocr', false, 0),
-    ('p_free', 'f_api', true, 1000),
-    ('p_free', 'f_workflow', false, 0),
-    ('p_free', 'f_analytics', false, 0);
-
--- Plan Features (Pro)
-INSERT INTO plan_features (plan_id, feature_id, enabled, limit_value) VALUES
-    ('p_pro', 'f_chat', true, 10000),
-    ('p_pro', 'f_kb', true, 5),
-    ('p_pro', 'f_whatsapp', true, 3),
-    ('p_pro', 'f_telegram', true, 10),
-    ('p_pro', 'f_voice', true, 500),
-    ('p_pro', 'f_ocr', true, 500),
-    ('p_pro', 'f_api', true, 100000),
-    ('p_pro', 'f_workflow', true, 20),
-    ('p_pro', 'f_analytics', true, NULL);
+UNION ALL SELECT id, key, true, NULL FROM plans, (VALUES
+    ('chat'), ('knowledge_base'), ('whatsapp'), ('telegram'),
+    ('voice'), ('ocr'), ('api'), ('workflow'), ('analytics')
+) AS f(key) WHERE plans.slug = 'enterprise'
+ON CONFLICT DO NOTHING;
 ```
 
 ---
 
 ## 7. Future Extension Points
 
-The schema is designed so these additions don't require touching the 6 core tables:
+Unchanged in spirit from the original draft — the schema is designed so
+these additions don't require touching the core tables:
 
 | Future Feature | How It Grafts On |
 |---------------|------------------|
-| **Organizations** | New `organizations` table; add `organization_id` to subscriptions, resources, feature_usage |
-| **Workspaces** | New `workspaces` table with `organization_id`; add `workspace_id` to resources, feature_usage |
-| **Teams/Members** | New `memberships` table joining users to organizations with roles |
-| **Event sourcing** | New `usage_events` table (append-only); migrate from direct counter updates |
-| **Stripe billing** | Add `stripe_customer_id`, `stripe_subscription_id` to subscriptions |
-| **Usage history** | New `usage_history` table or partition feature_usage by period |
-| **Cost tracking** | New `cost_records` + `cost_config` tables, linked to usage_events |
+| **Feature display metadata** | Normalized `Feature` catalog table (`key`, `name`, `category`) if a static Python lookup stops being enough for the dashboard |
+| **Event sourcing** | New `usage_events` table (append-only); migrate from direct `FeatureUsage` counter updates |
+| **Stripe billing** | `PlanPrice.stripe_price_id` already exists; add `stripe_subscription_id` to `Subscription` (both already columns on the existing models) |
+| **Usage history** | New `usage_history` table or partition `feature_usage` by period |
+| **Cost tracking** | New `cost_records` + `cost_config` tables, linked to usage events |
 | **Analytics** | New `analytics_daily` materialized view or external ClickHouse |
-| **Feature flags** | New `feature_flags` table for per-user rollouts |
-| **Add-ons** | New `subscription_addons` table, or extend feature_usage with addon_id |
-| **Audit logs** | New `audit_log` table, event-driven writes |
-| **AI provider tracking** | Add `provider` + `model` columns to usage, or to a new `model_usage` table |
-| **Rate limiting** | Use Redis counters keyed by `user_id:feature:window` |
+| **Feature flags** | New `feature_flags` table for per-tenant rollouts |
+| **Add-ons** | New `subscription_addons` table, or extend `FeatureUsage` with an `addon_id` |
+| **Audit logs** | `audit_logs` table already exists (`20260504_db_redesign.py`) — wire subscription/plan changes into it |
+| **AI provider tracking** | Add `provider` + `model` columns to usage, or a new `model_usage` table |
+| **Rate limiting** | Redis counters keyed by `tenant_id:feature:window` |

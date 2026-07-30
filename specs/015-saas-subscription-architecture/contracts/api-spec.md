@@ -1,41 +1,50 @@
 # API Specification — SaaS MVP
 
-**Base URL**: `https://madar.hamedco.com/api/v1`
+> **Revised 2026-07-30**: paths updated to this repo's actual convention
+> (`/api/...` + `/webapp/...` dual registration — there is no `/api/v1`
+> prefix anywhere else in the codebase) and responses updated to be
+> workspace-scoped (`tenant_id`, via `WorkspaceContext` from
+> `015-workspace-mvp`) instead of per-user. IDs are the existing Integer
+> PKs from `billing.py`, not new UUIDs. See `research.md` and
+> `data-model.md` for the full rationale.
 
-**Auth**: `Authorization: Bearer <token>` or Telegram WebApp init data.
+**Auth**: `Authorization: Bearer <token>` or Telegram WebApp init data
+(existing `extract_dashboard_identity` flow) + `X-Workspace-Id` header to
+select among multiple workspace memberships (defaults to the caller's
+owned workspace — see `015-workspace-mvp`'s `get_workspace_context`).
 
 ## Subscription
 
-### `GET /subscription`
+### `GET /api/subscription`
 
-Current user's subscription with plan details.
+Active workspace's subscription with plan details.
 
 ```json
 {
-    "id": "sub_abc123",
-    "plan": {"name": "Pro", "price": 2900, "billing": "monthly"},
+    "id": 42,
+    "plan": {"slug": "business", "name": "Business", "price_monthly_cents": 7900},
     "status": "active",
-    "started_at": "2026-06-01",
-    "expires_at": "2026-07-31",
+    "current_period_start": "2026-06-01",
+    "current_period_end": "2026-07-31",
     "period": "2026-07"
 }
 ```
 
-### `POST /subscription/change`
+### `POST /api/subscription/change`
 
-Change to a different plan.
+Change the active workspace's plan.
 
 ```json
 // Request
-{"plan_id": "p_pro"}
+{"plan_slug": "business"}
 
 // Response
-{"status": "active", "plan": "Pro", "previous_plan": "Free"}
+{"status": "active", "plan": "business", "previous_plan": "starter"}
 ```
 
 ## Plans
 
-### `GET /plans`
+### `GET /api/plans`
 
 List all active plans with their features.
 
@@ -43,20 +52,18 @@ List all active plans with their features.
 {
     "plans": [
         {
-            "id": "p_free",
-            "name": "Free",
-            "price": 0,
-            "billing": "monthly",
+            "slug": "starter",
+            "name": "Starter",
+            "price_monthly_cents": 2900,
             "features": [
                 {"key": "chat", "name": "AI Chat", "enabled": true, "limit": 500},
                 {"key": "ocr", "name": "OCR", "enabled": false}
             ]
         },
         {
-            "id": "p_pro",
-            "name": "Pro",
-            "price": 2900,
-            "billing": "monthly",
+            "slug": "business",
+            "name": "Business",
+            "price_monthly_cents": 7900,
             "highlight": true,
             "features": [
                 {"key": "chat", "name": "AI Chat", "enabled": true, "limit": 10000},
@@ -68,57 +75,43 @@ List all active plans with their features.
 }
 ```
 
-## Features
-
-### `GET /features`
-
-All features with entitlement for the current user.
-
-```json
-{
-    "features": [
-        {"key": "chat", "name": "AI Chat", "enabled": true,
-         "limit": 10000, "used": 385, "remaining": 9615},
-        {"key": "ocr", "name": "OCR", "enabled": true,
-         "limit": 500, "used": 12, "remaining": 488},
-        {"key": "voice", "name": "Voice", "enabled": false}
-    ]
-}
-```
+`name` per feature is resolved from a small static Python lookup
+(`feature_key → display name`), not a database join — see research.md's
+note on skipping a normalized `Feature` catalog table for MVP.
 
 ## Usage
 
-### `GET /usage`
+### `GET /api/usage`
 
-Current usage with remaining quota per feature + resource counts.
+Current usage with remaining quota per feature + resource counts, for
+the caller's active workspace.
 
 ```json
 {
-    "plan": "Pro",
+    "plan": "business",
     "period": "2026-07",
     "features": [
         {"key": "chat", "name": "AI Chat", "enabled": true,
          "limit": 10000, "used": 385, "remaining": 9615},
         {"key": "ocr", "name": "OCR", "enabled": true,
          "limit": 500, "used": 12, "remaining": 488},
-        {"key": "api", "name": "API", "enabled": true,
-         "limit": 100000, "used": 2500, "remaining": 97500},
         {"key": "voice", "name": "Voice", "enabled": false}
     ],
     "resources": {
-        "agents": {"active": 2, "limit": 10},
-        "knowledge_bases": {"active": 1, "limit": 5}
+        "agents": {"active": 2, "limit": 3},
+        "groups": {"active": 14, "limit": 50}
     }
 }
 ```
 
-### `POST /usage/check`
+### `POST /api/usage/check`
 
-Check quota and record usage atomically. Returns current state after increment.
+Check quota and record usage atomically, against the active workspace's
+subscription. Returns current state after increment.
 
 ```json
 // Request
-{"feature_key": "chat", "quantity": 1, "source": "web"}
+{"feature_key": "chat", "quantity": 1}
 
 // Response 200
 {"feature": "chat", "used": 386, "limit": 10000, "remaining": 9614}
@@ -138,56 +131,35 @@ Check quota and record usage atomically. Returns current state after increment.
 
 ## Resources
 
-### `GET /resources`
+No `/api/resources` CRUD endpoint — resource counts are read directly
+from the existing `Agent`/`Group` (and future typed) tables, not a
+separate ledger. Resource creation already happens through the existing
+`/api/agents`, group-linking, etc. endpoints; this feature only adds the
+*count-against-limit* check via `require_feature`/`can_use_feature`
+(see quickstart.md), it doesn't introduce a new way to create resources.
 
-```json
-{
-    "resources": [
-        {"id": "res_abc", "type": "agent", "name": "Support Bot",
-         "status": "active", "created_at": "2026-06-15T10:00:00Z"},
-        {"id": "res_def", "type": "knowledge_base", "name": "Product Docs",
-         "status": "active", "created_at": "2026-07-01T08:00:00Z"}
-    ],
-    "summary": {"agents": {"active": 2, "limit": 10}, "knowledge_bases": {"active": 1, "limit": 5}}
-}
-```
-
-### `POST /resources`
-
-```json
-// Request
-{"type": "agent", "name": "Sales Bot", "metadata": {"model": "gpt-4"}}
-
-// Response 201
-{"id": "res_xyz", "type": "agent", "name": "Sales Bot", "status": "active",
- "created_at": "2026-07-29T12:00:00Z"}
-```
-
-### `DELETE /resources/{id}`
-
-Soft delete (sets status to `deleted`).
-
-```json
-// Response 200
-{"status": "deleted"}
-```
+Resource summary is folded into `GET /api/usage`'s `resources` field
+above rather than a separate endpoint.
 
 ## Dashboard
 
-### `GET /dashboard`
+### `GET /api/usage/dashboard`
 
-Composite view combining subscription + usage + resources for the dashboard UI.
+Composite view combining subscription + usage + resources for the
+dashboard UI — same payload shape as `GET /api/usage`, kept as a distinct
+path in case the dashboard eventually needs a heavier aggregate (recent
+activity, upgrade prompts) than the raw usage check.
 
 ```json
 {
-    "plan": {"name": "Pro", "status": "active", "renewal": "2026-07-31"},
+    "plan": {"name": "Business", "status": "active", "renews": "2026-07-31"},
     "features": [
-        {"key": "chat", "label": "Chat", "used": 385, "limit": 10000},
-        {"key": "ocr", "label": "OCR", "used": 12, "limit": 500}
+        {"key": "chat", "name": "Chat", "used": 385, "limit": 10000},
+        {"key": "ocr", "name": "OCR", "used": 12, "limit": 500}
     ],
     "resources": {
         "agents": 2,
-        "knowledge_bases": 1
+        "groups": 14
     }
 }
 ```
@@ -209,4 +181,5 @@ Composite view combining subscription + usage + resources for the dashboard UI.
 }
 ```
 
-Error codes: `feature_not_enabled`, `limit_exceeded`, `plan_not_found`, `subscription_expired`.
+Error codes: `feature_not_enabled`, `limit_exceeded`, `plan_not_found`,
+`subscription_expired`.

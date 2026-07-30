@@ -8,7 +8,22 @@
 
 ## Summary
 
-MVP design for MadarBot subscription and usage tracking. Six tables: `plans`, `features`, `plan_features`, `subscriptions`, `resources`, `feature_usage`. Configuration-driven — adding a feature means a DB row, not a schema change. Permission flow: Subscription → Plan → Feature Enabled? → Usage < Limit? → Allow. Simple integer counters for usage. Dynamic quota calculation (limit - used). Clear extension points for future: organizations, workspaces, event sourcing, billing integration, cost tracking.
+MVP design for MadarBot subscription and usage tracking. Builds on the
+existing (already-migrated, currently unused) `bot/db/models/billing.py`
+schema — `Product → Plan → PlanPrice → Subscription → Entitlement` — plus
+two new tables, `PlanFeature` and `FeatureUsage`, added by branch
+`015-workspace-mvp`. Configuration-driven — adding a feature means a
+`PlanFeature` row, not a schema change. Permission flow: Subscription
+(tenant-scoped) → Plan → Feature Enabled? → Usage < Limit? → Allow. Simple
+integer counters for usage. Dynamic quota calculation (limit - used).
+
+**Revised 2026-07-30**: the original draft proposed a standalone,
+UUID-keyed, `user_id`-scoped 6-table schema (`plans`, `features`,
+`plan_features`, `subscriptions`, `resources`, `feature_usage`) that
+collides table-for-table with `billing.py` and can't represent a shared
+workspace subscription. See `research.md` for the full rationale. **This
+feature now depends on `015-workspace-mvp`** (tenant/workspace model +
+`PlanFeature`/`FeatureUsage`) and should be sequenced after it.
 
 ## Technical Context
 
@@ -22,7 +37,7 @@ MVP design for MadarBot subscription and usage tracking. Six tables: `plans`, `f
 
 **Primary Dependencies**: FastAPI, SQLAlchemy (async), Alembic, PostgreSQL 16
 
-**Storage**: PostgreSQL 16 (single database, all 6 tables)
+**Storage**: PostgreSQL 16 (existing `billing.py` tables + `PlanFeature`/`FeatureUsage` from `015-workspace-mvp`)
 
 **Testing**: pytest, pytest-asyncio
 
@@ -32,9 +47,9 @@ MVP design for MadarBot subscription and usage tracking. Six tables: `plans`, `f
 
 **Performance Goals**: <200ms p95 for subscription/feature reads, simple counters fast enough for MVP scale (thousands of users)
 
-**Constraints**: MVP scope — no event sourcing, no streaming, no background workers yet
+**Constraints**: MVP scope — no event sourcing, no streaming, no background workers yet. Must not create tables that collide with `bot/db/models/billing.py`.
 
-**Scale/Scope**: MVP — single database, single region, single-tenant per user (no orgs/workspaces yet)
+**Scale/Scope**: MVP — single database, single region. Tenancy is workspace-scoped via `Tenant`/`Subscription.tenant_id` (from `015-workspace-mvp`) rather than per-user — this feature rides on that shape instead of starting flat.
 
 ## Constitution Check
 
@@ -75,27 +90,28 @@ specs/015-saas-subscription-architecture/
 
 ```text
 bot/
-├── billing/                  # NEW: subscription + plans module
-│   ├── __init__.py
-│   ├── models.py             # SQLAlchemy models: Plan, Feature, PlanFeature, Subscription
-│   ├── schemas.py            # Pydantic request/response schemas
-│   ├── service.py            # Permission flow + quota logic
-│   └── router.py             # FastAPI routes
-├── db/
-│   ├── models/
-│   │   └── billing.py        # All 6 tables in one file
-│   └── migrations/           # Alembic migrations
-├── dashboard/
-│   └── frontend/
-│       └── templates/        # Subscription dashboard pages
+├── db/models/
+│   └── billing.py                  # EXISTING (015-workspace-mvp adds PlanFeature, FeatureUsage)
+│                                    #   MODIFY here: seed the remaining feature_key rows (chat, ocr, ...)
+├── services/
+│   └── subscription_service.py     # EXISTING — extend with can_use_feature/record_usage/get_quota
+├── dashboard/api/
+│   ├── routers/subscription.py     # EXISTING — extend with /api/plans, /api/usage, /api/usage/check
+│   └── dependencies.py             # EXISTING (015-workspace-mvp) — feature gates read WorkspaceContext.tenant_id
+dashboard/src/                      # React admin app (bot/dashboard/browser/) — extend SubscriptionsPage
 tests/
-└── billing/
-    ├── test_models.py
-    ├── test_service.py
-    └── test_router.py
+└── services/
+    └── test_subscription_service.py
 ```
 
-**Structure Decision**: New bounded domains (`billing/`, `analytics/`, `events/`) added alongside existing backend structure. Follows the existing FastAPI + SQLAlchemy patterns in `bot/`. Frontend dashboard pages extended in `bot/dashboard/frontend/`.
+**Structure Decision**: No new `bot/billing/` module — extends the
+existing `billing.py` models and `subscription_service.py` instead of
+standing up a parallel domain, since a working `Product/Plan/Subscription`
+schema and service already exist (they were just never wired to a live
+gate). Frontend changes land in `dashboard/src/` (the real React admin
+app — see `015-workspace-mvp`'s frontend work for the current build
+pipeline; the plan's original `bot/dashboard/frontend/templates/` target
+doesn't correspond to anything served today).
 
 ## Complexity Tracking
 
