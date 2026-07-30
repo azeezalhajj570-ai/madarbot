@@ -7,8 +7,40 @@ import aiohttp
 import structlog
 
 from bot.config import get_settings
+from bot.db.models.user_ai_config import UserAIConfig
+from bot.db.session import SessionLocal
 
 logger = structlog.get_logger(__name__)
+
+_USER_AI_CONFIG_CACHE: dict[int, dict[str, Any]] = {}
+
+
+async def get_user_ai_config(user_id: int | None) -> dict[str, Any]:
+    """Load per-user AI config from DB, falling back to env defaults."""
+    if user_id and user_id in _USER_AI_CONFIG_CACHE:
+        return _USER_AI_CONFIG_CACHE[user_id]
+    result: dict[str, Any] = {
+        "provider": get_settings().ai_provider,
+        "api_key": None,
+        "model": None,
+        "base_url": None,
+    }
+    if user_id:
+        try:
+            async with SessionLocal() as session:
+                from sqlalchemy import select
+                row = (await session.execute(
+                    select(UserAIConfig).where(UserAIConfig.user_id == user_id)
+                )).scalar_one_or_none()
+                if row and row.provider != "heuristic":
+                    result["provider"] = row.provider
+                    result["api_key"] = row.api_key
+                    result["model"] = row.model
+                    result["base_url"] = row.base_url
+                    _USER_AI_CONFIG_CACHE[user_id] = result
+        except Exception as exc:
+            logger.warning("user_ai_config_load_failed", user_id=user_id, error=str(exc))
+    return result
 
 
 def _system_prompt(kind: str) -> str:
@@ -23,15 +55,27 @@ async def call_admission_llm(
     system_kind: str = "text",
     max_tokens: int = 400,
     timeout_seconds: int = 30,
+    user_id: int | None = None,
 ) -> str | None:
     settings = get_settings()
-    provider = settings.ai_provider.lower()
+    user_config = await get_user_ai_config(user_id)
+    provider = user_config["provider"].lower()
 
     if provider == "openai":
+        key = user_config["api_key"] or settings.openai_api_key
+        if not key:
+            return None
         return await _call_openai(prompt, system_kind, max_tokens, timeout_seconds, settings)
     elif provider == "gemini":
-        return await _call_gemini(prompt, max_tokens, timeout_seconds, settings)
+        model = user_config["model"] or settings.gemini_model
+        key = user_config["api_key"] or settings.gemini_api_key
+        if not key:
+            return None
+        return await _call_gemini(prompt, max_tokens, timeout_seconds, settings, model)
     elif provider == "openrouter":
+        key = user_config["api_key"] or settings.openrouter_api_key
+        if not key:
+            return None
         return await _call_openrouter(prompt, system_kind, max_tokens, timeout_seconds, settings)
     else:
         logger.warning("admission_llm_unknown_provider provider=%s", provider)
