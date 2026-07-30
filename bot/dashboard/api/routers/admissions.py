@@ -19,6 +19,7 @@ from bot.db.models import (
 )
 from bot.services.admission_intelligence_layer import classify_intent, generate_suggestions
 from bot.services.admission_intelligence_service import AdmissionIntelligenceService
+from bot.services.admission_llm import clear_ai_config_cache
 from bot.services.admission_knowledge_service import (
     extract_and_seed,
     extract_faqs,
@@ -325,6 +326,14 @@ async def classify_query(
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ):
     return await classify_intent(q, user_id=identity.user_id)
+
+
+@router.post("/api/admissions/ai-config/refresh-cache")
+async def refresh_ai_config_cache(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    await clear_ai_config_cache()
+    return {"status": "ok", "message": "AI config cache cleared"}
 
 
 class SuggestionItem(BaseModel):
