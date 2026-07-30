@@ -6,11 +6,17 @@ import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
 
-const NAV = [
+const USER_NAV = [
+  { to: '/workspace', label: 'nav.admin.workspace', icon: Building2 },
+  { to: '/agents', label: 'nav.agents', icon: Bot },
+  { to: '/scraper', label: 'nav.scraper', icon: Search },
+  { to: '/members', label: 'nav.members', icon: Users },
+  { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
+]
+
+const ADMIN_NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
-  { to: '/admin/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
-  { to: '/admin/scraper', label: 'nav.scraper', icon: Search },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
   { to: '/admin/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
   { to: '/admin/subscriptions', label: 'nav.admin.subscriptions', icon: Ticket },
@@ -86,9 +92,42 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
           letterSpacing: '0.06em',
           padding: `${spacing.md}px ${spacing.sm}px ${spacing.xs}px`,
         }}>
+          Dashboard
+        </div>
+        {USER_NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={onNavClick}
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '9px 10px',
+              borderRadius: radius.md,
+              color: isActive ? uiVars.text : uiVars.textMuted,
+              background: isActive ? uiVars.primarySoft : 'transparent',
+              fontWeight: isActive ? 700 : 500,
+              fontSize: 14,
+              transition: 'background 0.1s, color 0.1s',
+            })}
+          >
+            <Icon size={15} />
+            {t(label)}
+          </NavLink>
+        ))}
+        <div style={{
+          fontSize: typeScale.micro,
+          fontWeight: 700,
+          color: uiVars.textMuted,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          padding: `${spacing.md}px ${spacing.sm}px ${spacing.xs}px`,
+          marginTop: spacing.sm,
+        }}>
           Admin
         </div>
-        {NAV.map(({ to, label, icon: Icon }) => (
+        {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

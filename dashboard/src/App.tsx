@@ -15,6 +15,9 @@ import AdminBulkAddPage from './pages/admin/BulkAddPage'
 import AdminAISettingsPage from './pages/admin/AISettingsPage'
 import AdminAdmissionIntelligencePage from './pages/admin/AdmissionIntelligencePage'
 import AdminKnowledgePage from './pages/admin/KnowledgePage'
+import AgentsPage from './pages/AgentsPage'
+import SettingsPage from './pages/SettingsPage'
+import MembersPage from './pages/MembersPage'
 import AdminWorkspacePage from './pages/admin/WorkspacePage'
 import ScraperPage from './pages/ScraperPage'
 
@@ -29,8 +32,14 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<Layout />}>
-            <Route path="/" element={<Navigate to="/admin/health" replace />} />
+            <Route path="/" element={<Navigate to="/workspace" replace />} />
             <Route path="/admin" element={<Navigate to="/admin/health" replace />} />
+            <Route path="/workspace" element={<AdminWorkspacePage />} />
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/scraper" element={<ScraperPage />} />
+            <Route path="/members" element={<MembersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/ai" element={<AdminAISettingsPage />} />
             <Route path="/admin/health" element={<AdminHealthPage />} />
             <Route path="/admin/agents" element={<AdminAgentsPage />} />
             <Route path="/admin/jobs" element={<AdminJobsPage />} />
@@ -43,7 +52,7 @@ export default function App() {
             <Route path="/admin/admissions" element={<AdminAdmissionIntelligencePage />} />
             <Route path="/admin/workspace" element={<AdminWorkspacePage />} />
             <Route path="/admin/scraper" element={<ScraperPage />} />
-            <Route path="*" element={<Navigate to="/admin/health" replace />} />
+            <Route path="*" element={<Navigate to="/workspace" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
