@@ -12,12 +12,13 @@ from bot.dashboard.api.auth import (
     TelegramWebAppAuthError,
     issue_dashboard_token_for_init_data,
     issue_dashboard_token_for_browser_credentials,
+    issue_dashboard_token_for_phone_credentials,
     issue_dashboard_token_for_telegram_login,
 )
 from bot.db.models import Group, GroupAdminRole
 from bot.db.session import get_session
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
-from bot.services.user_service import UserService
+from bot.services.user_service import PhoneNumberTakenError, UserService
 from bot.services.messaging_service import MessagingService, MessagingAuthError
 
 from ..dependencies import (
@@ -30,8 +31,10 @@ from ..dependencies import (
 from ._shared import (
     BOT_INSTALL_PERMISSION_KEYS,
     BotInstallLinkRequest,
+    ChangePasswordRequest,
     EmailPasswordLoginRequest,
     LanguageUpdateRequest,
+    UpdateProfileRequest,
 )
 
 
@@ -43,6 +46,7 @@ async def providers_payload() -> dict[str, Any]:
     return {
         "telegram": {"enabled": True, "bot_username": await _bot_install_username()},
         "password": {"enabled": bool(settings.dashboard_browser_users)},
+        "phone": {"enabled": True},
     }
 
 
@@ -126,6 +130,69 @@ async def email_login_payload(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password"
         ) from exc
+
+
+async def phone_login_payload(
+    *,
+    phone_number: str,
+    password: str,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    try:
+        token, identity = await issue_dashboard_token_for_phone_credentials(
+            session=session,
+            phone_number=phone_number,
+            password=password,
+        )
+        return {
+            "token": token,
+            "access_token": token,
+            "user": {"id": identity.user_id, "username": identity.username},
+        }
+    except DashboardJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid phone number or password"
+        ) from exc
+
+
+async def update_profile_payload(
+    *,
+    payload: UpdateProfileRequest,
+    identity: TelegramWebAppIdentity,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    try:
+        user = await UserService(session).update_profile(
+            tg_user_id=identity.user_id,
+            full_name=payload.full_name,
+            phone_number=payload.phone_number,
+        )
+    except PhoneNumberTakenError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return {
+        "status": "ok",
+        "full_name": user.full_name,
+        "phone_number": user.phone_number,
+    }
+
+
+async def change_password_payload(
+    *,
+    payload: ChangePasswordRequest,
+    identity: TelegramWebAppIdentity,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    user_service = UserService(session)
+    user = await user_service.get_by_tg_id(identity.user_id)
+    if user is not None and user.password_hash:
+        if not payload.current_password or not await user_service.verify_password(
+            tg_user_id=identity.user_id, password=payload.current_password
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect"
+            )
+    await user_service.set_password(tg_user_id=identity.user_id, password=payload.new_password)
+    return {"status": "ok"}
 
 
 async def miniapp_token_payload(
@@ -368,13 +435,16 @@ __all__ = [
     "auth_providers",
     "bot_install_groups_payload",
     "bot_install_links_payload",
+    "change_password_payload",
     "email_login_payload",
     "identity_profile_payload",
     "miniapp_token_payload",
+    "phone_login_payload",
     "providers_payload",
     "router",
     "set_identity_language_payload",
     "telegram_login_payload",
     "telegram_login_widget_config",
     "telegram_widget_config_payload",
+    "update_profile_payload",
 ]

@@ -14,6 +14,8 @@ const GUARDS: Record<string, Role[]> = {
   '/scraper': [],
   '/jobs': [],
   '/bulk-add': [],
+  '/profile': [],
+  '/admin/profile': ['owner', 'admin'],
   '/settings': ['owner', 'admin'],
   '/settings/ai': ['owner', 'admin'],
   '/admin/health': ['owner', 'admin'],

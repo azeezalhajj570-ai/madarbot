@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, RefreshCw, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge, UserCircle } from 'lucide-react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
@@ -14,6 +14,7 @@ const USER_NAV = [
   { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
   { to: '/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
+  { to: '/profile', label: 'nav.admin.profile', icon: UserCircle },
 ]
 
 const ADMIN_NAV = [
@@ -28,6 +29,7 @@ const ADMIN_NAV = [
   { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
   { to: '/admin/ai-settings', label: 'nav.admin.ai', icon: Brain },
   { to: '/admin/knowledge', label: 'nav.admin.knowledge', icon: BookOpen },
+  { to: '/admin/profile', label: 'nav.admin.profile', icon: UserCircle },
   { to: '/admin/admissions', label: 'nav.admin.admission', icon: GraduationCap },
 ]
 

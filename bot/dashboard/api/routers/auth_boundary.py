@@ -10,15 +10,24 @@ from bot.db.session import get_session
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import get_identity
-from ._shared import EmailPasswordLoginRequest, LanguageUpdateRequest
+from ._shared import (
+    ChangePasswordRequest,
+    EmailPasswordLoginRequest,
+    LanguageUpdateRequest,
+    PhonePasswordLoginRequest,
+    UpdateProfileRequest,
+)
 from .auth import (
+    change_password_payload,
     identity_profile_payload,
     miniapp_token_payload,
+    phone_login_payload,
     providers_payload,
     set_identity_language_payload,
     telegram_login_payload,
     telegram_widget_config_payload,
     email_login_payload,
+    update_profile_payload,
 )
 
 
@@ -108,6 +117,34 @@ async def email_password_login(
     return await email_login_payload(
         email=payload.email, password=payload.password, session=session
     )
+
+
+@router.post("/auth/phone/login")
+async def phone_password_login(
+    payload: PhonePasswordLoginRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await phone_login_payload(
+        phone_number=payload.phone_number, password=payload.password, session=session
+    )
+
+
+@router.patch("/auth/profile")
+async def update_profile(
+    payload: UpdateProfileRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await update_profile_payload(payload=payload, identity=identity, session=session)
+
+
+@router.post("/auth/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await change_password_payload(payload=payload, identity=identity, session=session)
 
 
 @router.post("/auth/miniapp/token")

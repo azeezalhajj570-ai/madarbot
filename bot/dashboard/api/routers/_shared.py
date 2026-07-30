@@ -234,6 +234,21 @@ class EmailPasswordLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=255)
 
 
+class PhonePasswordLoginRequest(BaseModel):
+    phone_number: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=1, max_length=255)
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: str | None = Field(default=None, max_length=255)
+    phone_number: str | None = Field(default=None, min_length=3, max_length=32)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str | None = Field(default=None, max_length=255)
+    new_password: str = Field(min_length=6, max_length=255)
+
+
 class RegisterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     email: str = Field(min_length=3, max_length=255)
@@ -339,6 +354,7 @@ __all__ = [
     "BOT_INSTALL_PERMISSION_KEYS",
     "BotInstallLinkRequest",
     "BotInstallTarget",
+    "ChangePasswordRequest",
     "EmailPasswordLoginRequest",
     "JoinRequestActionRequest",
     "LanguageUpdateRequest",
@@ -346,6 +362,7 @@ __all__ = [
     "ModerationActionRequest",
     "ModerationSettingsUpdateRequest",
     "NotificationFollowUpRequest",
+    "PhonePasswordLoginRequest",
     "PluginToggleRequest",
     "RedeemCodeRequest",
     "RegisterRequest",
@@ -354,6 +371,7 @@ __all__ = [
     "SettingsPatchRequest",
     "TaskAssignmentPatchRequest",
     "TaskAssignmentRequest",
+    "UpdateProfileRequest",
     "WarningPatchRequest",
     "schedule_delay_seconds",
     "serialize_agent",

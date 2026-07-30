@@ -471,11 +471,9 @@ async def build_identity_profile(
     identity: TelegramWebAppIdentity,
 ) -> dict[str, Any]:
     settings = get_settings()
-    language_code = (
-        await __import__("bot.services.user_service", fromlist=["UserService"])
-        .UserService(session)
-        .resolve_language(identity.user_id)
-    )
+    user_service = UserService(session)
+    language_code = await user_service.resolve_language(identity.user_id)
+    user_row = await user_service.get_by_tg_id(identity.user_id)
 
     inactive_stmt = (
         sa.select(Group.id, Group.tg_group_id, Group.title)
@@ -533,6 +531,9 @@ async def build_identity_profile(
             "first_name": identity.first_name,
             "last_name": identity.last_name,
             "language_code": language_code,
+            "full_name": user_row.full_name if user_row else None,
+            "phone_number": user_row.phone_number if user_row else None,
+            "has_password": bool(user_row and user_row.password_hash),
         },
         "is_bot_owner": identity.user_id in settings.bot_owner_ids,
         "subscription": await _resolve_subscription_info(session, identity),

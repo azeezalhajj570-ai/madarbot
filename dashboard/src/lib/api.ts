@@ -106,6 +106,11 @@ export async function login(email: string, password: string) {
   return data
 }
 
+export async function phoneLogin(phoneNumber: string, password: string) {
+  const { data } = await api.post('/auth/phone/login', { phone_number: phoneNumber, password })
+  return data
+}
+
 export async function telegramLogin(payload: Record<string, unknown>) {
   const { data } = await api.post('/auth/telegram/login', payload)
   return data
@@ -114,6 +119,16 @@ export async function telegramLogin(payload: Record<string, unknown>) {
 export async function fetchCurrentUser(token?: string) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined
   const { data } = await api.get(`${AUTH_API_PREFIX}/me`, { headers })
+  return data
+}
+
+export async function updateProfile(payload: { full_name?: string; phone_number?: string }) {
+  const { data } = await api.patch(`${AUTH_API_PREFIX}/profile`, payload)
+  return data
+}
+
+export async function changePassword(payload: { current_password?: string; new_password: string }) {
+  const { data } = await api.post(`${AUTH_API_PREFIX}/change-password`, payload)
   return data
 }
 

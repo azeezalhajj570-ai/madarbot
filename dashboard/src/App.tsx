@@ -20,6 +20,7 @@ import AgentsPage from './pages/AgentsPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminWorkspacePage from './pages/admin/WorkspacePage'
 import AdminUsagePage from './pages/admin/UsagePage'
+import AdminProfilePage from './pages/admin/ProfilePage'
 import ScraperPage from './pages/ScraperPage'
 
 const queryClient = new QueryClient()
@@ -48,6 +49,8 @@ export default function App() {
             <Route path="/scraper" element={<GuardRoute path="/scraper"><ScraperPage /></GuardRoute>} />
             <Route path="/jobs" element={<GuardRoute path="/jobs"><AdminJobsPage /></GuardRoute>} />
             <Route path="/bulk-add" element={<GuardRoute path="/bulk-add"><AdminBulkAddPage /></GuardRoute>} />
+            <Route path="/profile" element={<GuardRoute path="/profile"><AdminProfilePage /></GuardRoute>} />
+            <Route path="/admin/profile" element={<GuardRoute path="/admin/profile"><AdminProfilePage /></GuardRoute>} />
             <Route path="/settings" element={<GuardRoute path="/settings"><SettingsPage /></GuardRoute>} />
             <Route path="/settings/ai" element={<GuardRoute path="/settings/ai"><AdminAISettingsPage /></GuardRoute>} />
             <Route path="/admin/health" element={<GuardRoute path="/admin/health"><AdminHealthPage /></GuardRoute>} />
