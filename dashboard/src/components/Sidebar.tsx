@@ -5,12 +5,14 @@ import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/to
 import { clearAuth, getStoredUser, addAccount } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
+import { filterNav } from '../lib/permissions'
 
 const USER_NAV = [
   { to: '/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/agents', label: 'nav.agents', icon: Bot },
   { to: '/scraper', label: 'nav.scraper', icon: Search },
-  { to: '/members', label: 'nav.members', icon: Users },
+  { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
+  { to: '/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
 ]
 
@@ -18,7 +20,7 @@ const ADMIN_NAV = [
   { to: '/admin/health', label: 'nav.admin.health', icon: Heart },
   { to: '/admin/agents', label: 'nav.admin.agents', icon: Bot },
   { to: '/admin/jobs', label: 'nav.admin.jobs', icon: ClipboardList },
-  { to: '/admin/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
+  { to: '/admin/bulk-add', label: 'nav.groupMembers', icon: UserPlus },
   { to: '/admin/subscriptions', label: 'nav.admin.subscriptions', icon: Ticket },
   { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
   { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
@@ -26,6 +28,9 @@ const ADMIN_NAV = [
   { to: '/admin/knowledge', label: 'nav.admin.knowledge', icon: BookOpen },
   { to: '/admin/admissions', label: 'nav.admin.admission', icon: GraduationCap },
 ]
+
+const visibleUserNav = filterNav(USER_NAV)
+const visibleAdminNav = filterNav(ADMIN_NAV)
 
 export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
   const user = getStoredUser()
@@ -94,7 +99,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
         }}>
           Dashboard
         </div>
-        {USER_NAV.map(({ to, label, icon: Icon }) => (
+        {visibleUserNav.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -127,7 +132,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
         }}>
           Admin
         </div>
-        {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
+        {visibleAdminNav.length > 0 && visibleAdminNav.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

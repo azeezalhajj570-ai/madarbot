@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
-import { Heart, Bot, Search, ClipboardList, Tag, Menu, X, Building2, Users, Brain } from 'lucide-react'
+import { Search, ClipboardList, Menu, X, Building2, Bot, Brain, UserPlus } from 'lucide-react'
 
 import { spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { isAuthenticated } from '../lib/auth'
 import { I18nProvider, useI18n } from '../lib/i18n'
+import { filterNav } from '../lib/permissions'
 import Sidebar from './Sidebar'
 
-const NAV = [
+const NAV = filterNav([
   { to: '/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/agents', label: 'nav.agents', icon: Bot },
   { to: '/scraper', label: 'nav.scraper', icon: Search },
-  { to: '/members', label: 'nav.members', icon: Users },
+  { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
+  { to: '/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
-]
+])
 
 function LayoutInner() {
   const { t, lang, setLang, dir } = useI18n()
