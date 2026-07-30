@@ -6,6 +6,7 @@ from typing import Optional
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -75,6 +76,7 @@ class ScrapedMessage(Base):
     forward_from_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
 
 
 class ScrapedMember(Base):

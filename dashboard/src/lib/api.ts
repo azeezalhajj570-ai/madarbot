@@ -1050,6 +1050,16 @@ export interface AdmissionLead {
   tg_group_id: number | null
 }
 
+export async function fetchAdmissionClassify(q: string): Promise<{ intent: string; reason: string; entities: Record<string, any> }> {
+  const { data } = await api.get('/api/admissions/classify', { params: { q } })
+  return data
+}
+
+export async function fetchAdmissionSuggestions(): Promise<{ label: string; query: string }[]> {
+  const { data } = await api.get('/api/admissions/suggestions')
+  return data
+}
+
 export async function fetchAdmissionLeads(hoursBack = 24, minConfidence = 0.3): Promise<{ leads: AdmissionLead[]; total: number }> {
   const { data } = await api.get('/api/admissions/extract-leads', {
     params: { hours_back: hoursBack, min_confidence: minConfidence },

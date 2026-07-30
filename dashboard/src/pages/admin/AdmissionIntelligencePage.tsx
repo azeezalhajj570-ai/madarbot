@@ -8,6 +8,7 @@ import {
 import api, {
   fetchScrapedGroups, fetchAdmissionSearch, fetchCutoffTrend, fetchStudentConcerns,
   fetchCompareUniversities, fetchAdmissionOverview, fetchAdmissionLeads,
+  fetchAdmissionClassify, fetchAdmissionSuggestions,
   type ScrapedGroupSummary, type AdmissionOverview, type TrendingUniversity,
   type HotTopic, type AdmissionLead,
 } from '../../lib/api'
@@ -53,6 +54,7 @@ export default function AdminAdmissionIntelligencePage() {
   })
   const [showLeads, setShowLeads] = useState(false)
   const [leadHours, setLeadHours] = useState(24)
+  const [suggestions, setSuggestions] = useState<{label: string; query: string}[]>([])
 
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -102,6 +104,12 @@ export default function AdminAdmissionIntelligencePage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (overview) {
+      fetchAdmissionSuggestions().then(setSuggestions).catch(() => {})
+    }
+  }, [overview])
 
   const admissionGroups = (groups || []).filter((g: ScrapedGroupSummary) =>
     g.title?.includes('قبول') || g.title?.includes('admission') || g.title?.includes('جامعة')
@@ -156,19 +164,18 @@ export default function AdminAdmissionIntelligencePage() {
     try {
       let response: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', text: '' }
 
-      const isCutoff = /نسبة\s*(القبول|الحد)|cutoff|قبول/i.test(q)
-      const isCompare = /مقارنة|فرق|ايهما|أفضل|compare|vs/i.test(q) && /و|vs/i.test(q)
-      const isConcerns = /شاغل|قلق|مخاوف|مشكلة|مشاكل|هموم|concern/i.test(q)
+      const classification = await fetchAdmissionClassify(q)
+      const intent = classification?.intent || 'search'
 
-      if (isCompare) {
+      if (intent === 'compare') {
         response.resultType = 'compare'
         response.resultData = await handleCompare(q)
         response.text = ''
-      } else if (isCutoff) {
+      } else if (intent === 'cutoff') {
         response.resultType = 'cutoff'
         response.resultData = await handleCutoff(q)
         response.text = ''
-      } else if (isConcerns) {
+      } else if (intent === 'concerns') {
         response.resultType = 'concerns'
         response.resultData = await handleConcerns()
         response.text = ''
@@ -508,14 +515,14 @@ export default function AdminAdmissionIntelligencePage() {
             </Button>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            {[
-              { label: 'Cutoff for Cairo Engineering?', q: 'ما هي نسبة القبول في جامعة القاهرة هندسة؟' },
-              { label: 'Compare Cairo vs Ain Shams CS', q: 'قارن بين جامعة القاهرة وجامعة عين شمس في تخصص الحاسبات' },
-              { label: 'Student concerns registration', q: 'ما هي أهم مشاكل الطلاب في التسجيل؟' },
-              { label: 'Chances with 92%?', q: 'هل نسبة 92% تكفي لدخول كلية الاقتصاد؟' },
-            ].map((item, i) => (
+            {(suggestions.length > 0 ? suggestions : [
+              { label: '📊 Cutoff trends at top universities', query: 'نسبة القبول في الجامعات السعودية' },
+              { label: '🔄 Compare universities', query: 'مقارنة بين جامعة الملك سعود وجامعة الملك عبدالعزيز' },
+              { label: '🎓 Admission requirements', query: 'شروط القبول في الجامعات السعودية' },
+              { label: '💬 Student concerns', query: 'مشاكل الطلاب في التسجيل والقبول' },
+            ]).map((item, i) => (
               <span key={i} role="button" tabIndex={0}
-                onClick={() => setQuery(item.q)}
+                onClick={() => setQuery(item.query)}
                 style={{ cursor: 'pointer' }}
               >
                 <Badge tone="neutral">{item.label}</Badge>

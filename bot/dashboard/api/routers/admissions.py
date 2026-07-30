@@ -11,6 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.session import get_session
 from bot.dashboard.api.dependencies import get_identity
 from bot.services.admission_intelligence_service import AdmissionIntelligenceService
+from bot.db.models import (
+    AdmissionCutoff,
+    AdmissionUniversity,
+    AdmissionMajor,
+    AdmissionFAQ,
+)
+from bot.services.admission_intelligence_layer import classify_intent, generate_suggestions
+from bot.services.admission_intelligence_service import AdmissionIntelligenceService
+from bot.services.admission_knowledge_service import (
+    extract_and_seed,
+    extract_faqs,
+    get_university_major_counts,
+)
 from bot.services.admission_overview_service import AdmissionOverviewService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
@@ -295,3 +308,135 @@ async def compare_universities(
         university_b=university_b,
         major=major,
     )
+
+
+# ─── AI Intelligence Layer ───────────────────────────────────────────────────
+
+
+class ClassifyResponse(BaseModel):
+    intent: str
+    reason: str
+    entities: dict[str, Any] = {}
+
+
+@router.get("/api/admissions/classify", response_model=ClassifyResponse)
+async def classify_query(
+    q: str = Query(..., description="User question"),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    return await classify_intent(q)
+
+
+class SuggestionItem(BaseModel):
+    label: str
+    query: str
+
+
+@router.get("/api/admissions/suggestions", response_model=list[SuggestionItem])
+async def get_suggestions(
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    overview_svc: AdmissionOverviewService = Depends(_overview_service),
+):
+    try:
+        overview = await overview_svc.get_overview()
+        trending = overview.get("trending_universities", [])
+        hot_topics = overview.get("hot_topics", [])
+    except Exception:
+        trending = []
+        hot_topics = []
+    return await generate_suggestions(trending, hot_topics)
+
+
+# ─── Knowledge Endpoints ────────────────────────────────────────────────────
+
+
+class KnowledgeOverviewResponse(BaseModel):
+    universities: int
+    majors: int
+    cutoffs: int
+    faqs: int
+
+
+@router.get("/api/admissions/knowledge/overview", response_model=KnowledgeOverviewResponse)
+async def knowledge_overview(
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    return await get_university_major_counts(session)
+
+
+@router.post("/api/admissions/knowledge/extract")
+async def knowledge_extract(
+    group_id: int | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    result = await extract_and_seed(session)
+    faq_count = await extract_faqs(session, group_id)
+    result["faqs"] = faq_count
+    return result
+
+
+@router.get("/api/admissions/knowledge/universities")
+async def knowledge_universities(
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    rows = (await session.execute(
+        select(AdmissionUniversity).order_by(AdmissionUniversity.source_count.desc())
+    )).scalars().all()
+    return [
+        {"id": u.id, "name_ar": u.name_ar, "name_en": u.name_en,
+         "city": u.city, "source_count": u.source_count, "cutoff_count": 0}
+        for u in rows
+    ]
+
+
+@router.get("/api/admissions/knowledge/majors")
+async def knowledge_majors(
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    rows = (await session.execute(
+        select(AdmissionMajor).order_by(AdmissionMajor.source_count.desc())
+    )).scalars().all()
+    return [
+        {"id": m.id, "name_ar": m.name_ar, "name_en": m.name_en,
+         "category": m.category, "source_count": m.source_count}
+        for m in rows
+    ]
+
+
+@router.get("/api/admissions/knowledge/cutoffs")
+async def knowledge_cutoffs(
+    university_id: int | None = Query(None),
+    major_id: int | None = Query(None),
+    year: int | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+):
+    stmt = (
+        select(AdmissionCutoff)
+        .join(AdmissionUniversity, AdmissionCutoff.university_id == AdmissionUniversity.id)
+        .join(AdmissionMajor, AdmissionCutoff.major_id == AdmissionMajor.id)
+    )
+    if university_id:
+        stmt = stmt.where(AdmissionCutoff.university_id == university_id)
+    if major_id:
+        stmt = stmt.where(AdmissionCutoff.major_id == major_id)
+    if year:
+        stmt = stmt.where(AdmissionCutoff.year == year)
+    stmt = stmt.order_by(AdmissionCutoff.year.desc(), AdmissionCutoff.value.desc())
+
+    rows = (await session.execute(stmt)).scalars().all()
+    return [
+        {
+            "id": c.id,
+            "university": c.university.name_ar if c.university else "",
+            "major": c.major.name_ar if c.major else "",
+            "year": c.year,
+            "value": c.value,
+            "confidence": c.confidence,
+        }
+        for c in rows
+    ]

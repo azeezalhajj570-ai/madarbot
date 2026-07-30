@@ -1259,36 +1259,41 @@ class ScraperService:
         stmt = select(ScrapedMessage).where(
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
-        if query:
-            escaped_query = query.replace("%", "\\%").replace("_", "\\_")
-            stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
-        if sender_user_id is not None:
-            stmt = stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
-        if message_type:
-            stmt = stmt.where(ScrapedMessage.message_type == message_type)
-        if date_from:
-            stmt = stmt.where(ScrapedMessage.message_date >= date_from)
-        if date_to:
-            stmt = stmt.where(ScrapedMessage.message_date <= date_to)
-
         count_stmt = select(func.count(ScrapedMessage.id)).where(
             ScrapedMessage.tg_group_id == canonical_group_id,
         )
+
         if query:
             escaped_query = query.replace("%", "\\%").replace("_", "\\_")
-            count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
+            if len(query.strip()) >= 3:
+                ts_query = func.plainto_tsquery('arabic', query)
+                stmt = stmt.where(ScrapedMessage.search_vector.op('@@')(ts_query))
+                count_stmt = count_stmt.where(ScrapedMessage.search_vector.op('@@')(ts_query))
+            else:
+                stmt = stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
+                count_stmt = count_stmt.where(ScrapedMessage.message_text.ilike(f"%{escaped_query}%"))
         if sender_user_id is not None:
+            stmt = stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
             count_stmt = count_stmt.where(ScrapedMessage.sender_user_id == sender_user_id)
         if message_type:
+            stmt = stmt.where(ScrapedMessage.message_type == message_type)
             count_stmt = count_stmt.where(ScrapedMessage.message_type == message_type)
         if date_from:
+            stmt = stmt.where(ScrapedMessage.message_date >= date_from)
             count_stmt = count_stmt.where(ScrapedMessage.message_date >= date_from)
         if date_to:
+            stmt = stmt.where(ScrapedMessage.message_date <= date_to)
             count_stmt = count_stmt.where(ScrapedMessage.message_date <= date_to)
 
         total = int((await self.session.execute(count_stmt)).scalar_one() or 0)
 
-        stmt = stmt.order_by(desc(ScrapedMessage.message_date))
+        if query and len(query.strip()) >= 3:
+            ts_query = func.plainto_tsquery('arabic', query)
+            stmt = stmt.order_by(
+                func.ts_rank(ScrapedMessage.search_vector, ts_query).desc()
+            )
+        else:
+            stmt = stmt.order_by(desc(ScrapedMessage.message_date))
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         rows = (await self.session.execute(stmt)).scalars().all()
 

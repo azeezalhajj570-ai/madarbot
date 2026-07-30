@@ -9,6 +9,13 @@ from bot.db.models.campaign import Campaign, CampaignRecurrenceLog
 from bot.db.models.contact_message import ContactMessage
 from bot.db.models.audit import MembershipAuditLog, OwnerAuditLog
 from bot.db.models.audit_log import AuditLog
+from bot.db.models.admissions import (
+    AdmissionCutoff,
+    AdmissionFAQ,
+    AdmissionKnowledgeExtraction,
+    AdmissionMajor,
+    AdmissionUniversity,
+)
 from bot.db.models.billing import (
     CheckoutSession,
     Entitlement,
@@ -130,6 +137,11 @@ class TaskStatus(StrEnum):
 
 __all__ = [
     "AdminRole",
+    "AdmissionCutoff",
+    "AdmissionFAQ",
+    "AdmissionKnowledgeExtraction",
+    "AdmissionMajor",
+    "AdmissionUniversity",
     "Agent",
     "AgentBlacklistEntry",
     "AgentJob",
