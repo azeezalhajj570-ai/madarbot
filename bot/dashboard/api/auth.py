@@ -232,6 +232,42 @@ async def issue_dashboard_token_for_browser_credentials(
     return token, matched_user, identity
 
 
+async def issue_dashboard_token_for_phone_credentials(
+    *,
+    session,
+    phone_number: str,
+    password: str,
+) -> tuple[str, TelegramWebAppIdentity]:
+    """Phone+password login for a user who already exists (via Telegram) and
+    has set a password from their profile page — see UserService.set_password.
+    There is no standalone phone-only signup path: TelegramWebAppIdentity.user_id
+    is the tg_user_id every other part of the dashboard keys off, so this can
+    only issue a token for an account that already has one.
+    """
+    normalized_phone = phone_number.strip()
+    if not normalized_phone or not password:
+        raise DashboardJWTError("Invalid phone number or password")
+
+    user = await UserService(session).get_by_phone_number(normalized_phone)
+    if user is None or not user.password_hash or user.tg_user_id is None:
+        raise DashboardJWTError("Invalid phone number or password")
+    if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        raise DashboardJWTError("Invalid phone number or password")
+
+    identity = TelegramWebAppIdentity(
+        user_id=user.tg_user_id,
+        username=user.username,
+        first_name=user.full_name,
+        last_name=None,
+        auth_date=int(time.time()),
+        raw={"auth_type": "phone"},
+    )
+    token = create_dashboard_jwt(
+        identity, expires_in_seconds=get_settings().dashboard_jwt_exp_seconds
+    )
+    return token, identity
+
+
 async def issue_dashboard_token_for_telegram_login(
     *,
     session,

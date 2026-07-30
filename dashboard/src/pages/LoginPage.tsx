@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 import { storeAuth, getStoredAccounts, switchAccount, removeAccount, type AuthUser } from '../lib/auth'
-import { fetchCurrentUser, login, telegramLogin } from '../lib/api'
+import { fetchCurrentUser, login, phoneLogin, telegramLogin } from '../lib/api'
 import { Button, Card, Field, Input } from '../components/ui/primitives'
 import { I18nProvider, useI18n } from '../lib/i18n'
 import { uiVars } from '../../../shared/ui-system/tokens'
@@ -27,7 +27,9 @@ function LoginInner() {
       navigate('/')
     }
   }
+  const [credentialsMode, setCredentialsMode] = useState<'phone' | 'email'>('phone')
   const [email, setEmail] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -128,7 +130,8 @@ function LoginInner() {
     setLoading(true)
     setError('')
     try {
-      const { token } = await login(email, password)
+      const { token } =
+        credentialsMode === 'phone' ? await phoneLogin(phoneNumber, password) : await login(email, password)
       const me = await fetchCurrentUser(token)
       storeAuth(token, {
         id: me.user.id,
@@ -138,7 +141,7 @@ function LoginInner() {
       })
       afterLogin()
     } catch {
-      setError(t('login.error'))
+      setError(credentialsMode === 'phone' ? t('login.phoneError') : t('login.error'))
     } finally {
       setLoading(false)
     }
@@ -165,10 +168,43 @@ function LoginInner() {
             <div style={{ fontSize: 24, fontWeight: 800 }}>{t('login.title')}</div>
             <button className="lang-toggle" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}>{t('lang.switch')}</button>
           </div>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 14, padding: 3, borderRadius: 10, background: 'var(--ui-bg-muted)' }}>
+            {(['phone', 'email'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setCredentialsMode(mode)}
+                style={{
+                  flex: 1,
+                  padding: '8px 0',
+                  borderRadius: 8,
+                  border: 'none',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: credentialsMode === mode ? 'var(--ui-surface)' : 'transparent',
+                  color: credentialsMode === mode ? 'var(--ui-text)' : 'var(--ui-text-muted)',
+                }}
+              >
+                {mode === 'phone' ? t('login.phone') : t('login.email')}
+              </button>
+            ))}
+          </div>
           <form onSubmit={handleLogin} style={{ display: 'grid', gap: 14 }}>
-            <Field label={t('login.email')}>
-              <Input placeholder={t('login.email')} value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
+            {credentialsMode === 'phone' ? (
+              <Field label={t('login.phone')}>
+                <Input
+                  type="tel"
+                  placeholder={t('login.phonePlaceholder')}
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </Field>
+            ) : (
+              <Field label={t('login.email')}>
+                <Input placeholder={t('login.email')} value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+            )}
             <Field label={t('login.password')}>
               <Input type="password" placeholder={t('login.password')} value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>

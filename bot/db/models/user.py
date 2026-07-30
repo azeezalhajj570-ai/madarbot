@@ -23,6 +23,9 @@ class User(Base):
     email: Mapped[Optional[str]] = mapped_column(
         String(255), unique=True, index=True, nullable=True
     )
+    phone_number: Mapped[Optional[str]] = mapped_column(
+        String(32), unique=True, index=True, nullable=True
+    )
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
     language_code: Mapped[str] = mapped_column(String(8), default="en", index=True)
