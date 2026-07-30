@@ -102,6 +102,31 @@ async def workspace_usage(
     )
 
 
+@router.post("/api/redeem-code", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+@router.post("/webapp/redeem-code", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
+async def redeem_promo(
+    payload: RedeemCodeRequest,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    try:
+        subscription = await PromotionService(session).redeem_code(
+            tg_user_id=identity.user_id,
+            code=payload.code,
+            bot_kind="agents",
+        )
+    except PromotionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return {
+        "success": True,
+        "status": "active",
+        "plan": subscription.plan,
+        "bot_kind": subscription.bot_kind or "agents",
+        "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
+        "message": "Promotion code redeemed successfully.",
+    }
+
 @router.post("/api/agents/subscription/redeem", dependencies=[Depends(require_agents_boundary)])
 @router.post("/webapp/agents/subscription/redeem", dependencies=[Depends(require_agents_boundary)])
 async def webapp_redeem_promo(

@@ -183,6 +183,11 @@ export async function fetchWorkspaceUsage(): Promise<WorkspaceUsage> {
   return data
 }
 
+export async function redeemPromoCode(code: string): Promise<{ success: boolean; plan: string; status: string; expires_at: string | null; message: string }> {
+  const { data } = await api.post('/api/redeem-code', { code })
+  return data
+}
+
 // ─── Groups ──────────────────────────────────────────────────────────────────
 
 export async function fetchGroups(): Promise<{ id: number; title: string; tg_group_id: number }[]> {

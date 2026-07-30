@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Navigate, Outlet } from 'react-router-dom'
-import { Search, ClipboardList, Menu, X, Building2, Bot, Brain, UserPlus } from 'lucide-react'
+import { Search, ClipboardList, Menu, X, Building2, Bot, Brain, UserPlus, Gauge } from 'lucide-react'
 
 import { spacing, uiVars } from '../../../shared/ui-system/tokens'
 import { isAuthenticated } from '../lib/auth'
@@ -12,6 +12,7 @@ const NAV = filterNav([
   { to: '/workspace', label: 'nav.admin.workspace', icon: Building2 },
   { to: '/agents', label: 'nav.agents', icon: Bot },
   { to: '/scraper', label: 'nav.scraper', icon: Search },
+  { to: '/usage', label: 'nav.admin.usage', icon: Gauge },
   { to: '/jobs', label: 'nav.jobs', icon: ClipboardList },
   { to: '/bulk-add', label: 'nav.admin.bulkadd', icon: UserPlus },
   { to: '/settings/ai', label: 'nav.admin.ai', icon: Brain },
