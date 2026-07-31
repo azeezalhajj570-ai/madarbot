@@ -100,12 +100,14 @@ async def add_user_to_group(
     user_peer = None
     try:
         if access_hash is not None:
-            user_peer = await client.get_entity(InputUser(user_id, access_hash))
+            user_peer = InputUser(user_id, access_hash)
         else:
             user_peer = await client.get_entity(user_id)
     except ValueError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except PeerIdInvalidError:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
+    except KeyError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
 
     if getattr(user_peer, "bot", False):

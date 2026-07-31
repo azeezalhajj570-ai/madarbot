@@ -303,6 +303,9 @@ class SubscriptionService:
         directly from the tenant_id-scoped tables, regardless of which
         subscription source is used.
         """
+        from bot.config import get_settings
+        settings = get_settings()
+
         subscription = await self.get_active_subscription_for_tenant(tenant_id)
         plan_features: dict[str, PlanFeature] = {}
         plan_label: str | None = None
@@ -311,7 +314,12 @@ class SubscriptionService:
         expires_at: str | None = None
         source = "none"
 
-        if subscription is not None:
+        if tg_user_id in settings.bot_owner_ids:
+            plan_label = "Owner"
+            plan_slug = "owner"
+            status_value = "active"
+            source = "owner"
+        elif subscription is not None:
             plan = (
                 await self.session.execute(select(Plan).where(Plan.id == subscription.plan_id))
             ).scalar_one_or_none()
@@ -342,9 +350,25 @@ class SubscriptionService:
                     expires_at = legacy.expires_at.isoformat()
                 source = "legacy"
 
-        from bot.config import get_settings
+        if source == "none":
+            agent_tg_ids_stmt = (
+                select(Agent.telegram_user_id)
+                .where(Agent.tenant_id == tenant_id)
+                .distinct()
+            )
+            result = await self.session.execute(agent_tg_ids_stmt)
+            for (agent_tg_id,) in result.all():
+                leg = await self.get_active_subscription(tg_user_id=agent_tg_id)
+                if leg is not None:
+                    plan_label = leg.plan
+                    plan_slug = leg.plan
+                    status_value = leg.status
+                    if leg.expires_at:
+                        expires_at = leg.expires_at.isoformat()
+                    source = "legacy_agent"
+                    break
 
-        free_limits = get_settings().FREE_PLAN_LIMITS
+        free_limits = settings.FREE_PLAN_LIMITS
 
         agent_count = await self.session.scalar(
             select(func.count(Agent.id)).where(Agent.tenant_id == tenant_id)
@@ -354,10 +378,12 @@ class SubscriptionService:
         )
 
         def _limit(feature_key: str, legacy_key: str | None) -> int | None:
+            if source == "owner":
+                return None
             pf = plan_features.get(feature_key)
             if pf is not None:
                 return pf.limit_value if pf.enabled else 0
-            if source == "legacy" and legacy_key:
+            if source in ("legacy", "legacy_agent") and legacy_key:
                 return free_limits.get(legacy_key)
             return None
 

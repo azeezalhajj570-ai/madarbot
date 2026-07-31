@@ -1153,7 +1153,7 @@ class BulkAddMembersRuntime:
                             "stop_reason": "cooldown",
                             "retry_after": int(cd_remaining),
                         }
-                    raise Exception(f"Agent cooldown: {cd_remaining}s")
+                        raise Exception(f"Agent cooldown: {cd_remaining}s")
 
                 max_per_hour = agent_max_per_hour
                 if max_per_hour is not None and max_per_hour > 0:

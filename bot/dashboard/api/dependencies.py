@@ -31,8 +31,8 @@ PLAN_LIMIT_KEYS: dict[str, str] = {
 
 def _resolve_bot_kind_from_header(x_app_boundary: str | None) -> str | None:
     boundary = (x_app_boundary or "").strip().lower()
-    if boundary in ("admin", "agents"):
-        return boundary
+    if boundary == "agents":
+        return "agents"
     return None
 
 

@@ -399,6 +399,15 @@ textarea {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(400%); }
+}
+.loading-bar-fill {
+  animation: loading-bar 1.5s ease-in-out infinite;
+}
+
 @keyframes toast-slide-in {
   from {
     opacity: 0;
