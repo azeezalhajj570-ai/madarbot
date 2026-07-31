@@ -5,13 +5,26 @@ import { Badge, Button, Card, CardSkeleton, ContentGrid, MetricCard } from '../.
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { useI18n } from '../../lib/i18n'
-import { fetchRecentScrapeJobs, fetchAgents } from '../../lib/api'
-import type { ScrapeJobSummary } from '../../lib/api'
+import { fetchRecentAgentJobs } from '../../lib/api'
+
+interface JobSummary {
+  job_id: number
+  agent_id: number
+  agent_phone?: string
+  job_type: string
+  status: string
+  job_payload?: Record<string, any>
+  tg_group_id?: number | null
+  progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
+  retry_count?: number
+  created_at?: string
+  updated_at?: string
+}
 
 export default function AdminJobsPage() {
   const { t } = useI18n()
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [scrapeJobs, setScrapeJobs] = useState<ScrapeJobSummary[]>([])
+  const [scrapeJobs, setScrapeJobs] = useState<JobSummary[]>([])
   const [loading, setLoading] = useState(true)
   const scrapePollRef = useRef(false)
 
@@ -21,9 +34,9 @@ export default function AdminJobsPage() {
       if (scrapePollRef.current) return
       scrapePollRef.current = true
       try {
-        const jobs = await fetchRecentScrapeJobs(50)
+        const jobs = await fetchRecentAgentJobs(undefined, 50)
         if (!cancelled) {
-          setScrapeJobs(jobs)
+          setScrapeJobs(jobs as JobSummary[])
           setLastRefresh(new Date())
         }
       } catch { /* ignore */ } finally {
@@ -65,7 +78,7 @@ export default function AdminJobsPage() {
 
       <Card title={t('job.recentJobs')}>
         {loading ? <CardSkeleton /> : (
-          <DataTable<ScrapeJobSummary>
+          <DataTable<JobSummary>
             columns={[
               {
                 key: 'job_id', label: t('job.id'),
@@ -79,8 +92,7 @@ export default function AdminJobsPage() {
                 key: 'group', label: t('job.group'),
                 render: (job) => (
                   <span style={{ fontSize: 13 }}>
-                    {job.group_title || (job.tg_group_id ? `tg:${job.tg_group_id}` : '-')}
-                    {job.member_count != null ? <span style={{ color: 'var(--ui-text-muted)', fontSize: 11, marginInlineStart: 6 }}>({job.member_count} members)</span> : null}
+                    {job.tg_group_id ? `tg:${job.tg_group_id}` : '-'}
                   </span>
                 ),
               },
@@ -89,7 +101,7 @@ export default function AdminJobsPage() {
                 hideOnMobile: true,
                 render: (job) => (
                   <span style={{ color: 'var(--ui-text-muted)', fontSize: 13 }}>
-                    {job.job_type.replace('scraper_', '').replace('_', ' ')}
+                    {(job.job_type || '').replace('scraper_', '').replace('_', ' ')}
                   </span>
                 ),
               },

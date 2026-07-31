@@ -101,6 +101,7 @@ class AgentJobCreateRequest(BaseModel):
 
 class BulkMemberAddRequest(BaseModel):
     target_tg_group_id: int = Field(...)
+    source_tg_group_id: int | None = Field(default=None)
     interval_seconds: int = Field(default=20, ge=1, le=3600)
     user_ids: list[int] = Field(min_length=1, max_length=5000)
     send_invite_link_on_privacy_restricted: bool = Field(default=False)

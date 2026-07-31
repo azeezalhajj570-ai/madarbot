@@ -66,6 +66,7 @@ export interface DataTableProps<Row = any> {
   style?: CSSProperties
 
   loading?: boolean
+  isFetching?: boolean
   error?: string | null
 }
 
@@ -97,6 +98,7 @@ export function DataTable<Row>({
   style,
 
   loading: externalLoading,
+  isFetching: externalIsFetching,
   error: externalError,
   data: externalData,
   total: externalTotal,
@@ -173,8 +175,9 @@ export function DataTable<Row>({
     ? (queryResult.data?.total ?? 0)
     : (externalTotal ?? localData?.length ?? 0)
 
-  const isLoading = isLazy ? queryResult.isLoading : !!externalLoading
-  const isFetching = isLazy ? queryResult.isFetching : !!externalLoading
+  const isLoading = isLazy ? queryResult.isLoading : (!!externalLoading && !externalIsFetching)
+  const isFetching = isLazy ? queryResult.isFetching : (!!externalLoading || !!externalIsFetching)
+  const showLoadingBar = isFetching && !isLoading && !!rows.length
   const fetchError = isLazy ? queryResult.error : externalError
   const refetch = isLazy ? queryResult.refetch : () => {}
 
@@ -367,25 +370,36 @@ export function DataTable<Row>({
                 </td>
               </tr>
             ) : (
-              rows.map((row, i) => (
-                <tr key={keyExtractor(row, i)}>
-                  {selectable && (
-                    <td style={{ padding: '12px 4px 12px 0', borderTop: `1px solid ${uiVars.border}` }}>
-                      <button onClick={() => toggleOne(keyExtractor(row, i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: selectedIds.includes(keyExtractor(row, i)) ? uiVars.primary : uiVars.textMuted, padding: 0 }}>
-                        {selectedIds.includes(keyExtractor(row, i)) ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </button>
+              <>
+                {showLoadingBar && (
+                  <tr>
+                    <td colSpan={columns.length + (selectable ? 1 : 0)} style={{ padding: 0 }}>
+                      <div style={{ height: 2, background: uiVars.border, overflow: 'hidden' }}>
+                        <div className="loading-bar-fill" style={{ width: '30%', height: '100%', background: uiVars.primary, borderRadius: 2 }} />
+                      </div>
                     </td>
-                  )}
-                  {columns.map(col => (
-                    <td key={col.key} style={{
-                      padding: '12px 8px 12px 0', borderTop: `1px solid ${uiVars.border}`,
-                      fontSize: typeScale.body, lineHeight: '20px', verticalAlign: 'top',
-                    }}>
-                      {col.render(row, i)}
-                    </td>
-                  ))}
-                </tr>
-              ))
+                  </tr>
+                )}
+                {rows.map((row, i) => (
+                  <tr key={keyExtractor(row, i)}>
+                    {selectable && (
+                      <td style={{ padding: '12px 4px 12px 0', borderTop: `1px solid ${uiVars.border}` }}>
+                        <button onClick={() => toggleOne(keyExtractor(row, i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: selectedIds.includes(keyExtractor(row, i)) ? uiVars.primary : uiVars.textMuted, padding: 0 }}>
+                          {selectedIds.includes(keyExtractor(row, i)) ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                      </td>
+                    )}
+                    {columns.map(col => (
+                      <td key={col.key} style={{
+                        padding: '12px 8px 12px 0', borderTop: `1px solid ${uiVars.border}`,
+                        fontSize: typeScale.body, lineHeight: '20px', verticalAlign: 'top',
+                      }}>
+                        {col.render(row, i)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </>
             )}
           </tbody>
         </table>

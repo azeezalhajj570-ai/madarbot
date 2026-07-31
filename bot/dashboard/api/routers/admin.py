@@ -26,7 +26,7 @@ from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import ensure_group_admin, get_identity, require_bot_owner
 from bot.config import get_settings
-from .auth_boundary import require_admin_boundary
+from .auth_boundary import require_admin_boundary, require_any_boundary
 from ._shared import (
     AccessGateUpdateRequest,
     MemberRoleUpdateRequest,
@@ -864,28 +864,50 @@ async def webapp_cancel_subscription(
     return {"status": "ok", "message": "Subscription cancelled"}
 
 
-@router.get("/api/admin/jobs")
+@router.get("/api/admin/jobs", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
 async def admin_list_jobs(
     job_type: str = Query(None),
     limit: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_session),
     identity: TelegramWebAppIdentity = Depends(get_identity),
 ):
-    stmt = select(
-        AgentJob.id, AgentJob.agent_id, AgentJob.job_type, AgentJob.status, AgentJob.created_at
-    ).order_by(AgentJob.created_at.desc()).limit(limit)
+    stmt = (
+        select(AgentJob)
+        .order_by(AgentJob.created_at.desc())
+        .limit(limit)
+    )
     if job_type:
         stmt = stmt.where(AgentJob.job_type == job_type)
-    rows = (await session.execute(stmt)).all()
+    jobs = (await session.execute(stmt)).scalars().all()
+
+    agent_ids = {j.agent_id for j in jobs}
+    agents_map: dict[int, Agent] = {}
+    if agent_ids:
+        agent_rows = (
+            await session.execute(
+                select(Agent).where(Agent.id.in_(list(agent_ids)))
+            )
+        ).scalars().all()
+        agents_map = {a.id: a for a in agent_rows}
+
     return [
         {
-            "job_id": row.id,
-            "agent_id": row.agent_id,
-            "job_type": row.job_type,
-            "status": row.status,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "job_id": j.id,
+            "agent_id": j.agent_id,
+            "agent_phone": agents_map.get(j.agent_id, None) and (
+                agents_map[j.agent_id].external_account_id
+            ),
+            "job_type": j.job_type,
+            "status": j.status,
+            "job_payload": j.job_payload,
+            "tg_group_id": (j.job_payload or {}).get("target_tg_group_id")
+                or (j.job_payload or {}).get("tg_group_id"),
+            "progress": (j.job_payload or {}).get("progress"),
+            "retry_count": j.retry_count if hasattr(j, "retry_count") else 0,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "updated_at": j.updated_at.isoformat() if j.updated_at else None,
         }
-        for row in rows
+        for j in jobs
     ]
 
 

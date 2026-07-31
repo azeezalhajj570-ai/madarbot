@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Plus, RefreshCw, Send, Search, X, Eye, Loader, UserCheck, Bot, Shield } from 'lucide-react'
 import { useI18n } from '../../lib/i18n'
 
-import { Badge, Button, Card, Dialog, EmptyState, Input, Select, Field } from '../../components/ui/primitives'
+import { Badge, Button, Dialog, Input, Select, Field } from '../../components/ui/primitives'
 import { DataTable, type ColumnDef, type DataTableFilter } from '../../components/ui/data-table'
 import { useToast } from '../../components/ui/toast'
 import { GroupAutoComplete } from '../../components/ui/data-display'
@@ -51,14 +51,7 @@ interface MemberAddResult {
 
 const AGENTS_API_PREFIX = '/api/agents'
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'All statuses' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'running', label: 'Running' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'queued', label: 'Queued' },
-  { value: 'pending', label: 'Pending' },
-]
+
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -77,6 +70,15 @@ function extractJobStats(payload: Record<string, unknown> | undefined) {
   const totalProcessed = successCount + failureCount + skipCount
   return { successCount, failureCount, skipCount, totalProcessed, userCount, details: result?.details }
 }
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'running', label: 'Running' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
 
 function statusBadge(status: string, payload?: Record<string, unknown>) {
   const { totalProcessed, userCount } = extractJobStats(payload)
@@ -130,6 +132,7 @@ export default function AdminBulkAddPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [jobsLoading, setJobsLoading] = useState(false)
+  const [jobsRefreshing, setJobsRefreshing] = useState(false)
   const [groupsMap, setGroupsMap] = useState<Map<number, string>>(new Map())
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -172,8 +175,9 @@ export default function AdminBulkAddPage() {
     }
   }, [])
 
-  const loadJobs = useCallback(async (agentId: number) => {
-    setJobsLoading(true)
+  const loadJobs = useCallback(async (agentId: number, background?: boolean) => {
+    if (background) setJobsRefreshing(true)
+    else setJobsLoading(true)
     try {
       const { data } = await api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`)
       setJobs(data.filter((j) => j.job_type === 'member_add'))
@@ -181,6 +185,7 @@ export default function AdminBulkAddPage() {
       setJobs([])
     } finally {
       setJobsLoading(false)
+      setJobsRefreshing(false)
     }
   }, [])
 
@@ -204,7 +209,7 @@ export default function AdminBulkAddPage() {
 
   useEffect(() => {
     if (!selectedAgentId || !hasActiveJobs) return
-    const id = setInterval(() => loadJobs(selectedAgentId), 10_000)
+    const id = setInterval(() => loadJobs(selectedAgentId, true), 10_000)
     return () => clearInterval(id)
   }, [selectedAgentId, hasActiveJobs, loadJobs])
 
@@ -377,22 +382,18 @@ export default function AdminBulkAddPage() {
         <Button onClick={openDialog} disabled={!selectedAgentId}><Plus size={14} /> {t('bulkadd.newJob')}</Button>
       </div>
 
-      {!selectedAgentId ? (
-        <Card><EmptyState title={t('bulkadd.selectAgentPrompt')} subtitle={t('bulkadd.selectAgentDesc')} /></Card>
-      ) : (
-        <>
-          {hasActiveJobs && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ui-text-muted)', marginBottom: spacing.sm }}>
-            <Loader size={12} className="spin" />
-            Auto-refreshing every 10s — {jobs.filter(j => ['running', 'pending', 'queued'].includes(j.status)).length} active job(s)
-          </div>}
-          <DataTable<AgentJobRecord>
-            columns={columns} data={jobs} keyExtractor={(j) => j.id} loading={jobsLoading}
-            searchPlaceholder={t('bulkadd.searchJobs')} filters={filters}
-            title={t('bulkadd.recentJobs')}
-            subtitle={`${jobs.length} job${jobs.length !== 1 ? 's' : ''} for ${agents.find(a => a.id === selectedAgentId)?.external_account_id || `agent #${selectedAgentId}`}`}
-          />
-        </>
-      )}
+      {hasActiveJobs && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ui-text-muted)', marginBottom: spacing.sm }}>
+        <Loader size={12} className="spin" />
+        Auto-refreshing every 10s — {jobs.filter(j => ['running', 'pending', 'queued'].includes(j.status)).length} active job(s)
+      </div>}
+      <DataTable<AgentJobRecord>
+        columns={columns} data={jobs} keyExtractor={(j) => j.id} loading={jobsLoading} isFetching={jobsRefreshing}
+        searchPlaceholder={t('bulkadd.searchJobs')} filters={filters}
+        title={t('bulkadd.recentJobs')}
+        subtitle={selectedAgentId
+          ? `${jobs.length} job${jobs.length !== 1 ? 's' : ''} for ${agents.find(a => a.id === selectedAgentId)?.external_account_id || `agent #${selectedAgentId}`}`
+          : t('bulkadd.selectAgentDesc')}
+      />
 
       <Dialog open={dialogOpen} title={t('bulkadd.title')} description={t('bulkadd.desc')} onClose={() => setDialogOpen(false)}>
         <Field label={t('bulkadd.agent')}>
