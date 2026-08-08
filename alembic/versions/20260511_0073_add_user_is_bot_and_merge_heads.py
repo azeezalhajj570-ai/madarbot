@@ -19,11 +19,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "users",
-        sa.Column("is_bot", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-    )
-    op.create_index(op.f("ix_users_is_bot"), "users", ["is_bot"], unique=False)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    user_columns = {c["name"] for c in inspector.get_columns("users")}
+    if "is_bot" not in user_columns:
+        op.add_column(
+            "users",
+            sa.Column("is_bot", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        )
+    user_indexes = {i["name"] for i in inspector.get_indexes("users")}
+    if "ix_users_is_bot" not in user_indexes:
+        op.create_index(op.f("ix_users_is_bot"), "users", ["is_bot"], unique=False)
 
 
 def downgrade() -> None:

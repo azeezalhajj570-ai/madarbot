@@ -1,7 +1,7 @@
 """backfill NULL rate limits on agents with defaults
 
 Revision ID: 20260705_rate_limit_defaults
-Revises: 20260705_auto_broadcast
+Revises: 7a76aa564096
 Create Date: 2026-07-05
 """
 from typing import Sequence, Union
@@ -10,7 +10,7 @@ from alembic import op
 
 
 revision: str = "20260705_rate_limit_defaults"
-down_revision: Union[str, tuple[str, ...]] = "7ccff1383072"
+down_revision: Union[str, tuple[str, ...]] = "7a76aa564096"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

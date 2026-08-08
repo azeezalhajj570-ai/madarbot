@@ -86,7 +86,10 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_admission_faqs_question', 'admission_faqs', ['question'], postgresql_using='gin')
+    op.create_index(
+        'ix_admission_faqs_question', 'admission_faqs', ['question'],
+        postgresql_using='gin', postgresql_ops={'question': 'gin_trgm_ops'},
+    )
 
     op.create_table(
         'admission_knowledge_extractions',
