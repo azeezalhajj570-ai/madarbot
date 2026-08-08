@@ -73,8 +73,8 @@ async def webapp_agents(
     return [serialize_agent(agent) for agent in agents]
 
 
-@router.post("/api/agents/link", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/link", dependencies=[Depends(require_agents_boundary)])
+@router.post("/api/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post("/webapp/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_link_agent(
     payload: AgentLinkRequest,
     identity: TelegramWebAppIdentity = Depends(require_active_subscription),
@@ -122,8 +122,8 @@ async def webapp_link_agent(
     return {"status": "ok", "agent": serialize_agent(agent)}
 
 
-@router.post("/api/agents/auth/start", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/auth/start", dependencies=[Depends(require_agents_boundary)])
+@router.post("/api/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post("/webapp/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_start_agent_auth(
     payload: AgentLoginStartRequest,
     identity: TelegramWebAppIdentity = Depends(require_active_subscription),
@@ -143,8 +143,8 @@ async def webapp_start_agent_auth(
     return {"status": "ok", "agent": serialize_agent(agent)}
 
 
-@router.post("/api/agents/{agent_id}/auth/code", dependencies=[Depends(require_agents_boundary)])
-@router.post("/webapp/agents/{agent_id}/auth/code", dependencies=[Depends(require_agents_boundary)])
+@router.post("/api/agents/{agent_id}/auth/code", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post("/webapp/agents/{agent_id}/auth/code", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_complete_agent_auth_code(
     agent_id: int,
     payload: AgentLoginCodeRequest,
@@ -166,10 +166,10 @@ async def webapp_complete_agent_auth_code(
 
 
 @router.post(
-    "/api/agents/{agent_id}/auth/password", dependencies=[Depends(require_agents_boundary)]
+    "/api/agents/{agent_id}/auth/password", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
 )
 @router.post(
-    "/webapp/agents/{agent_id}/auth/password", dependencies=[Depends(require_agents_boundary)]
+    "/webapp/agents/{agent_id}/auth/password", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
 )
 async def webapp_complete_agent_auth_password(
     agent_id: int,

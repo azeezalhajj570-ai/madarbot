@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bot, User, Shield, Activity, Phone, Mail, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Bot, User, Shield, Activity, Phone, Mail, Trash2, KeyRound } from 'lucide-react'
 
 import { Badge, Card, CardSkeleton, ContentGrid, EmptyState, MetricCard, Table, Button } from '../components/ui/primitives'
 import { PageShell } from '../lib/page-shell'
@@ -7,6 +8,7 @@ import { getStoredUser } from '../lib/auth'
 import { fetchAgents, fetchOwnerAgents, fetchOwnerUsers, fetchOwnerStats, deleteAgent } from '../lib/api'
 import type { Agent } from '../lib/types'
 import { useI18n } from '../lib/i18n'
+import AgentActivationDialog from '../components/AgentActivationDialog'
 
 export default function AgentsPage() {
   const { t } = useI18n()
@@ -42,6 +44,8 @@ export default function AgentsPage() {
     enabled: user?.role !== 'owner',
   })
 
+  const [activating, setActivating] = useState<Agent | null>(null)
+
   if (user?.role !== 'owner') {
     return (
       <PageShell titleKey="page.agents" descriptionKey="page.agents.desc">
@@ -72,8 +76,15 @@ export default function AgentsPage() {
                   <Badge tone={agent.status === 'active' ? 'success' : 'warning'}>{agent.status}</Badge>
                 )},
                 { key: 'last_active', label: t('agent.lastActivity'), render: (agent) => (
-                  <div style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>
-                    {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : t('common.never')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', flex: 1 }}>
+                      {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : t('common.never')}
+                    </div>
+                    {agent.auth_state !== 'active' ? (
+                      <Button variant="ghost" size="sm" onClick={() => setActivating(agent)}>
+                        <KeyRound size={14} /> {t('agent.activate')}
+                      </Button>
+                    ) : null}
                   </div>
                 )},
               ]}
@@ -84,6 +95,7 @@ export default function AgentsPage() {
             <EmptyState title={t('agents.noLinked')} subtitle={t('agents.noLinked.desc')} />
           )}
         </Card>
+        <AgentActivationDialog agent={activating} open={!!activating} onClose={() => setActivating(null)} />
       </PageShell>
     )
   }
@@ -155,6 +167,15 @@ export default function AgentsPage() {
                   <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', flex: 1 }}>
                     {agent.updated_at ? new Date(agent.updated_at).toLocaleString() : t('common.never')}
                   </div>
+                  {agent.auth_state !== 'active' ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActivating(agent)}
+                    >
+                      <KeyRound size={14} /> {t('agent.activate')}
+                    </Button>
+                  ) : null}
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -219,6 +240,8 @@ export default function AgentsPage() {
           <EmptyState title={t('agents.noUsers')} subtitle={t('agents.noUsers.desc')} />
         )}
       </Card>
+
+      <AgentActivationDialog agent={activating} open={!!activating} onClose={() => setActivating(null)} />
     </PageShell>
   )
 }

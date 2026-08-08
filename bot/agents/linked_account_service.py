@@ -15,6 +15,90 @@ class LinkedAccountService(AgentServiceSupport):
     def __init__(self, session: AsyncSession, event_bus: EventBus | None = None) -> None:
         super().__init__(session, event_bus)
 
+    async def ensure_self_agent(
+        self,
+        *,
+        actor_user_id: int,
+        telegram_user_id: int | None = None,
+        phone_number: str | None = None,
+        username: str | None = None,
+        display_name: str | None = None,
+    ) -> Agent | None:
+        """Idempotently register the logged-in user's own Telegram account as
+        an agent so it can be activated and used for bulk operations from the
+        dashboard. Skipped when the user already has an agent row (their
+        account was linked before); returns that existing agent if it matches
+        the identity, otherwise None.
+        """
+        existing = (
+            (
+                await self.session.execute(
+                    select(Agent).where(Agent.linked_by_user_id == actor_user_id)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if existing is not None:
+            changed = False
+            if existing.telegram_user_id is None and telegram_user_id:
+                existing.telegram_user_id = telegram_user_id
+                changed = True
+            if not existing.phone_number and phone_number:
+                try:
+                    existing.phone_number = normalize_optional_agent_phone_number(phone_number)
+                    changed = True
+                except ValueError:
+                    pass
+            if changed:
+                await self.session.commit()
+            return existing
+
+        normalized_phone: str | None = None
+        if phone_number:
+            try:
+                candidate_phone = normalize_optional_agent_phone_number(phone_number)
+            except ValueError:
+                candidate_phone = None
+            if candidate_phone:
+                phone_taken = (
+                    (
+                        await self.session.execute(
+                            select(Agent).where(Agent.phone_number == candidate_phone)
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if phone_taken is None:
+                    normalized_phone = candidate_phone
+
+        tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+        account_id = str(username or "").strip() or f"tg_{telegram_user_id or actor_user_id}"
+        agent = Agent(
+            telegram_user_id=telegram_user_id or actor_user_id,
+            linked_by_user_id=actor_user_id,
+            tenant_id=tenant_id,
+            phone_number=normalized_phone,
+            external_account_id=account_id,
+            status="pending",
+            auth_state="pending_auth",
+            details={
+                "display_name": str(display_name or "").strip() or "My Telegram account",
+                "source": "browser_login",
+                "is_self": True,
+            },
+        )
+        self.session.add(agent)
+        await self.session.commit()
+        await self.publish(
+            "agent_linked",
+            group_id=0,
+            user_id=actor_user_id,
+            payload={"agent_id": agent.id, "external_account_id": account_id},
+        )
+        return agent
+
     async def create_agent(
         self,
         *,

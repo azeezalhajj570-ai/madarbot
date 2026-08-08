@@ -4,8 +4,11 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import bcrypt
 from fastapi import Header, HTTPException, Query, status
@@ -204,6 +207,29 @@ def browser_user_identity(user: DashboardBrowserUser) -> TelegramWebAppIdentity:
     )
 
 
+async def _register_login_agent(
+    session,
+    *,
+    identity: TelegramWebAppIdentity,
+    phone_number: str | None = None,
+) -> None:
+    """Auto-register the logged-in user's own Telegram account as a pending
+    agent so it can be activated from the dashboard. Failures never block login.
+    """
+    try:
+        from bot.agents.linked_account_service import LinkedAccountService
+
+        await LinkedAccountService(session).ensure_self_agent(
+            actor_user_id=identity.user_id,
+            telegram_user_id=identity.user_id,
+            phone_number=phone_number,
+            username=identity.username,
+            display_name=identity.first_name,
+        )
+    except Exception:
+        logger.exception("Failed to auto-register self agent on login")
+
+
 async def issue_dashboard_token_for_browser_credentials(
     *,
     session,
@@ -229,6 +255,7 @@ async def issue_dashboard_token_for_browser_credentials(
         full_name=full_name,
     )
     token = create_dashboard_jwt(identity, expires_in_seconds=settings.dashboard_jwt_exp_seconds)
+    await _register_login_agent(session, identity=identity)
     return token, matched_user, identity
 
 
@@ -265,6 +292,7 @@ async def issue_dashboard_token_for_phone_credentials(
     token = create_dashboard_jwt(
         identity, expires_in_seconds=get_settings().dashboard_jwt_exp_seconds
     )
+    await _register_login_agent(session, identity=identity, phone_number=user.phone_number)
     return token, identity
 
 
@@ -295,6 +323,7 @@ async def issue_dashboard_token_for_telegram_login(
         full_name=full_name,
     )
     token = create_dashboard_jwt(identity, expires_in_seconds=settings.dashboard_jwt_exp_seconds)
+    await _register_login_agent(session, identity=identity)
     return token, identity
 
 
