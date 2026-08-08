@@ -86,7 +86,7 @@ services:
           echo "ERROR: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in .env" >&2
           exit 1
         fi
-        exec dramatiq bot.agents.worker --queues agent scraper membership --processes 4
+        exec dramatiq bot.agents.worker --queues agent scraper membership --processes 2
     env_file: .env
     depends_on:
       redis:
