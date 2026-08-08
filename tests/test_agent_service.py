@@ -195,6 +195,80 @@ async def test_linked_account_service_validates_and_deduplicates_phone_numbers(d
 
 
 @pytest.mark.asyncio
+async def test_ensure_self_agent_registers_own_account_once(db_session) -> None:
+    user = User(tg_user_id=8123, username="owner23", full_name="Owner 23", language_code="en")
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.commit()
+
+    service = LinkedAccountService(db_session)
+    agent = await service.ensure_self_agent(
+        actor_user_id=user.tg_user_id,
+        telegram_user_id=user.tg_user_id,
+        phone_number="+15550000500",
+        username="owner23",
+        display_name="Owner 23",
+    )
+
+    assert agent is not None
+    assert agent.telegram_user_id == user.tg_user_id
+    assert agent.linked_by_user_id == user.tg_user_id
+    assert agent.phone_number == "+15550000500"
+    assert agent.external_account_id == "owner23"
+    assert agent.auth_state == "pending_auth"
+    assert agent.status == "pending"
+    assert agent.group_id is None
+
+    repeated = await service.ensure_self_agent(
+        actor_user_id=user.tg_user_id,
+        telegram_user_id=user.tg_user_id,
+        phone_number="+15550000500",
+        username="owner23",
+        display_name="Owner 23",
+    )
+    assert repeated.id == agent.id
+
+    rows = (
+        (await db_session.execute(select(Agent).where(Agent.linked_by_user_id == user.tg_user_id)))
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_ensure_self_agent_skips_when_user_already_linked_an_account(db_session) -> None:
+    user = User(tg_user_id=8124, username="owner24", full_name="Owner 24", language_code="en")
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.commit()
+
+    service = LinkedAccountService(db_session)
+    first = await service.create_agent(
+        actor_user_id=user.tg_user_id,
+        group_id=None,
+        external_account_id="other-account",
+        phone_number="+15550000600",
+    )
+    assert first.auth_state == "pending_auth"
+
+    result = await service.ensure_self_agent(
+        actor_user_id=user.tg_user_id,
+        telegram_user_id=user.tg_user_id,
+        username="owner24",
+        display_name="Owner 24",
+    )
+    assert result.id == first.id
+
+    rows = (
+        (await db_session.execute(select(Agent).where(Agent.linked_by_user_id == user.tg_user_id)))
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
 async def test_account_session_start_reuses_pending_login_without_resending_code(
     db_session,
 ) -> None:
