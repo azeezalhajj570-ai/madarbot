@@ -370,6 +370,25 @@ export async function linkAgent(groupId: number, payload: {
   return data
 }
 
+export async function startAgentAuth(groupId: number | null, phoneNumber: string, agentId?: number | null) {
+  const { data } = await api.post(`${AGENTS_API_PREFIX}/auth/start`, {
+    ...(groupId ? { group_id: groupId } : {}),
+    ...(agentId ? { agent_id: agentId } : {}),
+    phone_number: phoneNumber,
+  })
+  return data
+}
+
+export async function submitAgentCode(agentId: number, code: string) {
+  const { data } = await api.post(`${AGENTS_API_PREFIX}/${agentId}/auth/code`, { code })
+  return data
+}
+
+export async function submitAgentPassword(agentId: number, password: string) {
+  const { data } = await api.post(`${AGENTS_API_PREFIX}/${agentId}/auth/password`, { password })
+  return data
+}
+
 export async function fetchAgentJobs(agentId: number): Promise<AgentJobRecord[]> {
   const { data } = await api.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`)
   return data

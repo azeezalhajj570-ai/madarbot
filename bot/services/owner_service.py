@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import (
@@ -399,13 +399,21 @@ class OwnerService:
                 Group.title.label("group_title"),
                 Group.id.label("group_id"),
             )
-            .join(Group, Agent.group_id == Group.id)
+            .join(Group, Agent.group_id == Group.id, isouter=True)
             .order_by(Agent.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
         if owned_ids:
-            stmt = stmt.where(Group.id.in_(owned_ids))
+            stmt = stmt.where(
+                or_(
+                    Group.id.in_(owned_ids),
+                    and_(
+                        Agent.group_id.is_(None),
+                        Agent.linked_by_user_id == self.user_tg_id,
+                    ),
+                )
+            )
         rows = (await self.session.execute(stmt)).all()
         return [
             {

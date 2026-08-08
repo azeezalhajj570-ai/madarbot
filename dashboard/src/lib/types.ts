@@ -206,13 +206,13 @@ export interface NotificationReport {
 
 export interface Agent {
   id: number
-  group_id: number
+  group_id?: number | null
   group_title?: string
   telegram_user_id?: number
   phone_number?: string
   external_account_id: string
   status: 'active' | 'pending' | 'failed'
-  auth_state: 'active' | 'pending_code' | 'pending_2fa' | 'failed'
+  auth_state: 'active' | 'pending_auth' | 'pending_code' | 'pending_2fa' | 'failed'
   metadata?: Record<string, unknown>
   updated_at?: string
 }
