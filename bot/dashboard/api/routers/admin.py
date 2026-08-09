@@ -890,8 +890,37 @@ async def admin_list_jobs(
         ).scalars().all()
         agents_map = {a.id: a for a in agent_rows}
 
-    return [
-        {
+    from bot.db.models import ScrapedGroup
+
+    tg_group_ids = set()
+    for j in jobs:
+        payload = j.job_payload or {}
+        tg_id = payload.get("target_tg_group_id") or payload.get("tg_group_id")
+        if tg_id is not None:
+            try:
+                tg_group_ids.add(int(tg_id))
+            except (TypeError, ValueError):
+                pass
+    groups_map: dict[int, ScrapedGroup] = {}
+    if tg_group_ids:
+        group_rows = (
+            await session.execute(
+                select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(list(tg_group_ids)))
+            )
+        ).scalars().all()
+        groups_map = {int(g.tg_group_id): g for g in group_rows}
+
+    result = []
+    for j in jobs:
+        payload = j.job_payload or {}
+        tg_id = payload.get("target_tg_group_id") or payload.get("tg_group_id")
+        group = None
+        if tg_id is not None:
+            try:
+                group = groups_map.get(int(tg_id))
+            except (TypeError, ValueError):
+                group = None
+        result.append({
             "job_id": j.id,
             "agent_id": j.agent_id,
             "agent_phone": agents_map.get(j.agent_id, None) and (
@@ -900,15 +929,15 @@ async def admin_list_jobs(
             "job_type": j.job_type,
             "status": j.status,
             "job_payload": j.job_payload,
-            "tg_group_id": (j.job_payload or {}).get("target_tg_group_id")
-                or (j.job_payload or {}).get("tg_group_id"),
-            "progress": (j.job_payload or {}).get("progress"),
+            "tg_group_id": tg_id,
+            "group_title": group.title if group is not None else None,
+            "member_count": group.member_count if group is not None else None,
+            "progress": payload.get("progress"),
             "retry_count": j.retry_count if hasattr(j, "retry_count") else 0,
             "created_at": j.created_at.isoformat() if j.created_at else None,
             "updated_at": j.updated_at.isoformat() if j.updated_at else None,
-        }
-        for j in jobs
-    ]
+        })
+    return result
 
 
 __all__ = ["router"]
