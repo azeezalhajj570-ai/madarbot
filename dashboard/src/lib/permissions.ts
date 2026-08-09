@@ -10,7 +10,7 @@ export const ROLES: Record<string, Role> = {
 
 const GUARDS: Record<string, Role[]> = {
   '/workspace': [],
-  '/agents': ['owner', 'admin'],
+  '/agents': ['owner', 'admin', 'user'],
   '/scraper': [],
   '/usage': [],
   '/blacklist': [],
