@@ -5,7 +5,8 @@ import { Badge, Button, Card, CardSkeleton, ContentGrid, MetricCard } from '../.
 import { DataTable } from '../../components/ui/data-table'
 import { PageShell } from '../../lib/page-shell'
 import { useI18n } from '../../lib/i18n'
-import { fetchRecentAgentJobs } from '../../lib/api'
+import { useToast } from '../../components/ui/toast'
+import { fetchRecentAgentJobs, retryAgentJob, cancelAgentJob } from '../../lib/api'
 
 interface JobSummary {
   job_id: number
@@ -15,6 +16,8 @@ interface JobSummary {
   status: string
   job_payload?: Record<string, any>
   tg_group_id?: number | null
+  group_title?: string | null
+  member_count?: number | null
   progress?: { total_fetched?: number; total_errors?: number; batches_completed?: number; limit?: number }
   retry_count?: number
   created_at?: string
@@ -23,6 +26,7 @@ interface JobSummary {
 
 export default function AdminJobsPage() {
   const { t } = useI18n()
+  const { toast } = useToast()
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [scrapeJobs, setScrapeJobs] = useState<JobSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,6 +52,23 @@ export default function AdminJobsPage() {
     poll()
     return () => { cancelled = true }
   }, [])
+
+  async function runAction(action: () => Promise<unknown>, okMsg: string) {
+    try {
+      await action()
+      toast.success(okMsg)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || err?.message || t('common.failed'))
+      return
+    }
+    try {
+      const jobs = await fetchRecentAgentJobs(undefined, 50)
+      setScrapeJobs(jobs as JobSummary[])
+      setLastRefresh(new Date())
+    } catch { /* ignore */ }
+  }
+
+  const ACTIVE_STATUSES = ['pending', 'queued', 'running', 'scheduled']
 
   const byStatus = scrapeJobs.reduce<Record<string, number>>((acc, j) => {
     acc[j.status] = (acc[j.status] || 0) + 1
@@ -92,7 +113,7 @@ export default function AdminJobsPage() {
                 key: 'group', label: t('job.group'),
                 render: (job) => (
                   <span style={{ fontSize: 13 }}>
-                    {job.tg_group_id ? `tg:${job.tg_group_id}` : '-'}
+                    {job.group_title || (job.tg_group_id ? `tg:${job.tg_group_id}` : '-')}
                   </span>
                 ),
               },
@@ -153,6 +174,27 @@ export default function AdminJobsPage() {
             data={scrapeJobs}
             total={scrapeJobs.length}
             keyExtractor={(job) => job.job_id}
+            rowActions={(job) => {
+              const canRetry = job.status === 'failed' || job.status === 'aborted'
+              const canCancel = ACTIVE_STATUSES.includes(job.status)
+              if (!canRetry && !canCancel) return <span style={{ color: 'var(--ui-text-muted)', fontSize: 12 }}>—</span>
+              return (
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                  {canRetry && (
+                    <Button variant="outline" size="sm" onClick={() => runAction(
+                      () => retryAgentJob(job.agent_id, job.job_id), t('job.retried'))}>
+                      {t('common.retry')}
+                    </Button>
+                  )}
+                  {canCancel && (
+                    <Button variant="outline" size="sm" style={{ color: 'var(--ui-danger)' }} onClick={() => runAction(
+                      () => cancelAgentJob(job.agent_id, job.job_id), t('job.cancelled'))}>
+                      {t('common.cancel')}
+                    </Button>
+                  )}
+                </div>
+              )
+            }}
             searchPlaceholder={t('common.search')}
             filters={[
               { key: 'status', label: t('job.status'), options: [

@@ -925,6 +925,16 @@ export async function fetchRecentAgentJobs(
   return data
 }
 
+export async function retryAgentJob(agentId: number, jobId: number): Promise<{ status: string; job_id: number; new_status: string }> {
+  const { data } = await api.post(`/api/agents/${agentId}/jobs/${jobId}/retry`)
+  return data
+}
+
+export async function cancelAgentJob(agentId: number, jobId: number): Promise<{ status: string; job_id: number; new_status: string }> {
+  const { data } = await api.post(`/api/agents/${agentId}/jobs/${jobId}/cancel`)
+  return data
+}
+
 export async function fetchRecentScrapeJobs(limit = 10): Promise<ScrapeJobSummary[]> {
   const { data } = await api.get(`/webapp/scraper/jobs?limit=${limit}`)
   return data

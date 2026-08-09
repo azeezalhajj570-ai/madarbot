@@ -37,6 +37,7 @@ export interface FetchResult<T> {
 export interface DataTableProps<Row = any> {
   columns: ColumnDef<Row>[]
   keyExtractor?: (row: Row, index: number) => string | number
+  rowActions?: (row: Row, index: number) => ReactNode
 
   // Server-side pagination (lazy load) — supply fetchFn
   fetchFn?: (params: FetchParams) => Promise<FetchResult<Row>>
@@ -77,6 +78,7 @@ export function DataTable<Row>({
   fetchFn,
   queryKey = ['data-table'],
   keyExtractor = (_, i) => i,
+  rowActions,
 
   searchPlaceholder = 'Search...',
 
@@ -318,6 +320,11 @@ export function DataTable<Row>({
                   <div style={{ fontSize: typeScale.body }}>{col.render(row, i)}</div>
                 </div>
               ))}
+              {rowActions && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: spacing.xs, paddingTop: spacing.xs, borderTop: `1px solid ${uiVars.border}` }}>
+                  {rowActions(row, i)}
+                </div>
+              )}
             </div>
           ))
         )}
@@ -346,26 +353,34 @@ export function DataTable<Row>({
                   {col.label}
                 </th>
               ))}
+              {rowActions && (
+                <th style={{
+                  textAlign: 'right', fontSize: typeScale.caption, color: uiVars.textMuted,
+                  padding: '0 0 10px 8px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center', color: uiVars.textMuted }}>
+                <td colSpan={columns.length + (selectable ? 1 : 0) + (rowActions ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center', color: uiVars.textMuted }}>
                   <div className="pulse" style={{ width: 28, height: 28, borderRadius: 14, background: uiVars.primarySoft, margin: '0 auto 8px' }} />
                   Loading...
                 </td>
               </tr>
             ) : fetchError ? (
               <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center' }}>
+                <td colSpan={columns.length + (selectable ? 1 : 0) + (rowActions ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center' }}>
                   <div style={{ color: uiVars.danger, fontSize: typeScale.body, marginBottom: 8 }}>Failed to load data</div>
                   <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (selectable ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center', color: uiVars.textMuted }}>
+                <td colSpan={columns.length + (selectable ? 1 : 0) + (rowActions ? 1 : 0)} style={{ padding: spacing.xxxl, textAlign: 'center', color: uiVars.textMuted }}>
                   No data found.
                 </td>
               </tr>
@@ -373,7 +388,7 @@ export function DataTable<Row>({
               <>
                 {showLoadingBar && (
                   <tr>
-                    <td colSpan={columns.length + (selectable ? 1 : 0)} style={{ padding: 0 }}>
+                    <td colSpan={columns.length + (selectable ? 1 : 0) + (rowActions ? 1 : 0)} style={{ padding: 0 }}>
                       <div style={{ height: 2, background: uiVars.border, overflow: 'hidden' }}>
                         <div className="loading-bar-fill" style={{ width: '30%', height: '100%', background: uiVars.primary, borderRadius: 2 }} />
                       </div>
@@ -397,6 +412,14 @@ export function DataTable<Row>({
                         {col.render(row, i)}
                       </td>
                     ))}
+                    {rowActions && (
+                      <td style={{
+                        padding: '12px 0 12px 8px', borderTop: `1px solid ${uiVars.border}`,
+                        textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap',
+                      }}>
+                        {rowActions(row, i)}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </>
