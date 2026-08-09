@@ -153,7 +153,9 @@ class AgentNotification(Base):
     agent_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("agents.id", ondelete="CASCADE"), index=True, nullable=True
     )
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(64), index=True, default="info")
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
