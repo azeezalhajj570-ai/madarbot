@@ -41,6 +41,7 @@ async def build_conversations_from_scrape(
         else:
             standalone.append(row)
 
+    thread_root_ids = set(thread_map.keys())
     created = 0
     for root_id, messages in thread_map.items():
         root_msg = root_map[root_id]
@@ -58,6 +59,7 @@ async def build_conversations_from_scrape(
         if not title:
             title = f"Conversation #{root_id}"
 
+        await session.flush()
         conv_result = await session.execute(
             select(ScrapedConversation)
             .where(
@@ -101,6 +103,8 @@ async def build_conversations_from_scrape(
         standalone.sort(key=lambda m: m.get("message_date") or datetime.min)
         current_group: list[dict[str, Any]] = []
         for msg in standalone:
+            if msg.get("message_id") in thread_root_ids:
+                continue
             if not current_group:
                 current_group.append(msg)
             else:
@@ -149,6 +153,7 @@ async def _save_time_group(
     title = (first.get("message_text") or "")[:200] or f"Discussion ({len(messages)} messages)"
 
     root_message_id = int(first.get("message_id"))
+    await session.flush()
     existing = (
         (
             await session.execute(
