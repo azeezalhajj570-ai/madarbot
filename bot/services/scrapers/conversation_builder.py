@@ -147,11 +147,36 @@ async def _save_time_group(
             participants.add(int(uid))
     dates = [m.get("message_date") for m in messages if m.get("message_date")]
     title = (first.get("message_text") or "")[:200] or f"Discussion ({len(messages)} messages)"
+
+    root_message_id = int(first.get("message_id"))
+    existing = (
+        (
+            await session.execute(
+                select(ScrapedConversation)
+                .where(
+                    ScrapedConversation.scraped_group_id == scraped_group_id,
+                    ScrapedConversation.root_message_id == root_message_id,
+                )
+                .order_by(ScrapedConversation.id.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing is not None:
+        existing.message_count = len(messages)
+        existing.participant_count = len(participants)
+        existing.last_message_at = max(dates) if dates else existing.last_message_at
+        if not existing.title or existing.title.startswith("Discussion ("):
+            existing.title = title
+        return 0
+
     session.add(
         ScrapedConversation(
             scraped_group_id=scraped_group_id,
             tg_group_id=tg_group_id,
-            root_message_id=first.get("message_id"),
+            root_message_id=root_message_id,
             root_message_text=first.get("message_text"),
             root_sender_user_id=first.get("sender_user_id"),
             root_sender_name=first.get("sender_first_name") or first.get("sender_username") or "",
