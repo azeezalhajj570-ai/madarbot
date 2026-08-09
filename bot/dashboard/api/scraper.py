@@ -35,6 +35,7 @@ from bot.services.group_service import canonical_tg_group_id, tg_group_id_candid
 from bot.services.permission_service import PermissionService
 from bot.services.scraper_service import ScraperService
 from bot.dashboard.api.auth import extract_dashboard_identity
+from bot.dashboard.api.dependencies import ensure_agent_admin
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 from bot.db.models import GroupAdminRole, TenantMembership, User
 from datetime import datetime
@@ -94,12 +95,18 @@ async def _ensure_agent_access(
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    can_manage = await PermissionService(session).can(
-        agent.group_id, identity.user_id, "group.settings.update"
-    )
-    if not can_manage:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-    return agent
+    if agent.group_id is not None:
+        can_manage = await PermissionService(session).can(
+            agent.group_id, identity.user_id, "group.settings.update"
+        )
+        if not can_manage:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        return agent
+
+    # Self-linked agent without a managed group: fall back to ownership
+    # (workspace membership or legacy linked_by_user_id), matching
+    # member-search/bulk-add access.
+    return await ensure_agent_admin(agent_id=agent_id, session=session, identity=identity)
 
 
 async def _ensure_scraped_group_access(

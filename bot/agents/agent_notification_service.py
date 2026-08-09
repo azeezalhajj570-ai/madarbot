@@ -26,10 +26,8 @@ class AgentNotificationService(AgentServiceSupport):
         payload: dict[str, Any] | None = None,
     ) -> AgentNotification:
         resolved_group_id = agent.group_id if (agent and agent.group_id is not None) else group_id
-        if resolved_group_id is None:
-            resolved_group_id = 0
 
-        if actor_user_id is not None and agent is None and resolved_group_id > 0:
+        if actor_user_id is not None and agent is None and resolved_group_id is not None:
             await self.ensure_group_admin(resolved_group_id, actor_user_id)
 
         notification = AgentNotification(
