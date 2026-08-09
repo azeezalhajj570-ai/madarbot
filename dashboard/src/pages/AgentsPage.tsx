@@ -15,19 +15,24 @@ export default function AgentsPage() {
   const user = getStoredUser()
   const queryClient = useQueryClient()
 
+  const isOwner = user?.role === 'owner'
+
   const { data: stats } = useQuery({
     queryKey: ['owner', 'stats'],
     queryFn: fetchOwnerStats,
+    enabled: isOwner,
   })
 
   const { data: agents, isLoading: agentsLoading } = useQuery({
     queryKey: ['owner', 'agents'],
     queryFn: () => fetchOwnerAgents(),
+    enabled: isOwner,
   })
 
   const { data: users, isLoading: usersLoading } = useQuery({
     queryKey: ['owner', 'users'],
     queryFn: fetchOwnerUsers,
+    enabled: isOwner,
   })
 
   const deleteMutation = useMutation({
