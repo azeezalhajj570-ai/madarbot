@@ -52,6 +52,39 @@ export interface WorkspaceUsage {
   }
 }
 
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired' | 'revoked'
+
+export interface WorkspaceInvitation {
+  id: number
+  token: string
+  invited_user_id: number
+  invited_username: string | null
+  invited_full_name: string | null
+  inviter_user_id: number
+  inviter_username: string | null
+  inviter_full_name: string | null
+  role: WorkspaceRole
+  status: InvitationStatus
+  created_at: string
+  expires_at: string
+  accepted_at: string | null
+  declined_at: string | null
+  revoked_at: string | null
+}
+
+export interface PendingInvitation {
+  id: number
+  workspace_id: number
+  workspace_name: string
+  inviter_username: string | null
+  inviter_full_name: string | null
+  role: WorkspaceRole
+  status: 'pending'
+  token: string
+  created_at: string
+  expires_at: string
+}
+
 export interface ModQueueItem {
   id: number
   userId: number

@@ -89,6 +89,7 @@ from bot.db.models.summary import DailyGroupSummary, GroupMessageActivity, Group
 from bot.db.models.task import Task, TaskGroup, TaskRun
 from bot.db.models.tenant import TenantMembership, UserIdentity
 from bot.db.models.user import User
+from bot.db.models.workspace_invitation import WorkspaceInvitation
 
 
 class AdminRole(StrEnum):
@@ -237,5 +238,6 @@ __all__ = [
     "UnansweredQuestionStatus",
     "User",
     "UserIdentity",
+    "WorkspaceInvitation",
     "Warning",
 ]

@@ -206,6 +206,15 @@ Each bot owner only sees their own groups, agents, and statistics.
 <!-- SPECKIT START -->
 ## Current Plan
 
+**Workspace Member Invitations** (`016-workspace-member-invitations`)
+- Spec: `specs/016-workspace-member-invitations/spec.md`
+- Plan: `specs/016-workspace-member-invitations/plan.md`
+- Research: `specs/016-workspace-member-invitations/research.md`
+- Data Model: `specs/016-workspace-member-invitations/data-model.md`
+- API Contracts: `specs/016-workspace-member-invitations/contracts/api.md`
+- Quickstart: `specs/016-workspace-member-invitations/quickstart.md`
+- Tasks: `specs/016-workspace-member-invitations/tasks.md`
+
 **Multi-User Workspace MVP** (`015-workspace-mvp`)
 - Spec: `specs/015-workspace-mvp/spec.md`
 - Plan: `specs/015-workspace-mvp/plan.md`
