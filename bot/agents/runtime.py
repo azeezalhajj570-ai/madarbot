@@ -1125,11 +1125,11 @@ class BulkAddMembersRuntime:
         success_count = progress.get("success_count", 0)
         failure_count = progress.get("failure_count", 0)
         skip_count = progress.get("skip_count", 0)
+        invite_link_count = progress.get("invite_link_count", 0)
         total_count = len(user_ids)
         results: list[dict[str, Any]] = list(progress.get("results", []))
 
         agent_id_val = agent.id
-        agent_group_id = agent.group_id
         agent_cooldown = getattr(agent, "cooldown_minutes", None)
         agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
         agent_max_per_day = getattr(agent, "max_messages_per_day", None)
@@ -1148,6 +1148,7 @@ class BulkAddMembersRuntime:
                             "success_count": success_count,
                             "failure_count": failure_count,
                             "skip_count": skip_count,
+                            "invite_link_count": invite_link_count,
                             "results": results,
                             "stopped_at": index,
                             "stop_reason": "cooldown",
@@ -1164,6 +1165,7 @@ class BulkAddMembersRuntime:
                             "success_count": success_count,
                             "failure_count": failure_count,
                             "skip_count": skip_count,
+                            "invite_link_count": invite_link_count,
                             "results": results,
                             "stopped_at": index,
                             "stop_reason": "hourly_limit",
@@ -1179,6 +1181,7 @@ class BulkAddMembersRuntime:
                             "success_count": success_count,
                             "failure_count": failure_count,
                             "skip_count": skip_count,
+                            "invite_link_count": invite_link_count,
                             "results": results,
                             "stopped_at": index,
                             "stop_reason": "daily_limit",
@@ -1233,14 +1236,20 @@ class BulkAddMembersRuntime:
                 if add_result.success:
                     success_count += 1
                     if session is not None:
-                        session.add(
-                            GroupMember(
-                                group_id=target_group_id or agent_group_id or 0,
-                                tg_user_id=user_id,
-                                role="member",
-                                source="membership_add",
+                        if target_group_id:
+                            session.add(
+                                GroupMember(
+                                    group_id=target_group_id,
+                                    tg_user_id=user_id,
+                                    role="member",
+                                    source="membership_add",
+                                )
                             )
-                        )
+                        else:
+                            logger.bind(
+                                tg_group_id=target_tg_group_id,
+                                user_id=user_id,
+                            ).warning("agent_member_add_group_row_missing")
                         session.add(
                             MembershipAuditLog(
                                 group_id=target_tg_group_id,
@@ -1254,6 +1263,10 @@ class BulkAddMembersRuntime:
                             await session.commit()
                         except Exception:
                             await session.rollback()
+                            logger.bind(
+                                tg_group_id=target_tg_group_id,
+                                user_id=user_id,
+                            ).exception("agent_member_add_commit_failed")
                 else:
                     send_invite_link = bool(
                         normalized.get("send_invite_link_on_privacy_restricted", False)
@@ -1266,8 +1279,8 @@ class BulkAddMembersRuntime:
                         if invite_link:
                             dm_sent = await send_invite_link_to_user(client, user_id, invite_link)
                             if dm_sent:
-                                success_count += 1
-                                result_entry["status"] = "success"
+                                invite_link_count += 1
+                                result_entry["status"] = "invite_link_sent"
                                 result_entry["method"] = "invite_link"
                                 if session is not None:
                                     session.add(
@@ -1321,6 +1334,7 @@ class BulkAddMembersRuntime:
                                 "success_count": success_count,
                                 "failure_count": failure_count,
                                 "skip_count": skip_count,
+                                "invite_link_count": invite_link_count,
                                 "results": results,
                                 "stopped_at": index,
                                 "stop_reason": "flood_wait",
@@ -1354,6 +1368,7 @@ class BulkAddMembersRuntime:
                 "success_count": success_count,
                 "failure_count": failure_count,
                 "skip_count": skip_count,
+                "invite_link_count": invite_link_count,
                 "total_count": total_count,
                 "results": results,
                 "_progress": {
@@ -1361,6 +1376,7 @@ class BulkAddMembersRuntime:
                     "success_count": success_count,
                     "failure_count": failure_count,
                     "skip_count": skip_count,
+                    "invite_link_count": invite_link_count,
                     "results": results,
                 },
             }

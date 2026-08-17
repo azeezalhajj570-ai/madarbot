@@ -12,7 +12,7 @@ import {
   fetchTeamWorkspaces,
   createTeamWorkspace,
   fetchTeamWorkspaceMembers,
-  inviteTeamWorkspaceMember,
+  createWorkspaceInvitation,
   removeTeamWorkspaceMember,
   changeTeamWorkspaceMemberRole,
 } from '../../lib/api'
@@ -77,7 +77,7 @@ export default function AdminWorkspacePage() {
 
   const inviteMutation = useMutation({
     mutationFn: () =>
-      inviteTeamWorkspaceMember(activeWorkspaceId as number, inviteIdentifier.trim(), inviteRole),
+      createWorkspaceInvitation(activeWorkspaceId as number, inviteIdentifier.trim(), inviteRole),
     onSuccess: () => {
       setInviteOpen(false)
       setInviteIdentifier('')

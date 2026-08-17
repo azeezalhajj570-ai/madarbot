@@ -206,6 +206,7 @@ def _build_job_notification(
         success_count = int(result_payload.get("success_count") or 0)
         failure_count = int(result_payload.get("failure_count") or 0)
         skip_count = int(result_payload.get("skip_count") or 0)
+        invite_link_count = int(result_payload.get("invite_link_count") or 0)
         total_count = int(result_payload.get("total_count") or 0)
         target_tg_group_id = int(payload.get("target_tg_group_id") or 0)
         notification_payload = {
@@ -213,12 +214,15 @@ def _build_job_notification(
             "success_count": success_count,
             "failure_count": failure_count,
             "skip_count": skip_count,
+            "invite_link_count": invite_link_count,
             "total_count": total_count,
             "target_tg_group_id": target_tg_group_id,
         }
         if status == JOB_STATUS_COMPLETED:
             body = f"Added {success_count} out of {total_count} users to the target group."
             parts = []
+            if invite_link_count:
+                parts.append(f"{invite_link_count} invite links sent")
             if skip_count:
                 parts.append(f"{skip_count} skipped")
             if failure_count:
