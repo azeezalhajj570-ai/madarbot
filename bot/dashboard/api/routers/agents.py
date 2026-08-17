@@ -905,11 +905,12 @@ async def webapp_create_agent_job(
 
 
 @router.post(
-    "/api/agents/{agent_id}/jobs/{job_id}/cancel", dependencies=[Depends(require_agents_boundary)]
+    "/api/agents/{agent_id}/jobs/{job_id}/cancel",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
     "/webapp/agents/{agent_id}/jobs/{job_id}/cancel",
-    dependencies=[Depends(require_agents_boundary)],
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_cancel_agent_job(
     agent_id: int,
@@ -943,10 +944,12 @@ async def webapp_cancel_agent_job(
 
 
 @router.post(
-    "/api/agents/{agent_id}/jobs/{job_id}/retry", dependencies=[Depends(require_agents_boundary)]
+    "/api/agents/{agent_id}/jobs/{job_id}/retry",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/jobs/{job_id}/retry", dependencies=[Depends(require_agents_boundary)]
+    "/webapp/agents/{agent_id}/jobs/{job_id}/retry",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_retry_agent_job(
     agent_id: int,

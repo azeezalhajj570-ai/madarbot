@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,11 +9,12 @@ from telethon.errors import (
     FloodWaitError,
     RPCError,
     UserAlreadyParticipantError,
+    UserNotParticipantError,
     UserPrivacyRestrictedError,
 )
-from telethon.tl.functions.channels import InviteToChannelRequest
+from telethon.tl.functions.channels import GetParticipantRequest, InviteToChannelRequest
 from telethon.tl.functions.messages import AddChatUserRequest
-from telethon.tl.types import Channel, Chat, ChatPhotoEmpty, User
+from telethon.tl.types import Channel, Chat, ChatPhotoEmpty, MissingInvitee, User
 
 from bot.agents.group_membership import (
     ERROR_FLOOD_WAIT,
@@ -20,6 +22,7 @@ from bot.agents.group_membership import (
     ERROR_UNKNOWN,
     ERROR_USER_ALREADY_IN_GROUP,
     ERROR_USER_PRIVACY_RESTRICTED,
+    ERROR_VERIFICATION_FAILED,
     add_user_to_group,
 )
 
@@ -78,6 +81,57 @@ def _build_legacy_chat(chat_id: int) -> Chat:
     )
 
 
+def _build_full_chat_response(user_ids: list[int]) -> SimpleNamespace:
+    participants = [SimpleNamespace(user_id=uid) for uid in user_ids]
+    full_chat = SimpleNamespace(participants=SimpleNamespace(participants=participants))
+    return SimpleNamespace(full_chat=full_chat)
+
+
+def _build_invited_users_response(missing_user_ids: list[int]) -> SimpleNamespace:
+    missing_invitees = [
+        MissingInvitee(user_id=uid, premium_would_allow_invite=False, premium_required_for_pm=False)
+        for uid in missing_user_ids
+    ]
+    return SimpleNamespace(missing_invitees=missing_invitees)
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_returns_privacy_restricted_when_missing_invitees() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
+    client.return_value = _build_invited_users_response([77])
+
+    result = await add_user_to_group(client, -1001001, 77)
+
+    assert result.success is False
+    assert result.error_code == ERROR_USER_PRIVACY_RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_returns_privacy_restricted_when_other_missing() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
+    client.return_value = _build_invited_users_response([999, 77])
+
+    result = await add_user_to_group(client, -1001001, 77)
+
+    assert result.success is False
+    assert result.error_code == ERROR_USER_PRIVACY_RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_succeeds_when_missing_invitees_not_for_target() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
+    client.return_value = _build_invited_users_response([999])
+
+    result = await add_user_to_group(client, -1001001, 77)
+
+    assert result.success is True
+    assert isinstance(client.call_args_list[0].args[0], InviteToChannelRequest)
+    assert isinstance(client.call_args_list[1].args[0], GetParticipantRequest)
+
+
 @pytest.mark.asyncio
 async def test_add_user_to_group_succeeds_for_supergroup() -> None:
     client = AsyncMock()
@@ -87,21 +141,45 @@ async def test_add_user_to_group_succeeds_for_supergroup() -> None:
     result = await add_user_to_group(client, -1001001, 77)
 
     assert result.success is True
-    request = client.await_args.args[0]
-    assert isinstance(request, InviteToChannelRequest)
+    assert isinstance(client.call_args_list[0].args[0], InviteToChannelRequest)
+    assert isinstance(client.call_args_list[1].args[0], GetParticipantRequest)
 
 
 @pytest.mark.asyncio
 async def test_add_user_to_group_succeeds_for_legacy_group() -> None:
     client = AsyncMock()
     client.get_entity = AsyncMock(side_effect=[_build_user(78), _build_legacy_chat(222)])
-    client.return_value = None
+    client.return_value = _build_full_chat_response([78])
 
     result = await add_user_to_group(client, -222, 78)
 
     assert result.success is True
-    request = client.await_args.args[0]
-    assert isinstance(request, AddChatUserRequest)
+    assert isinstance(client.call_args_list[0].args[0], AddChatUserRequest)
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_returns_verification_failed_when_not_member() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
+    client.side_effect = [None, UserNotParticipantError(request=None)]
+
+    result = await add_user_to_group(client, -1001001, 77)
+
+    assert result.success is False
+    assert result.error_code == ERROR_VERIFICATION_FAILED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_skips_verification_when_verify_false() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
+    client.return_value = None
+
+    result = await add_user_to_group(client, -1001001, 77, verify=False)
+
+    assert result.success is True
+    assert len(client.call_args_list) == 1
+    assert isinstance(client.call_args_list[0].args[0], InviteToChannelRequest)
 
 
 @pytest.mark.asyncio

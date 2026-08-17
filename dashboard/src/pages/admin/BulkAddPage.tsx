@@ -36,16 +36,19 @@ interface MemberAddPayload {
   interval_seconds?: number
   user_ids?: number[]
   send_invite_link_on_privacy_restricted?: boolean
-  result?: { success_count?: number; failure_count?: number; skip_count?: number; details?: MemberAddResult[] }
-  progress?: { success_count?: number; failure_count?: number; skip_count?: number }
+  result?: { success_count?: number; failure_count?: number; skip_count?: number; invite_link_count?: number; details?: MemberAddResult[]; results?: MemberAddResult[] }
+  progress?: { success_count?: number; failure_count?: number; skip_count?: number; invite_link_count?: number }
 }
 
 interface MemberAddResult {
   user_id: number
-  success: boolean
-  error_code?: string
-  flood_wait_seconds?: number
+  status?: string
+  success?: boolean
   skipped?: boolean
+  inviteLinkSent?: boolean
+  error_code?: string
+  reason?: string
+  flood_wait_seconds?: number
   method?: 'direct' | 'invite_link'
 }
 
@@ -67,8 +70,23 @@ function extractJobStats(payload: Record<string, unknown> | undefined) {
   const successCount = result?.success_count ?? progress?.success_count ?? 0
   const failureCount = result?.failure_count ?? progress?.failure_count ?? 0
   const skipCount = result?.skip_count ?? progress?.skip_count ?? 0
-  const totalProcessed = successCount + failureCount + skipCount
-  return { successCount, failureCount, skipCount, totalProcessed, userCount, details: result?.details }
+  const inviteLinkCount = result?.invite_link_count ?? progress?.invite_link_count ?? 0
+  const totalProcessed = successCount + failureCount + skipCount + inviteLinkCount
+  const rawDetails = result?.details ?? result?.results
+  const details: MemberAddResult[] | undefined = Array.isArray(rawDetails)
+    ? rawDetails.map((r: any) => ({
+        user_id: r.user_id,
+        status: r.status,
+        success: r.status === 'success',
+        skipped: r.status === 'skipped',
+        inviteLinkSent: r.status === 'invite_link_sent',
+        error_code: r.error_code,
+        reason: r.reason,
+        flood_wait_seconds: r.flood_wait_seconds,
+        method: r.method || (r.status === 'success' ? 'direct' : undefined),
+      }))
+    : undefined
+  return { successCount, failureCount, skipCount, inviteLinkCount, totalProcessed, userCount, details }
 }
 
 const STATUS_OPTIONS = [
@@ -115,10 +133,12 @@ function MemberRow({ m, isSelected, disabled, onToggle }: { m: MemberItem; isSel
 const detailResultColumns: ColumnDef<MemberAddResult>[] = [
   { key: 'user_id', label: 'User ID', render: (r) => <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{r.user_id}</span> },
   { key: 'status', label: 'Status', render: (r) => r.success
-    ? <Badge tone="success">Added{r.method === 'invite_link' ? ' (via invite link)' : ''}</Badge>
-    : r.skipped
-      ? <Badge tone="warning">Skipped{r.error_code ? ` (${r.error_code})` : ''}</Badge>
-      : <Badge tone="destructive">Failed{r.error_code ? ` (${r.error_code})` : ''}</Badge>
+    ? <Badge tone="success">Added</Badge>
+    : r.inviteLinkSent
+      ? <Badge tone="warning">Invite link sent (not joined)</Badge>
+      : r.skipped
+        ? <Badge tone="warning">Skipped{(r.reason || r.error_code) ? ` (${r.reason || r.error_code})` : ''}</Badge>
+        : <Badge tone="destructive">Failed{r.error_code ? ` (${r.error_code})` : ''}</Badge>
   },
   { key: 'method', label: 'Method', hideOnMobile: true, render: (r) => r.method === 'invite_link' ? 'Invite link' : r.success ? 'Direct' : '—' },
 ]
@@ -350,9 +370,11 @@ export default function AdminBulkAddPage() {
     { key: 'status', label: 'Status', render: (j) => statusBadge(j.status, j.job_payload) },
     { key: 'users', label: 'Users', hideOnMobile: true, render: (j) => { const p = (j.job_payload || {}) as MemberAddPayload; return String(p.user_ids?.length || 0) } },
     { key: 'results', label: 'Results', render: (j) => {
-      const { successCount, failureCount, skipCount, totalProcessed, userCount } = extractJobStats(j.job_payload)
+      const { successCount, failureCount, skipCount, inviteLinkCount, totalProcessed, userCount } = extractJobStats(j.job_payload)
       const isComplete = j.status === 'completed' && totalProcessed > 0
-      const summary = isComplete ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed` : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
+      const summary = isComplete
+        ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed${inviteLinkCount ? ` · ${inviteLinkCount} link sent` : ''}`
+        : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
       return <span style={{ fontSize: 12 }}>{summary}</span>
     }},
     { key: 'created', label: 'Created', hideOnMobile: true, render: (j) => <span style={{ fontSize: 12, color: 'var(--ui-text-muted)' }}>{formatDate(j.created_at)}</span> },

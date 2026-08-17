@@ -32,26 +32,43 @@ async def reconcile_stale_jobs(
 ) -> dict[str, int]:
     """Find and mark stale pending/queued jobs that were never picked up.
 
-    Also detects RUNNING jobs stuck for too long and re-queues or fails them.
+    Also re-dispatches PENDING jobs that were never enqueued (e.g. dispatch ran
+    while the worker/redis was down) once they are older than
+    `pending_job_requeue_minutes`, and detects RUNNING jobs stuck for too long
+    and re-queues or fails them.
 
     Returns a dict with counts of reconciled jobs.
     """
     from bot.config import get_settings
 
     settings = get_settings()
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_hours)
+    now = datetime.now(timezone.utc)
+    requeue_cutoff = now - timedelta(minutes=settings.pending_job_requeue_minutes)
+    cutoff = now - timedelta(hours=max_hours)
     stale: list[AgentJob] = []
+    requeued: list[AgentJob] = []
     recovered_running: list[AgentJob] = []
     failed_running: list[AgentJob] = []
 
     async with SessionLocal() as session:
-        result = await session.execute(
+        # 1) Re-dispatch PENDING jobs that were never enqueued.
+        pending_result = await session.execute(
+            select(AgentJob).where(
+                AgentJob.status == JOB_STATUS_PENDING,
+                AgentJob.updated_at < requeue_cutoff,
+            )
+        )
+        to_requeue = list(pending_result.scalars())
+
+        # 2) Mark genuinely stale queued/pending jobs that exceeded the threshold.
+        stale_result = await session.execute(
             select(AgentJob).where(
                 AgentJob.status.in_([JOB_STATUS_PENDING, JOB_STATUS_QUEUED]),
                 AgentJob.updated_at < cutoff,
             )
         )
-        stale = list(result.scalars())
+        requeue_ids = {job.id for job in to_requeue}
+        stale = [job for job in stale_result.scalars() if job.id not in requeue_ids]
         target_status = JOB_STATUS_FAILED if mark_failed else JOB_STATUS_DISPATCH_STALE
         for job in stale:
             job.status = target_status
@@ -59,9 +76,7 @@ async def reconcile_stale_jobs(
             payload["last_error"] = f"Job stale after {max_hours}h (status={job.status})"
             job.job_payload = payload
 
-        running_cutoff = datetime.now(timezone.utc) - timedelta(
-            hours=settings.stuck_job_threshold_hours
-        )
+        running_cutoff = now - timedelta(hours=settings.stuck_job_threshold_hours)
         running_result = await session.execute(
             select(AgentJob).where(
                 AgentJob.status == JOB_STATUS_RUNNING,
@@ -102,8 +117,31 @@ async def reconcile_stale_jobs(
 
         await session.commit()
 
+    # 3) Enqueue the pending jobs that were never picked up, re-checking the
+    #    status right before dispatch to avoid double-processing a running job.
+    for job in to_requeue:
+        async with SessionLocal() as session:
+            fresh = (
+                await session.execute(select(AgentJob).where(AgentJob.id == job.id))
+            ).scalar_one_or_none()
+            if fresh is None or fresh.status != JOB_STATUS_PENDING:
+                continue
+        try:
+            await dispatch_agent_job(job.id)
+            requeued.append(job)
+            logger.bind(
+                job_id=job.id,
+                agent_id=job.agent_id,
+                pending_minutes=settings.pending_job_requeue_minutes,
+            ).info("agent_job_pending_redispatched")
+        except Exception:
+            logger.bind(job_id=job.id, agent_id=job.agent_id).exception(
+                "agent_job_redispatch_failed"
+            )
+
     logger.bind(
         stale_count=len(stale),
+        requeued_count=len(requeued),
         recovered_count=len(recovered_running),
         failed_count=len(failed_running),
         target_status=target_status,
@@ -120,6 +158,7 @@ async def reconcile_stale_jobs(
 
     return {
         "reconciled": len(stale),
+        "requeued": len(requeued),
         "recovered_running": len(recovered_running),
         "failed_running": len(failed_running),
         "target_status": target_status,

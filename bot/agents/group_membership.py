@@ -17,9 +17,14 @@ from telethon.errors import (
     UserNotParticipantError,
     UserPrivacyRestrictedError,
 )
-from telethon.tl.functions.channels import InviteToChannelRequest
-from telethon.tl.functions.messages import AddChatUserRequest, ExportChatInviteRequest, GetDialogsRequest
-from telethon.tl.types import Channel, InputPeerEmpty, InputUser
+from telethon.tl.functions.channels import GetParticipantRequest, InviteToChannelRequest
+from telethon.tl.functions.messages import (
+    AddChatUserRequest,
+    ExportChatInviteRequest,
+    GetDialogsRequest,
+    GetFullChatRequest,
+)
+from telethon.tl.types import Channel, InputPeerEmpty, InputUser, User
 
 
 ERROR_USER_ALREADY_IN_GROUP: Final = "USER_ALREADY_IN_GROUP"
@@ -29,6 +34,7 @@ ERROR_INVITE_LINK_DM_FAILED: Final = "INVITE_LINK_DM_FAILED"
 ERROR_FLOOD_WAIT: Final = "FLOOD_WAIT"
 ERROR_PEER_NOT_FOUND: Final = "PEER_NOT_FOUND"
 ERROR_IS_BOT: Final = "IS_BOT"
+ERROR_VERIFICATION_FAILED: Final = "VERIFICATION_FAILED"
 ERROR_UNKNOWN: Final = "UNKNOWN"
 
 logger = structlog.get_logger(__name__)
@@ -84,11 +90,52 @@ async def _resolve_group_from_dialogs(
     return None
 
 
+def _user_id_of(peer: object) -> int | None:
+    if isinstance(peer, InputUser):
+        return peer.user_id
+    if isinstance(peer, User):
+        return peer.id
+    return getattr(peer, "id", None) or getattr(peer, "user_id", None)
+
+
+async def is_user_in_group(
+    client: TelegramClient,
+    group_entity: object,
+    user_peer: object,
+) -> bool | None:
+    """Verify that a user is actually a participant of a group.
+
+    Returns ``True`` when the user is confirmed as a participant, ``False`` when
+    they are confirmed absent, and ``None`` when membership could not be
+    determined (e.g. a transient RPC error).
+    """
+    try:
+        if isinstance(group_entity, Channel) or bool(getattr(group_entity, "megagroup", False)):
+            await client(GetParticipantRequest(channel=group_entity, participant=user_peer))
+            return True
+        result = await client(GetFullChatRequest(chat_id=int(getattr(group_entity, "id", 0))))
+        full_chat = getattr(result, "full_chat", None)
+        participants = getattr(full_chat, "participants", None)
+        entries = getattr(participants, "participants", None)
+        if entries is None:
+            return None
+        target_id = _user_id_of(user_peer)
+        if target_id is None:
+            return None
+        return any(getattr(entry, "user_id", None) == target_id for entry in entries)
+    except UserNotParticipantError:
+        return False
+    except (PeerIdInvalidError, ValueError, KeyError, RPCError):
+        return None
+
+
 async def add_user_to_group(
     client: TelegramClient,
     group_id: int,
     user_id: int,
     access_hash: int | None = None,
+    *,
+    verify: bool = True,
 ) -> AddUserResult:
     bound_logger = logger.bind(
         group_id=group_id,
@@ -133,7 +180,16 @@ async def add_user_to_group(
 
     try:
         if isinstance(group_entity, Channel) or bool(getattr(group_entity, "megagroup", False)):
-            await client(InviteToChannelRequest(channel=group_id, users=[user_peer]))
+            invite_result = await client(
+                InviteToChannelRequest(channel=group_id, users=[user_peer])
+            )
+            missing_invitees = getattr(invite_result, "missing_invitees", None) or []
+            if any(_user_id_of(entry) == user_id for entry in missing_invitees):
+                return _failure(
+                    group_id=group_id,
+                    user_id=user_id,
+                    error_code=ERROR_USER_PRIVACY_RESTRICTED,
+                )
         else:
             legacy_chat_id = int(getattr(group_entity, "id"))
             await client(AddChatUserRequest(chat_id=legacy_chat_id, user_id=user_peer, fwd_limit=0))
@@ -154,6 +210,18 @@ async def add_user_to_group(
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USERBOT_NOT_IN_GROUP)
     except RPCError:
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
+
+    if verify:
+        present = await is_user_in_group(client, group_entity, user_peer)
+        if present is not True:
+            logger.bind(
+                group_id=group_id,
+                user_id=user_id,
+                membership_verified=present,
+            ).warning("agent_add_user_to_group_verification_failed")
+            return _failure(
+                group_id=group_id, user_id=user_id, error_code=ERROR_VERIFICATION_FAILED
+            )
 
     bound_logger.info("agent_add_user_to_group_succeeded")
     return AddUserResult(success=True)
