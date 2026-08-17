@@ -113,7 +113,7 @@ class WorkspaceService:
             raise WorkspaceError("Cannot remove the workspace owner")
 
         target_membership.is_active = False
-        await self._revoke_user_pending_invitations(tenant_id, target_user_id)
+        await self._revoke_user_pending_invitations(tenant_id, target_user_id, actor_user_id=actor_user_id)
         await self.session.commit()
 
     async def change_role(
@@ -203,6 +203,7 @@ class WorkspaceService:
     async def list_invitations(
         self, tenant_id: int, *, status: str | None = None
     ) -> list[dict]:
+        now = datetime.utcnow()
         stmt = (
             select(WorkspaceInvitation, User.label("invited_user"), User.label("inviter_user"))
             .join(User, User.id == WorkspaceInvitation.invited_user_id)
@@ -214,9 +215,16 @@ class WorkspaceService:
 
         rows = await self.session.execute(stmt)
         results: list[dict] = []
+        expired_ids: list[int] = []
         for invitation, invited_user in rows.all():
+            if invitation.status == "pending" and invitation.expires_at <= now:
+                invitation.status = "expired"
+                invitation.updated_at = now
+                expired_ids.append(invitation.id)
             inviter = await self.session.get(User, invitation.inviter_user_id)
             results.append(self._serialize_invitation(invitation, invited_user, inviter))
+        if expired_ids:
+            await self.session.flush()
         return results
 
     async def list_user_pending_invitations(self, user_id: int) -> list[dict]:
@@ -250,7 +258,7 @@ class WorkspaceService:
         return results
 
     async def accept_invitation(self, *, token: str, user_id: int) -> TenantMembership:
-        invitation = await self._get_invitation_by_token(token)
+        invitation = await self._get_invitation_by_token(token, for_update=True)
         if invitation is None:
             raise WorkspaceError("Invitation not found")
 
@@ -262,6 +270,7 @@ class WorkspaceService:
 
         if invitation.expires_at <= datetime.utcnow():
             invitation.status = "expired"
+            invitation.updated_at = datetime.utcnow()
             await self.session.flush()
             raise WorkspaceError("Invitation has expired")
 
@@ -374,12 +383,13 @@ class WorkspaceService:
 
     # ── internal helpers ───────────────────────────────────────────
 
-    async def _get_invitation_by_token(self, token: str) -> WorkspaceInvitation | None:
-        return (
-            await self.session.execute(
-                select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
-            )
-        ).scalar_one_or_none()
+    async def _get_invitation_by_token(
+        self, token: str, *, for_update: bool = False
+    ) -> WorkspaceInvitation | None:
+        stmt = select(WorkspaceInvitation).where(WorkspaceInvitation.token == token)
+        if for_update:
+            stmt = stmt.with_for_update()
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def _get_pending_invitation_for_user(
         self, tenant_id: int, user_id: int
@@ -394,7 +404,9 @@ class WorkspaceService:
             )
         ).scalar_one_or_none()
 
-    async def _revoke_user_pending_invitations(self, tenant_id: int, user_id: int) -> None:
+    async def _revoke_user_pending_invitations(
+        self, tenant_id: int, user_id: int, *, actor_user_id: int | None = None
+    ) -> None:
         now = datetime.utcnow()
         result = await self.session.execute(
             select(WorkspaceInvitation).where(
@@ -408,6 +420,13 @@ class WorkspaceService:
             inv.status = "revoked"
             inv.revoked_at = now
             inv.updated_at = now
+            if actor_user_id is not None:
+                await self._audit_invitation(
+                    tenant_id=tenant_id,
+                    actor_user_id=actor_user_id,
+                    action="revoked",
+                    invitation_id=inv.id,
+                )
 
     async def _audit_invitation(
         self, *, tenant_id: int, actor_user_id: int, action: str, invitation_id: int
