@@ -12,6 +12,8 @@ import type {
   TeamWorkspaceMember,
   WorkspaceRole,
   WorkspaceUsage,
+  WorkspaceInvitation,
+  PendingInvitation,
   OwnerGroup,
   OwnerMetrics,
   OwnerSubscriptionRequest,
@@ -153,12 +155,54 @@ export async function fetchTeamWorkspaceMembers(
   return data
 }
 
-export async function inviteTeamWorkspaceMember(
+export async function createWorkspaceInvitation(
   workspaceId: number,
   identifier: string,
   role: WorkspaceRole = 'member',
-): Promise<{ user_id: number; role: WorkspaceRole }> {
-  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/${workspaceId}/invite`, { identifier, role })
+): Promise<{ id: number; token: string; status: string }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/${workspaceId}/invitations`, { identifier, role })
+  return data
+}
+
+export async function fetchWorkspaceInvitations(
+  workspaceId: number,
+): Promise<{ invitations: WorkspaceInvitation[] }> {
+  const { data } = await api.get<{ invitations: WorkspaceInvitation[] }>(
+    `${WORKSPACE_API_PREFIX}/${workspaceId}/invitations`,
+  )
+  return data
+}
+
+export async function fetchPendingInvitations(): Promise<{ invitations: PendingInvitation[] }> {
+  const { data } = await api.get<{ invitations: PendingInvitation[] }>(
+    `${WORKSPACE_API_PREFIX}/invitations/pending`,
+  )
+  return data
+}
+
+export async function acceptInvitation(token: string): Promise<{ workspace_id: number; workspace_name: string; role: WorkspaceRole }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/invitations/${token}/accept`)
+  return data
+}
+
+export async function declineInvitation(token: string): Promise<{ status: string }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/invitations/${token}/decline`)
+  return data
+}
+
+export async function revokeWorkspaceInvitation(
+  workspaceId: number,
+  token: string,
+): Promise<{ id: number; status: string }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/${workspaceId}/invitations/${token}/revoke`)
+  return data
+}
+
+export async function resendWorkspaceInvitation(
+  workspaceId: number,
+  token: string,
+): Promise<{ id: number; status: string; expires_at: string }> {
+  const { data } = await api.post(`${WORKSPACE_API_PREFIX}/${workspaceId}/invitations/${token}/resend`)
   return data
 }
 

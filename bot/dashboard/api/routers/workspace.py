@@ -12,7 +12,7 @@ from bot.db.session import get_session
 from bot.services.user_service import UserService
 from bot.services.workspace_service import WorkspaceError, WorkspaceService
 
-from ..dependencies import get_identity
+from ..dependencies import WorkspaceContext, get_identity, get_workspace_context
 from .auth_boundary import require_any_boundary
 
 router = APIRouter(tags=["workspace"])
@@ -24,7 +24,7 @@ class CreateWorkspaceRequest(BaseModel):
     name: str
 
 
-class InviteMemberRequest(BaseModel):
+class CreateInvitationRequest(BaseModel):
     identifier: str
     role: str = "member"
 
@@ -58,6 +58,9 @@ async def _workspace_summary(
         "member_count": await workspace_service.member_count(tenant.id),
         "subscription": await _subscription_summary(session, tenant.id),
     }
+
+
+# ── workspace CRUD ─────────────────────────────────────────────
 
 
 @router.get("/api/workspace", dependencies=[WORKSPACE_BOUNDARY])
@@ -125,36 +128,6 @@ async def list_workspace_members(
     return {"members": members}
 
 
-@router.post(
-    "/api/workspace/{workspace_id}/invite",
-    dependencies=[WORKSPACE_BOUNDARY],
-    status_code=status.HTTP_201_CREATED,
-)
-@router.post(
-    "/webapp/workspace/{workspace_id}/invite",
-    dependencies=[WORKSPACE_BOUNDARY],
-    status_code=status.HTTP_201_CREATED,
-)
-async def invite_workspace_member(
-    workspace_id: int,
-    payload: InviteMemberRequest,
-    identity=Depends(get_identity),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
-    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
-    workspace_service = WorkspaceService(session)
-    try:
-        membership = await workspace_service.invite_member(
-            tenant_id=workspace_id,
-            inviter_user_id=user.id,
-            identifier=payload.identifier,
-            role=payload.role,
-        )
-    except WorkspaceError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    return {"user_id": membership.user_id, "role": membership.role}
-
-
 @router.delete(
     "/api/workspace/{workspace_id}/members/{member_user_id}",
     dependencies=[WORKSPACE_BOUNDARY],
@@ -206,6 +179,182 @@ async def change_workspace_member_role(
     except WorkspaceError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return {"user_id": membership.user_id, "role": membership.role}
+
+
+# ── invitations ────────────────────────────────────────────────
+
+
+@router.post(
+    "/api/workspace/{workspace_id}/invitations",
+    dependencies=[WORKSPACE_BOUNDARY],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/webapp/workspace/{workspace_id}/invitations",
+    dependencies=[WORKSPACE_BOUNDARY],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_invitation(
+    workspace_id: int,
+    payload: CreateInvitationRequest,
+    ctx: WorkspaceContext = Depends(get_workspace_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    workspace_service = WorkspaceService(session)
+    try:
+        invitation = await workspace_service.create_invitation(
+            tenant_id=workspace_id,
+            inviter_user_id=ctx.user.id,
+            identifier=payload.identifier,
+            role=payload.role,
+        )
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return {
+        "id": invitation.id,
+        "invited_user_id": invitation.invited_user_id,
+        "role": invitation.role,
+        "status": invitation.status,
+        "token": invitation.token,
+        "created_at": invitation.created_at.isoformat() if invitation.created_at else None,
+        "expires_at": invitation.expires_at.isoformat() if invitation.expires_at else None,
+    }
+
+
+@router.get("/api/workspace/{workspace_id}/invitations", dependencies=[WORKSPACE_BOUNDARY])
+@router.get("/webapp/workspace/{workspace_id}/invitations", dependencies=[WORKSPACE_BOUNDARY])
+async def list_invitations(
+    workspace_id: int,
+    ctx: WorkspaceContext = Depends(get_workspace_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    workspace_service = WorkspaceService(session)
+    invitations = await workspace_service.list_invitations(workspace_id)
+    return {"invitations": invitations}
+
+
+@router.get("/api/workspace/invitations/pending")
+@router.get("/webapp/workspace/invitations/pending")
+async def list_pending_invitations(
+    identity=Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+    invitations = await workspace_service.list_user_pending_invitations(user.id)
+    return {"invitations": invitations}
+
+
+@router.post("/api/workspace/invitations/{token}/accept")
+@router.post("/webapp/workspace/invitations/{token}/accept")
+async def accept_invitation(
+    token: str,
+    identity=Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+    try:
+        membership = await workspace_service.accept_invitation(token=token, user_id=user.id)
+    except WorkspaceError as exc:
+        exc_str = str(exc)
+        if "not found" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc_str) from exc
+        if "expired" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail=exc_str) from exc
+        if "does not belong" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc_str) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc_str) from exc
+    tenant = await session.get(Tenant, membership.tenant_id)
+    return {
+        "workspace_id": membership.tenant_id,
+        "workspace_name": tenant.name if tenant else None,
+        "role": membership.role,
+        "status": "accepted",
+    }
+
+
+@router.post("/api/workspace/invitations/{token}/decline")
+@router.post("/webapp/workspace/invitations/{token}/decline")
+async def decline_invitation(
+    token: str,
+    identity=Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+    try:
+        await workspace_service.decline_invitation(token=token, user_id=user.id)
+    except WorkspaceError as exc:
+        exc_str = str(exc)
+        if "not found" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc_str) from exc
+        if "does not belong" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc_str) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc_str) from exc
+    return {"status": "declined"}
+
+
+@router.post(
+    "/api/workspace/{workspace_id}/invitations/{token}/revoke",
+    dependencies=[WORKSPACE_BOUNDARY],
+)
+@router.post(
+    "/webapp/workspace/{workspace_id}/invitations/{token}/revoke",
+    dependencies=[WORKSPACE_BOUNDARY],
+)
+async def revoke_invitation(
+    workspace_id: int,
+    token: str,
+    ctx: WorkspaceContext = Depends(get_workspace_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    workspace_service = WorkspaceService(session)
+    try:
+        invitation = await workspace_service.revoke_invitation(
+            token=token, tenant_id=workspace_id, actor_user_id=ctx.user.id
+        )
+    except WorkspaceError as exc:
+        exc_str = str(exc)
+        if "not found" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc_str) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc_str) from exc
+    return {
+        "id": invitation.id,
+        "status": invitation.status,
+        "revoked_at": invitation.revoked_at.isoformat() if invitation.revoked_at else None,
+    }
+
+
+@router.post(
+    "/api/workspace/{workspace_id}/invitations/{token}/resend",
+    dependencies=[WORKSPACE_BOUNDARY],
+)
+@router.post(
+    "/webapp/workspace/{workspace_id}/invitations/{token}/resend",
+    dependencies=[WORKSPACE_BOUNDARY],
+)
+async def resend_invitation(
+    workspace_id: int,
+    token: str,
+    ctx: WorkspaceContext = Depends(get_workspace_context),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    workspace_service = WorkspaceService(session)
+    try:
+        invitation = await workspace_service.resend_invitation(
+            token=token, tenant_id=workspace_id, actor_user_id=ctx.user.id
+        )
+    except WorkspaceError as exc:
+        exc_str = str(exc)
+        if "not found" in exc_str.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc_str) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc_str) from exc
+    return {
+        "id": invitation.id,
+        "status": invitation.status,
+        "expires_at": invitation.expires_at.isoformat() if invitation.expires_at else None,
+    }
 
 
 __all__ = ["router"]
