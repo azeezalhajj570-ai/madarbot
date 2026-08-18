@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, UserPlus, Ban } from 'lucide-react'
 
@@ -15,6 +15,7 @@ import {
   fetchWorkspaceInvitations,
   createWorkspaceInvitation,
   revokeWorkspaceInvitation,
+  acceptInvitation,
   removeTeamWorkspaceMember,
   changeTeamWorkspaceMemberRole,
 } from '../../lib/api'
@@ -39,6 +40,33 @@ export default function AdminWorkspacePage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteIdentifier, setInviteIdentifier] = useState('')
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member')
+  const [accepting, setAccepting] = useState(false)
+  const [acceptResult, setAcceptResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const acceptHandled = useRef(false)
+
+  useEffect(() => {
+    if (acceptHandled.current) return
+    const hash = window.location.hash
+    const match = hash.match(/accept=([a-f0-9]+)/)
+    if (match) {
+      const token = match[1]
+      acceptHandled.current = true
+      setAccepting(true)
+      acceptInvitation(token)
+        .then((res) => {
+          setAcceptResult({ ok: true, message: `Joined "${res.workspace_name}" as ${res.role}` })
+          queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+        })
+        .catch((err) => {
+          const msg = err?.response?.data?.detail || 'Failed to accept invitation'
+          setAcceptResult({ ok: false, message: msg })
+        })
+        .finally(() => {
+          setAccepting(false)
+          window.history.replaceState(null, '', window.location.pathname + '#/workspace')
+        })
+    }
+  }, [])
 
   const { data: workspacesData, isLoading: workspacesLoading } = useQuery({
     queryKey: ['workspaces'],
@@ -170,6 +198,20 @@ export default function AdminWorkspacePage() {
         </Button>
       }
     >
+      {accepting && (
+        <div style={{ padding: '16px 20px', marginBottom: 16, borderRadius: 8, background: 'var(--ui-bg-muted)', color: 'var(--ui-text-muted)', fontSize: 14 }}>
+          Joining workspace...
+        </div>
+      )}
+      {acceptResult && (
+        <div style={{
+          padding: '16px 20px', marginBottom: 16, borderRadius: 8, fontSize: 14,
+          background: acceptResult.ok ? 'var(--ui-success-bg, #e6f9e6)' : 'var(--ui-danger-bg, #fde8e8)',
+          color: acceptResult.ok ? 'var(--ui-success, #16a34a)' : 'var(--ui-danger, #dc2626)',
+        }}>
+          {acceptResult.ok ? '✓ ' : '✕ '}{acceptResult.message}
+        </div>
+      )}
       {workspaces.length > 1 && (
         <div style={{ marginBottom: 20, maxWidth: 320 }}>
           <Field label={t('workspace.switchWorkspace')}>
