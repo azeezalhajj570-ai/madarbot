@@ -29,6 +29,7 @@ class User(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False)
     language_code: Mapped[str] = mapped_column(String(8), default="en", index=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

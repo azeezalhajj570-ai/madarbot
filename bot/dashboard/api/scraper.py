@@ -34,7 +34,7 @@ from bot.agents.service import AgentService
 from bot.services.group_service import canonical_tg_group_id, tg_group_id_candidates
 from bot.services.permission_service import PermissionService
 from bot.services.scraper_service import ScraperService
-from bot.dashboard.api.auth import extract_dashboard_identity
+from bot.dashboard.api.auth import _DecodedJWT, extract_dashboard_identity
 from bot.dashboard.api.dependencies import ensure_agent_admin
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 from bot.db.models import GroupAdminRole, TenantMembership, User
@@ -80,9 +80,9 @@ class ScrapeJobResponse(BaseModel):
 
 
 async def get_identity(
-    identity: TelegramWebAppIdentity = Depends(extract_dashboard_identity),
+    decoded: _DecodedJWT = Depends(extract_dashboard_identity),
 ) -> TelegramWebAppIdentity:
-    return identity
+    return decoded.identity
 
 
 async def _ensure_agent_access(

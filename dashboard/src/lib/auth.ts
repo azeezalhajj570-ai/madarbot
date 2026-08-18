@@ -50,8 +50,11 @@ export function removeAccount(userId: number) {
   localStorage.setItem('auth_accounts', JSON.stringify(accounts))
 }
 
-export function switchAccount(user: AuthUser) {
-  const token = localStorage.getItem('auth_token')
-  if (token) addAccount(getStoredUser()!)
-  localStorage.setItem('auth_user', JSON.stringify(user))
+export function switchAccount(_user: AuthUser) {
+  // Account switching clears the current session and redirects to login.
+  // The stored accounts list is preserved so the user can pick from it.
+  // Re-authentication is required because JWT tokens are per-account and
+  // we don't store tokens for other accounts.
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('auth_user')
 }

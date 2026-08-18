@@ -95,6 +95,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_user')
+      localStorage.removeItem('auth_accounts')
       window.location.href = '/dashboard/login'
     }
     return Promise.reject(err)
@@ -132,6 +133,14 @@ export async function updateProfile(payload: { full_name?: string; phone_number?
 export async function changePassword(payload: { current_password?: string; new_password: string }) {
   const { data } = await api.post(`${AUTH_API_PREFIX}/change-password`, payload)
   return data
+}
+
+export async function logoutUser() {
+  try {
+    await api.post(`${AUTH_API_PREFIX}/logout`)
+  } catch {
+    // Best-effort: even if the backend call fails, clear local state
+  }
 }
 
 // ─── Team Workspaces ──────────────────────────────────────────────────────────

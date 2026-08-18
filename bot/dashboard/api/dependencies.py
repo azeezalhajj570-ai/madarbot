@@ -12,7 +12,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
-from bot.dashboard.api.auth import extract_dashboard_identity
+from bot.dashboard.api.auth import _DecodedJWT, extract_dashboard_identity
 from bot.db.models import Agent, Group, GroupAdminRole, User
 from bot.db.session import get_session
 from bot.services.group_service import canonical_tg_group_id, upsert_group
@@ -196,8 +196,33 @@ async def list_identity_bot_install_groups(
 
 
 async def get_identity(
-    identity: TelegramWebAppIdentity = Depends(extract_dashboard_identity),
+    decoded: _DecodedJWT = Depends(extract_dashboard_identity),
 ) -> TelegramWebAppIdentity:
+    return decoded.identity
+
+
+async def get_validated_identity(
+    decoded: _DecodedJWT = Depends(extract_dashboard_identity),
+    session: AsyncSession = Depends(get_session),
+) -> TelegramWebAppIdentity:
+    """Like get_identity but validates token_version against the DB.
+
+    If the JWT's token_version doesn't match the user's current
+    token_version, the token has been revoked (e.g. via logout) and
+    we reject it with 401.
+    """
+    identity = decoded.identity
+    if decoded.token_version > 0:
+        user = (
+            await session.execute(
+                select(User).where(User.tg_user_id == identity.user_id)
+            )
+        ).scalar_one_or_none()
+        if user is not None and user.token_version != decoded.token_version:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session revoked",
+            )
     return identity
 
 
