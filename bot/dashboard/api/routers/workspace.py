@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.models import Plan, Subscription, Tenant, TenantMembership
+from bot.db.models import Agent, Plan, Subscription, Tenant, TenantMembership
 from bot.db.session import get_session
 from bot.services.user_service import UserService
 from bot.services.workspace_service import WorkspaceError, WorkspaceService
 
 from ..dependencies import WorkspaceContext, get_identity, get_workspace_context
 from .auth_boundary import require_any_boundary
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["workspace"])
 
@@ -184,6 +187,61 @@ async def change_workspace_member_role(
 # ── invitations ────────────────────────────────────────────────
 
 
+async def _get_workspace_telegram_client(
+    session: AsyncSession, workspace_id: int, owner_tg_user_id: int | None = None,
+) -> Any | None:
+    from bot.config import get_settings
+
+    settings = get_settings()
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        return None
+
+    agent = (
+        await session.execute(
+            select(Agent)
+            .where(
+                Agent.tenant_id == workspace_id,
+                Agent.auth_state == "active",
+                Agent.session_string.is_not(None),
+            )
+            .order_by(desc(Agent.updated_at))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if agent is None and owner_tg_user_id is not None:
+        agent = (
+            await session.execute(
+                select(Agent)
+                .where(
+                    Agent.linked_by_user_id == owner_tg_user_id,
+                    Agent.auth_state == "active",
+                    Agent.session_string.is_not(None),
+                )
+                .order_by(desc(Agent.updated_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+    if agent is None:
+        return None
+
+    try:
+        from telethon import TelegramClient
+        from telethon.sessions import StringSession
+
+        client = TelegramClient(
+            StringSession(agent.session_string),
+            settings.telegram_api_id,
+            settings.telegram_api_hash,
+        )
+        await client.connect()
+        return client
+    except Exception:
+        logger.debug("Could not create Telegram client for workspace %s", workspace_id, exc_info=True)
+        return None
+
+
 @router.post(
     "/api/workspace/{workspace_id}/invitations",
     dependencies=[WORKSPACE_BOUNDARY],
@@ -201,15 +259,26 @@ async def create_invitation(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     workspace_service = WorkspaceService(session)
+
+    telegram_client = await _get_workspace_telegram_client(
+        session, workspace_id, owner_tg_user_id=ctx.identity.user_id,
+    )
     try:
         invitation = await workspace_service.create_invitation(
             tenant_id=workspace_id,
             inviter_user_id=ctx.user.id,
             identifier=payload.identifier,
             role=payload.role,
+            telegram_client=telegram_client,
         )
     except WorkspaceError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    finally:
+        if telegram_client is not None:
+            try:
+                await telegram_client.disconnect()
+            except Exception:
+                pass
     return {
         "id": invitation.id,
         "invited_user_id": invitation.invited_user_id,
