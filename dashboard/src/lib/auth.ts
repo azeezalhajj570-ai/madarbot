@@ -23,6 +23,7 @@ export function storeAuth(token: string, user: AuthUser) {
 export function clearAuth() {
   localStorage.removeItem('auth_token')
   localStorage.removeItem('auth_user')
+  localStorage.removeItem('auth_accounts')
 }
 
 export function isAuthenticated(): boolean {
