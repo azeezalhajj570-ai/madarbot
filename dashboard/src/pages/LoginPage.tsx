@@ -17,8 +17,12 @@ function LoginInner() {
   const { t, lang, setLang } = useI18n()
   const searchParams = new URLSearchParams(location.search)
   const switching = searchParams.get('switch') === '1'
-  const loggingOut = searchParams.get('logout') === '1'
+  const loggingOut = sessionStorage.getItem('just_logged_out') === '1'
   const redirectTo = searchParams.get('redirect') || '/'
+
+  useEffect(() => {
+    if (loggingOut) sessionStorage.removeItem('just_logged_out')
+  }, [loggingOut])
 
   function afterLogin() {
     if (redirectTo !== '/') {
