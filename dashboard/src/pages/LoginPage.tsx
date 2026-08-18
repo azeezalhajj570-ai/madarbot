@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 import { storeAuth, getStoredAccounts, switchAccount, removeAccount, type AuthUser } from '../lib/auth'
@@ -45,7 +45,6 @@ function LoginInner() {
   }, [loggingOut])
 
   async function completeTelegramLogin(telegramUser: Record<string, unknown>) {
-    if (loggingOut) return
     setLoading(true)
     setError('')
     try {
@@ -81,6 +80,14 @@ function LoginInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const telegramReadyRef = useRef(!loggingOut)
+  useEffect(() => {
+    if (loggingOut) {
+      const timer = setTimeout(() => { telegramReadyRef.current = true }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [loggingOut])
+
   useEffect(() => {
     const container = document.getElementById('telegram-login-widget')
     if (!container) return
@@ -88,6 +95,7 @@ function LoginInner() {
     const callbackName = 'onTelegramDashboardAuth'
     const authWindow = window as WindowWithTelegramAuth
     authWindow[callbackName] = (telegramUser) => {
+      if (!telegramReadyRef.current) return
       void completeTelegramLogin(telegramUser)
     }
     void (async () => {
