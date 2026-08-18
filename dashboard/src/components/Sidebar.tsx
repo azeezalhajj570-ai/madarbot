@@ -170,7 +170,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
             <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>{user?.role ?? 'admin'}</div>
           </div>
         </div>
-        <button onClick={() => { void logoutUser(); clearAuth(); window.location.href = '/dashboard/login?logout=1' }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textSubtle, cursor: 'pointer', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
+        <button onClick={async () => { try { await logoutUser() } catch {} clearAuth(); window.location.href = '/dashboard/login?logout=1' }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textSubtle, cursor: 'pointer', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
           <LogOut size={10} />
           {t('sidebar.logout')}
         </button>

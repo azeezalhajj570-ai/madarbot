@@ -226,6 +226,35 @@ async def get_validated_identity(
     return identity
 
 
+async def get_identity_optional(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    init_data: str | None = None,
+) -> TelegramWebAppIdentity | None:
+    """Best-effort identity extraction that returns None instead of 401."""
+    from bot.dashboard.api.auth import decode_dashboard_jwt, verify_telegram_init_data_identity, DashboardJWTError, TelegramWebAppAuthError
+
+    if authorization:
+        token = authorization.strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        if token:
+            try:
+                decoded = decode_dashboard_jwt(token)
+                return decoded.identity
+            except DashboardJWTError:
+                return None
+
+    value = x_telegram_init_data or init_data
+    if value:
+        try:
+            return verify_telegram_init_data_identity(value)
+        except TelegramWebAppAuthError:
+            return None
+
+    return None
+
+
 @dataclass
 class WorkspaceContext:
     """`identity` plus the resolved `users.id` row and active workspace (tenant).
