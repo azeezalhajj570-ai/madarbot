@@ -1094,9 +1094,11 @@ class BulkAddMembersRuntime:
         from bot.agents.jobs import normalize_member_add_payload
         from bot.db.models.audit import MembershipAuditLog
         from bot.db.models.group import GroupMember
+        from bot.db.models.member_operation import MemberOperation
         from bot.db.models.scraper import ScrapedMember
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
+        from datetime import datetime, timezone
         from redis.asyncio import Redis
 
         normalized = normalize_member_add_payload(payload)
@@ -1120,6 +1122,40 @@ class BulkAddMembersRuntime:
                 ah = raw.get("access_hash") if raw else None
                 if ah is not None:
                     access_hashes[tg_user_id] = int(ah)
+
+        # Pre-fetch existing member operations for dedup (multi-agent safety)
+        existing_ops: set[int] = set()
+        if session is not None:
+            existing_rows = (
+                await session.execute(
+                    select(MemberOperation.tg_user_id).where(
+                        MemberOperation.tg_group_id == target_tg_group_id,
+                        MemberOperation.tg_user_id.in_(user_ids),
+                        MemberOperation.status.in_(["pending", "sent"]),
+                    )
+                )
+            ).all()
+            existing_ops = {row[0] for row in existing_rows}
+
+        # Invite link cache key pattern: invite_link:{agent_id}:{tg_group_id}
+        invite_link_cache_ttl = 86400  # 24 hours
+
+        async def _get_cached_invite_link(tg_group_id: int) -> str | None:
+            cache_key = f"invite_link:{agent_id_val}:{tg_group_id}"
+            try:
+                cached = await redis_client.get(cache_key)
+                if cached:
+                    return cached
+            except Exception:
+                pass
+            from bot.agents.group_membership import export_group_invite_link
+            link = await export_group_invite_link(client, tg_group_id)
+            if link:
+                try:
+                    await redis_client.set(cache_key, link, ex=invite_link_cache_ttl)
+                except Exception:
+                    pass
+            return link
 
         progress = dict(payload.get("progress") or {})
         success_count = progress.get("success_count", 0)
@@ -1221,7 +1257,6 @@ class BulkAddMembersRuntime:
                     ERROR_IS_BOT,
                     ERROR_USER_ALREADY_IN_GROUP,
                     ERROR_USER_PRIVACY_RESTRICTED,
-                    export_group_invite_link,
                     send_invite_link_to_user,
                 )
 
@@ -1268,92 +1303,147 @@ class BulkAddMembersRuntime:
                                 user_id=user_id,
                             ).exception("agent_member_add_commit_failed")
                 else:
-                    send_invite_link = bool(
-                        normalized.get("send_invite_link_on_privacy_restricted", False)
+                    is_skip_error = add_result.error_code in {
+                        ERROR_USER_ALREADY_IN_GROUP, ERROR_IS_BOT
+                    }
+                    is_flood = bool(
+                        add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0
                     )
-                    if (
-                        send_invite_link
-                        and add_result.error_code == ERROR_USER_PRIVACY_RESTRICTED
-                    ):
-                        invite_link = await export_group_invite_link(client, target_tg_group_id)
-                        if invite_link:
-                            dm_sent = await send_invite_link_to_user(client, user_id, invite_link)
-                            if dm_sent:
-                                invite_link_count += 1
-                                result_entry["status"] = "invite_link_sent"
-                                result_entry["method"] = "invite_link"
-                                if session is not None:
-                                    session.add(
-                                        MembershipAuditLog(
+
+                    if is_flood:
+                        failure_count += 1
+                        result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skip_count": skip_count,
+                            "invite_link_count": invite_link_count,
+                            "results": results,
+                            "stopped_at": index,
+                            "stop_reason": "flood_wait",
+                            "retry_after": add_result.flood_wait_seconds,
+                        }
+                        raise Exception(f"Flood wait: {add_result.flood_wait_seconds}s")
+
+                    if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
+                        skip_count += 1
+                        failure_count += 0
+                        result_entry["status"] = "skipped"
+                        result_entry["reason"] = "already_in_target_group"
+                    elif add_result.error_code == ERROR_IS_BOT:
+                        skip_count += 1
+                        result_entry["status"] = "skipped"
+                        result_entry["reason"] = "is_bot"
+                    else:
+                        # Try invite link fallback for any non-skip, non-flood failure
+                        send_invite_link = bool(
+                            normalized.get("send_invite_link_on_privacy_restricted", False)
+                        )
+                        if user_id in existing_ops:
+                            # Another agent already sent an invitation
+                            failure_count += 1
+                            result_entry["status"] = "skipped"
+                            result_entry["reason"] = "invite_already_sent_by_another_agent"
+                            if session is not None:
+                                session.add(MembershipAuditLog(
+                                    group_id=target_tg_group_id,
+                                    user_id=user_id,
+                                    requested_by=agent_linked_by or 0,
+                                    action="add",
+                                    result="duplicate_invitation_blocked",
+                                ))
+                                try:
+                                    await session.commit()
+                                except Exception:
+                                    await session.rollback()
+                        elif send_invite_link:
+                            invite_link = await _get_cached_invite_link(target_tg_group_id)
+                            if invite_link:
+                                dm_sent = await send_invite_link_to_user(client, user_id, invite_link)
+                                if dm_sent:
+                                    invite_link_count += 1
+                                    result_entry["status"] = "invite_link_sent"
+                                    result_entry["method"] = "invite_link"
+                                    if session is not None:
+                                        session.add(MemberOperation(
+                                            tg_group_id=target_tg_group_id,
+                                            tg_user_id=user_id,
+                                            agent_id=agent_id_val,
+                                            job_id=payload.get("job_id"),
+                                            status="sent",
+                                            invitation_link=invite_link,
+                                            sent_at=datetime.now(timezone.utc),
+                                        ))
+                                        session.add(MembershipAuditLog(
                                             group_id=target_tg_group_id,
                                             user_id=user_id,
                                             requested_by=agent_linked_by or 0,
                                             action="add",
                                             result="invite_link_sent",
-                                        )
-                                    )
-                                    await session.commit()
-                            else:
-                                failure_count += 1
-                                result_entry["status"] = "failed"
-                                result_entry["method"] = "invite_link_dm_failed"
-                                result_entry["error_code"] = "INVITE_LINK_DM_FAILED"
-                                if session is not None:
-                                    session.add(
-                                        MembershipAuditLog(
+                                        ))
+                                        try:
+                                            await session.commit()
+                                        except Exception:
+                                            await session.rollback()
+                                else:
+                                    failure_count += 1
+                                    result_entry["status"] = "failed"
+                                    result_entry["method"] = "invite_link_dm_failed"
+                                    result_entry["error_code"] = "INVITE_LINK_DM_FAILED"
+                                    if session is not None:
+                                        session.add(MemberOperation(
+                                            tg_group_id=target_tg_group_id,
+                                            tg_user_id=user_id,
+                                            agent_id=agent_id_val,
+                                            job_id=payload.get("job_id"),
+                                            status="failed",
+                                            failure_reason="INVITE_LINK_DM_FAILED",
+                                        ))
+                                        session.add(MembershipAuditLog(
                                             group_id=target_tg_group_id,
                                             user_id=user_id,
                                             requested_by=agent_linked_by or 0,
                                             action="add",
                                             result="invite_link_dm_failed",
-                                        )
-                                    )
-                                    await session.commit()
+                                        ))
+                                        try:
+                                            await session.commit()
+                                        except Exception:
+                                            await session.rollback()
+                            else:
+                                failure_count += 1
+                                result_entry["status"] = "failed"
+                                result_entry["method"] = "invite_link_export_failed"
+                                if session is not None:
+                                    session.add(MemberOperation(
+                                        tg_group_id=target_tg_group_id,
+                                        tg_user_id=user_id,
+                                        agent_id=agent_id_val,
+                                        job_id=payload.get("job_id"),
+                                        status="failed",
+                                        failure_reason="INVITE_LINK_EXPORT_FAILED",
+                                    ))
+                                    try:
+                                        await session.commit()
+                                    except Exception:
+                                        await session.rollback()
                         else:
+                            # Invite link disabled, record as plain failure
                             failure_count += 1
-                            result_entry["status"] = "failed"
-                            result_entry["method"] = "invite_link_export_failed"
-                    else:
-                        failure_count += 1
-                        result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
-                        if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
-                            skip_count += 1
-                            failure_count -= 1
-                            result_entry["status"] = "skipped"
-                            result_entry["reason"] = "already_in_target_group"
-
-                        if add_result.error_code == ERROR_IS_BOT:
-                            skip_count += 1
-                            failure_count -= 1
-                            result_entry["status"] = "skipped"
-                            result_entry["reason"] = "is_bot"
-
-                        if add_result.flood_wait_seconds and add_result.flood_wait_seconds > 0:
-                            payload["progress"] = {
-                                "total_count": total_count,
-                                "success_count": success_count,
-                                "failure_count": failure_count,
-                                "skip_count": skip_count,
-                                "invite_link_count": invite_link_count,
-                                "results": results,
-                                "stopped_at": index,
-                                "stop_reason": "flood_wait",
-                                "retry_after": add_result.flood_wait_seconds,
-                            }
-                            raise Exception(f"Flood wait: {add_result.flood_wait_seconds}s")
-
-                    if session is not None:
-                        session.add(
-                            MembershipAuditLog(
-                                group_id=target_tg_group_id,
-                                user_id=user_id,
-                                requested_by=agent_linked_by or 0,
-                                action="add",
-                                result=str(add_result.error_code or "unknown"),
-                                flood_wait_sec=add_result.flood_wait_seconds,
-                            )
-                        )
-                        await session.commit()
+                            if session is not None:
+                                session.add(MembershipAuditLog(
+                                    group_id=target_tg_group_id,
+                                    user_id=user_id,
+                                    requested_by=agent_linked_by or 0,
+                                    action="add",
+                                    result=str(add_result.error_code or "unknown"),
+                                    flood_wait_sec=add_result.flood_wait_seconds,
+                                ))
+                                try:
+                                    await session.commit()
+                                except Exception:
+                                    await session.rollback()
 
                 results.append(result_entry)
 

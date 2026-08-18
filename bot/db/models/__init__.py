@@ -45,6 +45,7 @@ from bot.db.models.faq import (
     UnansweredQuestionStatus,
 )
 from bot.db.models.group import Group, GroupAdminRole, GroupMember, GroupSetting, PluginEnabled
+from bot.db.models.member_operation import MemberOperation
 from bot.db.models.linked_account import LinkedAccount, LinkedAccountGroup
 from bot.db.models.mcp_token import MCPToken
 from bot.db.models.group_access import (
@@ -193,6 +194,7 @@ __all__ = [
     "MCPToken",
     "Message",
     "MemberRole",
+    "MemberOperation",
     "MembershipAuditLog",
     "MessagingSuppression",
     "ModerationEvent",
