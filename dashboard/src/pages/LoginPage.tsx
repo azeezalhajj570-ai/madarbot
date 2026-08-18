@@ -45,6 +45,7 @@ function LoginInner() {
   }, [loggingOut])
 
   async function completeTelegramLogin(telegramUser: Record<string, unknown>) {
+    if (loggingOut) return
     setLoading(true)
     setError('')
     try {
@@ -73,6 +74,7 @@ function LoginInner() {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (!params.get('hash') || !params.get('auth_date') || !params.get('id')) return
+    if (loggingOut) return
     const telegramUser: Record<string, unknown> = Object.fromEntries(params.entries())
     void completeTelegramLogin(telegramUser)
     navigate(location.pathname, { replace: true })
