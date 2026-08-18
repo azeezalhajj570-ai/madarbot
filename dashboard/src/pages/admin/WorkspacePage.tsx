@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, UserPlus } from 'lucide-react'
+import { Plus, Trash2, UserPlus, Ban } from 'lucide-react'
 
 import { Badge, Button, Dialog, Field, Select, Input } from '../../components/ui/primitives'
 import { DataTable } from '../../components/ui/data-table'
@@ -12,11 +12,13 @@ import {
   fetchTeamWorkspaces,
   createTeamWorkspace,
   fetchTeamWorkspaceMembers,
+  fetchWorkspaceInvitations,
   createWorkspaceInvitation,
+  revokeWorkspaceInvitation,
   removeTeamWorkspaceMember,
   changeTeamWorkspaceMemberRole,
 } from '../../lib/api'
-import type { TeamWorkspaceMember, WorkspaceRole } from '../../lib/types'
+import type { TeamWorkspaceMember, WorkspaceInvitation, WorkspaceRole } from '../../lib/types'
 
 function errorDetail(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -60,6 +62,13 @@ export default function AdminWorkspacePage() {
   })
   const members = membersData?.members || []
 
+  const { data: invitationsData } = useQuery({
+    queryKey: ['workspace-invitations', activeWorkspaceId],
+    queryFn: () => fetchWorkspaceInvitations(activeWorkspaceId as number),
+    enabled: activeWorkspaceId !== null,
+  })
+  const sentInvitations = invitationsData?.invitations || []
+
   const canManageMembers = activeWorkspace?.role === 'owner' || activeWorkspace?.role === 'admin'
   const isOwner = activeWorkspace?.role === 'owner'
 
@@ -83,6 +92,7 @@ export default function AdminWorkspacePage() {
       setInviteIdentifier('')
       setInviteRole('member')
       queryClient.invalidateQueries({ queryKey: ['workspace-members', activeWorkspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['workspace-invitations', activeWorkspaceId] })
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       toast.success(t('workspace.invited'))
     },
@@ -109,6 +119,45 @@ export default function AdminWorkspacePage() {
     },
     onError: (error) => toast.error(errorDetail(error, t('workspace.roleChangeError'))),
   })
+
+  const revokeMutation = useMutation({
+    mutationFn: (token: string) => revokeWorkspaceInvitation(activeWorkspaceId as number, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace-invitations', activeWorkspaceId] })
+      toast.success('Invitation revoked')
+    },
+    onError: (error) => toast.error(errorDetail(error, 'Failed to revoke invitation')),
+  })
+
+  const memberUserIds = new Set(members.map((m) => m.user_id))
+  const activeInvitations = sentInvitations.filter(
+    (inv) => inv.status === 'pending' && !memberUserIds.has(inv.invited_user_id)
+  )
+
+  interface MemberRow {
+    user_id: number
+    tg_user_id: number | null
+    username: string | null
+    full_name: string | null
+    role: WorkspaceRole
+    joined_at: string | null
+    invite_status?: string | null
+    invite_token?: string | null
+  }
+
+  const displayRows: MemberRow[] = [
+    ...members.map((m) => ({ ...m, invite_status: null, invite_token: null })),
+    ...activeInvitations.map((inv) => ({
+      user_id: inv.invited_user_id,
+      tg_user_id: null,
+      username: inv.invited_username,
+      full_name: inv.invited_full_name,
+      role: inv.role,
+      joined_at: null,
+      invite_status: 'pending',
+      invite_token: inv.token,
+    })),
+  ]
 
   return (
     <PageShell
@@ -153,8 +202,8 @@ export default function AdminWorkspacePage() {
       )}
 
       <DataTable
-        data={members}
-        total={members.length}
+        data={displayRows}
+        total={displayRows.length}
         loading={membersLoading}
         title={t('workspace.members')}
         subtitle={t('workspace.membersDesc')}
@@ -169,7 +218,7 @@ export default function AdminWorkspacePage() {
           {
             key: 'member',
             label: t('workspace.members'),
-            render: (m: TeamWorkspaceMember) => (
+            render: (m: MemberRow) => (
               <div>
                 <div style={{ fontWeight: 700 }}>
                   {m.full_name || m.username || m.tg_user_id}
@@ -184,8 +233,8 @@ export default function AdminWorkspacePage() {
           {
             key: 'role',
             label: t('workspace.inviteRole'),
-            render: (m: TeamWorkspaceMember) =>
-              isOwner && m.role !== 'owner' ? (
+            render: (m: MemberRow) =>
+              isOwner && m.role !== 'owner' && !m.invite_status ? (
                 <Select
                   value={m.role}
                   onChange={(e) =>
@@ -200,14 +249,26 @@ export default function AdminWorkspacePage() {
                   ))}
                 </Select>
               ) : (
-                <Badge tone={m.role === 'owner' ? 'success' : 'neutral'}>{t(`workspace.role.${m.role}`)}</Badge>
+                <Badge tone={m.role === 'owner' ? 'success' : m.invite_status ? 'warning' : 'neutral'}>{t(`workspace.role.${m.role}`)}</Badge>
               ),
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            hideOnMobile: true,
+            render: (m: MemberRow) => (
+              m.invite_status ? (
+                <Badge tone="warning">Pending</Badge>
+              ) : (
+                <Badge tone="success">Active</Badge>
+              )
+            ),
           },
           {
             key: 'joined_at',
             label: t('workspace.joinedAt'),
             hideOnMobile: true,
-            render: (m: TeamWorkspaceMember) => (
+            render: (m: MemberRow) => (
               <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
                 {m.joined_at ? new Date(m.joined_at).toLocaleDateString() : ''}
               </span>
@@ -217,22 +278,37 @@ export default function AdminWorkspacePage() {
             key: 'actions',
             label: '',
             hideOnMobile: true,
-            render: (m: TeamWorkspaceMember) =>
+            render: (m: MemberRow) =>
               canManageMembers && m.role !== 'owner' && m.tg_user_id !== user?.id ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    if (confirm(t('workspace.removeMemberConfirm'))) removeMutation.mutate(m.user_id)
-                  }}
-                  disabled={removeMutation.isPending}
-                >
-                  <Trash2 size={14} />
-                </Button>
+                m.invite_token ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    style={{ color: 'var(--ui-danger)' }}
+                    onClick={() => {
+                      if (confirm('Revoke this invitation?')) revokeMutation.mutate(m.invite_token!)
+                    }}
+                    disabled={revokeMutation.isPending}
+                    title="Revoke"
+                  >
+                    <Ban size={14} />
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (confirm(t('workspace.removeMemberConfirm'))) removeMutation.mutate(m.user_id)
+                    }}
+                    disabled={removeMutation.isPending}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                )
               ) : null,
           },
         ]}
-        keyExtractor={(m: TeamWorkspaceMember) => m.user_id}
+        keyExtractor={(m: MemberRow) => m.user_id}
       />
 
       <Dialog

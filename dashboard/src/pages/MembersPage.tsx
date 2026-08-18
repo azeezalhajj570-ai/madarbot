@@ -32,6 +32,17 @@ const STATUS_TONES: Record<string, 'success' | 'warning' | 'default' | 'neutral'
   pending: 'warning', accepted: 'success', declined: 'neutral', expired: 'neutral', revoked: 'destructive',
 }
 
+interface MemberRow {
+  user_id: number
+  tg_user_id: number | null
+  username: string | null
+  full_name: string | null
+  role: WorkspaceRole
+  joined_at: string | null
+  invite_status?: string | null
+  invite_token?: string | null
+}
+
 export default function MembersPage() {
   const { t } = useI18n()
   const { toast } = useToast()
@@ -60,7 +71,7 @@ export default function MembersPage() {
   const { data: sentInvitationsData, isLoading: sentLoading } = useQuery({
     queryKey: ['workspace-invitations', activeWs],
     queryFn: () => fetchWorkspaceInvitations(activeWs!),
-    enabled: !!activeWs && canManageInvitations,
+    enabled: !!activeWs,
   })
 
   const { data: pendingInvitationsData } = useQuery({
@@ -71,6 +82,25 @@ export default function MembersPage() {
   const members = membersData?.members || []
   const sentInvitations = sentInvitationsData?.invitations || []
   const pendingInvitations = pendingInvitationsData?.invitations || []
+
+  const memberUserIds = new Set(members.map((m: TeamWorkspaceMember) => m.user_id))
+  const activeInvitations = sentInvitations.filter(
+    (inv: WorkspaceInvitation) => inv.status === 'pending' && !memberUserIds.has(inv.invited_user_id)
+  )
+
+  const displayRows: MemberRow[] = [
+    ...members.map((m: TeamWorkspaceMember) => ({ ...m, invite_status: null, invite_token: null })),
+    ...activeInvitations.map((inv: WorkspaceInvitation) => ({
+      user_id: inv.invited_user_id,
+      tg_user_id: null,
+      username: inv.invited_username,
+      full_name: inv.invited_full_name,
+      role: inv.role,
+      joined_at: null,
+      invite_status: 'pending',
+      invite_token: inv.token,
+    })),
+  ]
 
   const inviteMutation = useMutation({
     mutationFn: () => createWorkspaceInvitation(activeWs!, inviteIdentifier, inviteRole),
@@ -174,17 +204,17 @@ export default function MembersPage() {
             </div>
           )}
 
-          <Card title={currentWs?.name || 'Workspace'} subtitle={`${members.length} members`}>
+          <Card title={currentWs?.name || 'Workspace'} subtitle={`${displayRows.length} members`}>
             {membersLoading ? (
               <CardSkeleton />
-            ) : members.length === 0 ? (
+            ) : displayRows.length === 0 ? (
               <EmptyState title="No members" subtitle="Invite members to collaborate." />
             ) : (
               <DataTable
-                data={members}
-                total={members.length}
+                data={displayRows}
+                total={displayRows.length}
                 columns={[
-                  { key: 'identity', label: 'User', render: (m: TeamWorkspaceMember) => (
+                  { key: 'identity', label: 'User', render: (m: MemberRow) => (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ui-bg-muted)', display: 'grid', placeItems: 'center', color: m.role === 'owner' ? 'var(--ui-warning)' : 'var(--ui-primary)' }}>
                         {m.role === 'owner' ? <Crown size={14} /> : <Shield size={14} />}
@@ -195,9 +225,11 @@ export default function MembersPage() {
                       </div>
                     </div>
                   )},
-                  { key: 'role', label: 'Role', render: (m: TeamWorkspaceMember) => (
+                  { key: 'role', label: 'Role', render: (m: MemberRow) => (
                     m.role === 'owner' ? (
                       <Badge tone="success">{ROLE_LABELS[m.role]}</Badge>
+                    ) : m.invite_status ? (
+                      <Badge tone={ROLE_TONES[m.role] || 'default'}>{ROLE_LABELS[m.role] || m.role}</Badge>
                     ) : (
                       <Select
                         value={m.role}
@@ -211,32 +243,51 @@ export default function MembersPage() {
                       </Select>
                     )
                   )},
-                  { key: 'joined', label: 'Joined', hideOnMobile: true, render: (m: TeamWorkspaceMember) => (
+                  { key: 'status', label: 'Status', hideOnMobile: true, render: (m: MemberRow) => (
+                    m.invite_status ? (
+                      <Badge tone="warning">{STATUS_LABELS[m.invite_status] || m.invite_status}</Badge>
+                    ) : (
+                      <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>Active</span>
+                    )
+                  )},
+                  { key: 'joined', label: 'Joined', hideOnMobile: true, render: (m: MemberRow) => (
                     <span style={{ fontSize: 13, color: 'var(--ui-text-muted)' }}>
                       {m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '—'}
                     </span>
                   )},
-                  { key: 'actions', label: '', render: (m: TeamWorkspaceMember) => (
-                    m.role !== 'owner' ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        style={{ color: 'var(--ui-danger)', padding: 6 }}
-                        onClick={() => { if (confirm(`Remove ${m.username || m.full_name || `user ${m.user_id}`}?`)) removeMutation.mutate(m.user_id) }}
-                        disabled={removeMutation.isPending}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
+                  { key: 'actions', label: '', render: (m: MemberRow) => (
+                    m.role !== 'owner' && canManageInvitations ? (
+                      m.invite_token ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          style={{ color: 'var(--ui-danger)', padding: 6 }}
+                          onClick={() => { if (confirm(`Revoke invitation for ${m.username || m.full_name || `user ${m.user_id}`}?`)) revokeMutation.mutate(m.invite_token!) }}
+                          disabled={revokeMutation.isPending}
+                          title="Revoke"
+                        >
+                          <Ban size={14} />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          style={{ color: 'var(--ui-danger)', padding: 6 }}
+                          onClick={() => { if (confirm(`Remove ${m.username || m.full_name || `user ${m.user_id}`}?`)) removeMutation.mutate(m.user_id) }}
+                          disabled={removeMutation.isPending}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      )
                     ) : null
                   )},
                 ]}
-                keyExtractor={(m: TeamWorkspaceMember) => m.user_id}
+                keyExtractor={(m: MemberRow) => m.user_id}
               />
             )}
           </Card>
 
-          {canManageInvitations && (
-            <Card
+          <Card
               title="Sent Invitations"
               subtitle={`${sentInvitations.length} invitations`}
             >
@@ -272,7 +323,7 @@ export default function MembersPage() {
                       </span>
                     )},
                     { key: 'actions', label: '', render: (inv: WorkspaceInvitation) => (
-                      inv.status === 'pending' ? (
+                      inv.status === 'pending' && canManageInvitations ? (
                         <div style={{ display: 'flex', gap: 4 }}>
                           <Button
                             variant="ghost"
@@ -302,7 +353,6 @@ export default function MembersPage() {
                 />
               )}
             </Card>
-          )}
 
           {pendingInvitations.length > 0 && (
             <Card
@@ -360,11 +410,11 @@ export default function MembersPage() {
             onClose={() => setInviteOpen(false)}
             title="Invite Member"
           >
-            <Field label="Telegram User ID or Username" hint="Enter the Telegram user ID or @username to invite.">
+            <Field label="Telegram Username or Phone" hint="Enter @username, username, or +phone number to invite.">
               <Input
                 value={inviteIdentifier}
                 onChange={e => setInviteIdentifier(e.target.value)}
-                placeholder="@username or 123456789"
+                placeholder="@username or +1234567890"
               />
             </Field>
             <Field label="Role">

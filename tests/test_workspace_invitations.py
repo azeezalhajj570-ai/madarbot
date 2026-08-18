@@ -116,7 +116,7 @@ async def test_invitation_for_unknown_identifier(db_session) -> None:
     await db_session.commit()
 
     svc = WorkspaceService(db_session)
-    with pytest.raises(WorkspaceError, match="No user found"):
+    with pytest.raises(WorkspaceError, match="Telegram user not found"):
         await svc.create_invitation(
             tenant_id=tenant.id, inviter_user_id=owner.id, identifier="99999", role="member"
         )
@@ -505,3 +505,227 @@ async def test_audit_log_on_acceptance(db_session) -> None:
         )
     ).scalars().all()
     assert len(logs) == 1
+
+
+# ── Telegram-based resolution ──────────────────────────────────
+
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+
+def _make_fake_telegram_client(*, user_id: int = 3001, username: str = "tguser", first_name: str = "TG", last_name: str = "User"):
+    client = AsyncMock()
+    client.get_entity.return_value = SimpleNamespace(
+        id=user_id,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+    )
+    return client
+
+
+@pytest.mark.asyncio
+async def test_resolve_identifier_via_telegram_username(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=3001, username="newuser", first_name="New", last_name="User")
+
+    svc = WorkspaceService(db_session)
+    inv = await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="@newuser",
+        role="member",
+        telegram_client=fake_client,
+    )
+    assert inv.status == "pending"
+    assert inv.role == "member"
+
+    new_user = (
+        await db_session.execute(select(User).where(User.tg_user_id == 3001))
+    ).scalar_one_or_none()
+    assert new_user is not None
+    assert new_user.username == "newuser"
+    assert new_user.full_name == "New User"
+    assert inv.invited_user_id == new_user.id
+
+
+@pytest.mark.asyncio
+async def test_resolve_identifier_via_telegram_phone(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=4001, username=None, first_name="Phone", last_name="User")
+
+    svc = WorkspaceService(db_session)
+    inv = await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="+15551234567",
+        role="member",
+        telegram_client=fake_client,
+    )
+    assert inv.status == "pending"
+
+    new_user = (
+        await db_session.execute(select(User).where(User.tg_user_id == 4001))
+    ).scalar_one_or_none()
+    assert new_user is not None
+    assert new_user.username is None
+    assert new_user.full_name == "Phone User"
+
+
+@pytest.mark.asyncio
+async def test_telegram_user_not_found(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = AsyncMock()
+    fake_client.get_entity.side_effect = ValueError("Could not find user")
+
+    svc = WorkspaceService(db_session)
+    with pytest.raises(WorkspaceError, match="Telegram user not found"):
+        await svc.create_invitation(
+            tenant_id=tenant.id,
+            inviter_user_id=owner.id,
+            identifier="@nonexistent",
+            role="member",
+            telegram_client=fake_client,
+        )
+
+
+@pytest.mark.asyncio
+async def test_db_lookup_before_telegram(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    target = await _create_user(db_session, 2001, "existing")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=9999, username="other")
+
+    svc = WorkspaceService(db_session)
+    inv = await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="2001",
+        role="member",
+        telegram_client=fake_client,
+    )
+
+    fake_client.get_entity.assert_not_called()
+    assert inv.invited_user_id == target.id
+
+
+@pytest.mark.asyncio
+async def test_no_telegram_client_falls_back_to_db_only(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    svc = WorkspaceService(db_session)
+    with pytest.raises(WorkspaceError, match="Telegram user not found"):
+        await svc.create_invitation(
+            tenant_id=tenant.id,
+            inviter_user_id=owner.id,
+            identifier="99999",
+            role="member",
+            telegram_client=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_phone_normalization_via_telegram(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=5001, username=None, first_name="Norm", last_name="User")
+
+    svc = WorkspaceService(db_session)
+    inv = await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="+1 (555) 123-4567",
+        role="member",
+        telegram_client=fake_client,
+    )
+    assert inv.status == "pending"
+
+    fake_client.get_entity.assert_called_once_with("+15551234567")
+
+    new_user = (
+        await db_session.execute(select(User).where(User.tg_user_id == 5001))
+    ).scalar_one_or_none()
+    assert new_user is not None
+
+
+@pytest.mark.asyncio
+async def test_username_without_at_sign_via_telegram(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=6001, username="noatuser", first_name="No", last_name="At")
+
+    svc = WorkspaceService(db_session)
+    inv = await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="noatuser",
+        role="member",
+        telegram_client=fake_client,
+    )
+    assert inv.status == "pending"
+    fake_client.get_entity.assert_called_once_with("noatuser")
+
+
+@pytest.mark.asyncio
+async def test_duplicate_pending_invitation_prevented_via_telegram(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = _make_fake_telegram_client(user_id=7001, username="dupeuser")
+
+    svc = WorkspaceService(db_session)
+    await svc.create_invitation(
+        tenant_id=tenant.id,
+        inviter_user_id=owner.id,
+        identifier="@dupeuser",
+        role="member",
+        telegram_client=fake_client,
+    )
+
+    with pytest.raises(WorkspaceError, match="pending invitation already exists"):
+        await svc.create_invitation(
+            tenant_id=tenant.id,
+            inviter_user_id=owner.id,
+            identifier="@dupeuser",
+            role="admin",
+            telegram_client=fake_client,
+        )
+
+
+@pytest.mark.asyncio
+async def test_telegram_entity_with_no_id_returns_none(db_session) -> None:
+    owner = await _create_user(db_session, 1001, "owner")
+    tenant = await _create_workspace(db_session, owner.id)
+    await db_session.commit()
+
+    fake_client = AsyncMock()
+    fake_client.get_entity.return_value = SimpleNamespace(id=None, username="noid")
+
+    svc = WorkspaceService(db_session)
+    with pytest.raises(WorkspaceError, match="Telegram user not found"):
+        await svc.create_invitation(
+            tenant_id=tenant.id,
+            inviter_user_id=owner.id,
+            identifier="@noid",
+            role="member",
+            telegram_client=fake_client,
+        )

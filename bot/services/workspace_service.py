@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -16,6 +17,8 @@ from bot.db.models import (
     User,
     WorkspaceInvitation,
 )
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +157,7 @@ class WorkspaceService:
         inviter_user_id: int,
         identifier: str,
         role: str = "member",
+        telegram_client: Any | None = None,
     ) -> WorkspaceInvitation:
         if role not in INVITABLE_ROLES:
             raise WorkspaceError(f"Invalid role: {role}. Owner role cannot be assigned via invitation.")
@@ -162,9 +166,9 @@ class WorkspaceService:
         if inviter_membership is None or inviter_membership.role not in ROLES_THAT_CAN_MANAGE_INVITATIONS:
             raise WorkspaceError("Only workspace owners and admins can create invitations")
 
-        target_user = await self._resolve_identifier(identifier)
+        target_user = await self._resolve_identifier(identifier, telegram_client=telegram_client)
         if target_user is None:
-            raise WorkspaceError(f"No user found for identifier: {identifier}")
+            raise WorkspaceError("Telegram user not found")
 
         existing_membership = await self.get_membership(tenant_id=tenant_id, user_id=target_user.id)
         if existing_membership is not None:
@@ -174,7 +178,7 @@ class WorkspaceService:
         if existing_invitation is not None:
             raise WorkspaceError("A pending invitation already exists for this user in this workspace")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         token = secrets.token_hex(16)
         invitation = WorkspaceInvitation(
             tenant_id=tenant_id,
@@ -203,9 +207,9 @@ class WorkspaceService:
     async def list_invitations(
         self, tenant_id: int, *, status: str | None = None
     ) -> list[dict]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         stmt = (
-            select(WorkspaceInvitation, User.label("invited_user"), User.label("inviter_user"))
+            select(WorkspaceInvitation, User)
             .join(User, User.id == WorkspaceInvitation.invited_user_id)
             .where(WorkspaceInvitation.tenant_id == tenant_id)
         )
@@ -228,7 +232,7 @@ class WorkspaceService:
         return results
 
     async def list_user_pending_invitations(self, user_id: int) -> list[dict]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         stmt = (
             select(WorkspaceInvitation, Tenant)
             .join(Tenant, Tenant.id == WorkspaceInvitation.tenant_id)
@@ -268,13 +272,13 @@ class WorkspaceService:
         if invitation.status != "pending":
             raise WorkspaceError(f"Invitation has already been {invitation.status}")
 
-        if invitation.expires_at <= datetime.utcnow():
+        if invitation.expires_at <= datetime.now(timezone.utc):
             invitation.status = "expired"
-            invitation.updated_at = datetime.utcnow()
+            invitation.updated_at = datetime.now(timezone.utc)
             await self.session.flush()
             raise WorkspaceError("Invitation has expired")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         invitation.status = "accepted"
         invitation.accepted_at = now
         invitation.updated_at = now
@@ -307,7 +311,7 @@ class WorkspaceService:
         if invitation.status != "pending":
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         invitation.status = "declined"
         invitation.declined_at = now
         invitation.updated_at = now
@@ -334,7 +338,7 @@ class WorkspaceService:
         if invitation.status != "pending":
             raise WorkspaceError(f"Invitation has already been {invitation.status}")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         invitation.status = "revoked"
         invitation.revoked_at = now
         invitation.updated_at = now
@@ -363,7 +367,7 @@ class WorkspaceService:
         if invitation.status != "pending":
             raise WorkspaceError(f"Invitation has already been {invitation.status}")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         invitation.expires_at = now + timedelta(days=INVITATION_EXPIRY_DAYS)
         invitation.updated_at = now
 
@@ -407,7 +411,7 @@ class WorkspaceService:
     async def _revoke_user_pending_invitations(
         self, tenant_id: int, user_id: int, *, actor_user_id: int | None = None
     ) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self.session.execute(
             select(WorkspaceInvitation).where(
                 WorkspaceInvitation.tenant_id == tenant_id,
@@ -470,13 +474,25 @@ class WorkspaceService:
         if invited_user.tg_user_id is not None:
             try:
                 from bot.utils.bot_pool import BotPool
+                from bot.config import get_settings
 
                 bot = await BotPool.get()
+                settings = get_settings()
+                dashboard_url = settings.webapp_url or settings.dashboard_url or ""
+
                 text = (
                     f"You've been invited to workspace \"{workspace_name}\" "
                     f"as {invitation.role} by {inviter_name}.\n\n"
-                    f"Open the dashboard to accept or decline this invitation."
                 )
+                if dashboard_url:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(dashboard_url)
+                    base = f"{parsed.scheme}://{parsed.netloc}"
+                    link = f"{base}/dashboard/#/workspace"
+                    text += f"Open the link below to accept or decline:\n{link}"
+                else:
+                    text += "Open the dashboard to accept or decline this invitation."
+
                 await bot.send_message(invited_user.tg_user_id, text)
             except Exception:
                 logger.debug(
@@ -507,14 +523,126 @@ class WorkspaceService:
             "revoked_at": invitation.revoked_at.isoformat() if invitation.revoked_at else None,
         }
 
-    async def _resolve_identifier(self, identifier: str) -> User | None:
+    async def _resolve_identifier(
+        self, identifier: str, *, telegram_client: Any | None = None
+    ) -> User | None:
         cleaned = identifier.strip().lstrip("@")
         if not cleaned:
             return None
-        if cleaned.isdigit():
-            return (
-                await self.session.execute(select(User).where(User.tg_user_id == int(cleaned)))
+
+        kind = self._classify_identifier(cleaned)
+        normalized = self._normalize_identifier(cleaned)
+
+        if kind == "phone":
+            digits_only = re.sub(r"\D", "", cleaned)
+            e164 = f"+{digits_only}" if cleaned.startswith("+") else f"+{digits_only}"
+            existing = (
+                await self.session.execute(
+                    select(User).where(User.phone_number == e164)
+                )
             ).scalar_one_or_none()
-        return (
-            await self.session.execute(select(User).where(func.lower(User.username) == cleaned.lower()))
+            if existing is not None:
+                return existing
+        elif kind == "tg_id":
+            existing = (
+                await self.session.execute(select(User).where(User.tg_user_id == int(normalized)))
+            ).scalar_one_or_none()
+            if existing is not None:
+                return existing
+        else:
+            existing = (
+                await self.session.execute(
+                    select(User).where(func.lower(User.username) == normalized.lower())
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                return existing
+
+        if telegram_client is None:
+            return None
+
+        return await self._resolve_via_telegram(telegram_client, normalized)
+
+    async def _resolve_via_telegram(self, client: Any, identifier: str) -> User | None:
+        entity = None
+        try:
+            entity = await client.get_entity(identifier)
+        except Exception:
+            if identifier.startswith("+"):
+                entity = await self._resolve_phone_via_import(client, identifier)
+            if entity is None:
+                logger.debug("Telegram entity not found for %s", identifier, exc_info=True)
+                return None
+
+        tg_user_id = getattr(entity, "id", None)
+        if tg_user_id is None:
+            return None
+
+        username = getattr(entity, "username", None)
+        first_name = getattr(entity, "first_name", None)
+        last_name = getattr(entity, "last_name", None)
+        full_name = " ".join(filter(None, [first_name, last_name])) or None
+
+        existing = (
+            await self.session.execute(select(User).where(User.tg_user_id == tg_user_id))
         ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        user = User(
+            tg_user_id=tg_user_id,
+            username=username,
+            full_name=full_name,
+            language_code="en",
+        )
+        self.session.add(user)
+        await self.session.flush()
+        return user
+
+    @staticmethod
+    async def _resolve_phone_via_import(client: Any, phone: str) -> Any | None:
+        from telethon.tl.functions.contacts import (
+            DeleteContactsRequest,
+            ImportContactsRequest,
+        )
+        from telethon.tl.types import InputPhoneContact
+
+        result = await client(ImportContactsRequest(
+            contacts=[InputPhoneContact(
+                client_id=0,
+                phone=phone,
+                first_name=" ",
+                last_name=" ",
+            )]
+        ))
+        if not result.users:
+            return None
+        found = result.users[0]
+        try:
+            await client(DeleteContactsRequest(id=[found]))
+        except Exception:
+            pass
+        return found
+
+    @staticmethod
+    def _classify_identifier(value: str) -> str:
+        cleaned = value.strip().lstrip("@")
+        if not cleaned:
+            return "username"
+        if cleaned.startswith("+") or (
+            cleaned.isdigit() and len(cleaned) >= 8
+        ):
+            return "phone"
+        if cleaned.isdigit():
+            return "tg_id"
+        return "username"
+
+    @staticmethod
+    def _normalize_identifier(value: str) -> str:
+        cleaned = value.strip().lstrip("@")
+        if not cleaned:
+            return cleaned
+        if cleaned.startswith("+") or (cleaned.isdigit() and len(cleaned) >= 8):
+            digits = re.sub(r"\D", "", cleaned)
+            return f"+{digits}"
+        return cleaned
