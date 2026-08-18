@@ -473,7 +473,6 @@ class WorkspaceService:
 
         if invited_user.tg_user_id is not None:
             try:
-                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                 from bot.utils.bot_pool import BotPool
                 from bot.config import get_settings
 
@@ -484,25 +483,17 @@ class WorkspaceService:
                 text = (
                     f"You've been invited to workspace \"{workspace_name}\" "
                     f"as {invitation.role} by {inviter_name}.\n\n"
-                    f"Open your dashboard to accept or decline this invitation."
                 )
-
-                reply_markup = None
                 if dashboard_url:
                     from urllib.parse import urlparse
                     parsed = urlparse(dashboard_url)
                     base = f"{parsed.scheme}://{parsed.netloc}"
-                    accept_url = f"{base}/dashboard/#/workspace"
-                    from aiogram.types import WebAppInfo
-                    reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="Open Dashboard", web_app=WebAppInfo(url=accept_url))],
-                    ])
+                    link = f"{base}/dashboard/#/workspace"
+                    text += f"Open the link below to accept or decline:\n{link}"
+                else:
+                    text += "Open the dashboard to accept or decline this invitation."
 
-                await bot.send_message(
-                    invited_user.tg_user_id,
-                    text,
-                    reply_markup=reply_markup,
-                )
+                await bot.send_message(invited_user.tg_user_id, text)
             except Exception:
                 logger.debug(
                     "Could not send Telegram DM to user %s", invited_user.tg_user_id, exc_info=True
