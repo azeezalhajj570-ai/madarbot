@@ -3,6 +3,7 @@ import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, 
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser } from '../lib/auth'
+import { logoutUser } from '../lib/api'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
 import { filterNav } from '../lib/permissions'
@@ -169,7 +170,7 @@ export default function Sidebar({ onNavClick }: { onNavClick?: () => void }) {
             <div style={{ fontSize: typeScale.caption, color: uiVars.textMuted }}>{user?.role ?? 'admin'}</div>
           </div>
         </div>
-        <button onClick={() => { clearAuth(); window.location.href = '/dashboard/login?logout=1' }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textSubtle, cursor: 'pointer', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
+        <button onClick={() => { void logoutUser(); clearAuth(); window.location.href = '/dashboard/login?logout=1' }} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: uiVars.textSubtle, cursor: 'pointer', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
           <LogOut size={10} />
           {t('sidebar.logout')}
         </button>

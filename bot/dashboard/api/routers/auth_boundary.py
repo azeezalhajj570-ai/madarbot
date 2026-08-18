@@ -9,7 +9,7 @@ from bot.config import AppKind, get_settings
 from bot.db.session import get_session
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
-from ..dependencies import get_identity
+from ..dependencies import get_identity, get_validated_identity
 from ._shared import (
     ChangePasswordRequest,
     EmailPasswordLoginRequest,
@@ -190,6 +190,23 @@ async def auth_set_language(
         identity=identity,
         session=session,
     )
+
+
+@router.post("/auth/logout")
+async def auth_logout(
+    identity: TelegramWebAppIdentity = Depends(get_validated_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from sqlalchemy import update
+    from bot.db.models import User
+
+    await session.execute(
+        update(User)
+        .where(User.tg_user_id == identity.user_id)
+        .values(token_version=User.token_version + 1)
+    )
+    await session.commit()
+    return {"status": "ok"}
 
 
 __all__ = ["router"]

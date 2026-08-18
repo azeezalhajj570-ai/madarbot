@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import get_settings
-from bot.dashboard.api.auth import extract_dashboard_identity
+from bot.dashboard.api.auth import _DecodedJWT, extract_dashboard_identity
 from bot.db.models import OwnerAuditLog, PromotionCode, SubscriptionRequest, SubscriptionStatus
 from bot.db.session import get_session
 from bot.services.menu_button_service import configure_private_chat_menu_button
@@ -148,10 +148,11 @@ def _serialize_promo_code(promo: PromotionCode) -> dict[str, Any]:
 
 
 async def require_owner(
-    identity: TelegramWebAppIdentity = Depends(extract_dashboard_identity),
+    decoded: _DecodedJWT = Depends(extract_dashboard_identity),
     session: AsyncSession = Depends(get_session),
 ) -> TelegramWebAppIdentity:
     settings = get_settings()
+    identity = decoded.identity
     if identity.user_id not in settings.bot_owner_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is not a bot owner")
 

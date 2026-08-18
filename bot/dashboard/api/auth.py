@@ -26,6 +26,14 @@ class DashboardJWTError(ValueError):
     pass
 
 
+class _DecodedJWT:
+    __slots__ = ("identity", "token_version")
+
+    def __init__(self, identity: TelegramWebAppIdentity, token_version: int) -> None:
+        self.identity = identity
+        self.token_version = token_version
+
+
 def _dashboard_jwt_secret() -> str:
     settings = get_settings()
     secret = settings.dashboard_jwt_secret
@@ -65,6 +73,7 @@ def create_dashboard_jwt(
     identity: TelegramWebAppIdentity,
     *,
     expires_in_seconds: int,
+    token_version: int = 1,
     now: int | None = None,
 ) -> str:
     issued_at = now if now is not None else int(time.time())
@@ -75,11 +84,12 @@ def create_dashboard_jwt(
         "last_name": identity.last_name,
         "iat": issued_at,
         "exp": issued_at + expires_in_seconds,
+        "tv": token_version,
     }
     return _encode_jwt(payload, secret=_dashboard_jwt_secret())
 
 
-def decode_dashboard_jwt(token: str, *, now: int | None = None) -> TelegramWebAppIdentity:
+def decode_dashboard_jwt(token: str, *, now: int | None = None) -> _DecodedJWT:
     try:
         encoded_header, encoded_payload, encoded_signature = token.split(".")
     except ValueError as exc:
@@ -115,13 +125,16 @@ def decode_dashboard_jwt(token: str, *, now: int | None = None) -> TelegramWebAp
     if issued_at <= 0 or expires_at <= current_ts:
         raise DashboardJWTError("Expired JWT")
 
-    return TelegramWebAppIdentity(
-        user_id=user_id,
-        username=payload.get("username"),
-        first_name=payload.get("first_name"),
-        last_name=payload.get("last_name"),
-        auth_date=issued_at,
-        raw={"auth_type": "jwt"},
+    return _DecodedJWT(
+        identity=TelegramWebAppIdentity(
+            user_id=user_id,
+            username=payload.get("username"),
+            first_name=payload.get("first_name"),
+            last_name=payload.get("last_name"),
+            auth_date=issued_at,
+            raw={"auth_type": "jwt"},
+        ),
+        token_version=int(payload.get("tv", 1)),
     )
 
 
@@ -254,7 +267,12 @@ async def issue_dashboard_token_for_browser_credentials(
         username=identity.username or matched_user.email,
         full_name=full_name,
     )
-    token = create_dashboard_jwt(identity, expires_in_seconds=settings.dashboard_jwt_exp_seconds)
+    db_user = await user_service.get_by_tg_id(identity.user_id)
+    token = create_dashboard_jwt(
+        identity,
+        expires_in_seconds=settings.dashboard_jwt_exp_seconds,
+        token_version=db_user.token_version if db_user else 1,
+    )
     await _register_login_agent(session, identity=identity)
     return token, matched_user, identity
 
@@ -290,7 +308,9 @@ async def issue_dashboard_token_for_phone_credentials(
         raw={"auth_type": "phone"},
     )
     token = create_dashboard_jwt(
-        identity, expires_in_seconds=get_settings().dashboard_jwt_exp_seconds
+        identity,
+        expires_in_seconds=get_settings().dashboard_jwt_exp_seconds,
+        token_version=user.token_version,
     )
     await _register_login_agent(session, identity=identity, phone_number=user.phone_number)
     return token, identity
@@ -322,7 +342,12 @@ async def issue_dashboard_token_for_telegram_login(
         username=identity.username,
         full_name=full_name,
     )
-    token = create_dashboard_jwt(identity, expires_in_seconds=settings.dashboard_jwt_exp_seconds)
+    db_user = await user_service.get_by_tg_id(identity.user_id)
+    token = create_dashboard_jwt(
+        identity,
+        expires_in_seconds=settings.dashboard_jwt_exp_seconds,
+        token_version=db_user.token_version if db_user else 1,
+    )
     await _register_login_agent(session, identity=identity)
     return token, identity
 
@@ -351,7 +376,7 @@ async def extract_dashboard_identity(
     authorization: str | None = Header(default=None, alias="Authorization"),
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     init_data: str | None = Query(default=None),
-) -> TelegramWebAppIdentity:
+) -> _DecodedJWT:
     if authorization:
         token = authorization.strip()
         if token.lower().startswith("bearer "):
@@ -373,6 +398,7 @@ async def extract_dashboard_identity(
 
     get_settings()
     try:
-        return verify_telegram_init_data_identity(value)
+        identity = verify_telegram_init_data_identity(value)
     except TelegramWebAppAuthError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return _DecodedJWT(identity=identity, token_version=0)

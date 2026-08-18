@@ -237,7 +237,7 @@ function LoginInner() {
                     key={account.id}
                     onClick={() => {
                       switchAccount(account)
-                      afterLogin()
+                      navigate('/login', { replace: true })
                     }}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid var(--ui-border)`, background: 'var(--ui-surface)', cursor: 'pointer', textAlign: 'start' }}
                   >
