@@ -283,12 +283,24 @@ class WorkspaceService:
         invitation.accepted_at = now
         invitation.updated_at = now
 
-        membership = TenantMembership(
-            tenant_id=invitation.tenant_id,
-            user_id=user_id,
-            role=invitation.role,
+        existing = await self.session.execute(
+            select(TenantMembership).where(
+                TenantMembership.tenant_id == invitation.tenant_id,
+                TenantMembership.user_id == user_id,
+            )
         )
-        self.session.add(membership)
+        membership = existing.scalar_one_or_none()
+        if membership is None:
+            membership = TenantMembership(
+                tenant_id=invitation.tenant_id,
+                user_id=user_id,
+                role=invitation.role,
+            )
+            self.session.add(membership)
+        else:
+            membership.is_active = True
+            membership.role = invitation.role
+            membership.updated_at = now
         await self.session.flush()
 
         await self._audit_invitation(
