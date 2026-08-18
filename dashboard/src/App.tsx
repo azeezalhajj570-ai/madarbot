@@ -6,6 +6,7 @@ import { ThemeProvider } from './lib/theme'
 import Layout from './components/Layout'
 import { canAccess } from './lib/permissions'
 import LoginPage from './pages/LoginPage'
+import AcceptPage from './pages/AcceptPage'
 import AdminHealthPage from './pages/admin/HealthPage'
 import AdminAgentsPage from './pages/admin/AgentsPage'
 import AdminJobsPage from './pages/admin/JobsPage'
@@ -43,6 +44,7 @@ export default function App() {
       <BrowserRouter basename="/dashboard">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/accept" element={<AcceptPage />} />
           <Route element={<Layout />}>
             <Route path="/" element={<Navigate to="/workspace" replace />} />
             <Route path="/admin" element={<Navigate to="/admin/health" replace />} />

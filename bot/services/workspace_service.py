@@ -488,7 +488,7 @@ class WorkspaceService:
                     from urllib.parse import urlparse
                     parsed = urlparse(dashboard_url)
                     base = f"{parsed.scheme}://{parsed.netloc}"
-                    link = f"{base}/dashboard/#/workspace?accept={invitation.token}"
+                    link = f"{base}/dashboard/accept?token={invitation.token}"
                     text += f"Click the link below to join:\n{link}"
                 else:
                     text += "Open the dashboard to accept or decline this invitation."
