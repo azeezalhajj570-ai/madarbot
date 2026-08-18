@@ -443,6 +443,18 @@ export async function createAgentJob(agentId: number, jobType: string, jobPayloa
   return data
 }
 
+export async function fetchMemberOperations(agentId: number, tgGroupId?: number) {
+  const params: Record<string, unknown> = {}
+  if (tgGroupId) params.tg_group_id = tgGroupId
+  const { data } = await api.get(`${AGENTS_API_PREFIX}/${agentId}/member-operations`, { params })
+  return data
+}
+
+export async function verifyMemberOperations(agentId: number) {
+  const { data } = await api.post(`${AGENTS_API_PREFIX}/${agentId}/member-operations/verify`)
+  return data
+}
+
 export async function updateAgent(agentId: number, payload: {
   external_account_id: string
   telegram_user_id?: number

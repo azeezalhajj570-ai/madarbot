@@ -852,6 +852,85 @@ async def webapp_check_group_accessibility(
         ) from exc
 
 
+@router.get(
+    "/api/agents/{agent_id}/member-operations",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.get(
+    "/webapp/agents/{agent_id}/member-operations",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_list_member_operations(
+    agent_id: int,
+    tg_group_id: int | None = None,
+    status: str | None = None,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.db.models.member_operation import MemberOperation
+
+    await ensure_agent_admin(agent_id, session, identity)
+    stmt = select(MemberOperation).where(MemberOperation.agent_id == agent_id)
+    if tg_group_id is not None:
+        stmt = stmt.where(MemberOperation.tg_group_id == tg_group_id)
+    if status is not None:
+        stmt = stmt.where(MemberOperation.status == status)
+    stmt = stmt.order_by(MemberOperation.created_at.desc())
+    rows = (await session.execute(stmt)).scalars().all()
+    return {
+        "operations": [
+            {
+                "id": op.id,
+                "tg_group_id": op.tg_group_id,
+                "tg_user_id": op.tg_user_id,
+                "agent_id": op.agent_id,
+                "job_id": op.job_id,
+                "operation_type": op.operation_type,
+                "status": op.status,
+                "failure_reason": op.failure_reason,
+                "invitation_link": op.invitation_link,
+                "sent_at": op.sent_at.isoformat() if op.sent_at else None,
+                "verified_at": op.verified_at.isoformat() if op.verified_at else None,
+                "joined_at": op.joined_at.isoformat() if op.joined_at else None,
+                "created_at": op.created_at.isoformat() if op.created_at else None,
+            }
+            for op in rows
+        ],
+    }
+
+
+@router.post(
+    "/api/agents/{agent_id}/member-operations/verify",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/member-operations/verify",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_verify_member_operations(
+    agent_id: int,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    from bot.agents.session import SessionManager
+    from bot.services.member_verification_service import verify_all_pending_invitations
+
+    await ensure_agent_admin(agent_id, session, identity)
+    session_manager = SessionManager()
+    try:
+        client = await session_manager.get_client(agent_id)
+        try:
+            result = await verify_all_pending_invitations(client, session, agent_id)
+            return {"status": "ok", **result}
+        finally:
+            await client.disconnect()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Verification failed: {exc}",
+        ) from exc
+
+
 @router.post("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
 @router.post("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_agents_boundary)])
 async def webapp_create_agent_job(

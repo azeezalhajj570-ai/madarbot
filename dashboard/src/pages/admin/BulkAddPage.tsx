@@ -7,7 +7,7 @@ import { DataTable, type ColumnDef, type DataTableFilter } from '../../component
 import { useToast } from '../../components/ui/toast'
 import { GroupAutoComplete } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
-import api, { fetchAgents } from '../../lib/api'
+import api, { fetchAgents, fetchMemberOperations, verifyMemberOperations } from '../../lib/api'
 import { spacing } from '../../../../shared/ui-system/tokens'
 import type { Agent, AgentJobRecord } from '../../lib/types'
 
@@ -77,9 +77,9 @@ function extractJobStats(payload: Record<string, unknown> | undefined) {
     ? rawDetails.map((r: any) => ({
         user_id: r.user_id,
         status: r.status,
-        success: r.status === 'success',
+        success: r.status === 'success' || r.status === 'joined',
         skipped: r.status === 'skipped',
-        inviteLinkSent: r.status === 'invite_link_sent',
+        inviteLinkSent: r.status === 'invite_link_sent' || r.status === 'joined',
         error_code: r.error_code,
         reason: r.reason,
         flood_wait_seconds: r.flood_wait_seconds,
@@ -99,7 +99,7 @@ const STATUS_OPTIONS = [
 ]
 
 function statusBadge(status: string, payload?: Record<string, unknown>) {
-  const { totalProcessed, userCount } = extractJobStats(payload)
+  const { totalProcessed, userCount, inviteLinkCount } = extractJobStats(payload)
   if (status === 'completed') {
     if (totalProcessed === 0) return <Badge tone="warning">Completed (no results)</Badge>
     return <Badge tone="success">Completed</Badge>
@@ -132,14 +132,14 @@ function MemberRow({ m, isSelected, disabled, onToggle }: { m: MemberItem; isSel
 
 const detailResultColumns: ColumnDef<MemberAddResult>[] = [
   { key: 'user_id', label: 'User ID', render: (r) => <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{r.user_id}</span> },
-  { key: 'status', label: 'Status', render: (r) => r.success
-    ? <Badge tone="success">Added</Badge>
-    : r.inviteLinkSent
-      ? <Badge tone="warning">Invite link sent (not joined)</Badge>
-      : r.skipped
-        ? <Badge tone="warning">Skipped{(r.reason || r.error_code) ? ` (${r.reason || r.error_code})` : ''}</Badge>
-        : <Badge tone="destructive">Failed{r.error_code ? ` (${r.error_code})` : ''}</Badge>
-  },
+  { key: 'status', label: 'Status', render: (r) => {
+    if (r.success) return <Badge tone="success">Added</Badge>
+    if (r.status === 'invite_link_sent') return <Badge tone="info">Invite sent</Badge>
+    if (r.status === 'joined') return <Badge tone="success">Joined via invite</Badge>
+    if (r.inviteLinkSent) return <Badge tone="warning">Invite link sent</Badge>
+    if (r.skipped) return <Badge tone="warning">Skipped{(r.reason || r.error_code) ? ` (${r.reason || r.error_code})` : ''}</Badge>
+    return <Badge tone="destructive">Failed{r.error_code ? ` (${r.error_code})` : ''}</Badge>
+  }},
   { key: 'method', label: 'Method', hideOnMobile: true, render: (r) => r.method === 'invite_link' ? 'Invite link' : r.success ? 'Direct' : '—' },
 ]
 
@@ -176,6 +176,7 @@ export default function AdminBulkAddPage() {
   const [detailJob, setDetailJob] = useState<AgentJobRecord | null>(null)
   const [excludeAdminsAndBots, setExcludeAdminsAndBots] = useState(true)
   const [targetMemberIds, setTargetMemberIds] = useState<Set<number>>(new Set())
+  const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
     setAgentsLoading(true)
@@ -357,6 +358,20 @@ export default function AdminBulkAddPage() {
     finally { setSyncing(false) }
   }
 
+  async function handleVerify() {
+    if (!selectedAgentId) return
+    setVerifying(true)
+    try {
+      const result = await verifyMemberOperations(selectedAgentId)
+      toast.success(`Verified: ${result.total_joined || 0} joined, ${result.total_not_joined || 0} not joined`)
+      loadJobs(selectedAgentId, true)
+    } catch (err: any) {
+      toast.error(err?.message || 'Verification failed')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   const columns: ColumnDef<AgentJobRecord>[] = [
     { key: 'id', label: t('bulkadd.id'), hideOnMobile: true, render: (j) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>#{j.id}</span> },
     { key: 'source', label: 'Source', hideOnMobile: true, render: (j) => {
@@ -372,8 +387,13 @@ export default function AdminBulkAddPage() {
     { key: 'results', label: 'Results', render: (j) => {
       const { successCount, failureCount, skipCount, inviteLinkCount, totalProcessed, userCount } = extractJobStats(j.job_payload)
       const isComplete = j.status === 'completed' && totalProcessed > 0
+      const parts = []
+      if (successCount > 0) parts.push(`${successCount} added`)
+      if (skipCount > 0) parts.push(`${skipCount} skipped`)
+      if (inviteLinkCount > 0) parts.push(`${inviteLinkCount} invites sent`)
+      if (failureCount > 0) parts.push(`${failureCount} failed`)
       const summary = isComplete
-        ? `${successCount} added · ${skipCount} skipped · ${failureCount} failed${inviteLinkCount ? ` · ${inviteLinkCount} link sent` : ''}`
+        ? parts.join(' · ') || 'No results'
         : j.status === 'running' ? `${totalProcessed} / ${userCount}` : '—'
       return <span style={{ fontSize: 12 }}>{summary}</span>
     }},
@@ -399,6 +419,9 @@ export default function AdminBulkAddPage() {
         </div>
         <Button variant="outline" size="sm" onClick={syncAgentGroups} disabled={!selectedAgentId || syncing}>
           <RefreshCw size={14} /> {syncing ? t('bulkadd.syncing') : t('bulkadd.sync')}
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleVerify} disabled={!selectedAgentId || verifying}>
+          <UserCheck size={14} /> {verifying ? 'Verifying...' : 'Verify Joins'}
         </Button>
         <div style={{ flex: 1 }} />
         <Button onClick={openDialog} disabled={!selectedAgentId}><Plus size={14} /> {t('bulkadd.newJob')}</Button>
@@ -497,11 +520,12 @@ export default function AdminBulkAddPage() {
 
       <Dialog open={!!detailJob} title={`Job #${detailJob?.id} — Per-User Results`} onClose={() => setDetailJob(null)} style={{ width: 'min(90vw, 680px)' }}>
         {detailJob && (() => {
-          const { details, successCount, failureCount, skipCount } = extractJobStats(detailJob.job_payload)
+          const { details, successCount, failureCount, skipCount, inviteLinkCount } = extractJobStats(detailJob.job_payload)
           return <div>
-            <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.md, fontSize: 13 }}>
+            <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.md, fontSize: 13, flexWrap: 'wrap' }}>
               <Badge tone="success">{successCount} added</Badge>
               <Badge tone="warning">{skipCount} skipped</Badge>
+              <Badge tone="info">{inviteLinkCount} invites sent</Badge>
               <Badge tone="destructive">{failureCount} failed</Badge>
             </div>
             {details?.length ? (

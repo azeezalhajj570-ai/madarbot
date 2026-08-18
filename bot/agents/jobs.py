@@ -10,6 +10,7 @@ SCRAPER_MEMBERS_JOB_TYPE = "scraper_members"
 SCRAPER_MESSAGES_JOB_TYPE = "scraper_messages"
 SCRAPER_FULL_GROUP_JOB_TYPE = "scraper_full_group"
 KNOWLEDGE_EXTRACTION_JOB_TYPE = "knowledge_extraction"
+MEMBER_VERIFY_JOB_TYPE = "member_verify"
 
 GRADUATED_INTERVAL_TIERS: list[tuple[int, float]] = [
     (50, 30.0),

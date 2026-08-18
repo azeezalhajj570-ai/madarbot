@@ -465,7 +465,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     'bulkadd.searchPlaceholder': 'Search by username or name...',
     'bulkadd.selected': 'selected',
     'bulkadd.interval': 'Interval (seconds)',
-    'bulkadd.sendInviteLink': 'Send invite link if user has privacy restrictions',
+    'bulkadd.sendInviteLink': 'Send invite link if direct add fails',
     'bulkadd.queueJob': 'Queue Member Add',
     'bulkadd.recentJobs': 'Recent Member Add Jobs',
     'bulkadd.recentJobsDesc': 'Latest bulk-add jobs for the selected agent.',
