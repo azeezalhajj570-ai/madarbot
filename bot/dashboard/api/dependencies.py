@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import get_settings
 from bot.dashboard.api.auth import _DecodedJWT, extract_dashboard_identity
-from bot.db.models import Agent, Group, GroupAdminRole, User
+from bot.db.models import Agent, Group, GroupAdminRole, Tenant, User
 from bot.db.session import get_session
 from bot.services.group_service import canonical_tg_group_id, upsert_group
 from bot.services.permission_service import PermissionService
@@ -578,6 +578,33 @@ async def build_identity_profile(
         ).order_by(Group.created_at.desc())
         groups = (await session.execute(all_groups_stmt)).all()
 
+    workspace_info = None
+    workspaces_list = []
+    if user_row is not None:
+        workspace_service = WorkspaceService(session)
+        memberships = await workspace_service.list_user_memberships(user_row.id)
+        if memberships:
+            for membership in memberships:
+                tenant = await session.get(Tenant, membership.tenant_id)
+                if tenant is None:
+                    continue
+                ws_summary = {
+                    "id": tenant.id,
+                    "name": tenant.name,
+                    "role": membership.role,
+                    "member_count": await workspace_service.member_count(tenant.id),
+                }
+                workspaces_list.append(ws_summary)
+            owned = next((m for m in memberships if m.role == "owner"), memberships[0])
+            active_tenant = await session.get(Tenant, owned.tenant_id)
+            if active_tenant is not None:
+                workspace_info = {
+                    "id": active_tenant.id,
+                    "name": active_tenant.name,
+                    "role": owned.role,
+                    "member_count": await workspace_service.member_count(active_tenant.id),
+                }
+
     return {
         "user": {
             "id": identity.user_id,
@@ -596,4 +623,6 @@ async def build_identity_profile(
             {"id": row.id, "title": row.title, "tg_group_id": row.tg_group_id, "role": row.role}
             for row in groups
         ],
+        "workspace": workspace_info,
+        "workspaces": workspaces_list,
     }

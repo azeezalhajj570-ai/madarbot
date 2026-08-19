@@ -435,3 +435,24 @@ export async function uploadAgentMedia(agentId: number, file: File) {
   }
   return res.json() as Promise<{ url: string }>
 }
+
+export interface BulkMemberAddPayload {
+  target_tg_group_id: number
+  source_tg_group_id?: number | null
+  interval_seconds?: number
+  user_ids: number[]
+  send_invite_link_on_privacy_restricted?: boolean
+}
+
+export async function bulkAddMembers(agentId: number, payload: BulkMemberAddPayload) {
+  return apiClient.post<{ status: string; job: { id: number; agent_id: number; job_type: string; status: string; user_count: number; target_tg_group_id: number } }>(
+    `${AGENTS_API_PREFIX}/${agentId}/member-adds`,
+    payload,
+  )
+}
+
+export async function fetchTargetGroupMembers(agentId: number, tgGroupId: number) {
+  return apiClient.get<{ user_ids: number[]; total: number }>(
+    `${AGENTS_API_PREFIX}/${agentId}/target-group-members/${tgGroupId}`,
+  )
+}

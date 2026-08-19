@@ -38,7 +38,7 @@ function _formatKeywords(keywords: string[]): string {
 
 type LeadsTaskType = 'scrape' | 'lead_capture'
 
-export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
+export function LeadsAcquisitionSection({ account, groupId, onSaved }: { account: Agent; groupId: number | null; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [taskType, setTaskType] = useState<LeadsTaskType>('scrape')
@@ -136,7 +136,7 @@ export function LeadsAcquisitionSection({ account, onSaved }: { account: Agent; 
         const maxNew = Number(leadMaxNewContacts)
         if (maxNew > 0) config.max_new_contacts_per_day = maxNew
       }
-      await agentsApi.createGroupTask(account.group_id || 196, {
+      await agentsApi.createGroupTask(groupId!, {
         task_key: 'lead_capture',
         executor_type: 'agent',
         enabled: true,

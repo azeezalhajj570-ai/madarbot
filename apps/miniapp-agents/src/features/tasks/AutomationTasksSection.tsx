@@ -17,6 +17,7 @@ import {
 } from '@miniapp/shared'
 import type {
   Agent,
+  AgentGroupMember,
   AgentManagedGroup,
   AutomationTask,
   TaskCatalogItem,
@@ -27,6 +28,13 @@ type SelectedGroupChip = {
   title: string
 }
 type TaskDestinationMode = 'group' | 'text'
+
+const BULK_ADD_ITEM: TaskCatalogItem = {
+  key: 'bulk_add_members',
+  title: 'Bulk Add Members',
+  description: 'Add members from a source group to a target group',
+  executor_types: ['agent'],
+}
 
 const DELIVERY_LABELS: Record<string, string> = {
   text: 'deliveryText',
@@ -85,7 +93,7 @@ function taskConfigLabel(t: (key: string, options?: Record<string, unknown>) => 
   return `${summary}${mode}`
 }
 
-export function AutomationTasksSection({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
+export function AutomationTasksSection({ account, groupId, onSaved }: { account: Agent; groupId: number | null; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
   const [catalog, setCatalog] = useState<TaskCatalogItem[]>([])
   const [tasks, setTasks] = useState<AutomationTask[]>([])
@@ -120,20 +128,40 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
   const [leadInterContactCooldown, setLeadInterContactCooldown] = useState('12')
   const [leadRespondMaxAge, setLeadRespondMaxAge] = useState('30')
 
+  const isBulkAdd = taskKey === 'bulk_add_members'
+  const [bulkSourceGroups, setBulkSourceGroups] = useState<AgentManagedGroup[]>([])
+  const [bulkTargetGroups, setBulkTargetGroups] = useState<AgentManagedGroup[]>([])
+  const [bulkSourceGroup, setBulkSourceGroup] = useState<AgentManagedGroup | null>(null)
+  const [bulkTargetGroup, setBulkTargetGroup] = useState<AgentManagedGroup | null>(null)
+  const [bulkMemberQuery, setBulkMemberQuery] = useState('')
+  const [bulkMembers, setBulkMembers] = useState<AgentGroupMember[]>([])
+  const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
+  const [bulkMemberPage, setBulkMemberPage] = useState(1)
+  const [bulkSelectedMembers, setBulkSelectedMembers] = useState<number[]>([])
+  const [bulkTargetMemberIds, setBulkTargetMemberIds] = useState<Set<number>>(new Set())
+  const [bulkInterval, setBulkInterval] = useState('20')
+  const [bulkSendInvite, setBulkSendInvite] = useState(false)
+  const [bulkExcludeAdminsBots, setBulkExcludeAdminsBots] = useState(true)
+  const [bulkSearching, setBulkSearching] = useState(false)
+  const [bulkLoadingTarget, setBulkLoadingTarget] = useState(false)
+
   const canSave = useMemo(() => {
+    if (isBulkAdd) {
+      return !!bulkSourceGroup && !!bulkTargetGroup && bulkSelectedMembers.length > 0
+    }
     if (!taskKeywords.length) return false
     if (taskKey === 'notify_destination') {
       const dest = taskDestinationMode === 'group' ? taskDestinationGroup?.tg_group_id : taskDestinationText.trim()
       return !!dest
     }
     return true
-  }, [taskKeywords, taskKey, taskDestinationMode, taskDestinationGroup, taskDestinationText])
+  }, [isBulkAdd, bulkSourceGroup, bulkTargetGroup, bulkSelectedMembers.length, taskKeywords, taskKey, taskDestinationMode, taskDestinationGroup, taskDestinationText])
 
   async function refresh() {
     setLoading(true)
     try {
       const [nextTasks, nextCatalog] = await Promise.all([
-        agentsApi.fetchGroupTasks(account.group_id || 196),
+        agentsApi.fetchGroupTasks(groupId!),
         agentsApi.fetchTaskCatalog(),
       ])
       setTasks(nextTasks)
@@ -146,7 +174,48 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     }
   }
 
-  useEffect(() => { void refresh() }, [account.group_id, account.id])
+  useEffect(() => { void refresh() }, [groupId, account.id])
+
+  useEffect(() => {
+    if (!isBulkAdd) return
+    void agentsApi.fetchAgentGroups(account.id).then((allGroups) => {
+      const seen = new Set<number>()
+      const deduped: AgentManagedGroup[] = []
+      for (const g of allGroups) {
+        if (g.tg_group_id == null || seen.has(g.tg_group_id)) continue
+        seen.add(g.tg_group_id)
+        deduped.push(g)
+      }
+      setBulkSourceGroups(deduped)
+      setBulkTargetGroups(deduped.filter((g) => g.can_add_members !== false))
+    }).catch(() => { setBulkSourceGroups([]); setBulkTargetGroups([]) })
+  }, [isBulkAdd, account.id])
+
+  useEffect(() => {
+    if (!isBulkAdd || !bulkSourceGroup?.tg_group_id) { setBulkMembers([]); setBulkMemberTotal(0); return }
+    setBulkSearching(true)
+    const params: Record<string, unknown> = { tg_group_id: bulkSourceGroup.tg_group_id, limit: 50, page: bulkMemberPage }
+    if (bulkMemberQuery.trim()) params.q = bulkMemberQuery.trim()
+    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, bulkMemberQuery || undefined, 50, false, bulkMemberPage, 'message_count', false, false)
+      .then((res) => { setBulkMembers(res.members || []); setBulkMemberTotal(res.total || 0) })
+      .catch(() => { setBulkMembers([]); setBulkMemberTotal(0) })
+      .finally(() => setBulkSearching(false))
+  }, [isBulkAdd, account.id, bulkSourceGroup?.tg_group_id, bulkMemberQuery, bulkMemberPage])
+
+  useEffect(() => { setBulkMemberPage(1); setBulkSelectedMembers([]) }, [bulkSourceGroup?.tg_group_id, bulkMemberQuery])
+
+  useEffect(() => {
+    if (!isBulkAdd || !bulkTargetGroup?.tg_group_id) { setBulkTargetMemberIds(new Set()); return }
+    setBulkLoadingTarget(true)
+    void agentsApi.fetchTargetGroupMembers(account.id, bulkTargetGroup.tg_group_id)
+      .then((res) => {
+        const ids = new Set(res.user_ids || [])
+        setBulkTargetMemberIds(ids)
+        setBulkSelectedMembers((prev) => prev.filter((id) => !ids.has(id)))
+      })
+      .catch(() => setBulkTargetMemberIds(new Set()))
+      .finally(() => setBulkLoadingTarget(false))
+  }, [isBulkAdd, account.id, bulkTargetGroup?.tg_group_id])
 
   const groupQuery = taskGroupsQuery || taskDestinationGroupQuery
   useEffect(() => {
@@ -157,12 +226,14 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     return () => clearTimeout(timer)
   }, [account.id, groupQuery])
 
+  const extendedCatalog = useMemo(() => [...catalog, BULK_ADD_ITEM], [catalog])
+
   useEffect(() => {
     if (!catalog.length) return
-    if (!catalog.some((item) => item.key === taskKey)) {
-      setTaskKey(catalog[0].key)
+    if (!extendedCatalog.some((item) => item.key === taskKey)) {
+      setTaskKey(extendedCatalog[0].key)
     }
-  }, [catalog, taskKey])
+  }, [catalog, taskKey, extendedCatalog])
 
   function resetForm() {
     setEditingTask(null)
@@ -185,6 +256,17 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setLeadCooldownMinutes('43200')
     setLeadInterContactCooldown('12')
     setLeadRespondMaxAge('30')
+    setBulkSourceGroup(null)
+    setBulkTargetGroup(null)
+    setBulkMemberQuery('')
+    setBulkMembers([])
+    setBulkMemberTotal(0)
+    setBulkMemberPage(1)
+    setBulkSelectedMembers([])
+    setBulkTargetMemberIds(new Set())
+    setBulkInterval('20')
+    setBulkSendInvite(false)
+    setBulkExcludeAdminsBots(true)
     setStatus(null)
   }
 
@@ -216,7 +298,7 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
 
   async function handleSave() {
     const errors: string[] = []
-    if (!taskKeywords.length) errors.push(t('automation.atLeastOneKeyword'))
+    if (!isBulkAdd && !taskKeywords.length) errors.push(t('automation.atLeastOneKeyword'))
     const config: Record<string, unknown> = {}
     if (taskTemplate.trim()) {
       if (taskKey === 'lead_capture') {
@@ -246,6 +328,31 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
       if (maxAge > 0) config.respond_max_age_minutes = maxAge
     }
     if (errors.length) { notify(errors.join(' · ')); return }
+
+    if (isBulkAdd) {
+      if (!bulkSourceGroup?.tg_group_id || !bulkTargetGroup?.tg_group_id || !bulkSelectedMembers.length) {
+        notify(t('automation.bulkAddRequired')); return
+      }
+      setIsSaving(true)
+      try {
+        await agentsApi.bulkAddMembers(account.id, {
+          target_tg_group_id: bulkTargetGroup.tg_group_id,
+          source_tg_group_id: bulkSourceGroup.tg_group_id,
+          interval_seconds: Math.max(1, Number(bulkInterval) || 20),
+          user_ids: bulkSelectedMembers,
+          send_invite_link_on_privacy_restricted: bulkSendInvite,
+        })
+        onSaved(t('automation.bulkAddCreated'))
+        setIsFormOpen(false)
+        resetForm()
+      } catch (error) {
+        notify(error instanceof Error ? error.message : t('automation.failedSave'))
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
+
     const payload = {
       task_key: taskKey,
       executor_type: 'agent',
@@ -259,10 +366,10 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     setIsSaving(true)
     try {
       if (editingTask) {
-        await agentsApi.updateGroupTask(account.group_id || 196, editingTask.assignment_id, payload)
+        await agentsApi.updateGroupTask(groupId!, editingTask.assignment_id, payload)
         onSaved(t('automation.updated'))
       } else {
-        await agentsApi.createGroupTask(account.group_id || 196, payload)
+        await agentsApi.createGroupTask(groupId!, payload)
         onSaved(t('automation.created'))
       }
       setIsFormOpen(false)
@@ -289,7 +396,6 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
     }
   }
 
-  const extendedCatalog = catalog
   return (
     <>
       <Card title={t('automation.title')} subtitle={t('automation.subtitle')}>
@@ -300,28 +406,122 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
             <SelectField label={t('automation.taskType')} value={taskKey} onChange={setTaskKey}>
               {extendedCatalog.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
             </SelectField>
-            <div style={{ display: 'grid', gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.keywordCondition')}</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {taskKeywords.map((kw, i) => (
-                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
-                    {kw}
-                    <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
-                  </span>
-                ))}
+            {isBulkAdd ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSourceGroup')}</label>
+                  <select
+                    value={bulkSourceGroup?.tg_group_id || ''}
+                    onChange={(e) => {
+                      const gid = Number(e.target.value)
+                      const found = bulkSourceGroups.find((g) => g.tg_group_id === gid) || null
+                      setBulkSourceGroup(found)
+                    }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                  >
+                    <option value="">{t('automation.selectSourceGroup')}</option>
+                    {bulkSourceGroups.map((g) => <option key={g.tg_group_id} value={g.tg_group_id}>{g.title || `#${g.tg_group_id}`}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkTargetGroup')}</label>
+                  <select
+                    value={bulkTargetGroup?.tg_group_id || ''}
+                    onChange={(e) => {
+                      const gid = Number(e.target.value)
+                      const found = bulkTargetGroups.find((g) => g.tg_group_id === gid) || null
+                      setBulkTargetGroup(found)
+                    }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                  >
+                    <option value="">{t('automation.selectTargetGroup')}</option>
+                    {bulkTargetGroups.map((g) => <option key={g.tg_group_id} value={g.tg_group_id}>{g.title || `#${g.tg_group_id}`}</option>)}
+                  </select>
+                </div>
+                {bulkSourceGroup?.tg_group_id ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
+                        <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
+                      </div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-text-muted)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={bulkExcludeAdminsBots} onChange={(e) => setBulkExcludeAdminsBots(e.target.checked)} />
+                      {t('automation.excludeAdminsBots')}
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkMemberQuery}
+                      onChange={(e) => setBulkMemberQuery(e.target.value)}
+                      placeholder={t('automation.searchMembers')}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 13, fontFamily: 'inherit' }}
+                    />
+                    <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8 }}>
+                      {bulkSearching ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.searching')}</div> : null}
+                      {!bulkSearching && bulkMembers.length === 0 ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
+                      {bulkMembers.filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin')).map((m) => {
+                        const inTarget = bulkTargetMemberIds.has(m.user_id)
+                        const selected = bulkSelectedMembers.includes(m.user_id)
+                        return (
+                          <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: inTarget ? 'default' : 'pointer', opacity: inTarget ? 0.5 : 1, borderBottom: '1px solid var(--miniapp-border-soft)' }}>
+                            <input type="checkbox" checked={selected} disabled={inTarget} onChange={() => setBulkSelectedMembers((prev) => prev.includes(m.user_id) ? prev.filter((id) => id !== m.user_id) : [...prev, m.user_id])} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--miniapp-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `User ${m.user_id}`}</div>
+                              {m.username ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>@{m.username}</div> : null}
+                            </div>
+                            {inTarget ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{t('automation.alreadyInGroup')}</span> : null}
+                            {m.role === 'admin' || m.role === 'creator' ? <span style={{ fontSize: 10, color: 'var(--miniapp-clay)', fontWeight: 600 }}>{m.role}</span> : null}
+                            {m.is_bot ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>bot</span> : null}
+                          </label>
+                        )
+                      })}
+                    </div>
+                    {bulkMemberTotal > 50 ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, fontSize: 12 }}>
+                        <button type="button" disabled={bulkMemberPage <= 1} onClick={() => setBulkMemberPage((p) => p - 1)} style={{ fontSize: 12, color: bulkMemberPage <= 1 ? 'var(--miniapp-text-muted)' : 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: bulkMemberPage <= 1 ? 'default' : 'pointer' }}>{t('automation.prev')}</button>
+                        <span style={{ color: 'var(--miniapp-text-muted)' }}>{bulkMemberPage} / {Math.ceil(bulkMemberTotal / 50)}</span>
+                        <button type="button" disabled={bulkMemberPage * 50 >= bulkMemberTotal} onClick={() => setBulkMemberPage((p) => p + 1)} style={{ fontSize: 12, color: bulkMemberPage * 50 >= bulkMemberTotal ? 'var(--miniapp-text-muted)' : 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: bulkMemberPage * 50 >= bulkMemberTotal ? 'default' : 'pointer' }}>{t('automation.next')}</button>
+                      </div>
+                    ) : null}
+                    {bulkLoadingTarget ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('automation.loadingTarget')}</div> : null}
+                  </div>
+                ) : null}
+                <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="20" />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={bulkSendInvite} onChange={(e) => setBulkSendInvite(e.target.checked)} />
+                  {t('automation.bulkSendInvite')}
+                </label>
               </div>
-              <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
-                onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
-                placeholder={t('automation.keywordPlaceholder')} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
-            </div>
-            <TextAreaField label={t('automation.messageTemplate')} value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? t('automation.templateNotifyPlaceholder') : t('automation.templateReplyPlaceholder')} />
-            {taskKey === 'reply_message' ? (
-              <SelectField label={t('automation.replyMode')} value={taskReplyMode} onChange={setTaskReplyMode}>
-                <option value="public">{t('automation.replyPublic')}</option>
-                <option value="private">{t('automation.replyPrivate')}</option>
-              </SelectField>
-            ) : null}
+            ) : (
+              <>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.keywordCondition')}</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {taskKeywords.map((kw, i) => (
+                      <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'var(--miniapp-coral-dim)', color: 'var(--miniapp-coral)', fontSize: 13, fontWeight: 500 }}>
+                        {kw}
+                        <button type="button" onClick={() => setTaskKeywords((p) => p.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', fontSize: 15, lineHeight: 1, padding: 0 }}>&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                  <input type="text" value={pendingKeyword} onChange={(e) => setPendingKeyword(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingKeyword.trim()) { e.preventDefault(); setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                    onBlur={() => { if (pendingKeyword.trim()) { setTaskKeywords((p) => p.includes(pendingKeyword.trim()) ? p : [...p, pendingKeyword.trim()]); setPendingKeyword('') } }}
+                    placeholder={t('automation.keywordPlaceholder')} style={{ width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 14, fontFamily: 'inherit' }} />
+                </div>
+                <TextAreaField label={t('automation.messageTemplate')} value={taskTemplate} onChange={setTaskTemplate} rows={5} placeholder={taskKey === 'notify_destination' ? t('automation.templateNotifyPlaceholder') : t('automation.templateReplyPlaceholder')} />
+              </>
+            )}
+            {isBulkAdd ? null : (
+              <>
+                {taskKey === 'reply_message' ? (
+                  <SelectField label={t('automation.replyMode')} value={taskReplyMode} onChange={setTaskReplyMode}>
+                    <option value="public">{t('automation.replyPublic')}</option>
+                    <option value="private">{t('automation.replyPrivate')}</option>
+                  </SelectField>
+                ) : null}
             {taskKey === 'lead_capture' ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
@@ -423,6 +623,8 @@ export function AutomationTasksSection({ account, onSaved }: { account: Agent; o
                 </SelectField>
               </>
             ) : null}
+              </>
+            )}
             <FormActions submitLabel="Save" submitDisabled={!canSave || isSaving} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
           </div>
         ) : null}

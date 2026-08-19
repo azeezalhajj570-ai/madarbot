@@ -54,9 +54,22 @@ function resolveAppBoundary(): AppBoundary | null {
 
 const appBoundary = resolveAppBoundary()
 
+let activeWorkspaceId: string | null = null
+
+export function setWorkspaceContext(workspaceId: string | null) {
+  activeWorkspaceId = workspaceId
+}
+
+export function getWorkspaceContext(): string | null {
+  return activeWorkspaceId
+}
+
 function withAppBoundary(headers: Record<string, string>) {
   if (appBoundary) {
     headers['X-App-Boundary'] = appBoundary
+  }
+  if (activeWorkspaceId) {
+    headers['X-Workspace-Id'] = activeWorkspaceId
   }
   return headers
 }

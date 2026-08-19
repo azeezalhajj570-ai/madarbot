@@ -290,6 +290,7 @@ BOT_INSTALL_PERMISSION_KEYS = {
 def serialize_agent(agent: Agent) -> dict[str, Any]:
     return {
         "id": agent.id,
+        "tenant_id": agent.tenant_id,
         "group_id": agent.group_id,
         "linked_by_user_id": agent.linked_by_user_id,
         "phone_number": agent.phone_number,
