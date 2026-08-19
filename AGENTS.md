@@ -206,6 +206,12 @@ Each bot owner only sees their own groups, agents, and statistics.
 <!-- SPECKIT START -->
 ## Current Plan
 
+**Make Miniapp Workspace-Aware** (`018-workspace-aware-miniapp`)
+- Spec: `specs/018-workspace-aware-miniapp/spec.md`
+- Plan: `specs/018-workspace-aware-miniapp/plan.md`
+- Tasks: `specs/018-workspace-aware-miniapp/tasks.md`
+- Audit: `specs/017-fix-hardcoded-group-id-fallback/audit.md`
+
 **Workspace Member Invitations** (`016-workspace-member-invitations`)
 - Spec: `specs/016-workspace-member-invitations/spec.md`
 - Plan: `specs/016-workspace-member-invitations/plan.md`

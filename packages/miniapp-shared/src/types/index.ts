@@ -11,6 +11,13 @@ export interface SubscriptionInfo {
   expires_at: string | null
 }
 
+export interface WorkspaceInfo {
+  id: string
+  name: string
+  role: string
+  member_count: number
+}
+
 export interface SubscriptionUser {
   tg_user_id: number
   username: string | null
@@ -41,6 +48,8 @@ export interface MiniappIdentity {
   groups: ManagedGroup[]
   subscription?: SubscriptionInfo
   plan_limits?: PlanLimits
+  workspace?: WorkspaceInfo
+  workspaces?: WorkspaceInfo[]
 }
 
 export interface GroupOverview {
@@ -163,6 +172,7 @@ export interface ScheduledMessage {
 
 export interface Agent {
   id: number
+  tenant_id?: number | null
   group_id: number
   telegram_user_id?: number
   phone_number?: string
@@ -241,6 +251,7 @@ export interface AgentManagedGroup {
   group_type?: string
   member_count?: number
   messages_count?: number
+  can_add_members?: boolean
 }
 
 export interface AgentGroupMember {

@@ -972,6 +972,7 @@ export default function App() {
   const { t } = useTranslation()
   const basePath = import.meta.env.BASE_URL
   const session = useMiniappSession()
+  const { activeWorkspace, workspaces, switchWorkspace } = session
   const [route, setRoute] = useState(() => parseAgentsRoute(window.location.pathname, basePath))
   const [accounts, setAccounts] = useState<Agent[]>([])
   const [accountsLoading, setAccountsLoading] = useState(false)
@@ -1075,7 +1076,15 @@ export default function App() {
       return
     }
     void refresh()
-  }, [session.loading, session.identity?.user.id, effectiveGroupId])
+  }, [session.loading, session.identity?.user.id, effectiveGroupId, activeWorkspace?.id])
+
+  useEffect(() => {
+    if (!activeWorkspace?.id) return
+    setAccounts([])
+    setSubscription(null)
+    setAccountsLoading(true)
+    void refresh()
+  }, [activeWorkspace?.id])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -1278,6 +1287,33 @@ export default function App() {
     const statusLabel = sessionState === 'healthy' ? 'Connected' : sessionState === 'flood_wait' ? 'Flood wait' : sessionState === 'banned' ? 'Banned' : sessionState === 'unknown' ? 'Unknown' : null
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {activeWorkspace && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
+            {workspaces.length > 1 ? (
+              <select
+                value={activeWorkspace.id}
+                onChange={(e) => switchWorkspace(e.target.value)}
+                style={{
+                  background: 'var(--miniapp-surface)',
+                  border: '1px solid var(--miniapp-border-soft)',
+                  borderRadius: 6,
+                  padding: '2px 6px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--miniapp-text-primary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>{ws.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span style={{ fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{activeWorkspace.name}</span>
+            )}
+            <span style={{ color: 'var(--miniapp-border-soft)' }}>&middot;</span>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {label}
           {sessionState && (
@@ -1312,7 +1348,7 @@ export default function App() {
         </div>
       </div>
     )
-  }, [selectedAccount, subscription, t, agentStatus])
+  }, [selectedAccount, subscription, t, agentStatus, activeWorkspace, workspaces, switchWorkspace])
 
   return (
     <AppShell title={t('app.title')} subtitle={headerSubtitle} actions={
@@ -1459,7 +1495,7 @@ export default function App() {
               ) : null}
                {route.page === 'leads' ? (
                 <>
-                  <LeadsAcquisitionSection account={selectedAccount} onSaved={setStatus} />
+                  <LeadsAcquisitionSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <AccountLeadsPage account={selectedAccount} />
                 </>
               ) : null}
@@ -1468,7 +1504,7 @@ export default function App() {
               ) : null}
               {route.page === 'tasks' ? (
                 <>
-                  <AutomationTasksSection account={selectedAccount} onSaved={setStatus} />
+                  <AutomationTasksSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <TaskActivity account={selectedAccount} scrollToJobId={scrollToJobId} onScrolled={() => setScrollToJobId(null)} />
                 </>
               ) : null}
