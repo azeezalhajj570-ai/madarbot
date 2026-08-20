@@ -411,7 +411,7 @@ export default function AdminBulkAddPage() {
 
   function openDialog() {
     setFormAgentId(selectedAgentId); setFormSourceGroupId(null); setFormTargetGroupId(null)
-    setSearchQuery(''); setMembers([]); setMemberTotal(0); setMemberPage(1); setSelectedUserIds([]); setIntervalSeconds(20)
+    setSearchQuery(''); setMembers([]); setMemberTotal(0); setMemberPage(1); setSelectedUserIds([]); setIntervalSeconds(3600)
     setSendInviteLink(false); setCustomInviteMessage(''); setExcludeAdminsAndBots(true); setFormErrors({}); setDialogOpen(true)
   }
 
@@ -419,7 +419,7 @@ export default function AdminBulkAddPage() {
     const errors: Record<string, string> = {}
     if (!formTargetGroupId) errors.target = t('bulkadd.errorTargetRequired')
     if (!selectedUserIds.length) errors.members = t('bulkadd.errorMembersRequired')
-    if (intervalSeconds < 1) errors.interval = t('bulkadd.errorIntervalMin')
+    if (intervalSeconds < 3600) errors.interval = t('bulkadd.errorIntervalMin')
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -618,7 +618,7 @@ export default function AdminBulkAddPage() {
           </Field>
         )}
         <Field label={t('bulkadd.interval')}>
-          <Input type="number" value={intervalSeconds} onChange={(e) => { setIntervalSeconds(Math.max(1, Number(e.target.value))); if (formErrors.interval) setFormErrors(prev => { const { interval, ...rest } = prev; return rest }) }} min={1} />
+          <Input type="number" value={intervalSeconds} onChange={(e) => { setIntervalSeconds(Math.max(3600, Number(e.target.value) || 3600)); if (formErrors.interval) setFormErrors(prev => { const { interval, ...rest } = prev; return rest }) }} min={3600} />
           {formErrors.interval && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.interval}</div>}
         </Field>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>

@@ -490,7 +490,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     'bulkadd.allStatuses': 'All statuses',
     'bulkadd.errorTargetRequired': 'Please select a target group',
     'bulkadd.errorMembersRequired': 'Please select at least one member',
-    'bulkadd.errorIntervalMin': 'Interval must be at least 1 second',
+    'bulkadd.errorIntervalMin': 'Interval must be at least 3600 seconds (1 hour)',
     'ai.provider': 'AI Provider',
     'ai.providerDesc': 'Select the service that powers AI features.',
     'ai.auth': 'Authentication',

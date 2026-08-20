@@ -1,5 +1,7 @@
 import { Component, type ReactNode } from 'react'
 
+import i18n from '../i18n'
+
 interface Props {
   children: ReactNode
 }
@@ -21,6 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const t = (key: string) => i18n.t(key)
       return (
         <div
           style={{
@@ -37,9 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
           }}
         >
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠</div>
-          <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>Something went wrong</h2>
+          <h2 style={{ margin: '0 0 8px', fontSize: 20 }}>{t('error.title')}</h2>
           <p style={{ margin: '0 0 24px', color: 'var(--tg-theme-hint-color, #999)', fontSize: 14, maxWidth: 320 }}>
-            The app encountered an error. Please try reloading.
+            {t('error.message')}
           </p>
           <button
             onClick={() => {
@@ -56,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
               cursor: 'pointer',
             }}
           >
-            Try Again
+            {t('error.tryAgain')}
           </button>
           <button
             onClick={() => window.location.reload()}
@@ -71,7 +74,7 @@ export class ErrorBoundary extends Component<Props, State> {
               cursor: 'pointer',
             }}
           >
-            Reload App
+            {t('error.reload')}
           </button>
         </div>
       )

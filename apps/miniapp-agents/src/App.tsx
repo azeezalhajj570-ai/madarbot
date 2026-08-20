@@ -1559,9 +1559,9 @@ export default function App() {
               ) : null}
                {route.page === 'outreach' ? (
                 <>
+                  <CampaignsPage account={selectedAccount} onSaved={setStatus} />
                   <LeadsAcquisitionSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <AccountLeadsPage account={selectedAccount} />
-                  <CampaignsPage account={selectedAccount} onSaved={setStatus} />
                 </>
               ) : null}
               {route.page === 'tasks' ? (
@@ -1808,8 +1808,9 @@ function RegistrationWizard({
   onCancel: () => void
   onOpenWorkspace: (accountId: number) => void
 }) {
+  const { t } = useTranslation()
   return (
-      <Card title={account ? `Link account - ${account.phone_number || ''}` : 'Link Telegram Account'} subtitle={account ? 'Complete the Telegram login flow.' : 'Enter your phone number to link a Telegram account.'}>
+      <Card title={account ? t('wizard.titleWithPhone', { phone: account.phone_number || '' }) : t('wizard.title')} subtitle={account ? t('wizard.subtitleWithAccount') : t('wizard.subtitle')}>
       <WizardMilestones currentStep={step} />
 
       {step === 'code' && account ? (
@@ -1831,9 +1832,9 @@ function RegistrationWizard({
 
       {step === 'finish' && account ? (
         <>
-          <Note>Account {accountLabel(account)} is ready.</Note>
-          <Note>Auth state {account.auth_state} · status {account.status}</Note>
-          <Button onClick={() => onOpenWorkspace(account.id)}>Open workspace</Button>
+          <Note>{t('wizard.ready', { name: accountLabel(account) })}</Note>
+          <Note>{t('wizard.authState', { state: account.auth_state, status: account.status })}</Note>
+          <Button onClick={() => onOpenWorkspace(account.id)}>{t('wizard.openWorkspace')}</Button>
         </>
       ) : null}
     </Card>
@@ -1853,6 +1854,7 @@ function PhoneEntryStep({
   isLinking: boolean
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const inputStyle: React.CSSProperties = {
     width: '100%',
     background: 'var(--miniapp-bg)',
@@ -1939,7 +1941,7 @@ function PhoneEntryStep({
               >
                 <input
                   type="text"
-                  placeholder="Search country..."
+                  placeholder={t('wizard.phoneSearchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   style={{ ...inputStyle, border: 'none', borderBottom: '1px solid var(--miniapp-border-soft)', borderRadius: 0, padding: '10px 12px' }}
@@ -1963,7 +1965,7 @@ function PhoneEntryStep({
                       <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
                     </button>
                   )) : (
-                    <div style={{ padding: '10px 12px', color: 'var(--miniapp-text-muted)', fontSize: 12 }}>No matches</div>
+                    <div style={{ padding: '10px 12px', color: 'var(--miniapp-text-muted)', fontSize: 12 }}>{t('wizard.phoneNoMatch')}</div>
                   )}
                 </div>
               </div>
@@ -1985,25 +1987,26 @@ function PhoneEntryStep({
           </div>
         </div>
         <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: -4, marginBottom: 8 }}>
-          Enter your Telegram account phone number
+          {t('wizard.phoneHelper')}
         </div>
       </label>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button onClick={onLink} disabled={isLinking || !phoneNumber.replace(/\D/g, '')}>
-          {isLinking ? 'Linking...' : 'Link Account'}
+          {isLinking ? t('wizard.linking') : t('wizard.linkAccount')}
         </Button>
-        <Button tone="secondary" onClick={onCancel}>Cancel</Button>
+        <Button tone="secondary" onClick={onCancel}>{t('common.cancel')}</Button>
       </div>
     </>
   )
 }
 
 function WizardMilestones({ currentStep }: { currentStep: WizardStep }) {
+  const { t } = useTranslation()
   const currentStepIndex = Math.max(0, LINK_ACCOUNT_STEPS.indexOf(currentStep))
 
   return (
     <div
-      aria-label="Link account progress"
+      aria-label={t('wizard.milestoneAria')}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -2049,7 +2052,7 @@ function WizardMilestones({ currentStep }: { currentStep: WizardStep }) {
             >
               {index + 1}
             </span>
-            {wizardStepMilestoneLabel(step)}
+            {wizardStepMilestoneLabel(t, step)}
             {index < LINK_ACCOUNT_STEPS.length - 1 ? (
               <span
                 aria-hidden="true"
@@ -2068,14 +2071,14 @@ function WizardMilestones({ currentStep }: { currentStep: WizardStep }) {
   )
 }
 
-function wizardStepMilestoneLabel(step: WizardStep) {
+function wizardStepMilestoneLabel(t: (key: string) => string, step: WizardStep) {
   switch (step) {
     case 'code':
-      return 'Code'
+      return t('wizard.milestoneCode')
     case 'password':
-      return '2FA'
+      return t('wizard.milestone2fa')
     case 'finish':
-      return 'Workspace'
+      return t('wizard.milestoneWorkspace')
   }
 }
 
@@ -2147,39 +2150,40 @@ function WizardCodeStep({
   onStepChange: (step: WizardStep) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   return (
     <>
-      <SecretInputField label="Login code" value={code} onChange={setCode} placeholder="Enter the code sent to Telegram" />
+      <SecretInputField label={t('wizard.loginCode')} value={code} onChange={setCode} placeholder={t('wizard.codePlaceholder')} />
       {error ? <Note tone="warning">{error}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       <Button
         onClick={() => {
           const trimmed = code.trim()
           if (!trimmed) {
-            setError('Code is required')
+            setError(t('wizard.codeRequired'))
             return
           }
           if (!/^\d{4,8}$/.test(trimmed)) {
-            setError('Code must be 4-8 digits, e.g. 12345')
+            setError(t('wizard.codeInvalid'))
             return
           }
           setError(null)
           void agentsApi.submitAgentCode(account.id, trimmed).then(async (response) => {
             const nextResponse = response as { agent: Agent }
-            onSaved('Code verified')
+            onSaved(t('wizard.codeVerified'))
             await onRefresh()
             onStepChange(nextResponse.agent.auth_state === 'pending_2fa' ? 'password' : 'finish')
           }).catch((err) => {
-            setError(err instanceof Error ? err.message : 'Failed to verify code')
+            setError(err instanceof Error ? err.message : t('wizard.codeFailed'))
           })
         }}
       >
-        Continue
+        {t('common.continue')}
       </Button>
-      <Button tone="secondary" onClick={onCancel}>Cancel</Button>
+      <Button tone="secondary" onClick={onCancel}>{t('common.cancel')}</Button>
       </div>
     </>
   )
@@ -2198,41 +2202,42 @@ function WizardPasswordStep({
   onStepChange: (step: WizardStep) => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   return (
     <>
-      <SecretInputField label="Password / 2FA" value={password} onChange={setPassword} placeholder="Enter your Telegram 2FA password" />
+      <SecretInputField label={t('wizard.passwordLabel')} value={password} onChange={setPassword} placeholder={t('wizard.passwordPlaceholder')} />
       {error ? <Note tone="warning">{error}</Note> : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button
           onClick={() => {
             const trimmed = password.trim()
             if (!trimmed) {
-              setError('Password is required')
+              setError(t('wizard.passwordRequired'))
               return
             }
             if (trimmed.length < 2) {
-              setError('Password must be at least 2 characters')
+              setError(t('wizard.passwordTooShort'))
               return
             }
             setError(null)
             void agentsApi.submitAgentPassword(account.id, trimmed).then(async () => {
-              onSaved('2FA verified')
+              onSaved(t('wizard.passwordVerified'))
               await onRefresh()
               onStepChange('finish')
             }).catch((err) => {
-              setError(err instanceof Error ? err.message : 'Failed to verify password')
+              setError(err instanceof Error ? err.message : t('wizard.passwordFailed'))
             })
           }}
         >
-          Finish auth
+          {t('wizard.finishAuth')}
         </Button>
         <Button tone="secondary" onClick={() => onStepChange('finish')}>
-          Skip for now
+          {t('wizard.skipForNow')}
         </Button>
-        <Button tone="secondary" onClick={onCancel}>Cancel</Button>
+        <Button tone="secondary" onClick={onCancel}>{t('common.cancel')}</Button>
       </div>
     </>
   )
@@ -2647,9 +2652,12 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   const [logs, setLogs] = useState<SendLogEntry[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [actingJobId, setActingJobId] = useState<number | null>(null)
-  const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
   const [jobGroupNames, setJobGroupNames] = useState<Record<number, string>>({})
   const jobCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const [menuJobId, setMenuJobId] = useState<number | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ jobId: number; action: 'stop' | 'retry' | 'resume' } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -2711,26 +2719,26 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     } catch { /* silent auto-refresh */ }
   }
 
-  async function handleCancel(jobId: number) {
+  async function runConfirmAction() {
+    if (!confirmAction) return
+    const { jobId, action } = confirmAction
+    setConfirmBusy(true)
     setActingJobId(jobId)
+    setMenuJobId(null)
     try {
-      await agentsApi.cancelAgentJob(account.id, jobId)
+      if (action === 'stop') {
+        await agentsApi.cancelAgentJob(account.id, jobId)
+      } else {
+        // retry and resume both re-run the job from the backend's perspective
+        await agentsApi.retryAgentJob(account.id, jobId)
+      }
       await refreshJobs()
+      setConfirmAction(null)
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : 'Failed to cancel job')
+      setStatusMsg(error instanceof Error ? error.message : 'Failed to run job action')
+      setConfirmAction(null)
     } finally {
-      setActingJobId(null)
-    }
-  }
-
-  async function handleRetry(jobId: number) {
-    setActingJobId(jobId)
-    try {
-      await agentsApi.retryAgentJob(account.id, jobId)
-      await refreshJobs()
-    } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : 'Failed to retry job')
-    } finally {
+      setConfirmBusy(false)
       setActingJobId(null)
     }
   }
@@ -2879,10 +2887,20 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     const el = jobCardRefs.current[scrollToJobId]
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      setExpandedJobId(scrollToJobId)
       onScrolled?.()
     }
   }, [scrollToJobId, onScrolled])
+
+  useEffect(() => {
+    if (menuJobId === null) return
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuJobId(null)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuJobId])
 
   return (
     <Card title={t('tasks.activityTitle')} subtitle={t('tasks.activitySubtitle')}>
@@ -2943,149 +2961,147 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
             const isFailed = job.status === 'failed'
             const isScheduled = job.status === 'scheduled'
             const isStopped = p.stop_reason != null
-            const isExpanded = expandedJobId === job.id
             const taskName = job.message_preview
               ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
-              : `${job.target_type === 'groups' ? 'Broadcast' : 'Members'} #${job.id}`
-            const groupNames: string[] = []
-            if (job.source_group_title) groupNames.push(job.source_group_title)
+              : `${job.target_type === 'groups' ? t('tasks.broadcastName', { id: job.id }) : t('tasks.membersName', { id: job.id })}`
             return (
               <div key={job.id} ref={(el) => { jobCardRefs.current[job.id] = el }}
-                onClick={() => setExpandedJobId(isExpanded ? null : job.id)}
                 style={{
-                  padding: 10, borderRadius: 10, border: `1px solid ${isExpanded ? 'var(--miniapp-sage)' : 'var(--miniapp-border-soft)'}`,
-                  background: 'var(--miniapp-surface)', display: 'grid', gap: 5, cursor: 'pointer',
+                  padding: 12, borderRadius: 12, border: '1px solid var(--miniapp-border-soft)',
+                  background: 'var(--miniapp-surface)', display: 'grid', gap: 8,
                 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <strong style={{ fontSize: 13, lineHeight: 1.3 }}>{taskName}</strong>
-                    {job.created_at ? (
-                      <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
-                        {formatTime(job.created_at)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <span style={{
-                    flexShrink: 0, marginLeft: 8, padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                    background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
-                    color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
-                  }}>
-                    {isStopped ? t('tasks.stopped') : job.status}
-                  </span>
-                </div>
-
-                {groupNames.length > 0 ? (
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {groupNames.map((g) => (
-                      <span key={g} style={{ padding: '1px 6px', borderRadius: 4, background: 'var(--miniapp-bg-deep)', fontSize: 10, color: 'var(--miniapp-text-muted)' }}>
-                        {g}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-
-                {isScheduled && job.scheduled_at ? (
-                  <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                    {t('tasks.scheduledFor', { date: formatDateTime(job.scheduled_at) })}
-                  </div>
-                ) : total > 0 ? (
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
-                    <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
-                      {job.target_type === 'groups' ? t('tasks.groups') : t('tasks.members')}
-                    </span>
-                  </div>
-                ) : <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</div>}
-
-                <div style={{ display: 'flex', gap: 10, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span>{t('tasks.sent')}: <strong>{sent}</strong></span>
-                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>{t('tasks.failed')}: <strong>{failed}</strong></span> : null}
-                  {done > 0 ? <span>{t('tasks.success')}: <strong>{successRate}%</strong></span> : null}
-                  {job.updated_at ? <span style={{ color: 'var(--miniapp-text-muted)' }}>{timeAgo(t, job.updated_at)}</span> : null}
-                  {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>· {p.stop_reason}</span> : null}
-                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {isScheduled ? (
-                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
-                        style={{
-                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
-                          color: 'var(--miniapp-clay)', fontSize: 11, fontWeight: 600,
-                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
-                          opacity: actingJobId === job.id ? 0.5 : 1,
-                        }}>
-                        {actingJobId === job.id ? t('tasks.cancelling') : t('tasks.cancel')}
-                      </button>
-                    ) : null}
-                    {(isRunning || isQueued) && job.status !== 'aborted' ? (
-                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleCancel(job.id)}
-                        style={{
-                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
-                          color: 'var(--miniapp-clay)', fontSize: 11, fontWeight: 600,
-                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
-                          opacity: actingJobId === job.id ? 0.5 : 1,
-                        }}>
-                        {actingJobId === job.id ? t('tasks.stopping') : t('tasks.stop')}
-                      </button>
-                    ) : null}
-                    {(isFailed || job.status === 'aborted') ? (
-                      <button type="button" disabled={actingJobId === job.id} onClick={() => void handleRetry(job.id)}
-                        style={{
-                          background: 'none', border: 'none', cursor: actingJobId === job.id ? 'default' : 'pointer',
-                          color: 'var(--miniapp-sage)', fontSize: 11, fontWeight: 600,
-                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
-                          opacity: actingJobId === job.id ? 0.5 : 1,
-                        }}>
-                        {actingJobId === job.id ? t('tasks.retrying') : t('tasks.retry')}
-                      </button>
-                    ) : null}
-                    {isCompleted && job.id ? (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setLogsJobId(job.id) }}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: 'var(--miniapp-text-muted)', fontSize: 11, fontWeight: 600,
-                          fontFamily: 'var(--miniapp-sans)', textDecoration: 'underline', padding: 0,
-                        }}>
-                        {t('tasks.viewLogs')}
-                      </button>
-                    ) : null}
-                  </span>
-                </div>
-
-                {isExpanded ? (
-                  <div style={{ marginTop: 6, display: 'grid', gap: 6, padding: 8, background: 'var(--miniapp-bg)', borderRadius: 8, fontSize: 11 }}>
+                {/* Header: task name + status pill + time */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <strong style={{ fontSize: 13, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{taskName}</strong>
                     {job.job_type ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.jobType')}:</span> {JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')}</div>
-                    ) : null}
-                    {job.target_type ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetType')}:</span> {job.target_type}</div>
-                    ) : null}
-                    {job.message_preview ? (
-                      <div style={{ display: 'grid', gap: 2 }}>
-                        <span style={{ fontWeight: 600 }}>{t('tasks.messagePreview')}:</span>
-                        <div style={{ color: 'var(--miniapp-text-muted)', lineHeight: 1.4, wordBreak: 'break-word' }}>{job.message_preview}</div>
-                      </div>
-                    ) : null}
-                    {job.target_group_ids && job.target_group_ids.length > 0 ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.targetGroups')}:</span> {job.target_group_ids.map((gid) => jobGroupNames[gid] || `#${gid}`).join(', ')}</div>
-                    ) : null}
-                    {job.selected_count != null ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.selectedCount', { count: job.selected_count })}</span></div>
-                    ) : null}
-                    {job.exclusion_counts ? (
-                      <div style={{ display: 'grid', gap: 2 }}>
-                        <span style={{ fontWeight: 600 }}>{t('tasks.exclusions')}:</span>
-                        <div style={{ color: 'var(--miniapp-text-muted)' }}>
-                          {job.exclusion_counts.admins_excluded ? t('tasks.adminsExcluded', { count: job.exclusion_counts.admins_excluded }) + ' ' : ''}
-                          {job.exclusion_counts.bots_excluded ? t('tasks.botsExcluded', { count: job.exclusion_counts.bots_excluded }) + ' ' : ''}
-                          {job.exclusion_counts.already_sent_excluded ? t('tasks.alreadySent', { count: job.exclusion_counts.already_sent_excluded }) + ' ' : ''}
-                          {job.exclusion_counts.blacklisted_excluded ? t('tasks.blacklisted', { count: job.exclusion_counts.blacklisted_excluded }) : ''}
-                        </div>
-                      </div>
-                    ) : null}
-                    {job.scheduled_at ? (
-                      <div><span style={{ fontWeight: 600 }}>{t('tasks.scheduledAt')}:</span> {formatDateTime(job.scheduled_at)}</div>
+                      <span style={{
+                        flexShrink: 0, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                        background: 'var(--miniapp-bg-deep)', color: 'var(--miniapp-text-muted)',
+                      }}>
+                        {JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')}
+                      </span>
                     ) : null}
                   </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {job.created_at ? (
+                      <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)' }}>{formatTime(job.created_at)}</span>
+                    ) : null}
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', textTransform: 'capitalize',
+                      background: isCompleted ? 'var(--miniapp-sage-dim)' : isFailed ? 'rgba(161,87,62,0.12)' : isRunning ? 'rgba(71,89,119,0.12)' : isQueued ? 'rgba(71,89,119,0.08)' : isScheduled ? 'rgba(200,160,80,0.12)' : 'var(--miniapp-bg-deep)',
+                      color: isCompleted ? 'var(--miniapp-sage)' : isFailed ? 'var(--miniapp-clay)' : isRunning ? '#475977' : isQueued ? '#9b9186' : isScheduled ? '#b8960a' : 'var(--miniapp-text-muted)',
+                    }}>
+                      {isStopped ? t('tasks.stopped') : job.status}
+                    </span>
+                    {/* Overflow menu */}
+                    <div ref={menuJobId === job.id ? menuRef : undefined} style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        aria-label={t('tasks.moreActions')}
+                        aria-expanded={menuJobId === job.id}
+                        onClick={(e) => { e.stopPropagation(); setMenuJobId(menuJobId === job.id ? null : job.id) }}
+                        style={{
+                          display: 'grid', placeItems: 'center', width: 28, height: 28, borderRadius: 8,
+                          background: menuJobId === job.id ? 'var(--miniapp-bg-deep)' : 'transparent',
+                          border: 'none', cursor: 'pointer', color: 'var(--miniapp-text-muted)',
+                          fontSize: 16, lineHeight: 1,
+                        }}
+                      >
+                        ⋯
+                      </button>
+                      {menuJobId === job.id ? (
+                        <div style={{
+                          position: 'absolute', top: 32, insetInlineEnd: 0, zIndex: 30, minWidth: 160,
+                          background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
+                          borderRadius: 12, padding: 4, boxShadow: '0 12px 32px rgba(32,25,16,0.18)',
+                          display: 'grid', gap: 2,
+                        }}>
+                          {(isRunning || isQueued) && job.status !== 'aborted' ? (
+                            <button type="button" onClick={() => setConfirmAction({ jobId: job.id, action: 'stop' })}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
+                                color: 'var(--miniapp-clay)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {t('tasks.stop')}
+                            </button>
+                          ) : null}
+                          {isScheduled ? (
+                            <button type="button" onClick={() => setConfirmAction({ jobId: job.id, action: 'stop' })}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
+                                color: 'var(--miniapp-clay)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {t('tasks.cancel')}
+                            </button>
+                          ) : null}
+                          {isStopped && (isFailed || job.status === 'aborted') ? (
+                            <button type="button" onClick={() => setConfirmAction({ jobId: job.id, action: 'resume' })}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
+                                color: 'var(--miniapp-sage)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {t('tasks.resume')}
+                            </button>
+                          ) : null}
+                          {(isFailed || job.status === 'aborted') ? (
+                            <button type="button" onClick={() => setConfirmAction({ jobId: job.id, action: 'retry' })}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
+                                color: 'var(--miniapp-text-primary)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {t('tasks.retry')}
+                            </button>
+                          ) : null}
+                          {isCompleted && job.id ? (
+                            <button type="button" onClick={() => { setMenuJobId(null); setLogsJobId(job.id) }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
+                                color: 'var(--miniapp-text-primary)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {t('tasks.viewLogs')}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar + counts */}
+                {!isScheduled && total > 0 ? (
+                  <div style={{ display: 'grid', gap: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{sent} / {total}</span>
+                      <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>
+                        {job.target_type === 'groups' ? t('tasks.groups') : t('tasks.members')}
+                      </span>
+                    </div>
+                    <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${Math.min(Math.max(pct, 0), 100)}%`,
+                        borderRadius: 999,
+                        background: isFailed && pct < 100 ? 'var(--miniapp-clay)' : 'var(--miniapp-sage)',
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                  </div>
                 ) : null}
+
+                {/* Meta row: sent / failed / success / updated */}
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, flexWrap: 'wrap', alignItems: 'center', color: 'var(--miniapp-text-muted)' }}>
+                  <span>{t('tasks.sent')}: <strong style={{ color: 'var(--miniapp-text-primary)' }}>{sent}</strong></span>
+                  {failed > 0 ? <span style={{ color: 'var(--miniapp-clay)' }}>{t('tasks.failed')}: <strong>{failed}</strong></span> : null}
+                  {done > 0 ? <span>{t('tasks.success')}: <strong style={{ color: 'var(--miniapp-sage)' }}>{successRate}%</strong></span> : null}
+                  {isStopped ? <span style={{ color: 'var(--miniapp-clay)' }}>{p.stop_reason}</span> : null}
+                  {job.updated_at ? <span style={{ marginLeft: 'auto' }}>{timeAgo(t, job.updated_at)}</span> : null}
+                </div>
               </div>
             )
           })}
@@ -3136,6 +3152,35 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
           />
         )
       })()}
+
+      {confirmAction ? (
+        <ConfirmModal
+          title={
+            confirmAction.action === 'stop'
+              ? t('tasks.confirmStopTitle')
+              : confirmAction.action === 'resume'
+                ? t('tasks.confirmResumeTitle')
+                : t('tasks.confirmRetryTitle')
+          }
+          message={
+            confirmAction.action === 'stop'
+              ? t('tasks.confirmStopMessage', { id: confirmAction.jobId })
+              : confirmAction.action === 'resume'
+                ? t('tasks.confirmResumeMessage', { id: confirmAction.jobId })
+                : t('tasks.confirmRetryMessage', { id: confirmAction.jobId })
+          }
+          confirmLabel={
+            confirmAction.action === 'stop'
+              ? t('tasks.stop')
+              : confirmAction.action === 'resume'
+                ? t('tasks.resume')
+                : t('tasks.retry')
+          }
+          isBusy={confirmBusy}
+          onConfirm={() => void runConfirmAction()}
+          onCancel={() => { if (!confirmBusy) setConfirmAction(null) }}
+        />
+      ) : null}
     </Card>
   )
 }

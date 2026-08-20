@@ -323,7 +323,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
         {bulkTargetType === 'members' ? (
           <>
-            <GroupAutocomplete label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups}
+            <GroupAutocomplete label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups} t={t}
               mode="single"
               selectedGroup={bulkSourceGroup}
               onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkMemberQuery(''); setBulkMemberResults([]); setBulkMemberTotal(0); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
@@ -440,7 +440,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </>
         ) : (
           <>
-            <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups}
+            <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} t={t}
               mode="multi" selected={bulkSelectedTargetGroups}
               onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])}
               onRemove={(id) => setBulkSelectedTargetGroups((c) => c.filter((x) => x.tg_group_id !== id))} />
@@ -640,8 +640,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                   setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessages([quickMessage.trim()]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
                 } catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
                 finally { setQuickSaving(false) }
-              }}>Save</Button>
-              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>Cancel</Button>
+              }}>{t('common.save')}</Button>
+              <Button tone="secondary" onClick={() => setShowQuickCreate(false)}>{t('common.cancel')}</Button>
             </div>
           </div>
         </div>
