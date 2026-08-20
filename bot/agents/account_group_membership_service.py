@@ -19,6 +19,7 @@ from bot.db.models import (
     ScrapedMessage,
     User,
 )
+from bot.db.models.member_operation import MemberOperation
 from bot.db.models.agent import SentBroadcastMessage
 from bot.db.models.bulk_messaging import AgentBlacklistEntry
 from bot.db.models.member_claim import MemberClaim
@@ -411,6 +412,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         only_bots: bool = False,
         exclude_self: bool = True,
         order_by: str = "message_count",
+        target_tg_group_id: int | None = None,
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -660,10 +662,31 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "expires_at": claim.expires_at.isoformat() if claim.expires_at else None,
                     }
 
+        # Query invitation status for these members (for the target group, if provided)
+        invitation_status: dict[int, dict[str, Any]] = {}  # tg_user_id -> {status, sent_at, invitation_link}
+        if user_ids and target_tg_group_id:
+            op_rows = (
+                await self.session.execute(
+                    select(MemberOperation).where(
+                        MemberOperation.tg_group_id == target_tg_group_id,
+                        MemberOperation.tg_user_id.in_(user_ids),
+                        MemberOperation.agent_id == agent.id,
+                        MemberOperation.status.in_(["pending", "sent"]),
+                    )
+                )
+            ).scalars().all()
+            for op in op_rows:
+                invitation_status[int(op.tg_user_id)] = {
+                    "status": op.status,
+                    "sent_at": op.sent_at.isoformat() if op.sent_at else None,
+                    "invitation_link": op.invitation_link,
+                }
+
         def _member_dict(member) -> dict[str, Any]:
             role = member.role or "member"
             tg_uid = int(member.tg_user_id)
             claim_info = member_claims.get(tg_uid)
+            inv_info = invitation_status.get(tg_uid)
             return {
                 "user_id": tg_uid,
                 "username": member.username,
@@ -676,6 +699,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "is_bot": bool((member.raw_data or {}).get("bot", member.is_bot)),
                 "sent_by_agent": tg_uid in sent_to,
                 "claim": claim_info,
+                "invitation_status": inv_info,
             }
 
         return {

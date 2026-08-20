@@ -515,6 +515,7 @@ async def webapp_agent_member_search(
     exclude_bots: bool = Query(default=False),
     only_admins: bool = Query(default=False),
     only_bots: bool = Query(default=False),
+    target_tg_group_id: int | None = Query(default=None),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
@@ -532,6 +533,7 @@ async def webapp_agent_member_search(
             exclude_bots=exclude_bots,
             only_admins=only_admins,
             only_bots=only_bots,
+            target_tg_group_id=target_tg_group_id,
         )
         return payload
     except ValueError as exc:

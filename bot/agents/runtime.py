@@ -1362,8 +1362,9 @@ class BulkAddMembersRuntime:
                                     await session.rollback()
                         elif send_invite_link:
                             invite_link = await _get_cached_invite_link(target_tg_group_id)
+                            custom_msg = normalized.get("custom_invite_message")
                             if invite_link:
-                                dm_sent = await send_invite_link_to_user(client, user_id, invite_link)
+                                dm_sent = await send_invite_link_to_user(client, user_id, invite_link, custom_message=custom_msg)
                                 if dm_sent:
                                     invite_link_count += 1
                                     result_entry["status"] = "invite_link_sent"

@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bot.db.base import Base
@@ -28,7 +28,7 @@ class WorkspaceInvitation(Base):
             "tenant_id",
             "invited_user_id",
             unique=True,
-            postgresql_where="status = 'pending'",
+            postgresql_where=text("status = 'pending'"),
         ),
     )
 

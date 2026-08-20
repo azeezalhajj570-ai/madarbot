@@ -281,10 +281,14 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
 
 
 async def send_invite_link_to_user(
-    client: TelegramClient, user_id: int, invite_link: str
+    client: TelegramClient, user_id: int, invite_link: str, custom_message: str | None = None,
 ) -> bool:
     try:
-        await client.send_message(user_id, f"Join our group here: {invite_link}")
+        if custom_message and custom_message.strip():
+            text = f"{custom_message.strip()}\n\n{invite_link}"
+        else:
+            text = f"Join our group here: {invite_link}"
+        await client.send_message(user_id, text)
         return True
     except Exception:
         logger.bind(user_id=user_id).warning("agent_invite_link_dm_failed")

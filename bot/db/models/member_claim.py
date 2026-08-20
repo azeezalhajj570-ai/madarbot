@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,7 +38,7 @@ class MemberClaim(Base):
             "tenant_id",
             "scraped_member_id",
             unique=True,
-            postgresql_where="status = 'active'",
+            postgresql_where=text("status = 'active'"),
         ),
     )
 

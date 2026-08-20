@@ -121,6 +121,7 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   add_contact: 'Add Contact',
   send_lead_message: 'Send Lead Message',
   automation_task: 'Automation Task',
+  member_add: 'Add Members',
 }
 
 function _parseKeywords(raw: string | string[] | undefined | null): string[] {
@@ -2854,7 +2855,10 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   }, [jobs, filterStatus, filterDate, filterType, search, filterGroup])
 
   const taskTypes = useMemo(() => {
-    const types = new Set(jobs.map((j) => j.job_type))
+    const types = new Set<string>(Object.keys(JOB_TYPE_LABELS))
+    for (const j of jobs) {
+      if (j.job_type) types.add(j.job_type)
+    }
     return Array.from(types)
   }, [jobs])
 
@@ -2919,12 +2923,10 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
           { label: t('tasks.filterLast24h'), value: '24h' }, { label: t('tasks.filterLast7d'), value: '7d' },
           { label: t('tasks.filterLast30d'), value: '30d' },
         ]} />
-        {taskTypes.length > 1 ? (
-          <FilterSelect value={filterType} onChange={setFilterType} options={[
-            { label: t('tasks.filterAllTypes'), value: 'all' },
-            ...taskTypes.map((jtype) => ({ label: JOB_TYPE_LABELS[jtype] || jtype.replace(/_/g, ' '), value: jtype })),
-          ]} />
-        ) : null}
+        <FilterSelect value={filterType} onChange={setFilterType} options={[
+          { label: t('tasks.filterAllTypes'), value: 'all' },
+          ...taskTypes.map((jtype) => ({ label: JOB_TYPE_LABELS[jtype] || jtype.replace(/_/g, ' '), value: jtype })),
+        ]} />
         {groupOptions.length > 0 ? (
           <FilterSelect value={filterGroup} onChange={setFilterGroup} options={[
             { label: t('tasks.filterAllGroups'), value: 'all' },

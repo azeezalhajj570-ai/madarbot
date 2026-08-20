@@ -14,6 +14,7 @@ export function GroupDestinationField({
   onSelect,
   onClear,
   syncButton,
+  loading,
 }: {
   label: string
   query: string
@@ -23,6 +24,7 @@ export function GroupDestinationField({
   onSelect: (group: SelectedGroupChip) => void
   onClear: () => void
   syncButton?: React.ReactNode
+  loading?: boolean
 }) {
   const normalizedQuery = query.trim().toLowerCase()
   const suggestions = useMemo(() => {
@@ -41,7 +43,7 @@ export function GroupDestinationField({
       <InputField label={label} value={query} onChange={onQueryChange} placeholder="Search destination group" />
       {normalizedQuery ? (
         <div style={{ display: 'grid', gap: 6, padding: 8, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)' }}>
-          {suggestions.length ? suggestions.map((group) => (
+          {loading ? <Note>Searching…</Note> : suggestions.length ? suggestions.map((group) => (
             <LinkRow key={String(group.tg_group_id)} onClick={() => onSelect({ tg_group_id: Number(group.tg_group_id), title: String(group.title || group.tg_group_id || 'Group') })}>
               <strong>{group.title || `Group ${group.tg_group_id}`}</strong>
               <div style={{ color: '#655d52', marginTop: 4 }}>{group.tg_group_id} · {group.group_type || 'group'}</div>
