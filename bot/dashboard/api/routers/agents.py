@@ -269,36 +269,101 @@ async def webapp_agent_send_logs(
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     from sqlalchemy import desc, select
-    from bot.db.models.agent import SentBroadcastMessage
+    from bot.db.models.agent import AgentJob, SentBroadcastMessage
 
-    stmt = select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
+    logs: list[dict[str, Any]] = []
+
     if job_id:
-        stmt = stmt.where(SentBroadcastMessage.job_id == job_id)
-    if offset_id:
-        stmt = stmt.where(SentBroadcastMessage.id < offset_id)
-    stmt = stmt.order_by(desc(SentBroadcastMessage.id)).limit(limit)
-
-    rows = (await session.execute(stmt)).scalars().all()
-
-    group_ids = {int(msg.tg_group_id) for msg in rows if msg.tg_user_id is None}
-    if group_ids:
-        from bot.db.models.scraper import ScrapedGroup
-        from sqlalchemy import select as sql_select
-
-        group_rows = (
+        job = (
             await session.execute(
-                sql_select(ScrapedGroup.tg_group_id, ScrapedGroup.title).where(
-                    ScrapedGroup.tg_group_id.in_(group_ids),
-                    ScrapedGroup.last_agent_id == agent.id,
-                )
+                select(AgentJob).where(AgentJob.id == job_id, AgentJob.agent_id == agent.id)
             )
-        ).all()
-        group_titles = {int(r.tg_group_id): r.title or str(r.tg_group_id) for r in group_rows}
-    else:
-        group_titles = {}
+        ).scalar_one_or_none()
 
-    return {
-        "logs": [
+        if job and job.job_type in ("member_add", "bulk_add_members"):
+            progress = dict(job.job_payload.get("progress") or {})
+            results: list[dict[str, Any]] = progress.get("results", [])
+
+            tg_user_ids = [r.get("user_id") for r in results if r.get("user_id")]
+            usernames: dict[int, str] = {}
+            if tg_user_ids:
+                from bot.db.models.scraper import ScrapedMember
+                sm_rows = (
+                    await session.execute(
+                        select(ScrapedMember.tg_user_id, ScrapedMember.username).where(
+                            ScrapedMember.tg_user_id.in_(tg_user_ids)
+                        )
+                    )
+                ).all()
+                usernames = {int(r.tg_user_id): r.username for r in sm_rows if r.username}
+
+            target_tg = int(progress.get("target_tg_group_id", 0))
+            group_title = None
+            if target_tg:
+                from bot.db.models.scraper import ScrapedGroup
+                grp = (
+                    await session.execute(
+                        select(ScrapedGroup.title).where(
+                            ScrapedGroup.tg_group_id == target_tg,
+                            ScrapedGroup.last_agent_id == agent.id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                group_title = grp or str(target_tg)
+
+            for i, r in enumerate(results):
+                uid = r.get("user_id")
+                status = r.get("status", "unknown")
+                error_code = r.get("error_code")
+                method = r.get("method")
+                msg = status
+                if error_code:
+                    msg = f"{status}: {error_code}"
+                elif method:
+                    msg = f"{status} ({method})"
+
+                logs.append({
+                    "id": -(job.id * 10000 + i),
+                    "job_id": job.id,
+                    "tg_user_id": uid,
+                    "tg_group_id": target_tg,
+                    "username": usernames.get(uid) if uid else None,
+                    "phone_number": None,
+                    "group_title": group_title,
+                    "message_preview": msg,
+                    "message_full": msg,
+                    "status": status,
+                    "sent_at": job.updated_at.isoformat() if job.updated_at else None,
+                })
+
+    if not logs:
+        stmt = select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
+        if job_id:
+            stmt = stmt.where(SentBroadcastMessage.job_id == job_id)
+        if offset_id:
+            stmt = stmt.where(SentBroadcastMessage.id < offset_id)
+        stmt = stmt.order_by(desc(SentBroadcastMessage.id)).limit(limit)
+
+        rows = (await session.execute(stmt)).scalars().all()
+
+        group_ids = {int(msg.tg_group_id) for msg in rows if msg.tg_user_id is None}
+        if group_ids:
+            from bot.db.models.scraper import ScrapedGroup
+            from sqlalchemy import select as sql_select
+
+            group_rows = (
+                await session.execute(
+                    sql_select(ScrapedGroup.tg_group_id, ScrapedGroup.title).where(
+                        ScrapedGroup.tg_group_id.in_(group_ids),
+                        ScrapedGroup.last_agent_id == agent.id,
+                    )
+                )
+            ).all()
+            group_titles = {int(r.tg_group_id): r.title or str(r.tg_group_id) for r in group_rows}
+        else:
+            group_titles = {}
+
+        logs = [
             {
                 "id": msg.id,
                 "job_id": msg.job_id,
@@ -315,8 +380,11 @@ async def webapp_agent_send_logs(
                 "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
             }
             for msg in rows
-        ],
-        "has_more": len(rows) >= limit,
+        ]
+
+    return {
+        "logs": logs[:limit],
+        "has_more": len(logs) >= limit,
     }
 
 
