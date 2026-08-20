@@ -28,14 +28,19 @@ from bot.agents.jobs import (
     normalize_member_add_payload,
 )
 from bot.db.models import AgentJob
+from bot.db.models.scraper import ScrapedMember
 from bot.db.session import get_session
+from bot.services.member_claim_service import claim_members
 from bot.services.scraper_service import ScraperService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
 from ..dependencies import (
+    WorkspaceContext,
     ensure_agent_admin,
     get_identity,
+    get_workspace_context,
     require_active_subscription,
+    require_active_workspace,
     require_business_plan,
 )
 from .auth_boundary import require_agents_boundary, require_any_boundary
@@ -64,11 +69,11 @@ router = APIRouter(tags=["agents"])
 )
 async def webapp_agents(
     group_id: int | None = Query(default=None, ge=1),
-    identity: TelegramWebAppIdentity = Depends(get_identity),
+    workspace: WorkspaceContext = Depends(get_workspace_context),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     agents = await LinkedAccountService(session).list_agents(
-        actor_user_id=identity.user_id, group_id=group_id
+        actor_user_id=workspace.identity.user_id, group_id=group_id, tenant_id=workspace.tenant_id,
     )
     return [serialize_agent(agent) for agent in agents]
 
@@ -77,13 +82,14 @@ async def webapp_agents(
 @router.post("/webapp/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_link_agent(
     payload: AgentLinkRequest,
-    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    workspace: WorkspaceContext = Depends(require_active_workspace),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     # Check plan limits
     from bot.config import get_settings
     from bot.services.subscription_service import SubscriptionService
 
+    identity = workspace.identity
     is_owner = identity.user_id in get_settings().bot_owner_ids
     if not is_owner:
         sub = await SubscriptionService(session).get_active_subscription(
@@ -91,7 +97,7 @@ async def webapp_link_agent(
         )
         if sub and sub.plan == "pro":
             existing = await LinkedAccountService(session).list_agents(
-                actor_user_id=identity.user_id
+                actor_user_id=identity.user_id, tenant_id=workspace.tenant_id,
             )
             if len(existing) >= 1:
                 raise HTTPException(
@@ -106,6 +112,7 @@ async def webapp_link_agent(
             external_account_id=(payload.name or payload.external_account_id),
             phone_number=payload.phone_number,
             telegram_user_id=payload.telegram_user_id,
+            tenant_id=workspace.tenant_id,
             metadata={
                 **payload.metadata,
                 **(
@@ -126,15 +133,16 @@ async def webapp_link_agent(
 @router.post("/webapp/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 async def webapp_start_agent_auth(
     payload: AgentLoginStartRequest,
-    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    workspace: WorkspaceContext = Depends(require_active_workspace),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     try:
         agent = await AccountSessionService(session).start_agent_login(
-            actor_user_id=identity.user_id,
+            actor_user_id=workspace.identity.user_id,
             group_id=payload.group_id,
             phone_number=payload.phone_number,
             agent_id=payload.agent_id,
+            tenant_id=workspace.tenant_id,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -837,6 +845,8 @@ async def webapp_bulk_add_members(
     identity: TelegramWebAppIdentity = Depends(require_active_subscription),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
+    from sqlalchemy import select as sql_select
+
     agent = await ensure_agent_admin(agent_id, session, identity)
     if agent.auth_state != "active":
         raise HTTPException(
@@ -850,6 +860,66 @@ async def webapp_bulk_add_members(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
 
+    # Resolve tg_user_ids to scraped_member_ids for claiming
+    user_ids = normalized.get("user_ids", [])
+    source_tg_group_id = normalized.get("source_tg_group_id")
+
+    scraped_member_map: dict[int, int] = {}  # tg_user_id -> scraped_member_id
+    scraped_group_id: int | None = None
+
+    if user_ids and source_tg_group_id:
+        # Look up scraped members for this source group
+        from bot.db.models.scraper import ScrapedGroup
+
+        sg_result = await session.execute(
+            sql_select(ScrapedGroup).where(ScrapedGroup.tg_group_id == source_tg_group_id)
+        )
+        scraped_group = sg_result.scalar_one_or_none()
+        if scraped_group:
+            scraped_group_id = scraped_group.id
+            sm_result = await session.execute(
+                sql_select(ScrapedMember).where(
+                    ScrapedMember.scraped_group_id == scraped_group.id,
+                    ScrapedMember.tg_user_id.in_(user_ids),
+                )
+            )
+            for sm in sm_result.scalars().all():
+                scraped_member_map[int(sm.tg_user_id)] = sm.id
+
+    # Create claims for members that can be resolved
+    claim_result = None
+    if scraped_member_map and scraped_group_id:
+        claim_result = await claim_members(
+            session,
+            tenant_id=agent.tenant_id,
+            agent_id=agent.id,
+            scraped_group_id=scraped_group_id,
+            member_ids=list(scraped_member_map.values()),
+        )
+        await session.commit()
+
+        # Filter user_ids to only include successfully claimed members
+        claimed_member_ids = set(claim_result.claimed)
+        claimed_tg_user_ids = [
+            uid for uid, mid in scraped_member_map.items() if mid in claimed_member_ids
+        ]
+        normalized["user_ids"] = claimed_tg_user_ids
+
+        # If no members were claimed, return conflicts without creating a job
+        if not claimed_tg_user_ids:
+            return {
+                "status": "conflicts",
+                "claimed_count": 0,
+                "conflicts": [
+                    {
+                        "scraped_member_id": c.scraped_member_id,
+                        "claimed_by_agent_id": c.claimed_by_agent_id,
+                        "expires_at": c.expires_at.isoformat(),
+                    }
+                    for c in claim_result.conflicts
+                ],
+            }
+
     try:
         job = await AgentJobService(session).create_job(
             actor_user_id=identity.user_id,
@@ -862,10 +932,30 @@ async def webapp_bulk_add_members(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
 
+    # Store claim_ids in job payload for release on completion
+    if claim_result and claim_result.claimed:
+        from bot.db.models.member_claim import MemberClaim
+
+        claim_ids_result = await session.execute(
+            sql_select(MemberClaim.id).where(
+                MemberClaim.agent_job_id == None,  # noqa: E711
+                MemberClaim.agent_id == agent.id,
+                MemberClaim.scraped_group_id == scraped_group_id,
+                MemberClaim.scraped_member_id.in_(claim_result.claimed),
+                MemberClaim.status == "active",
+            )
+        )
+        claim_ids = [row[0] for row in claim_ids_result.fetchall()]
+        if claim_ids:
+            normalized["claim_ids"] = claim_ids
+            job.job_payload = normalized
+            await session.commit()
+
     from bot.agents.dispatch import dispatch_agent_job
 
     await dispatch_agent_job(job.id)
-    return {
+
+    response: dict[str, Any] = {
         "status": "ok",
         "job": {
             "id": job.id,
@@ -876,6 +966,20 @@ async def webapp_bulk_add_members(
             "target_tg_group_id": normalized.get("target_tg_group_id"),
         },
     }
+
+    # Include conflict info if there were partial conflicts
+    if claim_result and claim_result.conflicts:
+        response["conflicts"] = [
+            {
+                "scraped_member_id": c.scraped_member_id,
+                "claimed_by_agent_id": c.claimed_by_agent_id,
+                "expires_at": c.expires_at.isoformat(),
+            }
+            for c in claim_result.conflicts
+        ]
+        response["claimed_count"] = len(claim_result.claimed)
+
+    return response
 
 
 @router.post(

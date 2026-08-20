@@ -1474,6 +1474,28 @@ class BulkAddMembersRuntime:
                 },
             }
         finally:
+            # Release member claims for this operation
+            claim_ids = payload.get("claim_ids")
+            if claim_ids and agent.tenant_id:
+                try:
+                    from bot.db.session import SessionLocal
+                    from bot.services.member_claim_service import release_claims
+
+                    async with SessionLocal() as claim_session:
+                        await release_claims(
+                            claim_session,
+                            tenant_id=agent.tenant_id,
+                            agent_id=agent.id,
+                            claim_ids=claim_ids,
+                        )
+                        await claim_session.commit()
+                except Exception as exc:
+                    logger.warning(
+                        "claim_release_failed",
+                        agent_id=agent.id,
+                        claim_ids=claim_ids,
+                        error=str(exc),
+                    )
             await redis_client.aclose()
 
 

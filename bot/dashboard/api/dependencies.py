@@ -322,6 +322,14 @@ async def require_active_subscription(
     return identity
 
 
+async def require_active_workspace(
+    workspace: WorkspaceContext = Depends(get_workspace_context),
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+) -> WorkspaceContext:
+    """WorkspaceContext + active subscription check combined."""
+    return workspace
+
+
 async def require_business_plan(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
@@ -589,7 +597,7 @@ async def build_identity_profile(
                 if tenant is None:
                     continue
                 ws_summary = {
-                    "id": tenant.id,
+                    "id": str(tenant.id),
                     "name": tenant.name,
                     "role": membership.role,
                     "member_count": await workspace_service.member_count(tenant.id),
@@ -599,7 +607,7 @@ async def build_identity_profile(
             active_tenant = await session.get(Tenant, owned.tenant_id)
             if active_tenant is not None:
                 workspace_info = {
-                    "id": active_tenant.id,
+                    "id": str(active_tenant.id),
                     "name": active_tenant.name,
                     "role": owned.role,
                     "member_count": await workspace_service.member_count(active_tenant.id),

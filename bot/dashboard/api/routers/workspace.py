@@ -27,6 +27,10 @@ class CreateWorkspaceRequest(BaseModel):
     name: str
 
 
+class UpdateWorkspaceRequest(BaseModel):
+    name: str | None = None
+
+
 class CreateInvitationRequest(BaseModel):
     identifier: str
     role: str = "member"
@@ -54,7 +58,7 @@ async def _workspace_summary(
     session: AsyncSession, workspace_service: WorkspaceService, tenant: Tenant, role: str
 ) -> dict[str, Any]:
     return {
-        "id": tenant.id,
+        "id": str(tenant.id),
         "name": tenant.name,
         "slug": tenant.slug,
         "role": role,
@@ -113,6 +117,58 @@ async def create_workspace(
 
     workspace_service = WorkspaceService(session)
     return await _workspace_summary(session, workspace_service, tenant, "owner")
+
+
+@router.patch("/api/workspace/{workspace_id}", dependencies=[WORKSPACE_BOUNDARY])
+@router.patch("/webapp/workspace/{workspace_id}", dependencies=[WORKSPACE_BOUNDARY])
+async def update_workspace(
+    workspace_id: int,
+    payload: UpdateWorkspaceRequest,
+    identity=Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+    membership = await workspace_service.get_membership(tenant_id=workspace_id, user_id=user.id)
+    if membership is None or membership.role not in ("owner", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and admins can update the workspace")
+    tenant = await session.get(Tenant, workspace_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Workspace name cannot be empty")
+        tenant.name = name
+    await session.commit()
+    return await _workspace_summary(session, workspace_service, tenant, membership.role)
+
+
+@router.delete(
+    "/api/workspace/{workspace_id}",
+    dependencies=[WORKSPACE_BOUNDARY],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+@router.delete(
+    "/webapp/workspace/{workspace_id}",
+    dependencies=[WORKSPACE_BOUNDARY],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_workspace(
+    workspace_id: int,
+    identity=Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    user = await UserService(session).get_or_create_user_by_tg_id(identity.user_id)
+    workspace_service = WorkspaceService(session)
+    membership = await workspace_service.get_membership(tenant_id=workspace_id, user_id=user.id)
+    if membership is None or membership.role != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the owner can delete the workspace")
+    tenant = await session.get(Tenant, workspace_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    await session.delete(tenant)
+    await session.commit()
 
 
 @router.get("/api/workspace/{workspace_id}/members", dependencies=[WORKSPACE_BOUNDARY])

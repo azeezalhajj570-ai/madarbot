@@ -206,6 +206,12 @@ Each bot owner only sees their own groups, agents, and statistics.
 <!-- SPECKIT START -->
 ## Current Plan
 
+**Workspace-Aware Concurrent Member Claiming** (`019-workspace-member-claiming`)
+- Spec: `specs/019-workspace-member-claiming/spec.md`
+- Plan: `specs/019-workspace-member-claiming/plan.md`
+- Tasks: `specs/019-workspace-member-claiming/tasks.md`
+- Research: `specs/019-workspace-member-claiming/research.md`
+
 **Make Miniapp Workspace-Aware** (`018-workspace-aware-miniapp`)
 - Spec: `specs/018-workspace-aware-miniapp/spec.md`
 - Plan: `specs/018-workspace-aware-miniapp/plan.md`

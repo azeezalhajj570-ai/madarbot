@@ -435,7 +435,13 @@
     "creatingToken": "جارٍ الإنشاء...",
     "cancel": "إلغاء",
     "created": "تم الإنشاء",
-    "failedCreateToken": "فشل إنشاء الرمز"
+    "failedCreateToken": "فشل إنشاء الرمز",
+    "workspace": "مساحة العمل",
+    "rename": "إعادة تسمية",
+    "workspaceUpdated": "تم تحديث اسم مساحة العمل",
+    "workspaceDeleted": "تم حذف مساحة العمل",
+    "deleteWorkspace": "حذف مساحة العمل",
+    "deleteWorkspaceConfirm": "هل تريد حذف مساحة العمل؟ سيفقد جميع الأعضاء الوصول."
   },
   "wizard": {
     "title": "ربط حساب تيليغرام",
@@ -783,6 +789,8 @@
     "searching": "جارٍ البحث...",
     "noMembersFound": "لم يتم العثور على أعضاء",
     "alreadyInGroup": "موجود بالفعل",
+    "heldByOther": "محجوز بواسطة عميل آخر",
+    "selectedByYou": "محدد بواسطتك",
     "selectAll": "تحديد الكل",
     "unselectAll": "إلغاء التحديد",
     "excludeAdminsBots": "استثناء المشرفين والبوتات",

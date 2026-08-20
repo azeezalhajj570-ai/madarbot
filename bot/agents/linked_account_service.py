@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import LinkedAccountIdentity
@@ -41,6 +42,9 @@ class LinkedAccountService(AgentServiceSupport):
         )
         if existing is not None:
             changed = False
+            if not existing.tenant_id:
+                existing.tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+                changed = True
             if existing.telegram_user_id is None and telegram_user_id:
                 existing.telegram_user_id = telegram_user_id
                 changed = True
@@ -90,7 +94,11 @@ class LinkedAccountService(AgentServiceSupport):
             },
         )
         self.session.add(agent)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise ValueError("This phone number is already linked to another account")
         await self.publish(
             "agent_linked",
             group_id=0,
@@ -108,12 +116,14 @@ class LinkedAccountService(AgentServiceSupport):
         phone_number: str | None = None,
         telegram_user_id: int | None = None,
         metadata: dict | None = None,
+        tenant_id: int | None = None,
     ) -> Agent:
         normalized_account_id = str(external_account_id or "").strip()
         if not normalized_account_id:
             raise ValueError("Agent account identifier is required")
         normalized_phone_number = normalize_optional_agent_phone_number(phone_number)
-        tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+        if tenant_id is None:
+            tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
 
         existing = (
             (
@@ -129,6 +139,7 @@ class LinkedAccountService(AgentServiceSupport):
         )
         if existing:
             if existing.auth_state in {"pending_auth", "pending_code", "pending_2fa", "failed"}:
+                existing.tenant_id = existing.tenant_id or tenant_id
                 existing.phone_number = normalized_phone_number or existing.phone_number
                 existing.auth_state = "pending_auth"
                 existing.status = "pending"
@@ -141,7 +152,6 @@ class LinkedAccountService(AgentServiceSupport):
                     await self.session.execute(
                         select(Agent).where(
                             Agent.phone_number == normalized_phone_number,
-                            Agent.linked_by_user_id == actor_user_id,
                         )
                     )
                 )
@@ -149,7 +159,10 @@ class LinkedAccountService(AgentServiceSupport):
                 .first()
             )
             if existing_phone:
-                raise ValueError("Phone number is already linked for this subscription")
+                if existing_phone.auth_state in {"active"} and existing_phone.session_string:
+                    raise ValueError("Phone number is already linked to another account")
+                existing_phone.phone_number = None
+                await self.session.flush()
 
         agent = Agent(
             telegram_user_id=telegram_user_id,
@@ -163,7 +176,11 @@ class LinkedAccountService(AgentServiceSupport):
             details=dict(metadata or {}),
         )
         self.session.add(agent)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise ValueError("This phone number is already linked to another account")
         await self.publish(
             "agent_linked",
             group_id=group_id or 0,
@@ -214,10 +231,6 @@ class LinkedAccountService(AgentServiceSupport):
                         select(Agent).where(
                             Agent.phone_number == normalized_phone_number,
                             Agent.id != agent.id,
-                            or_(
-                                Agent.group_id == agent.group_id,
-                                Agent.linked_by_user_id == actor_user_id,
-                            ),
                         )
                     )
                 )
@@ -225,14 +238,22 @@ class LinkedAccountService(AgentServiceSupport):
                 .first()
             )
             if existing_phone:
-                raise ValueError("Phone number is already linked for this subscription")
+                if existing_phone.auth_state in {"active"} and existing_phone.session_string:
+                    raise ValueError("Phone number is already linked to another account")
+                existing_phone.phone_number = None
+                await self.session.flush()
 
+        agent.tenant_id = agent.tenant_id or await self.resolve_actor_tenant_id(actor_user_id)
         agent.external_account_id = normalized_account_id
         agent.phone_number = normalized_phone_number
         agent.telegram_user_id = telegram_user_id
         agent.linked_by_user_id = agent.linked_by_user_id or actor_user_id
         agent.details = dict(metadata or {})
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise ValueError("This phone number is already linked to another account")
         await self.publish(
             "agent_updated",
             group_id=agent.group_id,
@@ -273,8 +294,11 @@ class LinkedAccountService(AgentServiceSupport):
         )
         return True
 
-    async def list_agents(self, *, actor_user_id: int, group_id: int | None = None) -> list[Agent]:
-        tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+    async def list_agents(
+        self, *, actor_user_id: int, group_id: int | None = None, tenant_id: int | None = None,
+    ) -> list[Agent]:
+        if tenant_id is None:
+            tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
         # Workspace members share visibility of all agents in the tenant (US2).
         # The linked_by_user_id fallback covers agents from before the
         # tenant_id backfill ran — should be empty once the migration completes.
