@@ -8,6 +8,7 @@ import type { ColumnDef } from './components/DataTable'
 
 import {
   agentsApi,
+  workspaceApi,
   AppShell,
   Button,
   Card,
@@ -1003,6 +1004,9 @@ export default function App() {
   const lastNotifIdRef = useRef(0)
   const [subscription, setSubscription] = useState<SubscriptionStatusInfo | null>(null)
   const [showSubscription, setShowSubscription] = useState(false)
+  const [wsEditingName, setWsEditingName] = useState(false)
+  const [wsNameDraft, setWsNameDraft] = useState('')
+  const [wsSaving, setWsSaving] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [subscriptionExpanded, setSubscriptionExpanded] = useState(false)
   const [agentStatus, setAgentStatus] = useState<{ session_state?: string; retry_after?: number | null; flood_wait_until?: string | null } | null>(null)
@@ -1289,33 +1293,37 @@ export default function App() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {activeWorkspace && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
-            {workspaces.length > 1 ? (
-              <select
-                value={activeWorkspace.id}
-                onChange={(e) => switchWorkspace(e.target.value)}
-                style={{
-                  background: 'var(--miniapp-surface)',
-                  border: '1px solid var(--miniapp-border-soft)',
-                  borderRadius: 6,
-                  padding: '2px 6px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--miniapp-text-primary)',
-                  cursor: 'pointer',
-                }}
-              >
-                {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>{ws.name}</option>
-                ))}
-              </select>
-            ) : (
-              <span style={{ fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{activeWorkspace.name}</span>
-            )}
+            <span style={{ fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{activeWorkspace.name}</span>
             <span style={{ color: 'var(--miniapp-border-soft)' }}>&middot;</span>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {label}
+          {accounts.length > 1 && selectedAccount ? (
+            <select
+              value={String(selectedAccount.id)}
+              onChange={(e) => {
+                const id = Number(e.target.value)
+                const acct = accounts.find((a) => a.id === id)
+                if (acct) openWorkspace(acct.id)
+              }}
+              style={{
+                background: 'var(--miniapp-surface)',
+                border: '1px solid var(--miniapp-border-soft)',
+                borderRadius: 6,
+                padding: '2px 6px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--miniapp-text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.phone_number || accountLabel(a)}</option>
+              ))}
+            </select>
+          ) : (
+            <span>{label}</span>
+          )}
           {sessionState && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
@@ -1348,7 +1356,7 @@ export default function App() {
         </div>
       </div>
     )
-  }, [selectedAccount, subscription, t, agentStatus, activeWorkspace, workspaces, switchWorkspace])
+  }, [selectedAccount, subscription, t, agentStatus, activeWorkspace, accounts, openWorkspace])
 
   return (
     <AppShell title={t('app.title')} subtitle={headerSubtitle} actions={
@@ -1415,6 +1423,71 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 0' }}>
               <LanguageSwitcher />
             </div>
+            {activeWorkspace && (
+              <Card title={t('settings.workspace') || 'Workspace'} subtitle={activeWorkspace.name}>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {wsEditingName ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        value={wsNameDraft}
+                        onChange={(e) => setWsNameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && wsNameDraft.trim()) {
+                            setWsSaving(true)
+                            workspaceApi.updateWorkspace(activeWorkspace.id, { name: wsNameDraft.trim() }).then(() => {
+                              session.refreshSession()
+                              setWsEditingName(false)
+                              setStatus(t('settings.workspaceUpdated') || 'Workspace updated', 'success')
+                            }).catch((err: Error) => setStatus(err.message, 'error')).finally(() => setWsSaving(false))
+                          }
+                          if (e.key === 'Escape') setWsEditingName(false)
+                        }}
+                        style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 13, fontFamily: 'var(--miniapp-mono)' }}
+                        autoFocus
+                      />
+                      <Button
+                        onClick={() => {
+                          if (!wsNameDraft.trim()) return
+                          setWsSaving(true)
+                          workspaceApi.updateWorkspace(activeWorkspace.id, { name: wsNameDraft.trim() }).then(() => {
+                            session.refreshSession()
+                            setWsEditingName(false)
+                            setStatus(t('settings.workspaceUpdated') || 'Workspace updated', 'success')
+                          }).catch((err: Error) => setStatus(err.message, 'error')).finally(() => setWsSaving(false))
+                        }}
+                        disabled={wsSaving || !wsNameDraft.trim()}
+                      >{t('common.save') || 'Save'}</Button>
+                      <Button onClick={() => setWsEditingName(false)}>{t('common.cancel') || 'Cancel'}</Button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--miniapp-text-primary)' }}>{activeWorkspace.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setWsEditingName(true); setWsNameDraft(activeWorkspace.name) }}
+                        style={{ background: 'none', border: 'none', color: 'var(--miniapp-text-muted)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}
+                      >{t('settings.rename') || 'Rename'}</button>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>
+                    {activeWorkspace.member_count} {activeWorkspace.member_count === 1 ? 'member' : 'members'} · {activeWorkspace.role}
+                  </div>
+                  {activeWorkspace.role === 'owner' && workspaces.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(t('settings.deleteWorkspaceConfirm') || 'Delete this workspace? All members will lose access.')) return
+                        workspaceApi.deleteWorkspace(activeWorkspace.id).then(() => {
+                          session.refreshSession()
+                          setStatus(t('settings.workspaceDeleted') || 'Workspace deleted', 'success')
+                        }).catch((err: Error) => setStatus(err.message, 'error'))
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#c0392b', cursor: 'pointer', fontSize: 12, textAlign: 'left', padding: 0 }}
+                    >{t('settings.deleteWorkspace') || 'Delete workspace'}</button>
+                  )}
+                </div>
+              </Card>
+            )}
             <Card
               title={t('subscription.title')}
               subtitle={subscription?.status === 'active' ? `${subscription?.plan === 'business' ? t('subscription.businessActive') : t('subscription.proActive')}` : t('subscription.noActive')}

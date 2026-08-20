@@ -435,7 +435,13 @@
     "creatingToken": "Creating...",
     "cancel": "Cancel",
     "created": "created",
-    "failedCreateToken": "Failed to create token"
+    "failedCreateToken": "Failed to create token",
+    "workspace": "Workspace",
+    "rename": "Rename",
+    "workspaceUpdated": "Workspace name updated",
+    "workspaceDeleted": "Workspace deleted",
+    "deleteWorkspace": "Delete workspace",
+    "deleteWorkspaceConfirm": "Delete this workspace? All members will lose access."
   },
   "wizard": {
     "title": "Link Telegram Account",
@@ -783,6 +789,8 @@
     "searching": "Searching...",
     "noMembersFound": "No members found",
     "alreadyInGroup": "Already in target",
+    "heldByOther": "Held by another agent",
+    "selectedByYou": "Selected by you",
     "selectAll": "Select all",
     "unselectAll": "Unselect all",
     "excludeAdminsBots": "Exclude admins and bots",

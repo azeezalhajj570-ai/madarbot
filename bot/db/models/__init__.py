@@ -45,6 +45,7 @@ from bot.db.models.faq import (
     UnansweredQuestionStatus,
 )
 from bot.db.models.group import Group, GroupAdminRole, GroupMember, GroupSetting, PluginEnabled
+from bot.db.models.member_claim import MemberClaim
 from bot.db.models.member_operation import MemberOperation
 from bot.db.models.linked_account import LinkedAccount, LinkedAccountGroup
 from bot.db.models.mcp_token import MCPToken
@@ -192,6 +193,7 @@ __all__ = [
     "LinkedAccountGroup",
     "LinkedAccountRole",
     "MCPToken",
+    "MemberClaim",
     "Message",
     "MemberRole",
     "MemberOperation",

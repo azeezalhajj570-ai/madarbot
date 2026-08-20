@@ -254,6 +254,13 @@ export interface AgentManagedGroup {
   can_add_members?: boolean
 }
 
+export interface MemberClaimInfo {
+  claim_id: number
+  agent_id: number
+  is_own: boolean
+  expires_at?: string | null
+}
+
 export interface AgentGroupMember {
   user_id: number
   username?: string | null
@@ -264,6 +271,7 @@ export interface AgentGroupMember {
   message_count?: number
   is_bot?: boolean
   sent_by_agent?: boolean
+  claim?: MemberClaimInfo | null
 }
 
 export interface AgentGroupMembersPage {

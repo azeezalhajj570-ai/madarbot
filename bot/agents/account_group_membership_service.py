@@ -21,6 +21,7 @@ from bot.db.models import (
 )
 from bot.db.models.agent import SentBroadcastMessage
 from bot.db.models.bulk_messaging import AgentBlacklistEntry
+from bot.db.models.member_claim import MemberClaim
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scraper_service import ScraperService
 
@@ -624,19 +625,57 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 for uid in sent_users:
                     sent_to.add(int(uid))
 
+        # Query active claims for these members
+        member_claims: dict[int, dict[str, Any]] = {}  # tg_user_id -> claim info
+        if user_ids and scraped_group:
+            claim_rows = (
+                await self.session.execute(
+                    select(MemberClaim).where(
+                        MemberClaim.tenant_id == agent.tenant_id,
+                        MemberClaim.scraped_group_id == scraped_group.id,
+                        MemberClaim.scraped_member_id.in_(
+                            select(ScrapedMember.id).where(
+                                ScrapedMember.scraped_group_id == scraped_group.id,
+                                ScrapedMember.tg_user_id.in_(user_ids),
+                            )
+                        ),
+                        MemberClaim.status == "active",
+                    )
+                )
+            ).scalars().all()
+            for claim in claim_rows:
+                # Find the tg_user_id for this claim's scraped_member_id
+                sm_result = await self.session.execute(
+                    select(ScrapedMember.tg_user_id).where(
+                        ScrapedMember.id == claim.scraped_member_id
+                    )
+                )
+                sm_row = sm_result.first()
+                if sm_row:
+                    tg_uid = int(sm_row[0])
+                    member_claims[tg_uid] = {
+                        "claim_id": claim.id,
+                        "agent_id": claim.agent_id,
+                        "is_own": claim.agent_id == agent.id,
+                        "expires_at": claim.expires_at.isoformat() if claim.expires_at else None,
+                    }
+
         def _member_dict(member) -> dict[str, Any]:
             role = member.role or "member"
+            tg_uid = int(member.tg_user_id)
+            claim_info = member_claims.get(tg_uid)
             return {
-                "user_id": int(member.tg_user_id),
+                "user_id": tg_uid,
                 "username": member.username,
                 "full_name": member.full_name,
                 "phone": member.phone,
                 "role": role,
                 "is_admin": role in {"admin", "creator"},
                 "is_creator": role == "creator",
-                "message_count": message_counts.get(int(member.tg_user_id), 0),
+                "message_count": message_counts.get(tg_uid, 0),
                 "is_bot": bool((member.raw_data or {}).get("bot", member.is_bot)),
-                "sent_by_agent": int(member.tg_user_id) in sent_to,
+                "sent_by_agent": tg_uid in sent_to,
+                "claim": claim_info,
             }
 
         return {

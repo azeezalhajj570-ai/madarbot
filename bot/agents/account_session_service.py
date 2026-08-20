@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.auth import (
@@ -37,6 +38,7 @@ class AccountSessionService(AgentServiceSupport):
         phone_number: str,
         agent_id: int | None = None,
         auth_service: AgentTelegramAuthService | None = None,
+        tenant_id: int | None = None,
     ) -> Agent:
         normalized_phone = normalize_agent_phone_number(phone_number)
         target_agent: Agent | None = None
@@ -58,6 +60,23 @@ class AccountSessionService(AgentServiceSupport):
                 )
             ).scalars()
         )
+        stale_foreign = list(
+            (
+                await self.session.execute(
+                    select(Agent)
+                    .where(
+                        Agent.phone_number == normalized_phone,
+                        Agent.linked_by_user_id != actor_user_id,
+                    )
+                )
+            ).scalars()
+        )
+        for stale in stale_foreign:
+            if stale.auth_state == "active" and stale.session_string:
+                raise ValueError("Phone number is already linked to another account")
+            stale.phone_number = None
+        if stale_foreign:
+            await self.session.flush()
         if target_agent is not None:
             active_duplicate = next(
                 (
@@ -95,7 +114,8 @@ class AccountSessionService(AgentServiceSupport):
         auth_service = auth_service or AgentTelegramAuthService()
         auth_session = await auth_service.start_login(phone_number=normalized_phone)
         if agent is None:
-            tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+            if tenant_id is None:
+                tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
             agent = Agent(
                 telegram_user_id=None,
                 linked_by_user_id=actor_user_id,
@@ -111,6 +131,9 @@ class AccountSessionService(AgentServiceSupport):
             )
             self.session.add(agent)
         else:
+            if tenant_id is None:
+                tenant_id = await self.resolve_actor_tenant_id(actor_user_id)
+            agent.tenant_id = agent.tenant_id or tenant_id
             agent.phone_number = normalized_phone
             agent.external_account_id = normalized_phone
             agent.linked_by_user_id = agent.linked_by_user_id or actor_user_id
@@ -118,7 +141,11 @@ class AccountSessionService(AgentServiceSupport):
             agent.auth_state = "pending_code"
             agent.session_string = auth_session.session_string
             agent.phone_code_hash = auth_session.phone_code_hash
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise ValueError("This phone number is already linked to another account")
         return agent
 
     async def complete_agent_code(
@@ -226,7 +253,11 @@ class AccountSessionService(AgentServiceSupport):
         details = dict(agent.details or {})
         details.update({"username": result.username, "full_name": result.full_name})
         agent.details = details
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise ValueError("This phone number is already linked to another account")
         await self.publish(
             "agent_linked",
             group_id=agent.group_id,
