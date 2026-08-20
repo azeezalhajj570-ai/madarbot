@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatTime } from '../i18n/format'
 
-import { MultiGroupSelect } from '../components/MultiGroupSelect'
 import { FormActions } from '../components/FormActions'
-import { GroupDestinationField } from '../components/GroupDestinationField'
 import { BlacklistSection } from '../features/blacklist/BlacklistSection'
 import { SchedulePicker, DEFAULT_SCHEDULE } from '../components/SchedulePicker'
 import type { ScheduleConfig } from '../components/SchedulePicker'
@@ -13,6 +11,7 @@ import {
   agentsApi,
   Button,
   Card,
+  GroupAutocomplete,
   InputField,
   Note,
 } from '@miniapp/shared'
@@ -324,7 +323,8 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
 
         {bulkTargetType === 'members' ? (
           <>
-            <GroupDestinationField label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups}
+            <GroupAutocomplete label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups}
+              mode="single"
               selectedGroup={bulkSourceGroup}
               onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkMemberQuery(''); setBulkMemberResults([]); setBulkMemberTotal(0); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
               onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery(''); setBulkMemberQuery(''); setBulkMemberResults([]); setBulkMemberTotal(0); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
@@ -440,8 +440,10 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </>
         ) : (
           <>
-            <MultiGroupSelect query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} selected={bulkSelectedTargetGroups}
-              onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])} />
+            <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups}
+              mode="multi" selected={bulkSelectedTargetGroups}
+              onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])}
+              onRemove={(id) => setBulkSelectedTargetGroups((c) => c.filter((x) => x.tg_group_id !== id))} />
             <div style={{ display: 'grid', gap: 8 }}>
               {bulkMessages.map((msg, i) => (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -538,7 +540,7 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
           </div>
         ) : null}
         {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
-        <FormActions submitLabel="Save" submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
+        <FormActions submitLabel={t('common.save')} submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
         </>) : null}
       </Card>
 

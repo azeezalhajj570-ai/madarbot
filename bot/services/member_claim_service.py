@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 import structlog
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -99,7 +99,7 @@ async def claim_members(
     stmt = pg_insert(MemberClaim).values(rows)
     stmt = stmt.on_conflict_do_nothing(
         index_elements=["tenant_id", "scraped_member_id"],
-        index_where="status = 'active'",
+        index_where=text("status = 'active'"),
     )
     stmt = stmt.returning(MemberClaim.scraped_member_id)
 

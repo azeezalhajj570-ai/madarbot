@@ -272,6 +272,14 @@ export interface AgentGroupMember {
   is_bot?: boolean
   sent_by_agent?: boolean
   claim?: MemberClaimInfo | null
+  invitation_status?: {
+    status?: string
+    sent_at?: string | null
+    invitation_link?: string | null
+    agent_id?: number
+    is_own?: boolean
+  } | null
+  already_added?: boolean
 }
 
 export interface AgentGroupMembersPage {

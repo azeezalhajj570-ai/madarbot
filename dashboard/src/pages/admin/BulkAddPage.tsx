@@ -1,11 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, RefreshCw, Send, Search, X, Eye, Loader, UserCheck, Bot, Shield } from 'lucide-react'
 import { useI18n } from '../../lib/i18n'
 
 import { Badge, Button, Dialog, Input, Select, Field } from '../../components/ui/primitives'
 import { DataTable, type ColumnDef, type DataTableFilter } from '../../components/ui/data-table'
 import { useToast } from '../../components/ui/toast'
-import { GroupAutoComplete } from '../../components/ui/data-display'
 import { PageShell } from '../../lib/page-shell'
 import api, { fetchAgents, fetchMemberOperations, verifyMemberOperations } from '../../lib/api'
 import { spacing } from '../../../../shared/ui-system/tokens'
@@ -28,6 +27,14 @@ interface MemberItem {
   full_name?: string
   role?: string
   is_bot?: boolean
+  invitation_status?: {
+    status?: string
+    sent_at?: string | null
+    invitation_link?: string | null
+    agent_id?: number
+    is_own?: boolean
+  } | null
+  already_added?: boolean
 }
 
 interface MemberAddPayload {
@@ -53,6 +60,127 @@ interface MemberAddResult {
 }
 
 const AGENTS_API_PREFIX = '/api/agents'
+
+interface AsyncGroupAutoCompleteProps {
+  agentId: number
+  value: number | null
+  onChange: (id: number | null) => void
+  placeholder?: string
+  canAddMembersOnly?: boolean
+  errorText?: string
+}
+
+/** Debounced server-side group autocomplete scoped to the selected agent. */
+function AsyncGroupAutoComplete({ agentId, value, onChange, placeholder, canAddMembersOnly, errorText }: AsyncGroupAutoCompleteProps) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const [options, setOptions] = useState<AgentGroup[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const selected = options.find((g) => g.tg_group_id === value) ?? null
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const q = query.trim()
+    if (!q) {
+      setOpen(false)
+      setOptions([])
+      setLoading(false)
+      setError(null)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${agentId}/groups`, { params: { q } })
+        const seen = new Set<number>()
+        const deduped: AgentGroup[] = []
+        for (const g of data) {
+          if (seen.has(g.tg_group_id)) continue
+          seen.add(g.tg_group_id)
+          if (canAddMembersOnly && !g.can_add_members) continue
+          deduped.push(g)
+        }
+        setOptions(deduped)
+        setOpen(true)
+      } catch {
+        setOptions([])
+        setError('Search failed')
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [agentId, query, canAddMembersOnly])
+
+  function handleSelect(id: number) {
+    onChange(id)
+    setQuery('')
+    setOpen(false)
+    inputRef.current?.blur()
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <input
+        ref={inputRef}
+        placeholder={placeholder}
+        value={selected && !open ? `${selected.title}` : query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => { if (query.trim()) setOpen(true) }}
+        style={{
+          width: '100%', minHeight: 42, borderRadius: 8, border: '1px solid var(--ui-border-strong)',
+          padding: '0 12px', background: 'var(--ui-surface-strong)', color: 'var(--ui-text)', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+        }}
+        aria-label={placeholder}
+      />
+      {query.trim() && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, marginTop: 4,
+          borderRadius: 8, border: '1px solid var(--ui-border)', background: 'var(--ui-surface)',
+          boxShadow: 'var(--ui-shadow)', maxHeight: 240, overflowY: 'auto',
+        }}>
+          {loading ? (
+            <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Loader size={13} className="spin" /> Searching...
+            </div>
+          ) : error ? (
+            <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-danger)', textAlign: 'center' }}>{error}</div>
+          ) : options.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 13, color: 'var(--ui-text-muted)', textAlign: 'center' }}>No matching groups</div>
+          ) : options.map((g) => (
+            <div
+              key={g.tg_group_id}
+              onClick={() => handleSelect(g.tg_group_id)}
+              style={{
+                padding: '9px 12px', cursor: 'pointer', fontSize: 13, background: g.tg_group_id === value ? 'var(--ui-primary-soft)' : 'transparent',
+                borderBottom: '1px solid var(--ui-border)', transition: 'background 0.1s', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--ui-bg-muted)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = g.tg_group_id === value ? 'var(--ui-primary-soft)' : 'transparent' }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.title}</span>
+              {g.username && <span style={{ fontSize: 11, color: 'var(--ui-text-muted)', flexShrink: 0 }}>@{g.username}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {errorText && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{errorText}</div>}
+    </div>
+  )
+}
 
 
 
@@ -111,7 +239,9 @@ function statusBadge(status: string, payload?: Record<string, unknown>) {
 
 function MemberRow({ m, isSelected, disabled, onToggle }: { m: MemberItem; isSelected: boolean; disabled?: boolean; onToggle: (id: number) => void }) {
   const badges: React.ReactNode[] = []
-  if (disabled) badges.push(<Badge key="already" tone="neutral" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>Already</Badge>)
+  const joinedViaInvite = m.invitation_status?.status === 'joined'
+  if (disabled) badges.push(<Badge key="already" tone="neutral" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>{joinedViaInvite ? 'Joined via invite' : 'Already in group'}</Badge>)
+  else if (m.invitation_status) badges.push(<Badge key="invited" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>{joinedViaInvite ? 'Joined via invite' : (m.invitation_status.is_own === false ? 'Invitation sent by other agent' : 'Invitation sent')}</Badge>)
   else if (m.is_bot) badges.push(<Badge key="bot" tone="default" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Bot size={10} /> Bot</Badge>)
   else if (m.role === 'creator' || m.role === 'admin') badges.push(<Badge key="admin" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Shield size={10} /> {m.role}</Badge>)
 
@@ -159,13 +289,12 @@ export default function AdminBulkAddPage() {
   const [formAgentId, setFormAgentId] = useState<number | null>(null)
   const [formSourceGroupId, setFormSourceGroupId] = useState<number | null>(null)
   const [formTargetGroupId, setFormTargetGroupId] = useState<number | null>(null)
-  const [sourceGroups, setSourceGroups] = useState<AgentGroup[]>([])
-  const [targetGroups, setTargetGroups] = useState<AgentGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<MemberItem[]>([])
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
   const [intervalSeconds, setIntervalSeconds] = useState(20)
   const [sendInviteLink, setSendInviteLink] = useState(false)
+  const [customInviteMessage, setCustomInviteMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [searching, setSearching] = useState(false)
   const [fetchingTarget, setFetchingTarget] = useState(false)
@@ -234,21 +363,6 @@ export default function AdminBulkAddPage() {
     return () => clearInterval(id)
   }, [selectedAgentId, hasActiveJobs, loadJobs])
 
-  useEffect(() => {
-    if (!formAgentId) { setSourceGroups([]); setTargetGroups([]); setFormSourceGroupId(null); setFormTargetGroupId(null); setMembers([]); return }
-    api.get<AgentGroup[]>(`${AGENTS_API_PREFIX}/${formAgentId}/groups`).then(({ data }) => {
-      const seen = new Set<number>()
-      const deduped: AgentGroup[] = []
-      for (const g of data) {
-        if (seen.has(g.tg_group_id)) continue
-        seen.add(g.tg_group_id)
-        deduped.push(g)
-      }
-      setSourceGroups(deduped)
-      setTargetGroups(deduped.filter((g) => g.can_add_members))
-    }).catch(() => { setSourceGroups([]); setTargetGroups([]) })
-  }, [formAgentId])
-
   const MEMBER_PAGE_SIZE = 50
 
   useEffect(() => {
@@ -256,11 +370,12 @@ export default function AdminBulkAddPage() {
     setSearching(true)
     const params: Record<string, unknown> = { tg_group_id: formSourceGroupId, limit: MEMBER_PAGE_SIZE, page: memberPage }
     if (searchQuery.trim()) params.q = searchQuery.trim()
+    if (formTargetGroupId) params.target_tg_group_id = formTargetGroupId
     api.get<{ members: MemberItem[]; total: number }>(`${AGENTS_API_PREFIX}/${formAgentId}/member-search`, { params })
       .then(({ data }) => { setMembers(data.members || []); setMemberTotal(data.total) })
       .catch(() => { setMembers([]); setMemberTotal(0) })
       .finally(() => setSearching(false))
-  }, [formAgentId, formSourceGroupId, searchQuery, memberPage])
+  }, [formAgentId, formSourceGroupId, searchQuery, memberPage, formTargetGroupId])
 
   useEffect(() => { setMemberPage(1) }, [formSourceGroupId, searchQuery])
 
@@ -283,7 +398,10 @@ export default function AdminBulkAddPage() {
     if (excludeAdminsAndBots) {
       list = list.filter(m => !m.is_bot && m.role !== 'creator' && m.role !== 'admin')
     }
-    return list.map(m => ({ ...m, alreadyInTarget: targetMemberIds.has(m.user_id) }))
+    return list.map(m => ({
+      ...m,
+      alreadyInTarget: targetMemberIds.has(m.user_id) || !!m.already_added || m.invitation_status?.status === 'joined',
+    }))
   }, [members, excludeAdminsAndBots, targetMemberIds])
 
   function getGroupName(tgGroupId: number | null | undefined): string {
@@ -294,7 +412,7 @@ export default function AdminBulkAddPage() {
   function openDialog() {
     setFormAgentId(selectedAgentId); setFormSourceGroupId(null); setFormTargetGroupId(null)
     setSearchQuery(''); setMembers([]); setMemberTotal(0); setMemberPage(1); setSelectedUserIds([]); setIntervalSeconds(20)
-    setSendInviteLink(false); setExcludeAdminsAndBots(true); setFormErrors({}); setDialogOpen(true)
+    setSendInviteLink(false); setCustomInviteMessage(''); setExcludeAdminsAndBots(true); setFormErrors({}); setDialogOpen(true)
   }
 
   function validateForm(): boolean {
@@ -333,6 +451,7 @@ export default function AdminBulkAddPage() {
         interval_seconds: intervalSeconds,
         user_ids: selectedUserIds,
         send_invite_link_on_privacy_restricted: sendInviteLink,
+        custom_invite_message: customInviteMessage.trim() ? customInviteMessage.trim() : null,
       })
       toast.success(t('bulkadd.jobCreated'))
       setDialogOpen(false)
@@ -352,7 +471,6 @@ export default function AdminBulkAddPage() {
         map.set(g.tg_group_id, g.title)
       }
       setGroupsMap(map)
-      setSourceGroups(data); setTargetGroups(data.filter((g) => g.can_add_members))
       toast.success(`Synced ${data.length} groups`)
     } catch (err: any) { toast.error(err?.message || t('bulkadd.syncFailed')) }
     finally { setSyncing(false) }
@@ -448,16 +566,13 @@ export default function AdminBulkAddPage() {
           </Select>
         </Field>
         <Field label={t('bulkadd.sourceGroup')}>
-          <GroupAutoComplete items={sourceGroups} value={formSourceGroupId} onChange={setFormSourceGroupId}
-            placeholder={sourceGroups.length ? t('bulkadd.selectSource') : t('bulkadd.noGroups')}
-            getId={(g: any) => g.tg_group_id} getLabel={(g: any) => g.title} />
+          <AsyncGroupAutoComplete agentId={formAgentId!} value={formSourceGroupId} onChange={setFormSourceGroupId}
+            placeholder={t('bulkadd.selectSource')} />
         </Field>
         <Field label={t('bulkadd.targetGroup')}>
-          <GroupAutoComplete items={targetGroups} value={formTargetGroupId}
+          <AsyncGroupAutoComplete agentId={formAgentId!} value={formTargetGroupId}
             onChange={(v) => { setFormTargetGroupId(v); if (formErrors.target) setFormErrors(prev => { const { target, ...rest } = prev; return rest }) }}
-            placeholder={targetGroups.length ? t('bulkadd.selectTarget') : t('bulkadd.noTargetGroups')}
-            getId={(g: any) => g.tg_group_id} getLabel={(g: any) => g.title} />
-          {formErrors.target && <div style={{ color: 'var(--ui-danger)', fontSize: 12, marginTop: 2 }}>{formErrors.target}</div>}
+            placeholder={t('bulkadd.selectTarget')} canAddMembersOnly errorText={formErrors.target} />
           {fetchingTarget && <div style={{ fontSize: 12, color: 'var(--ui-text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Loader size={12} className="spin" /> Fetching target group members from Telegram...</div>}
         </Field>
         {formSourceGroupId && (
@@ -510,6 +625,19 @@ export default function AdminBulkAddPage() {
           <input type="checkbox" checked={sendInviteLink} onChange={(e) => setSendInviteLink(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--ui-primary)' }} />
           {t('bulkadd.sendInviteLink')}
         </label>
+        {sendInviteLink && (
+          <Field label={t('bulkadd.customMessage')}>
+            <textarea
+              value={customInviteMessage}
+              onChange={(e) => setCustomInviteMessage(e.target.value)}
+              rows={3}
+              placeholder={t('bulkadd.customMessagePlaceholder')}
+              maxLength={2000}
+              style={{ width: '100%', minHeight: 72, borderRadius: 8, border: '1px solid var(--ui-border-strong)', padding: 10, background: 'var(--ui-surface-strong)', color: 'var(--ui-text)', fontSize: 14, outline: 'none', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--ui-text-muted)', marginTop: 2 }}>{t('bulkadd.customMessageHint')}</div>
+          </Field>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm }}>
           <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={() => { if (validateForm()) handleSubmit() }} disabled={!formAgentId || !formTargetGroupId || !selectedUserIds.length || submitting}>

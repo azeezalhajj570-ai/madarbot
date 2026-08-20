@@ -297,6 +297,8 @@ export function InputField({
   type = 'text',
   placeholder,
   listId,
+  onFocus,
+  onBlur,
 }: {
   label: string
   value: string
@@ -304,6 +306,8 @@ export function InputField({
   type?: string
   placeholder?: string
   listId?: string
+  onFocus?: () => void
+  onBlur?: () => void
 }) {
   return (
     <label style={{ display: 'grid', gap: 6 }}>
@@ -314,6 +318,8 @@ export function InputField({
         list={listId}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
         style={inputStyle}
       />
     </label>
@@ -401,6 +407,7 @@ export function Note({ children, tone = 'neutral' }: { children: ReactNode; tone
   )
 }
 
+export { GroupAutocomplete, type GroupChip } from './GroupAutocomplete'
 export function LinkRow({
   children,
   active = false,

@@ -209,4 +209,7 @@ def normalize_member_add_payload(payload: dict[str, Any] | None) -> dict[str, An
         "interval_seconds": interval_seconds,
         "send_invite_link_on_privacy_restricted": send_invite_link,
     })
+    custom_msg = normalized.get("custom_invite_message")
+    if isinstance(custom_msg, str) and custom_msg.strip():
+        result["custom_invite_message"] = custom_msg.strip()[:2000]
     return result

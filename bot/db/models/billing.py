@@ -26,6 +26,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Index,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -109,7 +110,7 @@ class Subscription(Base):
             "uq_subscriptions_one_active_per_tenant",
             "tenant_id",
             unique=True,
-            postgresql_where="status = 'active'",
+            postgresql_where=text("status = 'active'"),
         ),
     )
 
