@@ -10,6 +10,7 @@ import structlog
 from telethon import TelegramClient
 from telethon.errors import (
     ChatAdminRequiredError,
+    ChatWriteForbiddenError,
     FloodWaitError,
     PeerIdInvalidError,
     RPCError,
@@ -36,6 +37,7 @@ ERROR_PEER_NOT_FOUND: Final = "PEER_NOT_FOUND"
 ERROR_IS_BOT: Final = "IS_BOT"
 ERROR_VERIFICATION_FAILED: Final = "VERIFICATION_FAILED"
 ERROR_UNKNOWN: Final = "UNKNOWN"
+ERROR_NOT_ADMIN: Final = "NOT_ADMIN"
 
 logger = structlog.get_logger(__name__)
 
@@ -175,7 +177,12 @@ async def add_user_to_group(
             error_code=ERROR_FLOOD_WAIT,
             flood_wait_seconds=int(exc.seconds),
         )
-    except RPCError:
+    except (ChatAdminRequiredError, UserNotParticipantError):
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USERBOT_NOT_IN_GROUP)
+    except RPCError as exc:
+        logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_add_user_to_group_rpc_error")
+        if "admin" in str(exc).lower():
+            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     try:
@@ -206,14 +213,17 @@ async def add_user_to_group(
             error_code=ERROR_FLOOD_WAIT,
             flood_wait_seconds=int(exc.seconds),
         )
-    except (ChatAdminRequiredError, UserNotParticipantError):
-        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USERBOT_NOT_IN_GROUP)
-    except RPCError:
+    except (ChatAdminRequiredError, ChatWriteForbiddenError, UserNotParticipantError):
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+    except RPCError as exc:
+        logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_invite_to_channel_rpc_error")
+        if "admin" in str(exc).lower() or "forbidden" in str(exc).lower():
+            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     if verify:
         present = await is_user_in_group(client, group_entity, user_peer)
-        if present is not True:
+        if present is False:
             logger.bind(
                 group_id=group_id,
                 user_id=user_id,
@@ -222,6 +232,12 @@ async def add_user_to_group(
             return _failure(
                 group_id=group_id, user_id=user_id, error_code=ERROR_VERIFICATION_FAILED
             )
+        if present is None:
+            logger.bind(
+                group_id=group_id,
+                user_id=user_id,
+                membership_verified=present,
+            ).info("agent_add_user_to_group_verification_uncertain")
 
     bound_logger.info("agent_add_user_to_group_succeeded")
     return AddUserResult(success=True)
@@ -229,7 +245,14 @@ async def add_user_to_group(
 
 async def export_group_invite_link(client: TelegramClient, group_id: int) -> str | None:
     try:
-        result = await client(ExportChatInviteRequest(peer=group_id))
+        try:
+            entity = await client.get_entity(group_id)
+        except (ValueError, KeyError):
+            entity = await _resolve_group_from_dialogs(client, group_id)
+            if entity is None:
+                logger.bind(group_id=group_id).warning("agent_group_invite_entity_not_found")
+                return None
+        result = await client(ExportChatInviteRequest(peer=entity))
         link = getattr(result, "link", None)
         if link:
             logger.bind(group_id=group_id).info("agent_group_invite_link_exported")
@@ -241,7 +264,7 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
             "agent_group_invite_link_flood_wait"
         )
         return None
-    except (ChatAdminRequiredError, RPCError) as exc:
+    except (ChatAdminRequiredError, ChatWriteForbiddenError, RPCError) as exc:
         logger.bind(group_id=group_id, error=str(exc)).warning(
             "agent_group_invite_link_export_failed"
         )

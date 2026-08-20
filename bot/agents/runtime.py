@@ -1149,7 +1149,10 @@ class BulkAddMembersRuntime:
             except Exception:
                 pass
             from bot.agents.group_membership import export_group_invite_link
-            link = await export_group_invite_link(client, tg_group_id)
+            try:
+                link = await export_group_invite_link(client, tg_group_id)
+            except Exception:
+                return None
             if link:
                 try:
                     await redis_client.set(cache_key, link, ex=invite_link_cache_ttl)
