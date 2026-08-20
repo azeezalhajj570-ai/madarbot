@@ -127,7 +127,8 @@ async def is_user_in_group(
         return any(getattr(entry, "user_id", None) == target_id for entry in entries)
     except UserNotParticipantError:
         return False
-    except (PeerIdInvalidError, ValueError, KeyError, RPCError):
+    except (PeerIdInvalidError, ValueError, KeyError, RPCError) as exc:
+        logger.bind(group_id=getattr(group_entity, "id", None), user_id=_user_id_of(user_peer), error=str(exc)).warning("is_user_in_group_uncertain")
         return None
 
 
@@ -191,6 +192,14 @@ async def add_user_to_group(
                 InviteToChannelRequest(channel=group_id, users=[user_peer])
             )
             missing_invitees = getattr(invite_result, "missing_invitees", None) or []
+            users_added = getattr(invite_result, "users", None) or []
+            logger.bind(
+                group_id=group_id,
+                user_id=user_id,
+                missing_invitees_count=len(missing_invitees),
+                users_added_count=len(users_added),
+                missing_invitee_ids=[_user_id_of(e) for e in missing_invitees],
+            ).info("agent_invite_to_channel_result")
             if any(_user_id_of(entry) == user_id for entry in missing_invitees):
                 return _failure(
                     group_id=group_id,
