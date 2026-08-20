@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
-import { MultiGroupSelect } from './components/MultiGroupSelect'
 import { TableModal } from './components/TableModal'
 import type { ColumnDef } from './components/DataTable'
 
@@ -45,10 +44,8 @@ import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSectio
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
 import { ConfirmModal } from './components/ConfirmModal'
 import { FormActions } from './components/FormActions'
-import { GroupAutocompleteField } from './components/GroupAutocompleteField'
-import { GroupDestinationField } from './components/GroupDestinationField'
 
-type AgentsPage = 'dashboard' | 'leads' | 'campaigns' | 'tasks' | 'settings'
+type AgentsPage = 'dashboard' | 'outreach' | 'tasks' | 'settings'
 type WizardStep = 'code' | 'password' | 'finish'
 type TaskDestinationMode = 'group' | 'text'
 type SelectedGroupChip = {
@@ -592,16 +589,17 @@ function parseAgentsRoute(pathname: string, basePath: string) {
     analytics: 'dashboard',
     analysis: 'dashboard',
     notifications: 'dashboard',
-    scraping: 'leads',
+    scraping: 'outreach',
     tasks: 'tasks',
-    leads: 'leads',
-    groups: 'leads',
-    campaigns: 'campaigns',
+    leads: 'outreach',
+    groups: 'outreach',
+    campaigns: 'outreach',
     settings: 'settings',
     dashboard: 'dashboard',
+    outreach: 'outreach',
   }
 
-  const page = pageMap[rawPage] || 'leads'
+  const page = pageMap[rawPage] || 'outreach'
 
   return {
     accountId: Number.isFinite(accountId) ? accountId : null,
@@ -834,22 +832,14 @@ function BottomNav({ currentPage, onNavigate }: { currentPage: AgentsPage; onNav
       ),
     },
     {
-      id: 'leads',
-      label: t('nav.leads'),
+      id: 'outreach',
+      label: t('nav.outreach'),
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.7" />
           <circle cx="17" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.7" />
           <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           <path d="M16 14.5a3 3 0 013 3v2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-        </svg>
-      ),
-    },
-    {
-      id: 'campaigns',
-      label: t('nav.campaigns'),
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path d="M22 2L11 13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -1260,7 +1250,7 @@ export default function App() {
     setIsWizardOpen(false)
     setWizardAccountId(null)
     setWizardStep('finish')
-    navigate(accountPath(accountId, 'groups'))
+    navigate(accountPath(accountId, 'outreach'))
   }
 
   async function confirmDeleteAccount() {
@@ -1525,7 +1515,7 @@ export default function App() {
                       <LinkedAccountCard
                         key={account.id}
                         account={account}
-                        onOpen={() => navigate(accountPath(account.id, 'leads'))}
+                        onOpen={() => navigate(accountPath(account.id, 'outreach'))}
                         onStatus={setStatus}
                         onDelete={() => setDeleteTarget(account)}
                         onResume={() => {
@@ -1567,14 +1557,12 @@ export default function App() {
               {route.page === 'dashboard' ? (
                 <AccountAnalyticsPage account={selectedAccount} />
               ) : null}
-               {route.page === 'leads' ? (
+               {route.page === 'outreach' ? (
                 <>
                   <LeadsAcquisitionSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <AccountLeadsPage account={selectedAccount} />
+                  <CampaignsPage account={selectedAccount} onSaved={setStatus} />
                 </>
-              ) : null}
-              {route.page === 'campaigns' ? (
-                <CampaignsPage account={selectedAccount} onSaved={setStatus} />
               ) : null}
               {route.page === 'tasks' ? (
                 <>
@@ -3222,7 +3210,25 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
   return (
     <Card title={t('analytics.title')} subtitle={t('analytics.subtitle')}>
       {status ? <Note>{status}</Note> : null}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+
+      {/* Session status + primary actions */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+          <span style={{
+            width: 10, height: 10, borderRadius: 999, flexShrink: 0,
+            background: account.session_state === 'banned' ? 'var(--miniapp-clay)'
+              : account.session_state === 'flood_wait' ? 'var(--miniapp-ochre)'
+              : account.session_state === 'healthy' ? 'var(--miniapp-sage)'
+              : 'var(--miniapp-border)',
+          }} />
+          <span style={{ color: 'var(--miniapp-text-muted)' }}>
+            {account.session_state === 'banned' ? t('analytics.sessionBanned')
+              : account.session_state === 'flood_wait' ? t('analytics.sessionFlood')
+              : account.session_state === 'healthy' ? t('analytics.sessionHealthy')
+              : t('analytics.sessionUnknown')}
+          </span>
+        </div>
+        <div style={{ flex: 1 }} />
         <Button tone="secondary" onClick={() => void refresh()}>{t('common.refresh')}</Button>
         <Button onClick={() => setShowSafety(!showSafety)}>
           {showSafety ? t('subscription.close') : t('analytics.configureSafety')}
@@ -3230,7 +3236,7 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
       </div>
 
       {showSafety ? (
-        <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16, marginTop: 12 }}>
+        <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 16, marginBottom: 16 }}>
           <div style={{ fontWeight: 600 }}>{t('analytics.safetyConfigTitle')}</div>
           <InputField
             label={t('analytics.maxActionsPerHour')}
@@ -3286,7 +3292,8 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
         </div>
       ) : null}
 
-      <div style={{ display: 'grid', gap: 16, marginTop: 12 }}>
+      {/* KPI row */}
+      <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--miniapp-primary)' }}>{a?.leads?.total ?? 0}</div>
@@ -3305,7 +3312,9 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
             <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.unseenAlerts')}</div>
           </div>
         </div>
+      </div>
 
+      <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'grid', gap: 12, padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14 }}>
           <div style={{ fontWeight: 600 }}>{t('analytics.safetyStatus')}</div>
           <div style={{ display: 'grid', gap: 8 }}>

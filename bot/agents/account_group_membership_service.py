@@ -14,6 +14,7 @@ from bot.db.models import (
     AgentJob,
     Group,
     GroupAdminRole,
+    GroupMember,
     ScrapedGroup,
     ScrapedMember,
     ScrapedMessage,
@@ -662,25 +663,69 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "expires_at": claim.expires_at.isoformat() if claim.expires_at else None,
                     }
 
-        # Query invitation status for these members (for the target group, if provided)
-        invitation_status: dict[int, dict[str, Any]] = {}  # tg_user_id -> {status, sent_at, invitation_link}
+        # Query invitation status for these members (for the target group, if provided).
+        # Scoped to the whole workspace (all agents sharing agent.tenant_id) so that
+        # an invite sent by one agent is visible to every other agent in the workspace.
+        # "joined" operations mean the member accepted the invite and is now in the group,
+        # so they are treated as both already-invited and already-added.
+        invitation_status: dict[int, dict[str, Any]] = {}  # tg_user_id -> {status, sent_at, invitation_link, agent_id}
         if user_ids and target_tg_group_id:
-            op_rows = (
-                await self.session.execute(
-                    select(MemberOperation).where(
-                        MemberOperation.tg_group_id == target_tg_group_id,
-                        MemberOperation.tg_user_id.in_(user_ids),
-                        MemberOperation.agent_id == agent.id,
-                        MemberOperation.status.in_(["pending", "sent"]),
+            workspace_agent_ids: set[int] = set()
+            if agent.tenant_id is not None:
+                ws_agents = (
+                    await self.session.execute(
+                        select(Agent.id).where(Agent.tenant_id == agent.tenant_id)
                     )
+                ).all()
+                workspace_agent_ids = {int(row[0]) for row in ws_agents}
+            if workspace_agent_ids:
+                op_rows = (
+                    await self.session.execute(
+                        select(MemberOperation).where(
+                            MemberOperation.tg_group_id == target_tg_group_id,
+                            MemberOperation.tg_user_id.in_(user_ids),
+                            MemberOperation.agent_id.in_(workspace_agent_ids),
+                            MemberOperation.status.in_(["pending", "sent", "joined"]),
+                        )
+                    )
+                ).scalars().all()
+                for op in op_rows:
+                    invitation_status[int(op.tg_user_id)] = {
+                        "status": op.status,
+                        "sent_at": op.sent_at.isoformat() if op.sent_at else None,
+                        "invitation_link": op.invitation_link,
+                        "agent_id": op.agent_id,
+                        "is_own": op.agent_id == agent.id,
+                    }
+
+        # Members already present in the target group. This is workspace-independent:
+        # a member added by any agent (directly or via invite join) is a member of the group.
+        already_added: set[int] = set()
+        if user_ids and target_tg_group_id:
+            target_group_id_row = (
+                await self.session.execute(
+                    select(Group.id).where(Group.tg_group_id == target_tg_group_id)
                 )
-            ).scalars().all()
-            for op in op_rows:
-                invitation_status[int(op.tg_user_id)] = {
-                    "status": op.status,
-                    "sent_at": op.sent_at.isoformat() if op.sent_at else None,
-                    "invitation_link": op.invitation_link,
-                }
+            ).first()
+            if target_group_id_row:
+                target_group_db_id = int(target_group_id_row[0])
+                gm_rows = (
+                    await self.session.execute(
+                        select(GroupMember.tg_user_id).where(
+                            GroupMember.group_id == target_group_db_id,
+                            GroupMember.tg_user_id.in_(user_ids),
+                        )
+                    )
+                ).all()
+                already_added = {int(row[0]) for row in gm_rows}
+
+        # Members whose invitation operation was confirmed "joined" are already in
+        # the group even though no GroupMember row was created for the invite path.
+        already_added.update(
+            int(uid)
+            for uid, info in invitation_status.items()
+            if info.get("status") == "joined"
+        )
 
         def _member_dict(member) -> dict[str, Any]:
             role = member.role or "member"
@@ -700,6 +745,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "sent_by_agent": tg_uid in sent_to,
                 "claim": claim_info,
                 "invitation_status": inv_info,
+                "already_added": tg_uid in already_added,
             }
 
         return {

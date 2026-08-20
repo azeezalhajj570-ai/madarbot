@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { GroupAutocompleteField } from '../../components/GroupAutocompleteField'
-
 import {
   agentsApi,
   Button,
   Card,
+  GroupAutocomplete,
   InputField,
   LinkRow,
   Note,
@@ -225,11 +224,11 @@ export function LeadsAcquisitionSection({ account, groupId, onSaved }: { account
                 <InputField label={t('leadsAcq.maxAgeDays')} value={scrapeMaxAgeDays} onChange={setScrapeMaxAgeDays} type="number" />
               </div>
             ) : null}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('common.cancel')}</Button>
               <Button onClick={() => void handleSubmit()} disabled={isSaving || !canSubmit}>
-                Save
+                {t('common.save')}
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         ) : (
@@ -296,14 +295,15 @@ export function LeadsAcquisitionSection({ account, groupId, onSaved }: { account
                 />
               </label>
             )}
-            <GroupAutocompleteField label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
-              selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
+            <GroupAutocomplete label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+              mode="multi" selected={taskGroups}
+              onToggle={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c.filter((e) => e.tg_group_id !== g.tg_group_id) : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('leadsAcq.groupPlaceholder')} />
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>{t('common.cancel')}</Button>
               <Button onClick={() => void handleSaveLeadCapture()} disabled={isSaving || !canSubmit}>
-                Save
+                {t('common.save')}
               </Button>
-              <Button tone="secondary" onClick={() => { resetForm(); setIsFormOpen(false) }}>Cancel</Button>
             </div>
           </div>
         )}

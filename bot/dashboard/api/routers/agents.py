@@ -205,6 +205,7 @@ async def webapp_agent_jobs(
     agent_id: int,
     job_type: str | None = None,
     limit: int = 50,
+    workspace: bool = Query(default=False),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
@@ -217,6 +218,7 @@ async def webapp_agent_jobs(
         agent_id=agent.id,
         limit=limit,
         job_type=job_type,
+        tenant_id=agent.tenant_id if workspace else None,
     )
 
     tg_ids = set()

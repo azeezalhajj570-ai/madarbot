@@ -31,7 +31,10 @@ interface MemberItem {
     status?: string
     sent_at?: string | null
     invitation_link?: string | null
+    agent_id?: number
+    is_own?: boolean
   } | null
+  already_added?: boolean
 }
 
 interface MemberAddPayload {
@@ -236,8 +239,9 @@ function statusBadge(status: string, payload?: Record<string, unknown>) {
 
 function MemberRow({ m, isSelected, disabled, onToggle }: { m: MemberItem; isSelected: boolean; disabled?: boolean; onToggle: (id: number) => void }) {
   const badges: React.ReactNode[] = []
-  if (disabled) badges.push(<Badge key="already" tone="neutral" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>Already</Badge>)
-  else if (m.invitation_status) badges.push(<Badge key="invited" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>Invitation sent</Badge>)
+  const joinedViaInvite = m.invitation_status?.status === 'joined'
+  if (disabled) badges.push(<Badge key="already" tone="neutral" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>{joinedViaInvite ? 'Joined via invite' : 'Already in group'}</Badge>)
+  else if (m.invitation_status) badges.push(<Badge key="invited" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}>{joinedViaInvite ? 'Joined via invite' : (m.invitation_status.is_own === false ? 'Invitation sent by other agent' : 'Invitation sent')}</Badge>)
   else if (m.is_bot) badges.push(<Badge key="bot" tone="default" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Bot size={10} /> Bot</Badge>)
   else if (m.role === 'creator' || m.role === 'admin') badges.push(<Badge key="admin" tone="info" style={{ fontSize: 10, padding: '0 5px', lineHeight: '18px' }}><Shield size={10} /> {m.role}</Badge>)
 
@@ -394,7 +398,10 @@ export default function AdminBulkAddPage() {
     if (excludeAdminsAndBots) {
       list = list.filter(m => !m.is_bot && m.role !== 'creator' && m.role !== 'admin')
     }
-    return list.map(m => ({ ...m, alreadyInTarget: targetMemberIds.has(m.user_id) }))
+    return list.map(m => ({
+      ...m,
+      alreadyInTarget: targetMemberIds.has(m.user_id) || !!m.already_added || m.invitation_status?.status === 'joined',
+    }))
   }, [members, excludeAdminsAndBots, targetMemberIds])
 
   function getGroupName(tgGroupId: number | null | undefined): string {

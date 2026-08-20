@@ -72,8 +72,8 @@ export async function deleteAgent(agentId: number) {
   return apiClient.delete(`${AGENTS_API_PREFIX}/${agentId}`)
 }
 
-export async function fetchAgentJobs(agentId: number, jobType?: string, limit?: number) {
-  return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, limit })
+export async function fetchAgentJobs(agentId: number, jobType?: string, limit?: number, workspace = false) {
+  return apiClient.get<AgentJobRecord[]>(`${AGENTS_API_PREFIX}/${agentId}/jobs`, { job_type: jobType, limit, workspace })
 }
 
 export async function cancelAgentJob(agentId: number, jobId: number) {

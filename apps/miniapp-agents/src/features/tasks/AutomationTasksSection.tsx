@@ -3,13 +3,12 @@ import { useTranslation } from 'react-i18next'
 
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { FormActions } from '../../components/FormActions'
-import { GroupAutocompleteField } from '../../components/GroupAutocompleteField'
-import { GroupDestinationField } from '../../components/GroupDestinationField'
 
 import {
   agentsApi,
   Button,
   Card,
+  GroupAutocomplete,
   InputField,
   Note,
   SelectField,
@@ -251,7 +250,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   useEffect(() => {
     if (!isBulkAdd || !bulkTargetGroup?.tg_group_id) { setBulkHeldMemberIds(new Set()); return }
     let cancelled = false
-    void agentsApi.fetchAgentJobs(account.id, 'member_add', 100)
+    void agentsApi.fetchAgentJobs(account.id, 'member_add', 100, true)
       .then((jobs) => {
         if (cancelled) return
         const held = new Set<number>()
@@ -468,22 +467,24 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
             </SelectField>
             {isBulkAdd ? (
               <div style={{ display: 'grid', gap: 8 }}>
-                <GroupDestinationField
+                <GroupAutocomplete
                   label={t('automation.bulkSourceGroup')}
                   query={bulkSourceGroupQuery}
                   onQueryChange={setBulkSourceGroupQuery}
                   groups={bulkSourceGroups}
                   loading={bulkSourceGroupsLoading}
+                  mode="single"
                   selectedGroup={bulkSourceGroup}
                   onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery('') }}
                   onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery('') }}
                 />
-                <GroupDestinationField
+                <GroupAutocomplete
                   label={t('automation.bulkTargetGroup')}
                   query={bulkTargetGroupQuery}
                   onQueryChange={setBulkTargetGroupQuery}
                   groups={bulkTargetGroups}
                   loading={bulkTargetGroupsLoading}
+                  mode="single"
                   selectedGroup={bulkTargetGroup}
                   onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery('') }}
                   onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery('') }}
@@ -493,7 +494,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !bulkHeldMemberIds.has(m.user_id) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
+                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
                         <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
                       </div>
                     </div>
@@ -513,13 +514,16 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                       {!bulkSearching && bulkMembers.length === 0 ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
                       {bulkMembers.filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin')).map((m) => {
                         const inTarget = bulkTargetMemberIds.has(m.user_id)
+                        const persistedAdded = !!m.already_added
                         const selected = bulkSelectedMembers.includes(m.user_id)
                         const claim = m.claim
                         const heldByOther = !!(claim && !claim.is_own)
                         const heldBySelf = !!(claim && claim.is_own)
                         const invited = !!m.invitation_status
+                        const joinedViaInvite = m.invitation_status?.status === 'joined'
+                        const invitedByOther = !!(m.invitation_status && m.invitation_status.is_own === false)
                         const inRunningJob = bulkHeldMemberIds.has(m.user_id)
-                        const isDisabled = inTarget || heldByOther || invited || inRunningJob
+                        const isDisabled = inTarget || persistedAdded || heldByOther || invited || inRunningJob
                         return (
                           <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: isDisabled ? 'default' : 'pointer', opacity: isDisabled ? 0.5 : 1, borderBottom: '1px solid var(--miniapp-border-soft)' }}>
                             <input type="checkbox" checked={selected || !!heldBySelf} disabled={isDisabled} onChange={() => setBulkSelectedMembers((prev) => prev.includes(m.user_id) ? prev.filter((id) => id !== m.user_id) : [...prev, m.user_id])} />
@@ -527,9 +531,9 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--miniapp-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `User ${m.user_id}`}</div>
                               {m.username ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>@{m.username}</div> : null}
                             </div>
-                            {inTarget ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{t('automation.alreadyInGroup')}</span> : null}
+                            {inTarget || persistedAdded ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')}</span> : null}
                             {inRunningJob ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.inRunningJob')}</span> : null}
-                            {invited ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-secondary)', fontWeight: 600 }}>{t('automation.invitationSent')}</span> : null}
+                            {invited && !joinedViaInvite ? <span style={{ fontSize: 10, color: invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)', fontWeight: 600 }}>{invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')}</span> : null}
                             {heldByOther ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.heldByOther')}</span> : null}
                             {heldBySelf ? <span style={{ fontSize: 10, color: 'var(--miniapp-coral)', fontWeight: 600 }}>{t('automation.selectedByYou')}</span> : null}
                             {m.role === 'admin' || m.role === 'creator' ? <span style={{ fontSize: 10, color: 'var(--miniapp-clay)', fontWeight: 600 }}>{m.role}</span> : null}
@@ -667,8 +671,9 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                 )}
               </div>
             ) : null}
-            <GroupAutocompleteField label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
-              selectedGroups={taskGroups} onAdd={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c : [...c, g])}
+            <GroupAutocomplete label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+              mode="multi" selected={taskGroups}
+              onToggle={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c.filter((e) => e.tg_group_id !== g.tg_group_id) : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('automation.destGroupPlaceholder')} />
             {taskKey === 'notify_destination' ? (
               <>
@@ -677,8 +682,8 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   <option value="text">{t('automation.destManual')}</option>
                 </SelectField>
                 {taskDestinationMode === 'group' ? (
-                  <GroupDestinationField label={t('automation.destGroup')} query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
-                    selectedGroup={taskDestinationGroup} onSelect={(g) => { setTaskDestinationGroup(g); setTaskDestinationGroupQuery(g.title) }}
+                  <GroupAutocomplete label={t('automation.destGroup')} query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
+                    mode="single" selectedGroup={taskDestinationGroup} onSelect={(g) => { setTaskDestinationGroup(g); setTaskDestinationGroupQuery(g.title) }}
                     onClear={() => { setTaskDestinationGroup(null); setTaskDestinationGroupQuery('') }} />
                 ) : (
                   <InputField label={t('automation.destination')} value={taskDestinationText} onChange={setTaskDestinationText} placeholder={t('automation.destPlaceholder')} />
@@ -694,7 +699,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
             ) : null}
               </>
             )}
-            <FormActions submitLabel="Save" submitDisabled={!canSave || isSaving} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
+            <FormActions submitLabel={t('common.save')} submitDisabled={!canSave || isSaving} onSubmit={() => void handleSave()} onCancel={() => { resetForm(); setIsFormOpen(false) }} />
           </div>
         ) : null}
       </Card>

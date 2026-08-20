@@ -179,7 +179,13 @@ class AgentJobService(AgentServiceSupport):
         return list((await self.session.execute(stmt)).scalars())
 
     async def list_agent_jobs(
-        self, *, actor_user_id: int, agent_id: int, limit: int = 50, job_type: str | None = None
+        self,
+        *,
+        actor_user_id: int,
+        agent_id: int,
+        limit: int = 50,
+        job_type: str | None = None,
+        tenant_id: int | None = None,
     ) -> list[AgentJob]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -188,6 +194,14 @@ class AgentJobService(AgentServiceSupport):
         stmt = select(AgentJob).where(AgentJob.agent_id == agent.id)
         if job_type:
             stmt = stmt.where(AgentJob.job_type == job_type)
+        if tenant_id is not None:
+            # Include jobs from every agent in the same workspace so that
+            # in-flight member_add jobs are visible across agents.
+            stmt = stmt.where(
+                AgentJob.agent_id.in_(
+                    select(Agent.id).where(Agent.tenant_id == tenant_id)
+                )
+            )
         stmt = stmt.order_by(desc(AgentJob.created_at), desc(AgentJob.id)).limit(limit)
         return list((await self.session.execute(stmt)).scalars())
 
