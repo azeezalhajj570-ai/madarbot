@@ -5972,22 +5972,72 @@
           });
 
           if (isRunning && remaining > 0) {
-            setTimeout(async () => {
-              const freshJobs = await apiRequest(`/webapp/agents/${agentId}/jobs`);
-              state.cache.agentJobs[agentId] = freshJobs;
-              const freshJob = freshJobs.find((e) => Number(e.id) === jobId);
-              if (freshJob && (freshJob.status === "running" || freshJob.status === "pending" || freshJob.status === "queued")) {
-                document.querySelector(".modal .summary-line")?.remove();
-                const pct = totalCount > 0 ? Math.round(((progress.success_count || 0) + (progress.failure_count || 0) + (progress.skip_count || 0)) / totalCount * 100) : 0;
-                const bar = document.querySelector(".modal .progress-bar");
-                const label = document.querySelector(".modal .progress-label");
-                if (bar) bar.style.width = pct + "%";
-                if (label) label.textContent = `${progress.success_count || 0} / ${totalCount} (${pct}%)`;
-              } else if (freshJob) {
-                closeModal();
-                showBulkAddMemberJobs(false);
+            const poll = async () => {
+              try {
+                const freshJobs = await apiRequest(`/webapp/agents/${agentId}/jobs`);
+                state.cache.agentJobs[agentId] = freshJobs;
+                const freshJob = freshJobs.find((e) => Number(e.id) === jobId);
+                if (!freshJob) {
+                  closeModal();
+                  showBulkAddMemberJobs(false);
+                  return;
+                }
+                if (!(freshJob.status === "running" || freshJob.status === "pending" || freshJob.status === "queued")) {
+                  closeModal();
+                  showBulkAddMemberJobs(false);
+                  return;
+                }
+                // Re-render the whole modal from fresh data so new per-user
+                // rows appear live as the worker persists progress.
+                const fPayload = freshJob.job_payload || {};
+                const fProgress = fPayload.progress || {};
+                const fResult = fPayload.result || {};
+                const fres = fResult.results || fProgress.results || [];
+                const fTotal = fResult.total_count || fProgress.total_count || fres.length || fPayload.user_ids?.length || 0;
+                const fSuccess = fResult.success_count || fProgress.success_count || 0;
+                const fFail = fResult.failure_count || fProgress.failure_count || 0;
+                const fSkip = fResult.skip_count || fProgress.skip_count || 0;
+                const fCompleted = fProgress.completed || (fSuccess + fFail + fSkip);
+                const fresRows = fres.map((r) => {
+                  const statusLabel = r.status === "success" ? "✅ Added"
+                    : r.status === "skipped" ? "⏭ Skipped" + (r.reason ? ` (${r.reason})` : "")
+                    : r.status === "failed" && r.method === "invite_link" ? "🔗 Invite link sent"
+                    : r.method === "invite_link_dm_failed" ? "❌ Invite DM failed"
+                    : "❌ Failed";
+                  const extra = r.error_code ? escapeHtml(String(r.error_code)) : "";
+                  const extra2 = r.flood_wait_seconds ? ` (flood ${r.flood_wait_seconds}s)` : "";
+                  return `<tr><td class="mono">${escapeHtml(String(r.user_id))}</td><td>${statusLabel}</td><td class="mono">${extra}${extra2}</td></tr>`;
+                }).join("");
+                const fPct = fTotal > 0 ? Math.round((fCompleted / fTotal) * 100) : 0;
+                openModal({
+                  title: `Member Add Job #${jobId}`,
+                  subtitle: `⏳ Running — ${fCompleted} of ${fTotal} processed`,
+                  body: `
+                    <div class="progress-bar-wrap" style="margin:12px 0">
+                      <div class="progress-bar" style="width:${fPct}%"></div>
+                      <span class="progress-label">${fCompleted} / ${fTotal} (${fPct}%)</span>
+                    </div>
+                    <div class="summary-line" style="margin:8px 0;font-weight:600">✅ ${fSuccess} added, ⏭ ${fSkip} skipped, ❌ ${fFail} failed</div>
+                    ${fres.length ? `
+                      <div class="table-wrap" style="max-height:400px;overflow-y:auto">
+                        <table>
+                          <thead><tr><th>User ID</th><th>Status</th><th>Details</th></tr></thead>
+                          <tbody>${fresRows}</tbody>
+                        </table>
+                      </div>` : `<div class="muted">No per-user results yet.</div>`}
+                  `,
+                  footer: modalFooterMarkup({
+                    start: `<button class="ghost-button" type="button" data-action="close-modal">${escapeHtml(t("cancel"))}</button>`,
+                    end: `<button class="button" type="button" data-action="close-modal">Done</button>`,
+                  }),
+                  className: "modal-wide",
+                });
+                setTimeout(poll, 5000);
+              } catch {
+                // ignore transient fetch errors and stop polling
               }
-            }, 5000);
+            };
+            setTimeout(poll, 5000);
           }
           return;
         }
