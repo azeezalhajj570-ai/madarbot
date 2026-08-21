@@ -1926,13 +1926,13 @@ function PhoneEntryStep({
                 padding: '11px 10px', whiteSpace: 'nowrap', minWidth: 0,
               }}
             >
-              <span style={{ fontWeight: 600 }}>+{selected.dial}</span>
+              <span style={{ fontWeight: 600, direction: 'ltr', unicodeBidi: 'isolate' }}>+{selected.dial}</span>
               <span style={{ fontSize: 9, color: 'var(--miniapp-text-muted)', lineHeight: 1 }}>▾</span>
             </button>
             {open && (
               <div
                 style={{
-                  position: 'absolute', top: '100%', left: 0, zIndex: 20, minWidth: 220,
+                  position: 'absolute', top: '100%', insetInlineStart: 0, zIndex: 20, minWidth: 220,
                   background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
                   borderRadius: 10, boxShadow: 'var(--miniapp-shadow-lg)', maxHeight: 220, overflow: 'auto',
                   marginTop: 4,
@@ -1961,8 +1961,8 @@ function PhoneEntryStep({
                       }}
                     >
                       <span style={{ minWidth: 28, fontWeight: 600 }}>{c.label}</span>
-                      <span style={{ color: 'var(--miniapp-text-muted)', fontFamily: 'var(--miniapp-mono)', fontSize: 12 }}>+{c.dial}</span>
-                      <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginLeft: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                      <span style={{ color: 'var(--miniapp-text-muted)', fontFamily: 'var(--miniapp-mono)', fontSize: 12, direction: 'ltr', unicodeBidi: 'isolate' }}>+{c.dial}</span>
+                      <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginInlineStart: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
                     </button>
                   )) : (
                     <div style={{ padding: '10px 12px', color: 'var(--miniapp-text-muted)', fontSize: 12 }}>{t('wizard.phoneNoMatch')}</div>
