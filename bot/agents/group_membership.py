@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
@@ -231,7 +232,17 @@ async def add_user_to_group(
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     if verify:
-        present = await is_user_in_group(client, group_entity, user_peer)
+        # Telegram membership does not propagate instantly after an invite, so a
+        # single immediate GetParticipantRequest often reports absent even though
+        # the add succeeded. Retry a few times with a short delay; a transient
+        # (None) result is treated as a pass rather than a failure to avoid
+        # false VERIFICATION_FAILED on otherwise-successful adds.
+        present: bool | None = None
+        for attempt in range(3):
+            present = await is_user_in_group(client, group_entity, user_peer)
+            if present is not False:
+                break
+            await asyncio.sleep(2.0 * (attempt + 1))
         if present is False:
             logger.bind(
                 group_id=group_id,
