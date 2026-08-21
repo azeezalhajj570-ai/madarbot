@@ -1466,6 +1466,37 @@ class BulkAddMembersRuntime:
 
                 results.append(result_entry)
 
+                # Persist running progress after each user so the dashboard job
+                # detail can render a live per-user log instead of only totals
+                # after the job finishes.
+                if session is not None and payload.get("job_id"):
+                    try:
+                        job_row = (
+                            await session.execute(
+                                select(AgentJob).where(AgentJob.id == payload["job_id"])
+                            )
+                        ).scalar_one_or_none()
+                        if job_row is not None:
+                            updated_payload = dict(job_row.job_payload or {})
+                            updated_payload["progress"] = {
+                                "total_count": total_count,
+                                "success_count": success_count,
+                                "failure_count": failure_count,
+                                "skip_count": skip_count,
+                                "invite_link_count": invite_link_count,
+                                "results": list(results),
+                                "stopped_at": index,
+                            }
+                            job_row.job_payload = updated_payload
+                            await session.commit()
+                    except Exception:
+                        await session.rollback()
+                        logger.warning(
+                            "member_add_progress_persist_failed",
+                            job_id=payload.get("job_id"),
+                            user_id=user_id,
+                        )
+
                 effective_interval = base_interval
                 if base_interval > 0:
                     jitter = random.uniform(-0.3, 0.3) * base_interval
