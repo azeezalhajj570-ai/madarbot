@@ -190,9 +190,9 @@ def normalize_member_add_payload(payload: dict[str, Any] | None) -> dict[str, An
         raise ValueError("interval_seconds must be a non-negative number") from exc
     if interval_seconds < 0:
         raise ValueError("interval_seconds must be a non-negative number")
-    # Bulk member adds must be spaced at least an hour apart (60 * 60 seconds)
-    # to avoid Telegram flooding and protect the account session.
-    interval_seconds = max(interval_seconds, 60 * 60)
+    # Bulk member adds must be spaced at least 1800 seconds (30 minutes)
+    # apart to avoid Telegram flooding and protect the account session.
+    interval_seconds = max(interval_seconds, 30 * 60)
 
     send_invite_link = bool(normalized.get("send_invite_link_on_privacy_restricted", False))
     source_tg_group_id = normalized.get("source_tg_group_id")

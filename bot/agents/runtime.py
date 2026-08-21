@@ -1238,12 +1238,26 @@ class BulkAddMembersRuntime:
 
                 if session is not None:
                     from bot.db.models.group import Group as OrmGroup
+                    from bot.db.models.scraper import ScrapedGroup
                     target_group_row = (
                         await session.execute(
                             select(OrmGroup.id).where(OrmGroup.tg_group_id == target_tg_group_id)
                         )
                     ).scalar_one_or_none()
-                    target_group_id = target_group_row or 0
+                    if target_group_row is None:
+                        # The target is a scraped-only group (not registered in `groups`).
+                        # Fall back to the scraped_groups row so member records and dedup
+                        # still resolve to a real group id instead of collapsing to 0.
+                        target_group_scraped = (
+                            await session.execute(
+                                select(ScrapedGroup.id).where(
+                                    ScrapedGroup.tg_group_id == target_tg_group_id
+                                )
+                            )
+                        ).scalar_one_or_none()
+                        target_group_id = target_group_scraped or 0
+                    else:
+                        target_group_id = target_group_row
                     existing = (
                         await session.execute(
                             select(GroupMember).where(
