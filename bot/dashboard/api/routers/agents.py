@@ -1195,6 +1195,28 @@ async def webapp_cancel_agent_job(
 
     job.status = JOB_STATUS_ABORTED
     await session.commit()
+
+    # Release member claims held by this job so the members are immediately
+    # re-selectable when the user re-creates a bulk add job. (Claims are
+    # normally released in the runtime's finally block, which does not run
+    # when a job is cancelled mid-flight.)
+    tenant_id = getattr(agent, "tenant_id", None)
+    claim_ids = list((job.job_payload or {}).get("claim_ids") or [])
+    if tenant_id and claim_ids:
+        try:
+            from bot.services.member_claim_service import release_claims
+
+            await release_claims(
+                session,
+                tenant_id=tenant_id,
+                agent_id=agent.id,
+                claim_ids=claim_ids,
+            )
+            await session.commit()
+        except Exception:
+            logger.exception("webapp_cancel_job_claim_release_failed", job_id=job_id)
+            await session.rollback()
+
     return {"status": "ok", "job_id": job_id, "new_status": JOB_STATUS_ABORTED}
 
 

@@ -96,10 +96,19 @@ async def reconcile_loop() -> None:
     while True:
         try:
             from bot.agents.dispatch import reconcile_stale_jobs
+            from bot.services.member_claim_service import expire_stale_claims
 
             result = await reconcile_stale_jobs()
             if result.get("reconciled") or result.get("recovered_running"):
                 logger.info("reconcile_cycle_complete", **result)
+
+            # Auto-clean member claims that have passed their TTL so members
+            # are not left marked as selected after jobs fail or abort.
+            async with SessionLocal() as session:
+                expired = await expire_stale_claims(session)
+                await session.commit()
+                if expired:
+                    logger.info("stale_claims_expired_in_reconcile", count=expired)
         except Exception:
             logger.exception("reconcile_tick_failed")
         await asyncio.sleep(settings.reconcile_poll_interval)
