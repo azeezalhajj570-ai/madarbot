@@ -242,12 +242,14 @@ export function Button({
   tone = 'primary',
   type = 'button',
   disabled = false,
+  style,
 }: {
   children: ReactNode
   onClick?: () => void
   tone?: 'primary' | 'secondary' | 'danger'
   type?: 'button' | 'submit'
   disabled?: boolean
+  style?: CSSProperties
 }) {
   const colors: Record<string, CSSProperties> = {
     primary: {
@@ -283,6 +285,7 @@ export function Button({
         fontFamily: 'var(--miniapp-sans)',
         opacity: disabled ? 0.6 : 1,
         cursor: disabled ? 'default' : 'pointer',
+        ...style,
       }}
     >
       {children}

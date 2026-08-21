@@ -295,7 +295,7 @@ export function LeadsAcquisitionSection({ account, groupId, onSaved }: { account
                 />
               </label>
             )}
-            <GroupAutocomplete label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+            <GroupAutocomplete label={t('leadsAcq.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups} t={t}
               mode="multi" selected={taskGroups}
               onToggle={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c.filter((e) => e.tg_group_id !== g.tg_group_id) : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('leadsAcq.groupPlaceholder')} />

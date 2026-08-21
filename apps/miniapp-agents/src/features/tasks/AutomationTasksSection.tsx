@@ -35,6 +35,23 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
   executor_types: ['agent'],
 }
 
+// Map task keys to i18n labels so catalog titles and descriptions
+// render in the active language regardless of what the backend returns.
+const TASK_LABEL_KEYS: Record<string, { title: string; description: string }> = {
+  reply_message: { title: 'automation.taskReplyMessage', description: 'automation.taskReplyMessageDesc' },
+  welcome_flow: { title: 'automation.taskWelcomeFlow', description: 'automation.taskWelcomeFlowDesc' },
+  lead_capture: { title: 'automation.taskLeadCapture', description: 'automation.taskLeadCaptureDesc' },
+  escalation_alert: { title: 'automation.taskEscalationAlert', description: 'automation.taskEscalationAlertDesc' },
+  notify_destination: { title: 'automation.taskNotifyDestination', description: 'automation.taskNotifyDestinationDesc' },
+  bulk_add_members: { title: 'automation.bulkAddMembers', description: 'automation.bulkAddMembersDesc' },
+}
+
+function taskCatalogLabel(t: (key: string, options?: Record<string, unknown>) => string, item: TaskCatalogItem) {
+  const mapped = TASK_LABEL_KEYS[item.key]
+  if (mapped) return { title: t(mapped.title), description: t(mapped.description) }
+  return { title: item.title, description: item.description || '' }
+}
+
 const DELIVERY_LABELS: Record<string, string> = {
   text: 'deliveryText',
   forward: 'deliveryForward',
@@ -52,8 +69,13 @@ function mapTaskGroups(t: (key: string, options?: Record<string, unknown>) => st
   }))
 }
 
-function taskTitle(task: AutomationTask, catalog: TaskCatalogItem[]) {
-  return catalog.find((item) => item.key === task.task_key)?.title || task.task_key.replace(/_/g, ' ')
+function taskTitle(t: (key: string, options?: Record<string, unknown>) => string, task: AutomationTask, catalog: TaskCatalogItem[]) {
+  const item = catalog.find((i) => i.key === task.task_key)
+  if (item) {
+    const label = taskCatalogLabel(t, item)
+    return label.title
+  }
+  return task.task_key.replace(/_/g, ' ')
 }
 
 function _parseKeywords(raw: unknown): string[] {
@@ -140,7 +162,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<number[]>([])
   const [bulkTargetMemberIds, setBulkTargetMemberIds] = useState<Set<number>>(new Set())
-  const [bulkInterval, setBulkInterval] = useState('20')
+  const [bulkInterval, setBulkInterval] = useState('3600')
   const [bulkSendInvite, setBulkSendInvite] = useState(false)
   const [bulkCustomMessage, setBulkCustomMessage] = useState('')
   const [bulkExcludeAdminsBots, setBulkExcludeAdminsBots] = useState(true)
@@ -321,7 +343,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
     setBulkSelectedMembers([])
     setBulkTargetMemberIds(new Set())
     setBulkHeldMemberIds(new Set())
-    setBulkInterval('20')
+    setBulkInterval('3600')
     setBulkSendInvite(false)
     setBulkCustomMessage('')
     setBulkExcludeAdminsBots(true)
@@ -396,7 +418,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
         await agentsApi.bulkAddMembers(account.id, {
           target_tg_group_id: bulkTargetGroup.tg_group_id,
           source_tg_group_id: bulkSourceGroup.tg_group_id,
-          interval_seconds: Math.max(1, Number(bulkInterval) || 20),
+          interval_seconds: Math.max(60 * 60, Number(bulkInterval) || 60 * 60),
           user_ids: bulkSelectedMembers,
           send_invite_link_on_privacy_restricted: bulkSendInvite,
           custom_invite_message: bulkCustomMessage.trim() ? bulkCustomMessage.trim() : null,
@@ -463,7 +485,10 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
         {isFormOpen ? (
           <div style={{ display: 'grid', gap: 12 }}>
             <SelectField label={t('automation.taskType')} value={taskKey} onChange={setTaskKey}>
-              {extendedCatalog.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
+              {extendedCatalog.map((item) => {
+                const label = taskCatalogLabel(t, item)
+                return <option key={item.key} value={item.key}>{label.title}</option>
+              })}
             </SelectField>
             {isBulkAdd ? (
               <div style={{ display: 'grid', gap: 8 }}>
@@ -477,6 +502,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   selectedGroup={bulkSourceGroup}
                   onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery('') }}
                   onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery('') }}
+                  t={t}
                 />
                 <GroupAutocomplete
                   label={t('automation.bulkTargetGroup')}
@@ -488,6 +514,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   selectedGroup={bulkTargetGroup}
                   onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery('') }}
                   onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery('') }}
+                  t={t}
                 />
                 {bulkSourceGroup?.tg_group_id ? (
                   <div style={{ display: 'grid', gap: 6 }}>
@@ -537,7 +564,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                             {heldByOther ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.heldByOther')}</span> : null}
                             {heldBySelf ? <span style={{ fontSize: 10, color: 'var(--miniapp-coral)', fontWeight: 600 }}>{t('automation.selectedByYou')}</span> : null}
                             {m.role === 'admin' || m.role === 'creator' ? <span style={{ fontSize: 10, color: 'var(--miniapp-clay)', fontWeight: 600 }}>{m.role}</span> : null}
-                            {m.is_bot ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>bot</span> : null}
+                            {m.is_bot ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{t('campaigns.bot')}</span> : null}
                           </label>
                         )
                       })}
@@ -552,7 +579,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     {bulkLoadingTarget ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('automation.loadingTarget')}</div> : null}
                   </div>
                 ) : null}
-                <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="20" />
+                <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="3600" />
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={bulkSendInvite} onChange={(e) => setBulkSendInvite(e.target.checked)} />
                   {t('automation.bulkSendInvite')}
@@ -671,7 +698,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                 )}
               </div>
             ) : null}
-            <GroupAutocomplete label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups}
+            <GroupAutocomplete label={t('automation.selectGroups')} query={taskGroupsQuery} onQueryChange={setTaskGroupsQuery} groups={groups} t={t}
               mode="multi" selected={taskGroups}
               onToggle={(g) => setTaskGroups((c) => c.some((e) => e.tg_group_id === g.tg_group_id) ? c.filter((e) => e.tg_group_id !== g.tg_group_id) : [...c, g])}
               onRemove={(id) => setTaskGroups((c) => c.filter((g) => g.tg_group_id !== id))} placeholder={t('automation.destGroupPlaceholder')} />
@@ -682,7 +709,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   <option value="text">{t('automation.destManual')}</option>
                 </SelectField>
                 {taskDestinationMode === 'group' ? (
-                  <GroupAutocomplete label={t('automation.destGroup')} query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups}
+                  <GroupAutocomplete label={t('automation.destGroup')} query={taskDestinationGroupQuery} onQueryChange={setTaskDestinationGroupQuery} groups={groups} t={t}
                     mode="single" selectedGroup={taskDestinationGroup} onSelect={(g) => { setTaskDestinationGroup(g); setTaskDestinationGroupQuery(g.title) }}
                     onClear={() => { setTaskDestinationGroup(null); setTaskDestinationGroupQuery('') }} />
                 ) : (
@@ -709,7 +736,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
             {tasks.map((task) => (
               <div key={task.assignment_id} style={{ padding: 14, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-surface)' }}>
                 <div>
-                  <strong>{taskTitle(task, catalog)}</strong>
+                  <strong>{taskTitle(t, task, catalog)}</strong>
                   <div style={{ color: '#655d52', marginTop: 4 }}>{taskConditionLabel(t, task)}</div>
                   <div style={{ color: '#655d52', marginTop: 4 }}>{taskConfigLabel(t, task)}</div>
                   {Array.isArray(task.group_titles) && task.group_titles.length ? <div style={{ color: '#655d52', marginTop: 4 }}>{t('automation.groupsLabel', { titles: task.group_titles.join(', ') })}</div> : null}

@@ -30,6 +30,7 @@ export function GroupAutocomplete({
   placeholder,
   loading,
   syncButton,
+  t,
 }: {
   label: string
   query: string
@@ -51,6 +52,8 @@ export function GroupAutocomplete({
   placeholder?: string
   loading?: boolean
   syncButton?: React.ReactNode
+  /** Optional translator for built-in strings. Falls back to English when omitted. */
+  t?: (key: string, fallback: string) => string
 }) {
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -115,7 +118,7 @@ export function GroupAutocomplete({
         onChange={onQueryChange}
         onFocus={() => { setFocused(true); setOpen(true) }}
         onBlur={() => setFocused(false)}
-        placeholder={placeholder ?? 'Search groups'}
+        placeholder={placeholder ?? (t?.('shared.searchGroups', 'Search groups') ?? 'Search groups')}
       />
       {showPanel ? (
         <div style={{
@@ -129,12 +132,12 @@ export function GroupAutocomplete({
         }}>
           {loading ? (
             <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--miniapp-text-muted)', textAlign: 'center' }}>
-              Searching…
+              {t?.('shared.searching', 'Searching…') ?? 'Searching…'}
             </div>
           ) : suggestions.length ? suggestions.map((group) => (
             <div
               key={String(group.tg_group_id)}
-              onClick={() => handlePick({ tg_group_id: Number(group.tg_group_id), title: String(group.title || group.tg_group_id || 'Group') })}
+              onClick={() => handlePick({ tg_group_id: Number(group.tg_group_id), title: String(group.title || group.tg_group_id || (t?.('shared.groupFallback', 'Group') ?? 'Group')) })}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px',
                 borderRadius: 8, cursor: 'pointer', userSelect: 'none',
@@ -148,15 +151,15 @@ export function GroupAutocomplete({
                 background: group.can_add_members === false ? 'var(--miniapp-border)' : 'var(--miniapp-sage)',
               }} />
               <div style={{ minWidth: 0 }}>
-                <strong style={{ fontSize: 13, display: 'block', color: 'var(--miniapp-text-primary)' }}>{group.title || `Group ${group.tg_group_id}`}</strong>
+                <strong style={{ fontSize: 13, display: 'block', color: 'var(--miniapp-text-primary)' }}>{group.title || (t?.('shared.groupFallback', 'Group') ?? 'Group')}</strong>
                 <div style={{ color: 'var(--miniapp-text-muted)', fontSize: 11, marginTop: 1 }}>
-                  {group.tg_group_id} · {group.group_type || 'group'}
+                  {group.tg_group_id} · {group.group_type || (t?.('shared.group', 'group') ?? 'group')}
                 </div>
               </div>
             </div>
           )) : (
             <div style={{ padding: '10px 12px', fontSize: 13, color: 'var(--miniapp-text-muted)', textAlign: 'center' }}>
-              No matching groups found.
+              {t?.('shared.noMatchingGroups', 'No matching groups found.') ?? 'No matching groups found.'}
             </div>
           )}
         </div>

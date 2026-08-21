@@ -1169,6 +1169,7 @@ class BulkAddMembersRuntime:
         results: list[dict[str, Any]] = list(progress.get("results", []))
 
         agent_id_val = agent.id
+        agent_tenant_id = getattr(agent, "tenant_id", None)
         agent_cooldown = getattr(agent, "cooldown_minutes", None)
         agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
         agent_max_per_day = getattr(agent, "max_messages_per_day", None)
@@ -1477,7 +1478,7 @@ class BulkAddMembersRuntime:
         finally:
             # Release member claims for this operation
             claim_ids = payload.get("claim_ids")
-            if claim_ids and agent.tenant_id:
+            if claim_ids and agent_tenant_id:
                 try:
                     from bot.db.session import SessionLocal
                     from bot.services.member_claim_service import release_claims
@@ -1485,15 +1486,15 @@ class BulkAddMembersRuntime:
                     async with SessionLocal() as claim_session:
                         await release_claims(
                             claim_session,
-                            tenant_id=agent.tenant_id,
-                            agent_id=agent.id,
+                            tenant_id=agent_tenant_id,
+                            agent_id=agent_id_val,
                             claim_ids=claim_ids,
                         )
                         await claim_session.commit()
                 except Exception as exc:
                     logger.warning(
                         "claim_release_failed",
-                        agent_id=agent.id,
+                        agent_id=agent_id_val,
                         claim_ids=claim_ids,
                         error=str(exc),
                     )
