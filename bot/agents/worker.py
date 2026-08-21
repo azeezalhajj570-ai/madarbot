@@ -563,7 +563,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
         if job is None:
             bound_logger.warning("agent_job_missing")
             return
-        if job.status in {JOB_STATUS_COMPLETED, JOB_STATUS_ABORTED}:
+        if job.status in {JOB_STATUS_COMPLETED, JOB_STATUS_ABORTED, JOB_STATUS_FAILED}:
             bound_logger.info("agent_job_skipped", status=job.status)
             return
         if job.status in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_ENQUEUE_FAILED}:
