@@ -187,20 +187,27 @@ async def add_user_to_group(
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
+    group_is_channel = isinstance(group_entity, Channel) or bool(
+        getattr(group_entity, "megagroup", False)
+    )
+    if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
+        # Marked -100 ids are channels/megagroups even when entity resolution
+        # returned a legacy Chat object.
+        group_is_channel = True
+
+    invite_peer = group_entity
+    if group_is_channel and not isinstance(group_entity, Channel):
+        try:
+            invite_peer = await client.get_input_entity(group_id)
+        except (ValueError, KeyError):
+            invite_peer = await _resolve_group_from_dialogs(client, group_id)
+        if invite_peer is None:
+            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
+
     try:
-        group_is_channel = isinstance(group_entity, Channel) or bool(
-            getattr(group_entity, "megagroup", False)
-        )
-        if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
-            # Marked -100 ids are channels/megagroups even if entity resolution
-            # returned a legacy Chat object.
-            group_is_channel = True
         if group_is_channel:
             invite_result = await client(
-                InviteToChannelRequest(
-                    channel=group_entity if isinstance(group_entity, Channel) else group_id,
-                    users=[user_peer],
-                )
+                InviteToChannelRequest(channel=invite_peer, users=[user_peer])
             )
             missing_invitees = getattr(invite_result, "missing_invitees", None) or []
             users_added = getattr(invite_result, "users", None) or []
@@ -235,6 +242,8 @@ async def add_user_to_group(
         )
     except (ChatAdminRequiredError, ChatWriteForbiddenError, UserNotParticipantError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+    except ValueError:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except RPCError as exc:
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_invite_to_channel_rpc_error")
         if "admin" in str(exc).lower() or "forbidden" in str(exc).lower():
@@ -248,8 +257,9 @@ async def add_user_to_group(
         # (None) result is treated as a pass rather than a failure to avoid
         # false VERIFICATION_FAILED on otherwise-successful adds.
         present: bool | None = None
+        verify_entity = invite_peer if group_is_channel else group_entity
         for attempt in range(3):
-            present = await is_user_in_group(client, group_entity, user_peer)
+            present = await is_user_in_group(client, verify_entity, user_peer)
             if present is not False:
                 break
             await asyncio.sleep(2.0 * (attempt + 1))
@@ -291,7 +301,7 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
             try:
                 peer = await client.get_input_entity(group_id)
             except (ValueError, KeyError):
-                peer = entity
+                peer = await _resolve_group_from_dialogs(client, group_id) or entity
         result = await client(ExportChatInviteRequest(peer=peer))
         link = getattr(result, "link", None)
         if link:
