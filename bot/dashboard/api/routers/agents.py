@@ -358,7 +358,11 @@ async def webapp_agent_send_logs(
                 ).all()
                 usernames = {int(r.tg_user_id): r.username for r in sm_rows if r.username}
 
-            target_tg = int(progress.get("target_tg_group_id", 0))
+            target_tg = int(
+                progress.get("target_tg_group_id")
+                or job.job_payload.get("target_tg_group_id")
+                or 0
+            )
             group_title = None
             if target_tg:
                 group_title = (await _group_title(target_tg)) or str(target_tg)

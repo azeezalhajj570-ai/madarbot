@@ -2883,10 +2883,16 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
       const { exportLogsPdf } = await import('./utils/exportLogsPdf')
       const delivery = await exportLogsPdf(model, `madar-task-${job.id}-logs.pdf`)
       if (delivery === 'sent_to_chat') {
-        setStatusMsg(t('tasks.exportSentToChat'))
+        const msg = t('tasks.exportSentToChat')
+        const webapp = (window as any).Telegram?.WebApp
+        if (webapp?.showAlert) void webapp.showAlert(msg)
+        else setStatusMsg(msg)
       }
     } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : t('tasks.exportFailed'))
+      const msg = error instanceof Error ? error.message : t('tasks.exportFailed')
+      const webapp = (window as any).Telegram?.WebApp
+      if (webapp?.showAlert) void webapp.showAlert(msg)
+      else setStatusMsg(msg)
     } finally {
       setExportingJobId(null)
     }
