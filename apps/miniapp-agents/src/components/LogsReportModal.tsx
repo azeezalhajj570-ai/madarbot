@@ -339,9 +339,10 @@ export function LogsReportModal({
                 {emptyMessage || t('common.noData')}
               </div>
             ) : (
-              paginated.map((rawLog) => {
+              paginated.map((rawLog, idx) => {
                 const log = rawLog as LogRow
                 const key = String(log.id)
+                const rowNo = (safePage - 1) * PAGE_SIZE + idx + 1
                 const isExpanded = expandedKey === key
                 const ok = log.status === 'sent' || log.status === 'success'
                 const invite = log.method === 'invite_link' || log.method === 'invite_link_dm_failed'
@@ -382,9 +383,17 @@ export function LogsReportModal({
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                       <span style={{
-                        fontWeight: 700, fontSize: 13, minWidth: 0,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{recipient}</span>
+                        display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0,
+                      }}>
+                        <span style={{
+                          flexShrink: 0, fontFamily: 'var(--miniapp-mono, monospace)',
+                          fontSize: 10.5, color: MUTED, minWidth: 20, textAlign: 'end',
+                        }}>{rowNo}.</span>
+                        <span style={{
+                          fontWeight: 700, fontSize: 13, minWidth: 0,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{recipient}</span>
+                      </span>
                       <span style={{
                         flexShrink: 0, fontSize: 9.5, fontWeight: 700,
                         letterSpacing: '0.8px', textTransform: 'uppercase',
