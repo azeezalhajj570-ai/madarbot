@@ -188,9 +188,19 @@ async def add_user_to_group(
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     try:
-        if isinstance(group_entity, Channel) or bool(getattr(group_entity, "megagroup", False)):
+        group_is_channel = isinstance(group_entity, Channel) or bool(
+            getattr(group_entity, "megagroup", False)
+        )
+        if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
+            # Marked -100 ids are channels/megagroups even if entity resolution
+            # returned a legacy Chat object.
+            group_is_channel = True
+        if group_is_channel:
             invite_result = await client(
-                InviteToChannelRequest(channel=group_id, users=[user_peer])
+                InviteToChannelRequest(
+                    channel=group_entity if isinstance(group_entity, Channel) else group_id,
+                    users=[user_peer],
+                )
             )
             missing_invitees = getattr(invite_result, "missing_invitees", None) or []
             users_added = getattr(invite_result, "users", None) or []
@@ -272,7 +282,17 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
             if entity is None:
                 logger.bind(group_id=group_id).warning("agent_group_invite_entity_not_found")
                 return None
-        result = await client(ExportChatInviteRequest(peer=entity))
+        peer = entity
+        if (
+            not isinstance(entity, Channel)
+            and isinstance(group_id, int)
+            and group_id <= -1000000000000
+        ):
+            try:
+                peer = await client.get_input_entity(group_id)
+            except (ValueError, KeyError):
+                peer = entity
+        result = await client(ExportChatInviteRequest(peer=peer))
         link = getattr(result, "link", None)
         if link:
             logger.bind(group_id=group_id).info("agent_group_invite_link_exported")
