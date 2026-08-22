@@ -2627,8 +2627,6 @@ function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, 
   return formatDateTime(dateStr)
 }
 
-const ATTEMPTS_SHOWN = 8
-
 function buildLogReportModel(
   job: AgentJobRecord,
   logRows: SendLogEntry[],
@@ -2647,22 +2645,9 @@ function buildLogReportModel(
     ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
     : `${job.target_type === 'groups' ? t('tasks.broadcastName', { id: job.id }) : t('tasks.membersName', { id: job.id })}`
 
-  const attempts: LogReportAttempt[] = (p.results || []).slice(0, ATTEMPTS_SHOWN).map((r) => {
-    let label: string
-    let tone: LogReportAttempt['tone']
-    if (r.status === 'success') { label = t('tasks.added'); tone = 'good' }
-    else if (r.status === 'skipped') { label = t('tasks.skipped'); tone = 'neutral' }
-    else if (r.status === 'failed' && r.method === 'invite_link') { label = t('tasks.inviteLinkSent'); tone = 'info' }
-    else if (r.method === 'invite_link_dm_failed') { label = t('tasks.inviteDmFailed'); tone = 'bad' }
-    else { label = t('tasks.failed'); tone = 'bad' }
-    const detail = r.status === 'skipped'
-      ? (r.reason || '')
-      : r.method && r.method !== 'invite_link_dm_failed'
-        ? r.method.replace(/_/g, ' ')
-        : (r.error_code || r.reason || '')
-    return { userId: r.user_id ?? '', label, tone, detail }
-  })
-  const attemptsMoreCount = Math.max(0, (p.results?.length || 0) - ATTEMPTS_SHOWN)
+  // Retry/attempt rows hidden from the report for now
+  const attempts: LogReportAttempt[] = []
+  const attemptsMoreCount = 0
 
   const summary: LogReportModel['summary'] = [
     { label: t('tasks.total'), value: String(total) },
@@ -3237,7 +3222,6 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
         const logSent = logProgress.success_count ?? 0
         const logFailed = logProgress.failure_count ?? 0
         const logSkipped = logProgress.skip_count ?? logProgress.skipped_count ?? 0
-        const progressRows = logProgress.results || []
         const isLogStopped = logProgress.stop_reason != null
 
         return (
@@ -3250,7 +3234,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
             statusLabel={isLogStopped ? t('tasks.stopped') : logJob?.status}
             messagePreview={logJob?.message_preview || undefined}
             summary={{ total: logTotal, sent: logSent, failed: logFailed, skipped: logSkipped }}
-            progressRows={progressRows}
+            progressRows={[]}
             logs={logs}
             loading={logsLoading}
             memberAdd={logJob?.job_type === 'member_add' || logJob?.job_type === 'bulk_add_members'}
