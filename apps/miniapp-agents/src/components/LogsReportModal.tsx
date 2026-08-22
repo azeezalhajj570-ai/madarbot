@@ -30,6 +30,7 @@ type LogRow = SendLogEntry & {
   method?: string | null
   agent_name?: string | null
   agent_phone?: string | null
+  source_group_title?: string | null
 }
 
 function attemptPresentation(
@@ -159,6 +160,42 @@ export function LogsReportModal({
                   ))}
                 </div>
               ) : null}
+              {(() => {
+                const first = logs[0] as LogRow | undefined
+                const sourceTitle = (first?.source_group_title || '').trim()
+                const destTitle = first?.group_title || ''
+                if (!sourceTitle && !destTitle) return null
+                return (
+                  <div style={{
+                    marginTop: 6, fontSize: 10.5,
+                    display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+                    gap: '2px 6px', color: 'var(--miniapp-text-secondary)',
+                  }}>
+                    {sourceTitle ? (
+                      <span style={{
+                        background: 'rgba(71,89,119,0.08)', border: '1px solid rgba(71,89,119,0.18)',
+                        borderRadius: 6, padding: '2px 8px', overflowWrap: 'anywhere',
+                        maxWidth: '100%',
+                      }}>
+                        {t('tasks.logSource')}: <b style={{ color: 'var(--miniapp-ink)' }}>{sourceTitle}</b>
+                      </span>
+                    ) : null}
+                    {destTitle ? (
+                      memberAdd ? (
+                        <span style={{
+                          background: 'rgba(74,103,65,0.10)', border: '1px solid rgba(74,103,65,0.22)',
+                          borderRadius: 6, padding: '2px 8px', overflowWrap: 'anywhere',
+                          maxWidth: '100%',
+                        }}>
+                          {t('tasks.logDest')}: <b style={{ color: 'var(--miniapp-ink)' }}>{destTitle}</b>
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--miniapp-muted)', fontSize: 9.5 }}>→ {t('tasks.perGroupDest')}</span>
+                      )
+                    ) : null}
+                  </div>
+                )
+              })()}
             </div>
             <button
               type="button"

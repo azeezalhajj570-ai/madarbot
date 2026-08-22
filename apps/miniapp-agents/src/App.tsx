@@ -2671,17 +2671,27 @@ function buildLogReportModel(
   if (total > 0 || failed > 0) summary.push({ label: t('tasks.failed'), value: String(failed), tone: failed > 0 ? 'bad' : 'neutral' })
   if (skipped > 0) summary.push({ label: t('tasks.skipped'), value: String(skipped), tone: 'neutral' })
 
+  const firstLogAny = (logRows[0] || {}) as { group_title?: string | null; source_group_title?: string | null }
+  const reportSourceTitle = String(firstLogAny.source_group_title || '').trim()
+  const metaItems = [
+    t('tasks.jobPrefix', { id: job.id }),
+    job.job_type ? (JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')) : '',
+    isStopped ? t('tasks.stopped') : job.status,
+    agentName ? t('tasks.byAgent', { name: agentName }) : '',
+  ]
+  if (reportSourceTitle) {
+    metaItems.push(`${t('tasks.logSource')}: ${reportSourceTitle}`)
+    if ((job.job_type === 'member_add' || job.job_type === 'bulk_add_members') && firstLogAny.group_title) {
+      metaItems.push(`${t('tasks.logDest')}: ${firstLogAny.group_title}`)
+    }
+  }
+
   return {
     dir: /^ar/i.test(lang || '') ? 'rtl' : 'ltr',
     kicker: t('tasks.reportKicker'),
     generatedAt: formatDateTime(new Date()),
     title: taskName,
-    metaItems: [
-      t('tasks.jobPrefix', { id: job.id }),
-      job.job_type ? (JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')) : '',
-      isStopped ? t('tasks.stopped') : job.status,
-      agentName ? t('tasks.byAgent', { name: agentName }) : '',
-    ],
+    metaItems,
     summary,
     messagePreview: job.message_preview || undefined,
     messageLabel: t('tasks.messagePreview'),

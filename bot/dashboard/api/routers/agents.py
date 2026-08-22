@@ -325,6 +325,26 @@ async def webapp_agent_send_logs(
                         seen_index[uid] = len(results)
                     results.append(r)
 
+            async def _group_title(tg_group_id: int, require_agent: bool = True) -> str | None:
+                from bot.db.models.scraper import ScrapedGroup
+
+                conditions = [ScrapedGroup.tg_group_id == int(tg_group_id)]
+                if require_agent:
+                    conditions.append(ScrapedGroup.last_agent_id == agent.id)
+                title = (
+                    await session.execute(select(ScrapedGroup.title).where(*conditions))
+                ).scalar_one_or_none()
+                if title is None and require_agent:
+                    title = (
+                        await session.execute(
+                            select(ScrapedGroup.title).where(ScrapedGroup.tg_group_id == int(tg_group_id)).limit(1)
+                        )
+                    ).scalar_one_or_none()
+                return title
+
+            source_tg_id = job.job_payload.get("source_tg_group_id")
+            source_title = await _group_title(int(source_tg_id), require_agent=False) if source_tg_id else None
+
             tg_user_ids = [r.get("user_id") for r in results if r.get("user_id")]
             usernames: dict[int, str] = {}
             if tg_user_ids:
@@ -341,16 +361,7 @@ async def webapp_agent_send_logs(
             target_tg = int(progress.get("target_tg_group_id", 0))
             group_title = None
             if target_tg:
-                from bot.db.models.scraper import ScrapedGroup
-                grp = (
-                    await session.execute(
-                        select(ScrapedGroup.title).where(
-                            ScrapedGroup.tg_group_id == target_tg,
-                            ScrapedGroup.last_agent_id == agent.id,
-                        )
-                    )
-                ).scalar_one_or_none()
-                group_title = grp or str(target_tg)
+                group_title = (await _group_title(target_tg)) or str(target_tg)
 
             for i, r in enumerate(results):
                 uid = r.get("user_id")
@@ -371,6 +382,7 @@ async def webapp_agent_send_logs(
                     "username": usernames.get(uid) if uid else None,
                     "phone_number": None,
                     "group_title": group_title,
+                    "source_group_title": source_title,
                     "message_preview": msg,
                     "message_full": msg,
                     "status": status,
@@ -408,6 +420,21 @@ async def webapp_agent_send_logs(
         else:
             group_titles = {}
 
+        source_title = None
+        if job:
+            source_title = str(job.job_payload.get("source_group_title") or "").strip() or None
+            if not source_title and job.job_payload.get("source_group_id"):
+                from bot.db.models.scraper import ScrapedGroup
+
+                src_title = (
+                    await session.execute(
+                        select(ScrapedGroup.title)
+                        .where(ScrapedGroup.tg_group_id == int(job.job_payload["source_group_id"]))
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                source_title = src_title or str(job.job_payload["source_group_id"])
+
         logs = [
             {
                 "id": msg.id,
@@ -419,6 +446,7 @@ async def webapp_agent_send_logs(
                 "group_title": group_titles.get(int(msg.tg_group_id))
                 if msg.tg_user_id is None
                 else None,
+                "source_group_title": source_title,
                 "message_preview": (msg.message_text or "")[:200],
                 "message_full": msg.message_text,
                 "status": msg.status,
