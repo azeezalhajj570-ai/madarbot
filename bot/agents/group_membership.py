@@ -26,7 +26,14 @@ from telethon.tl.functions.messages import (
     GetDialogsRequest,
     GetFullChatRequest,
 )
-from telethon.tl.types import Channel, InputPeerEmpty, InputUser, User
+from telethon.tl.types import (
+    Channel,
+    InputPeerChannel,
+    InputPeerChannelFromMessage,
+    InputPeerEmpty,
+    InputUser,
+    User,
+)
 
 
 ERROR_USER_ALREADY_IN_GROUP: Final = "USER_ALREADY_IN_GROUP"
@@ -197,12 +204,20 @@ async def add_user_to_group(
 
     invite_peer = group_entity
     if group_is_channel and not isinstance(group_entity, Channel):
+        resolved = None
         try:
-            invite_peer = await client.get_input_entity(group_id)
+            candidate = await client.get_input_entity(group_id)
+            if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
+                resolved = candidate
         except (ValueError, KeyError):
-            invite_peer = await _resolve_group_from_dialogs(client, group_id)
-        if invite_peer is None:
+            resolved = None
+        if resolved is None:
+            dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
+            if isinstance(dialogs_entity, Channel):
+                resolved = dialogs_entity
+        if resolved is None:
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
+        invite_peer = resolved
 
     try:
         if group_is_channel:
@@ -242,7 +257,7 @@ async def add_user_to_group(
         )
     except (ChatAdminRequiredError, ChatWriteForbiddenError, UserNotParticipantError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
-    except ValueError:
+    except (ValueError, TypeError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except RPCError as exc:
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_invite_to_channel_rpc_error")
@@ -298,10 +313,18 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
             and isinstance(group_id, int)
             and group_id <= -1000000000000
         ):
+            resolved = None
             try:
-                peer = await client.get_input_entity(group_id)
+                candidate = await client.get_input_entity(group_id)
+                if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
+                    resolved = candidate
             except (ValueError, KeyError):
-                peer = await _resolve_group_from_dialogs(client, group_id) or entity
+                resolved = None
+            if resolved is None:
+                dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
+                if isinstance(dialogs_entity, Channel):
+                    resolved = dialogs_entity
+            peer = resolved or entity
         result = await client(ExportChatInviteRequest(peer=peer))
         link = getattr(result, "link", None)
         if link:
@@ -318,6 +341,9 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
         logger.bind(group_id=group_id, error=str(exc)).warning(
             "agent_group_invite_link_export_failed"
         )
+        return None
+    except (ValueError, TypeError):
+        logger.bind(group_id=group_id).warning("agent_group_invite_link_invalid_peer")
         return None
 
 
