@@ -309,7 +309,21 @@ async def webapp_agent_send_logs(
 
         if job and job.job_type in ("member_add", "bulk_add_members"):
             progress = dict(job.job_payload.get("progress") or {})
-            results: list[dict[str, Any]] = progress.get("results", [])
+            raw_results: list[dict[str, Any]] = progress.get("results", [])
+
+            # Retried/resumed runs append to progress.results, so a single user
+            # can have multiple attempt records. Collapse to the LATEST record
+            # per user so the log shows one row per member.
+            results: list[dict[str, Any]] = []
+            seen_index: dict[Any, int] = {}
+            for r in raw_results:
+                uid = r.get("user_id")
+                if uid is not None and uid in seen_index:
+                    results[seen_index[uid]] = r
+                else:
+                    if uid is not None:
+                        seen_index[uid] = len(results)
+                    results.append(r)
 
             tg_user_ids = [r.get("user_id") for r in results if r.get("user_id")]
             usernames: dict[int, str] = {}
