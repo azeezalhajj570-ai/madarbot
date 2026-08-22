@@ -281,6 +281,23 @@ async def webapp_agent_send_logs(
     from sqlalchemy import desc, select
     from bot.db.models.agent import AgentJob, SentBroadcastMessage
 
+    # Attribute actions to the USER ACCOUNT that owns the linked session,
+    # not to the agent worker itself.
+    actor_label: str | None = None
+    if agent.linked_by_user_id:
+        from bot.db.models.user import User
+
+        owner_row = (
+            await session.execute(
+                select(User.username, User.full_name).where(
+                    User.tg_user_id == agent.linked_by_user_id
+                )
+            )
+        ).first()
+        if owner_row:
+            owner_username, owner_full_name = owner_row
+            actor_label = f"@{owner_username}" if owner_username else (owner_full_name or None)
+
     logs: list[dict[str, Any]] = []
 
     if job_id:
@@ -343,6 +360,10 @@ async def webapp_agent_send_logs(
                     "message_preview": msg,
                     "message_full": msg,
                     "status": status,
+                    "method": method or "direct",
+                    "agent_id": agent.id,
+                    "agent_name": actor_label,
+                    "agent_phone": agent.phone_number,
                     "sent_at": job.updated_at.isoformat() if job.updated_at else None,
                 })
 
@@ -387,6 +408,10 @@ async def webapp_agent_send_logs(
                 "message_preview": (msg.message_text or "")[:200],
                 "message_full": msg.message_text,
                 "status": msg.status,
+                "method": "direct",
+                "agent_id": agent.id,
+                "agent_name": actor_label,
+                "agent_phone": agent.phone_number,
                 "sent_at": msg.sent_at.isoformat() if msg.sent_at else None,
             }
             for msg in rows
@@ -1602,6 +1627,66 @@ async def webapp_resolve_blacklist_phones(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/reports/send-pdf",
+    dependencies=[Depends(require_agents_boundary)],
+)
+@router.post(
+    "/webapp/reports/send-pdf",
+    dependencies=[Depends(require_agents_boundary)],
+)
+async def webapp_send_report_pdf(
+    request: Request,
+    filename: str = Query("report.pdf", max_length=120),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+) -> dict[str, Any]:
+    """Receive a generated PDF and deliver it to the user's chat via sendDocument.
+
+    Miniapps run inside a sandboxed WebView where browser downloads are blocked,
+    so the client uploads the file here instead of saving it locally.
+    """
+    import re
+
+    import httpx
+
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty_pdf_upload")
+    if len(data) > 45 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="pdf_too_large")
+
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", filename).strip("._") or "report"
+    if not safe_name.lower().endswith(".pdf"):
+        safe_name += ".pdf"
+
+    from bot.config import get_settings
+
+    try:
+        bot_token = get_settings().resolve_bot_token("agents")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="bot_token_unconfigured") from exc
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendDocument",
+                data={"chat_id": str(identity.user_id)},
+                files={"document": (safe_name, data, "application/pdf")},
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("sendDocument failed for user %s: %s", identity.user_id, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="telegram_send_failed") from exc
+
+    if response.status_code != 200 or not response.json().get("ok"):
+        logger.warning(
+            "sendDocument rejected for user %s: %s %s",
+            identity.user_id, response.status_code, response.text[:200],
+        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="telegram_send_failed")
+
+    return {"ok": True}
 
 
 __all__ = ["router"]

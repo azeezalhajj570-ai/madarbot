@@ -309,6 +309,47 @@ async function apiRequest<T>(
   return parseResponse<T>(response)
 }
 
+async function apiUploadRequest<T>(
+  path: string,
+  body: Blob | ArrayBuffer,
+  params?: QueryParams,
+): Promise<T> {
+  const requestUrl = buildUrl(path, params)
+
+  const send = async (forceTokenRefresh = false) => {
+    if (forceTokenRefresh) {
+      writeMiniappToken(null)
+    }
+
+    const token = await ensureMiniappToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    } else {
+      const initData = resolveAvailableInitData()
+      if (initData) {
+        headers['X-Telegram-Init-Data'] = initData
+      } else {
+        throw missingMiniappAuthError()
+      }
+    }
+
+    return fetch(requestUrl, {
+      method: 'POST',
+      headers: withAppBoundary(headers),
+      body,
+    })
+  }
+
+  let response = await send()
+  if (response.status === 401) {
+    response = await send(true)
+  }
+
+  return parseResponse<T>(response)
+}
+
 export const apiClient = {
   get: <T>(path: string, params?: QueryParams) => apiRequest<T>(path, { method: 'GET', params }),
   post: <T>(path: string, body?: unknown, params?: QueryParams) =>
@@ -318,6 +359,8 @@ export const apiClient = {
   patch: <T>(path: string, body?: unknown, params?: QueryParams) =>
     apiRequest<T>(path, { method: 'PATCH', body, params }),
   delete: <T>(path: string, params?: QueryParams) => apiRequest<T>(path, { method: 'DELETE', params }),
+  upload: <T>(path: string, body: Blob | ArrayBuffer, params?: QueryParams) =>
+    apiUploadRequest<T>(path, body, params),
 }
 
 export async function fetchMe() {

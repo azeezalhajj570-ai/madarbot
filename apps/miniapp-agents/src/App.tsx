@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
-import { TableModal } from './components/TableModal'
-import type { ColumnDef } from './components/DataTable'
 import type { LogReportModel, LogReportAttempt } from './components/LogReportDocument'
+import { LogsReportModal } from './components/LogsReportModal'
 
 import {
   agentsApi,
@@ -2635,6 +2634,7 @@ function buildLogReportModel(
   logRows: SendLogEntry[],
   t: (key: string, options?: Record<string, unknown>) => string,
   lang: string,
+  agentName?: string,
 ): LogReportModel {
   const p = job.progress || {}
   const total = p.total_count ?? 0
@@ -2642,6 +2642,7 @@ function buildLogReportModel(
   const failed = p.failure_count ?? 0
   const skipped = p.skip_count ?? p.skipped_count ?? 0
   const isStopped = p.stop_reason != null
+  const isMemberAdd = job.job_type === 'member_add' || job.job_type === 'bulk_add_members'
   const taskName = job.message_preview
     ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
     : `${job.target_type === 'groups' ? t('tasks.broadcastName', { id: job.id }) : t('tasks.membersName', { id: job.id })}`
@@ -2679,6 +2680,7 @@ function buildLogReportModel(
       t('tasks.jobPrefix', { id: job.id }),
       job.job_type ? (JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')) : '',
       isStopped ? t('tasks.stopped') : job.status,
+      agentName ? t('tasks.byAgent', { name: agentName }) : '',
     ],
     summary,
     messagePreview: job.message_preview || undefined,
@@ -2692,17 +2694,31 @@ function buildLogReportModel(
     colRecipient: t('tasks.logRecipient'),
     colStatus: t('tasks.logStatus'),
     colTime: t('tasks.logTime'),
-    entries: logRows.map((log, idx) => ({
-      no: String(idx + 1).padStart(3, '0'),
-      recipient: log.username
-        ? `@${log.username}`
-        : log.group_title || (log.tg_user_id ? t('tasks.userFallback', { tgUserId: log.tg_user_id }) : t('tasks.groupFallbackLog', { tgGroupId: log.tg_group_id })),
-      recipientSub: [log.tg_user_id || log.tg_group_id, log.phone_number].filter(Boolean).join(' · ') || undefined,
-      statusLabel: log.status,
-      ok: log.status === 'sent',
-      time: log.sent_at ? formatDateTime(log.sent_at) : undefined,
-      message: (log.message_preview || '').slice(0, 160),
-    })),
+    entries: logRows.map((rawLog, idx) => {
+      const log = rawLog as SendLogEntry & { method?: string | null; agent_name?: string | null }
+      const ok = log.status === 'sent' || log.status === 'success'
+      let statusLabel = log.status
+      if (ok && isMemberAdd) {
+        statusLabel = log.method === 'invite_link' ? t('tasks.statusInviteSent') : t('tasks.statusDirectAdd')
+      } else if (ok) {
+        statusLabel = t('tasks.sent')
+      }
+      return {
+        no: String(idx + 1).padStart(3, '0'),
+        recipient: log.username
+          ? `@${log.username}`
+          : log.group_title || (log.tg_user_id ? t('tasks.userFallback', { tgUserId: log.tg_user_id }) : t('tasks.groupFallbackLog', { tgGroupId: log.tg_group_id })),
+        recipientSub: [
+          log.tg_user_id || log.tg_group_id,
+          log.phone_number,
+          (log.agent_name || null) ? t('tasks.byAgent', { name: log.agent_name }) : '',
+        ].filter(Boolean).join(' · ') || undefined,
+        statusLabel,
+        ok,
+        time: log.sent_at ? formatDateTime(log.sent_at) : undefined,
+        message: (log.message_preview || '').slice(0, 160),
+      }
+    }),
     footerLeft: `${t('tasks.sendLogs')} — ${t('tasks.jobPrefix', { id: job.id })}`,
     endMark: t('tasks.reportEnd'),
     pageOf: (pageNo, totalPages) => t('tasks.reportPage', { page: pageNo, total: totalPages }),
@@ -2852,61 +2868,19 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
     setExportingJobId(job.id)
     try {
       const data = await agentsApi.fetchAgentSendLogs(account.id, 500, undefined, job.id)
-      const model = buildLogReportModel(job, data.logs, t, i18n.language)
+      const actorFromLogs = (data.logs[0] as { agent_name?: string | null } | undefined)?.agent_name || undefined
+      const model = buildLogReportModel(job, data.logs, t, i18n.language, actorFromLogs ?? accountLabel(account))
       const { exportLogsPdf } = await import('./utils/exportLogsPdf')
-      await exportLogsPdf(model, `madar-task-${job.id}-logs.pdf`)
+      const delivery = await exportLogsPdf(model, `madar-task-${job.id}-logs.pdf`)
+      if (delivery === 'sent_to_chat') {
+        setStatusMsg(t('tasks.exportSentToChat'))
+      }
     } catch (error) {
       setStatusMsg(error instanceof Error ? error.message : t('tasks.exportFailed'))
     } finally {
       setExportingJobId(null)
     }
   }
-
-  const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
-    {
-      key: 'recipient', label: t('tasks.logRecipient'), sortable: true, width: '2fr',
-      render: (log) => (
-        <div style={{ display: 'grid', gap: 1 }}>
-          <span style={{ fontWeight: 700, fontSize: 13 }}>
-            {log.username ? `@${log.username}` : log.group_title || (log.tg_user_id ? `User ${log.tg_user_id}` : `Group ${log.tg_group_id}`)}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', fontFamily: 'var(--miniapp-mono, monospace)' }}>
-            {log.tg_user_id ? log.tg_user_id : log.tg_group_id}{log.phone_number ? ` · ${log.phone_number}` : ''}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'type', label: t('tasks.logType'), width: '60px',
-      render: (log) => log.username || log.tg_user_id ? '👤' : '👥',
-    },
-    {
-      key: 'status', label: t('tasks.logStatus'), sortable: true, width: '80px',
-      render: (log) => (
-        <span style={{
-          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-          background: log.status === 'sent' ? 'var(--miniapp-sage-dim)' : 'rgba(161,87,62,0.12)',
-          color: log.status === 'sent' ? 'var(--miniapp-sage)' : 'var(--miniapp-clay)',
-        }}>
-          {log.status}
-        </span>
-      ),
-    },
-    {
-      key: 'message', label: t('tasks.logMessage'), width: '2fr',
-      render: (log) => (
-        <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-          {(log.message_preview || '').slice(0, 120)}
-        </span>
-      ),
-    },
-    {
-      key: 'time', label: t('tasks.logTime'), sortable: true, align: 'right' as const, width: '120px',
-      render: (log) => log.sent_at ? (
-        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 11 }}>{formatDateTime(log.sent_at)}</span>
-      ) : '—',
-    },
-  ], [t])
 
   const filteredJobs = useMemo(() => {
     let result = [...jobs]
@@ -3247,74 +3221,27 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
         const logSent = logProgress.success_count ?? 0
         const logFailed = logProgress.failure_count ?? 0
         const logSkipped = logProgress.skip_count ?? logProgress.skipped_count ?? 0
-        const logSummary = logTotal > 0 ? `${logSent} sent, ${logFailed} failed, ${logSkipped} skipped of ${logTotal}` : ''
         const progressRows = logProgress.results || []
-
-        const progressRowLabel = (r: { status?: string; reason?: string; method?: string; error_code?: string }) => {
-          if (r.status === 'success') return { text: t('tasks.added'), color: 'var(--miniapp-sage)' }
-          if (r.status === 'skipped') return { text: t('tasks.skipped') + (r.reason ? ` (${r.reason})` : ''), color: 'var(--miniapp-text-muted)' }
-          if (r.status === 'failed' && r.method === 'invite_link') return { text: t('tasks.inviteLinkSent'), color: '#475977' }
-          if (r.method === 'invite_link_dm_failed') return { text: t('tasks.inviteDmFailed'), color: 'var(--miniapp-clay)' }
-          return { text: t('tasks.failed'), color: 'var(--miniapp-clay)' }
-        }
+        const isLogStopped = logProgress.stop_reason != null
 
         return (
-          <TableModal<SendLogEntry>
+          <LogsReportModal
             open={logsJobId !== null}
             onClose={() => setLogsJobId(null)}
             title={t('tasks.sendLogs')}
-            subtitle={
-              `Job #${logsJobId}` +
-              (logJob?.message_preview ? ` · ${logJob.message_preview}` : '') +
-              (logSummary ? ` · ${logSummary}` : '')
-            }
-            data={logs}
-            columns={sendLogColumns}
-            keyField="id"
-            searchAccessor={(log) => `${log.username || ''} ${log.phone_number || ''} ${log.tg_user_id || ''} ${log.tg_group_id || ''} ${log.message_preview || ''}`}
-            pageSize={25}
+            jobLabel={logsJobId !== null ? t('tasks.jobPrefix', { id: logsJobId }) : undefined}
+            jobTypeLabel={logJob?.job_type ? (JOB_TYPE_LABELS[logJob.job_type] || logJob.job_type.replace(/_/g, ' ')) : undefined}
+            statusLabel={isLogStopped ? t('tasks.stopped') : logJob?.status}
+            messagePreview={logJob?.message_preview || undefined}
+            summary={{ total: logTotal, sent: logSent, failed: logFailed, skipped: logSkipped }}
+            progressRows={progressRows}
+            logs={logs}
             loading={logsLoading}
+            memberAdd={logJob?.job_type === 'member_add' || logJob?.job_type === 'bulk_add_members'}
             emptyMessage={
               logTotal > 0
                 ? t('tasks.logsEmptyWithProgress', { sent: logSent, failed: logFailed, total: logTotal })
                 : t('tasks.logsEmptyNoProgress')
-            }
-            renderExpanded={(log) => (
-              <div style={{ padding: '4px 0', lineHeight: 1.6, color: 'var(--miniapp-text)' }}>
-                {log.message_full || log.message_preview}
-              </div>
-            )}
-            renderHeader={
-              progressRows.length > 0 ? (
-                <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>
-                  <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${logTotal > 0 ? Math.round(((logSent + logFailed + logSkipped) / logTotal) * 100) : 0}%`,
-                      borderRadius: 999,
-                      background: 'var(--miniapp-sage)',
-                      transition: 'width 0.4s ease',
-                    }} />
-                  </div>
-                  <div>
-                    {progressRows.map((r, idx) => {
-                      const lbl = progressRowLabel(r)
-                      const detail = r.method && r.method !== 'invite_link_dm_failed'
-                        ? r.method.replace(/_/g, ' ')
-                        : r.error_code || r.reason || ''
-                      return (
-                        <div key={idx} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--miniapp-border-soft)' }}>
-                          <span style={{ width: 130, fontFamily: 'var(--miniapp-mono, monospace)', color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {r.user_id ?? '-'}
-                          </span>
-                          <span style={{ fontWeight: 600, color: lbl.color, whiteSpace: 'nowrap' }}>{lbl.text}</span>
-                          {detail ? <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail}</span> : null}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : undefined
             }
           />
         )
