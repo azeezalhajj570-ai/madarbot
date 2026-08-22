@@ -15,13 +15,14 @@ interface TableModalProps<T> {
   loading?: boolean
   emptyMessage?: string
   renderExpanded?: (row: T) => React.ReactNode
+  renderHeader?: React.ReactNode
 }
 
 export function TableModal<T extends Record<string, unknown>>({
   open, onClose, title, subtitle,
   data, columns, keyField,
   searchAccessor, pageSize = 25,
-  loading, emptyMessage, renderExpanded,
+  loading, emptyMessage, renderExpanded, renderHeader,
 }: TableModalProps<T>) {
   const { t } = useTranslation()
   if (!open) return null
@@ -67,6 +68,7 @@ export function TableModal<T extends Record<string, unknown>>({
         </div>
 
         <div style={{ overflow: 'auto', padding: '12px 20px 20px' }}>
+          {renderHeader ? <div>{renderHeader}</div> : null}
           <DataTable<T>
             data={data}
             columns={columns}

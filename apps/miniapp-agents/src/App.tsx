@@ -4,6 +4,7 @@ import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/for
 
 import { TableModal } from './components/TableModal'
 import type { ColumnDef } from './components/DataTable'
+import type { LogReportModel, LogReportAttempt } from './components/LogReportDocument'
 
 import {
   agentsApi,
@@ -2627,6 +2628,87 @@ function timeAgo(t: (key: string, options?: Record<string, unknown>) => string, 
   return formatDateTime(dateStr)
 }
 
+const ATTEMPTS_SHOWN = 8
+
+function buildLogReportModel(
+  job: AgentJobRecord,
+  logRows: SendLogEntry[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+  lang: string,
+): LogReportModel {
+  const p = job.progress || {}
+  const total = p.total_count ?? 0
+  const sent = p.success_count ?? 0
+  const failed = p.failure_count ?? 0
+  const skipped = p.skip_count ?? p.skipped_count ?? 0
+  const isStopped = p.stop_reason != null
+  const taskName = job.message_preview
+    ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
+    : `${job.target_type === 'groups' ? t('tasks.broadcastName', { id: job.id }) : t('tasks.membersName', { id: job.id })}`
+
+  const attempts: LogReportAttempt[] = (p.results || []).slice(0, ATTEMPTS_SHOWN).map((r) => {
+    let label: string
+    let tone: LogReportAttempt['tone']
+    if (r.status === 'success') { label = t('tasks.added'); tone = 'good' }
+    else if (r.status === 'skipped') { label = t('tasks.skipped'); tone = 'neutral' }
+    else if (r.status === 'failed' && r.method === 'invite_link') { label = t('tasks.inviteLinkSent'); tone = 'info' }
+    else if (r.method === 'invite_link_dm_failed') { label = t('tasks.inviteDmFailed'); tone = 'bad' }
+    else { label = t('tasks.failed'); tone = 'bad' }
+    const detail = r.status === 'skipped'
+      ? (r.reason || '')
+      : r.method && r.method !== 'invite_link_dm_failed'
+        ? r.method.replace(/_/g, ' ')
+        : (r.error_code || r.reason || '')
+    return { userId: r.user_id ?? '', label, tone, detail }
+  })
+  const attemptsMoreCount = Math.max(0, (p.results?.length || 0) - ATTEMPTS_SHOWN)
+
+  const summary: LogReportModel['summary'] = [
+    { label: t('tasks.total'), value: String(total) },
+  ]
+  if (total > 0 || sent > 0) summary.push({ label: t('tasks.sent'), value: String(sent), tone: 'good' })
+  if (total > 0 || failed > 0) summary.push({ label: t('tasks.failed'), value: String(failed), tone: failed > 0 ? 'bad' : 'neutral' })
+  if (skipped > 0) summary.push({ label: t('tasks.skipped'), value: String(skipped), tone: 'neutral' })
+
+  return {
+    dir: /^ar/i.test(lang || '') ? 'rtl' : 'ltr',
+    kicker: t('tasks.reportKicker'),
+    generatedAt: formatDateTime(new Date()),
+    title: taskName,
+    metaItems: [
+      t('tasks.jobPrefix', { id: job.id }),
+      job.job_type ? (JOB_TYPE_LABELS[job.job_type] || job.job_type.replace(/_/g, ' ')) : '',
+      isStopped ? t('tasks.stopped') : job.status,
+    ],
+    summary,
+    messagePreview: job.message_preview || undefined,
+    messageLabel: t('tasks.messagePreview'),
+    attemptsLabel: attempts.length > 0 ? t('tasks.attemptsSection') : undefined,
+    attempts: attempts.length > 0 ? attempts : undefined,
+    attemptsMoreLabel: attemptsMoreCount > 0 ? t('tasks.attemptsMore', { count: attemptsMoreCount }) : undefined,
+    entriesCount: logRows.length,
+    entriesRangeLabel: (from, to) => t('tasks.reportOf', { from, to, count: logRows.length }),
+    colNo: t('tasks.reportEntryNo'),
+    colRecipient: t('tasks.logRecipient'),
+    colStatus: t('tasks.logStatus'),
+    colTime: t('tasks.logTime'),
+    entries: logRows.map((log, idx) => ({
+      no: String(idx + 1).padStart(3, '0'),
+      recipient: log.username
+        ? `@${log.username}`
+        : log.group_title || (log.tg_user_id ? t('tasks.userFallback', { tgUserId: log.tg_user_id }) : t('tasks.groupFallbackLog', { tgGroupId: log.tg_group_id })),
+      recipientSub: [log.tg_user_id || log.tg_group_id, log.phone_number].filter(Boolean).join(' · ') || undefined,
+      statusLabel: log.status,
+      ok: log.status === 'sent',
+      time: log.sent_at ? formatDateTime(log.sent_at) : undefined,
+      message: (log.message_preview || '').slice(0, 160),
+    })),
+    footerLeft: `${t('tasks.sendLogs')} — ${t('tasks.jobPrefix', { id: job.id })}`,
+    endMark: t('tasks.reportEnd'),
+    pageOf: (pageNo, totalPages) => t('tasks.reportPage', { page: pageNo, total: totalPages }),
+  }
+}
+
 function FilterSelect({ value, options, onChange }: { value: string; options: { label: string; value: string }[]; onChange: (v: string) => void }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} style={{
@@ -2644,7 +2726,7 @@ function FilterSelect({ value, options, onChange }: { value: string; options: { 
 const _jobGroupCache: Record<number, string> = {}
 
 function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; scrollToJobId?: number | null; onScrolled?: () => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [jobs, setJobs] = useState<AgentJobRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -2652,6 +2734,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   const [logs, setLogs] = useState<SendLogEntry[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [actingJobId, setActingJobId] = useState<number | null>(null)
+  const [exportingJobId, setExportingJobId] = useState<number | null>(null)
   const [jobGroupNames, setJobGroupNames] = useState<Record<number, string>>({})
   const jobCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const [menuJobId, setMenuJobId] = useState<number | null>(null)
@@ -2751,6 +2834,33 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
       .catch(() => setLogs([]))
       .finally(() => setLogsLoading(false))
   }, [account.id, logsJobId])
+
+  // Live-refresh jobs (and thus per-user progress) while a running job's log
+  // modal is open, so the member-add progress rows update in place.
+  useEffect(() => {
+    if (logsJobId === null) return
+    const active = jobs.find((j) => j.id === logsJobId)
+    if (!active || !(active.status === 'running' || active.status === 'queued' || active.status === 'pending')) return
+    const timer = setInterval(() => { void refreshJobs() }, 5000)
+    return () => clearInterval(timer)
+  }, [logsJobId, jobs])
+
+  async function handleExportPdf(job: AgentJobRecord) {
+    if (exportingJobId !== null) return
+    setMenuJobId(null)
+    setStatusMsg(null)
+    setExportingJobId(job.id)
+    try {
+      const data = await agentsApi.fetchAgentSendLogs(account.id, 500, undefined, job.id)
+      const model = buildLogReportModel(job, data.logs, t, i18n.language)
+      const { exportLogsPdf } = await import('./utils/exportLogsPdf')
+      await exportLogsPdf(model, `madar-task-${job.id}-logs.pdf`)
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : t('tasks.exportFailed'))
+    } finally {
+      setExportingJobId(null)
+    }
+  }
 
   const sendLogColumns = useMemo<ColumnDef<SendLogEntry>[]>(() => [
     {
@@ -3057,14 +3167,28 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {t('tasks.retry')}
                             </button>
                           ) : null}
-                          {isCompleted && job.id ? (
+                          {(isCompleted || isRunning || isQueued) && job.id ? (
                             <button type="button" onClick={() => { setMenuJobId(null); setLogsJobId(job.id) }}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
                                 border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start',
                                 color: 'var(--miniapp-text-primary)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
                               }}>
-                              {t('tasks.viewLogs')}
+                              {isRunning || isQueued ? t('tasks.viewProgress') : t('tasks.viewLogs')}
+                            </button>
+                          ) : null}
+                          {(isCompleted || isRunning || isQueued) && job.id ? (
+                            <button
+                              type="button"
+                              disabled={exportingJobId !== null && exportingJobId !== job.id}
+                              onClick={() => { void handleExportPdf(job) }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                                border: 'none', background: exportingJobId === job.id ? 'var(--miniapp-bg-deep)' : 'transparent',
+                                cursor: exportingJobId !== null && exportingJobId !== job.id ? 'default' : 'pointer', textAlign: 'start',
+                                color: exportingJobId === job.id ? 'var(--miniapp-text-muted)' : 'var(--miniapp-slate)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--miniapp-sans)',
+                              }}>
+                              {exportingJobId === job.id ? t('tasks.exportingPdf') : t('tasks.exportPdf')}
                             </button>
                           ) : null}
                         </div>
@@ -3122,7 +3246,18 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
         const logTotal = logProgress.total_count ?? 0
         const logSent = logProgress.success_count ?? 0
         const logFailed = logProgress.failure_count ?? 0
-        const logSummary = logTotal > 0 ? `${logSent} sent, ${logFailed} failed of ${logTotal}` : ''
+        const logSkipped = logProgress.skip_count ?? logProgress.skipped_count ?? 0
+        const logSummary = logTotal > 0 ? `${logSent} sent, ${logFailed} failed, ${logSkipped} skipped of ${logTotal}` : ''
+        const progressRows = logProgress.results || []
+
+        const progressRowLabel = (r: { status?: string; reason?: string; method?: string; error_code?: string }) => {
+          if (r.status === 'success') return { text: t('tasks.added'), color: 'var(--miniapp-sage)' }
+          if (r.status === 'skipped') return { text: t('tasks.skipped') + (r.reason ? ` (${r.reason})` : ''), color: 'var(--miniapp-text-muted)' }
+          if (r.status === 'failed' && r.method === 'invite_link') return { text: t('tasks.inviteLinkSent'), color: '#475977' }
+          if (r.method === 'invite_link_dm_failed') return { text: t('tasks.inviteDmFailed'), color: 'var(--miniapp-clay)' }
+          return { text: t('tasks.failed'), color: 'var(--miniapp-clay)' }
+        }
+
         return (
           <TableModal<SendLogEntry>
             open={logsJobId !== null}
@@ -3149,6 +3284,38 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                 {log.message_full || log.message_preview}
               </div>
             )}
+            renderHeader={
+              progressRows.length > 0 ? (
+                <div style={{ display: 'grid', gap: 8, marginBottom: 8 }}>
+                  <div style={{ height: 6, background: 'var(--miniapp-bg-deep)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${logTotal > 0 ? Math.round(((logSent + logFailed + logSkipped) / logTotal) * 100) : 0}%`,
+                      borderRadius: 999,
+                      background: 'var(--miniapp-sage)',
+                      transition: 'width 0.4s ease',
+                    }} />
+                  </div>
+                  <div>
+                    {progressRows.map((r, idx) => {
+                      const lbl = progressRowLabel(r)
+                      const detail = r.method && r.method !== 'invite_link_dm_failed'
+                        ? r.method.replace(/_/g, ' ')
+                        : r.error_code || r.reason || ''
+                      return (
+                        <div key={idx} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--miniapp-border-soft)' }}>
+                          <span style={{ width: 130, fontFamily: 'var(--miniapp-mono, monospace)', color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.user_id ?? '-'}
+                          </span>
+                          <span style={{ fontWeight: 600, color: lbl.color, whiteSpace: 'nowrap' }}>{lbl.text}</span>
+                          {detail ? <span style={{ color: 'var(--miniapp-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail}</span> : null}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : undefined
+            }
           />
         )
       })()}
