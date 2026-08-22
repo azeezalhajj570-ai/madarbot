@@ -13,7 +13,9 @@
     "@floating-ui/utils": "^0.2.11",
     "@telegram-apps/sdk": "^2.0.0",
     "@telegram-apps/telegram-ui": "^2.0.0",
+    "html2canvas": "^1.4.1",
     "i18next": "^26.3.1",
+    "jspdf": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.8"

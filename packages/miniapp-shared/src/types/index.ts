@@ -191,6 +191,15 @@ export interface Agent {
   flood_wait_until?: string | null
 }
 
+export interface MemberAddProgressResult {
+  user_id?: number
+  status?: string
+  reason?: string
+  method?: string
+  error_code?: string
+  flood_wait_seconds?: number
+}
+
 export interface AgentJobRecord {
   id: number
   agent_id: number
@@ -204,9 +213,12 @@ export interface AgentJobRecord {
     total_count?: number
     success_count?: number
     failure_count?: number
+    skip_count?: number
     skipped_count?: number
+    invite_link_count?: number
     stopped_at?: number
     stop_reason?: string
+    results?: MemberAddProgressResult[]
     failures?: Array<{ user_id?: string; group_id?: string; error?: string }>
   }
   message_preview?: string
