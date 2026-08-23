@@ -25,6 +25,10 @@ from bot.agents.jobs import (
     JOB_STATUS_RUNNING,
     JOB_STATUS_SCHEDULED,
     MEMBER_ADD_JOB_TYPE,
+    SCRAPER_FULL_GROUP_JOB_TYPE,
+    SCRAPER_GROUP_INFO_JOB_TYPE,
+    SCRAPER_MEMBERS_JOB_TYPE,
+    SCRAPER_MESSAGES_JOB_TYPE,
     normalize_member_add_payload,
 )
 from bot.db.models import AgentJob
@@ -396,6 +400,57 @@ async def webapp_agent_send_logs(
                     "agent_phone": agent.phone_number,
                     "sent_at": job.updated_at.isoformat() if job.updated_at else None,
                 })
+
+        if job and job.job_type in {
+            SCRAPER_FULL_GROUP_JOB_TYPE,
+            SCRAPER_MEMBERS_JOB_TYPE,
+            SCRAPER_MESSAGES_JOB_TYPE,
+            SCRAPER_GROUP_INFO_JOB_TYPE,
+        }:
+            result = dict(job.job_payload.get("result") or {})
+            tg_group_id = int(
+                result.get("tg_group_id") or job.job_payload.get("tg_group_id") or 0
+            )
+            group_info = dict(result.get("group_info") or {})
+            group_title = group_info.get("title") or str(tg_group_id or "")
+            # scraper_full_group nests counts under members/messages; the
+            # member/message-only job types return counts at the top level.
+            members = dict(result.get("members") or {})
+            messages = dict(result.get("messages") or {})
+            if job.job_type == SCRAPER_MEMBERS_JOB_TYPE and not members:
+                members = result
+            if job.job_type == SCRAPER_MESSAGES_JOB_TYPE and not messages:
+                messages = result
+
+            # One summary row per scraper run, showing what was scraped.
+            summary_parts = []
+            if members.get("total_scraped") is not None:
+                summary_parts.append(f"members: {members['total_scraped']}")
+            if messages.get("total_scraped") is not None:
+                summary_parts.append(f"messages: {messages['total_scraped']}")
+            if messages.get("batches") is not None:
+                summary_parts.append(f"batches: {messages['batches']}")
+            summary = ", ".join(summary_parts) or f"scrape {result.get('job_type', job.job_type)}"
+            status = "success" if result.get("success", True) else "failed"
+
+            logs.append({
+                "id": -(job.id * 10000),
+                "job_id": job.id,
+                "tg_user_id": None,
+                "tg_group_id": tg_group_id,
+                "username": group_info.get("username"),
+                "phone_number": None,
+                "group_title": group_title,
+                "source_group_title": None,
+                "message_preview": summary,
+                "message_full": summary,
+                "status": status,
+                "method": job.job_type,
+                "agent_id": agent.id,
+                "agent_name": actor_label,
+                "agent_phone": agent.phone_number,
+                "sent_at": job.updated_at.isoformat() if job.updated_at else None,
+            })
 
     if not logs:
         stmt = select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
