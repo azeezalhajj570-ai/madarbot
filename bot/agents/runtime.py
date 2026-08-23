@@ -1167,6 +1167,11 @@ class BulkAddMembersRuntime:
         invite_link_count = progress.get("invite_link_count", 0)
         total_count = len(user_ids)
         results: list[dict[str, Any]] = list(progress.get("results", []))
+        # When a crashed job is re-dispatched (dramatiq retry), the progress is
+        # persisted with per-user results. Skip users already processed so the
+        # retry does not re-invite members who were already added (issue #229).
+        processed_user_ids = {r["user_id"] for r in results if "user_id" in r}
+        pending_user_ids = [uid for uid in user_ids if uid not in processed_user_ids]
 
         agent_id_val = agent.id
         agent_tenant_id = getattr(agent, "tenant_id", None)
@@ -1178,7 +1183,10 @@ class BulkAddMembersRuntime:
         agent_telegram_user_id = agent.telegram_user_id
 
         try:
-            for index, user_id in enumerate(user_ids):
+            for index, user_id in enumerate(pending_user_ids):
+                # Map the pending index back to the original list position so
+                # `stopped_at`/`total_count` stay consistent with the full batch.
+                original_index = user_ids.index(user_id)
                 skip_interval_wait = False
                 cooldown_mins = agent_cooldown
                 if cooldown_mins is not None and cooldown_mins > 0:
@@ -1191,7 +1199,7 @@ class BulkAddMembersRuntime:
                             "skip_count": skip_count,
                             "invite_link_count": invite_link_count,
                             "results": results,
-                            "stopped_at": index,
+                            "stopped_at": original_index,
                             "stop_reason": "cooldown",
                             "retry_after": int(cd_remaining),
                         }
@@ -1208,7 +1216,7 @@ class BulkAddMembersRuntime:
                             "skip_count": skip_count,
                             "invite_link_count": invite_link_count,
                             "results": results,
-                            "stopped_at": index,
+                            "stopped_at": original_index,
                             "stop_reason": "hourly_limit",
                         }
                         raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
@@ -1224,7 +1232,7 @@ class BulkAddMembersRuntime:
                             "skip_count": skip_count,
                             "invite_link_count": invite_link_count,
                             "results": results,
-                            "stopped_at": index,
+                            "stopped_at": original_index,
                             "stop_reason": "daily_limit",
                         }
                         raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
@@ -1339,7 +1347,7 @@ class BulkAddMembersRuntime:
                             "skip_count": skip_count,
                             "invite_link_count": invite_link_count,
                             "results": results,
-                            "stopped_at": index,
+                            "stopped_at": original_index,
                             "stop_reason": "flood_wait",
                             "retry_after": add_result.flood_wait_seconds,
                         }
@@ -1503,7 +1511,7 @@ class BulkAddMembersRuntime:
                                 "skip_count": skip_count,
                                 "invite_link_count": invite_link_count,
                                 "results": list(results),
-                                "stopped_at": index,
+                                "stopped_at": original_index,
                             }
                             job_row.job_payload = updated_payload
                             await session.commit()
@@ -1521,7 +1529,7 @@ class BulkAddMembersRuntime:
                     effective_interval = max(0.5, base_interval + jitter)
                 if (
                     not skip_interval_wait
-                    and index < len(user_ids) - 1
+                    and original_index < len(user_ids) - 1
                     and effective_interval > 0
                 ):
                     await self.sleep(effective_interval)

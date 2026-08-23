@@ -405,16 +405,18 @@ def _privacy_restricted_result() -> SimpleNamespace:
     )
 
 
+def _success_result() -> SimpleNamespace:
+    return SimpleNamespace(success=True, error_code=None, flood_wait_seconds=None)
+
+
 @pytest.mark.asyncio
 async def test_bulk_add_runtime_skips_privacy_restricted_without_waiting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bot.agents.runtime import BulkAddMembersRuntime
-
     add_user_mock = AsyncMock(
         side_effect=[
             _privacy_restricted_result(),
-            SimpleNamespace(success=True, error_code=None, flood_wait_seconds=None),
+            _success_result(),
         ]
     )
     monkeypatch.setattr(
@@ -461,12 +463,10 @@ async def test_bulk_add_runtime_skips_privacy_restricted_without_waiting(
 async def test_bulk_add_runtime_keeps_interval_after_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bot.agents.runtime import BulkAddMembersRuntime
-
     add_user_mock = AsyncMock(
         side_effect=[
-            SimpleNamespace(success=True, error_code=None, flood_wait_seconds=None),
-            SimpleNamespace(success=True, error_code=None, flood_wait_seconds=None),
+            _success_result(),
+            _success_result(),
         ]
     )
     monkeypatch.setattr(
@@ -500,12 +500,10 @@ async def test_bulk_add_runtime_keeps_interval_after_success(
 async def test_bulk_add_runtime_sends_invite_link_fallback_for_privacy_restricted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bot.agents.runtime import BulkAddMembersRuntime
-
     add_user_mock = AsyncMock(
         side_effect=[
             _privacy_restricted_result(),
-            SimpleNamespace(success=True, error_code=None, flood_wait_seconds=None),
+            _success_result(),
         ]
     )
     monkeypatch.setattr(
@@ -545,3 +543,55 @@ async def test_bulk_add_runtime_sends_invite_link_fallback_for_privacy_restricte
     assert result["invite_link_count"] == 1
     assert len(runtime.sleep_calls) == 1
     assert runtime.sleep_calls[0] > 0
+
+
+# ─── Issue #229: crash-retry resume skips already-processed users ─────────────
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_runtime_resume_skips_processed_users_on_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # First run processed user 779001 (success) and persisted progress before
+    # crashing. The retry re-dispatches with the same payload+progress and must
+    # NOT re-invite 779001 — only 779002 is new.
+    add_user_mock = AsyncMock(return_value=_success_result())
+    monkeypatch.setattr(
+        "bot.agents.group_membership.add_user_to_group",
+        add_user_mock,
+    )
+
+    runtime = _RecordingRuntime()
+    payload = {
+        "target_tg_group_id": -100779001,
+        "user_ids": [779001, 779002],
+        "interval_seconds": 0,
+        "send_invite_link_on_privacy_restricted": False,
+        "job_id": 1,
+        "progress": {
+            "total_count": 2,
+            "success_count": 1,
+            "failure_count": 0,
+            "skip_count": 0,
+            "invite_link_count": 0,
+            "results": [
+                {"user_id": 779001, "status": "success", "error_code": None},
+            ],
+            "stopped_at": 0,
+        },
+    }
+    client = SimpleNamespace()
+    agent = _FakeAgent()
+
+    result = await runtime.execute(
+        client=client, agent=agent, payload=payload, session=_NoOpSession()
+    )
+
+    # Only the unprocessed user is invited on the retry.
+    assert add_user_mock.await_count == 1
+    assert add_user_mock.await_args.args[2] == 779002
+    assert result["success_count"] == 2
+    assert result["results"] == [
+        {"user_id": 779001, "status": "success", "error_code": None},
+        {"user_id": 779002, "status": "success", "error_code": None},
+    ]
