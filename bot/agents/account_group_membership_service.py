@@ -698,6 +698,23 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "is_own": op.agent_id == agent.id,
                     }
 
+        # Members already processed by a direct-add attempt (any outcome).
+        # These were offered in a bulk add job already, so they should not be
+        # re-offered in the member list.
+        processed_direct_add: dict[int, str | None] = {}  # tg_user_id -> failure_reason
+        if user_ids and target_tg_group_id:
+            da_rows = (
+                await self.session.execute(
+                    select(MemberOperation.tg_user_id, MemberOperation.failure_reason).where(
+                        MemberOperation.tg_group_id == target_tg_group_id,
+                        MemberOperation.tg_user_id.in_(user_ids),
+                        MemberOperation.operation_type == "direct_add",
+                    )
+                )
+            ).all()
+            for row in da_rows:
+                processed_direct_add[int(row[0])] = row[1]
+
         # Members already present in the target group. This is workspace-independent:
         # a member added by any agent (directly or via invite join) is a member of the group.
         already_added: set[int] = set()
@@ -746,6 +763,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "claim": claim_info,
                 "invitation_status": inv_info,
                 "already_added": tg_uid in already_added,
+                "processed": tg_uid in processed_direct_add,
+                "processing_error": processed_direct_add.get(tg_uid),
             }
 
         return {

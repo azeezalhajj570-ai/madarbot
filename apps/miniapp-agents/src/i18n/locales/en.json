@@ -852,6 +852,8 @@
     "searching": "Searching...",
     "noMembersFound": "No members found",
     "alreadyInGroup": "Already in target",
+    "alreadyProcessed": "Already processed",
+    "alreadyProcessedError": "Failed ({error}) — won't re-process",
     "inRunningJob": "In a running job",
     "invitationSent": "Invitation sent",
     "invitationSentByOther": "Invitation sent by another agent",

@@ -1492,6 +1492,27 @@ class BulkAddMembersRuntime:
 
                 results.append(result_entry)
 
+                # Record a persistent operation for this member so the bulk-add
+                # member list can mark them as already-processed (direct add
+                # attempt made, regardless of outcome) and not re-offer them.
+                if session is not None:
+                    op_status = "joined" if add_result.success else "failed"
+                    session.add(MemberOperation(
+                        tg_group_id=target_tg_group_id,
+                        tg_user_id=user_id,
+                        agent_id=agent_id_val,
+                        job_id=payload.get("job_id"),
+                        operation_type="direct_add",
+                        status=op_status,
+                        failure_reason=add_result.error_code if not add_result.success else None,
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc),
+                    ))
+                    try:
+                        await session.commit()
+                    except Exception:
+                        await session.rollback()
+
                 # Persist running progress after each user so the dashboard job
                 # detail can render a live per-user log instead of only totals
                 # after the job finishes.
