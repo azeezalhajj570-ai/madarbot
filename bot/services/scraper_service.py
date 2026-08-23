@@ -680,7 +680,20 @@ class ScraperService:
             flood_wait_cap_seconds = max(1, int(settings.scraper_flood_wait_cap_seconds))
 
             ck = (scraped_group.scrape_state or {}).get("messages", {})
-            last_offset_id = ck.get("last_scraped_message_id", 0)
+            last_scraped_id = ck.get("last_scraped_message_id", 0)
+            # A stale/corrupted checkpoint (e.g. written by the old code that
+            # stored the down-walk offset, ending at 1) can be lower than what
+            # is already in the DB. Trust the DB max so we do not re-scrape
+            # history we already have.
+            if last_scraped_id:
+                db_max = await self.session.execute(
+                    select(func.max(ScrapedMessage.message_id)).where(
+                        ScrapedMessage.scraped_group_id == scraped_group.id
+                    )
+                )
+                db_max_id = db_max.scalar_one_or_none()
+                if db_max_id:
+                    last_scraped_id = max(int(last_scraped_id), int(db_max_id))
             total_success = ck.get("total_success", 0)
             total_errors = ck.get("total_errors", 0)
             batches_completed = ck.get("batches_completed", 0)
@@ -691,6 +704,7 @@ class ScraperService:
             seen_senders: set[int] = set()
             member_success_count = 0
             reached_end = False
+            max_seen_id = int(last_scraped_id or 0)
             existing_admin_roles = await self._get_existing_admin_roles(scraped_group.id)
             conversation_jobs: list[dict] = []
             last_checkpoint = 0
@@ -701,7 +715,13 @@ class ScraperService:
                 else None
             )
 
-            offset_id = last_offset_id or 0
+            # Resume offset for GetHistoryRequest: it returns messages OLDER
+            # than offset_id. Starting at 0 walks from the newest message down.
+            # When resuming after a previous scrape, we stop as soon as we hit
+            # a message id we already have (<= last_scraped_id), which makes
+            # the checkpointed scrape incremental instead of re-scraping
+            # everything or, worse, starting from id 1 and finding nothing.
+            offset_id = 0
             message_batch: list[dict[str, Any]] = []
             member_batch: list[dict[str, Any]] = []
 
@@ -740,6 +760,12 @@ class ScraperService:
                     if msg_id is None:
                         continue
 
+                    # Incremental resume: this message (and anything older) was
+                    # already scraped in a previous run, so we are done.
+                    if last_scraped_id and int(msg_id) <= int(last_scraped_id):
+                        reached_end = True
+                        break
+
                     msg_date = getattr(msg, "date", None)
                     if (
                         isinstance(msg_date, datetime)
@@ -748,6 +774,8 @@ class ScraperService:
                     ):
                         reached_end = True
                         break
+
+                    max_seen_id = max(max_seen_id, int(msg_id))
 
                     try:
                         sender_data = await entity_resolver.extract_message_sender_data(msg)
@@ -834,7 +862,7 @@ class ScraperService:
                 if success_count - last_checkpoint >= self._CHECKPOINT_EVERY:
                     checkpoint_state = dict(scraped_group.scrape_state or {})
                     checkpoint_state["messages"] = {
-                        "last_scraped_message_id": offset_id,
+                        "last_scraped_message_id": max_seen_id or offset_id,
                         "total_success": total_success + success_count,
                         "total_errors": total_errors + error_count,
                         "batches_completed": batches_completed + batch_count,
@@ -868,7 +896,7 @@ class ScraperService:
 
             checkpoint_state = dict(scraped_group.scrape_state or {})
             checkpoint_state["messages"] = {
-                "last_scraped_message_id": offset_id,
+                "last_scraped_message_id": max_seen_id or offset_id,
                 "total_success": total_success + success_count,
                 "total_errors": total_errors + error_count,
                 "batches_completed": batches_completed + batch_count,
