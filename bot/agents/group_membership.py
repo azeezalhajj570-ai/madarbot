@@ -26,7 +26,14 @@ from telethon.tl.functions.messages import (
     GetDialogsRequest,
     GetFullChatRequest,
 )
-from telethon.tl.types import Channel, InputPeerEmpty, InputUser, User
+from telethon.tl.types import (
+    Channel,
+    InputPeerChannel,
+    InputPeerChannelFromMessage,
+    InputPeerEmpty,
+    InputUser,
+    User,
+)
 
 
 ERROR_USER_ALREADY_IN_GROUP: Final = "USER_ALREADY_IN_GROUP"
@@ -88,8 +95,14 @@ async def _resolve_group_from_dialogs(
         for chat in result.chats:
             if chat.id == peer_channel_id:
                 return chat
-    except Exception:
-        pass
+        logger.bind(
+            group_id=group_id,
+            dialogs_count=len(result.chats),
+        ).warning("agent_group_dialog_scan_miss")
+    except Exception as exc:
+        logger.bind(group_id=group_id, error=str(exc)).warning(
+            "agent_group_dialog_scan_failed"
+        )
     return None
 
 
@@ -187,10 +200,35 @@ async def add_user_to_group(
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
+    group_is_channel = isinstance(group_entity, Channel) or bool(
+        getattr(group_entity, "megagroup", False)
+    )
+    if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
+        # Marked -100 ids are channels/megagroups even when entity resolution
+        # returned a legacy Chat object.
+        group_is_channel = True
+
+    invite_peer = group_entity
+    if group_is_channel and not isinstance(group_entity, Channel):
+        resolved = None
+        try:
+            candidate = await client.get_input_entity(group_id)
+            if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
+                resolved = candidate
+        except (ValueError, KeyError):
+            resolved = None
+        if resolved is None:
+            dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
+            if isinstance(dialogs_entity, Channel):
+                resolved = dialogs_entity
+        if resolved is None:
+            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
+        invite_peer = resolved
+
     try:
-        if isinstance(group_entity, Channel) or bool(getattr(group_entity, "megagroup", False)):
+        if group_is_channel:
             invite_result = await client(
-                InviteToChannelRequest(channel=group_id, users=[user_peer])
+                InviteToChannelRequest(channel=invite_peer, users=[user_peer])
             )
             missing_invitees = getattr(invite_result, "missing_invitees", None) or []
             users_added = getattr(invite_result, "users", None) or []
@@ -225,6 +263,8 @@ async def add_user_to_group(
         )
     except (ChatAdminRequiredError, ChatWriteForbiddenError, UserNotParticipantError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+    except (ValueError, TypeError):
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except RPCError as exc:
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_invite_to_channel_rpc_error")
         if "admin" in str(exc).lower() or "forbidden" in str(exc).lower():
@@ -238,8 +278,9 @@ async def add_user_to_group(
         # (None) result is treated as a pass rather than a failure to avoid
         # false VERIFICATION_FAILED on otherwise-successful adds.
         present: bool | None = None
+        verify_entity = invite_peer if group_is_channel else group_entity
         for attempt in range(3):
-            present = await is_user_in_group(client, group_entity, user_peer)
+            present = await is_user_in_group(client, verify_entity, user_peer)
             if present is not False:
                 break
             await asyncio.sleep(2.0 * (attempt + 1))
@@ -272,7 +313,25 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
             if entity is None:
                 logger.bind(group_id=group_id).warning("agent_group_invite_entity_not_found")
                 return None
-        result = await client(ExportChatInviteRequest(peer=entity))
+        peer = entity
+        if (
+            not isinstance(entity, Channel)
+            and isinstance(group_id, int)
+            and group_id <= -1000000000000
+        ):
+            resolved = None
+            try:
+                candidate = await client.get_input_entity(group_id)
+                if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
+                    resolved = candidate
+            except (ValueError, KeyError):
+                resolved = None
+            if resolved is None:
+                dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
+                if isinstance(dialogs_entity, Channel):
+                    resolved = dialogs_entity
+            peer = resolved or entity
+        result = await client(ExportChatInviteRequest(peer=peer))
         link = getattr(result, "link", None)
         if link:
             logger.bind(group_id=group_id).info("agent_group_invite_link_exported")
@@ -288,6 +347,9 @@ async def export_group_invite_link(client: TelegramClient, group_id: int) -> str
         logger.bind(group_id=group_id, error=str(exc)).warning(
             "agent_group_invite_link_export_failed"
         )
+        return None
+    except (ValueError, TypeError):
+        logger.bind(group_id=group_id).warning("agent_group_invite_link_invalid_peer")
         return None
 
 
