@@ -95,8 +95,14 @@ async def _resolve_group_from_dialogs(
         for chat in result.chats:
             if chat.id == peer_channel_id:
                 return chat
-    except Exception:
-        pass
+        logger.bind(
+            group_id=group_id,
+            dialogs_count=len(result.chats),
+        ).warning("agent_group_dialog_scan_miss")
+    except Exception as exc:
+        logger.bind(group_id=group_id, error=str(exc)).warning(
+            "agent_group_dialog_scan_failed"
+        )
     return None
 
 

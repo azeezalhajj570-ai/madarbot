@@ -30,7 +30,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: dramatiq bot.agents.worker
+    command: dramatiq bot.agents.worker --processes 2 --threads 4
     env_file: .env.deploy
     networks:
       - combot_default
