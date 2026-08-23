@@ -4,6 +4,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Agent, ScrapedGroup
@@ -144,10 +145,29 @@ async def get_or_create_scraped_group(
             updated_at=now,
         )
         session.add(group)
-        if commit:
-            await session.commit()
-            await session.refresh(group)
-        return group
+        try:
+            if commit:
+                await session.commit()
+                await session.refresh(group)
+            return group
+        except IntegrityError:
+            # Two concurrent syncs/scrapers raced to insert the same group.
+            # Roll back and re-select the row created by the other writer.
+            await session.rollback()
+            existing = (
+                (
+                    await session.execute(
+                        select(ScrapedGroup).where(
+                            ScrapedGroup.tg_group_id == canonical_id
+                        ).limit(1)
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if existing is not None:
+                return existing
+            raise
 
     if last_agent_id is not None:
         group.last_agent_id = last_agent_id
