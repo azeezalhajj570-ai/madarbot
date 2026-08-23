@@ -114,6 +114,17 @@ def _user_id_of(peer: object) -> int | None:
     return getattr(peer, "id", None) or getattr(peer, "user_id", None)
 
 
+def _is_invalid_user_id_error(exc: RPCError) -> bool:
+    """Detect the stale access_hash signature Telethon raises on invites.
+
+    "Invalid object ID for a user. Make sure to pass the right types..." is
+    raised when an InputUser carries a stale access_hash. Treat it as a
+    retryable cache issue rather than a genuine failure.
+    """
+    text = str(exc).lower()
+    return "invalid object id for a user" in text or "pass the right types" in text
+
+
 async def is_user_in_group(
     client: TelegramClient,
     group_entity: object,
@@ -266,7 +277,59 @@ async def add_user_to_group(
     except (ValueError, TypeError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except RPCError as exc:
-        logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_invite_to_channel_rpc_error")
+        # A stale cached access_hash produces "Invalid object ID for a user"
+        # from InviteToChannelRequest. Re-resolve the user without the cached
+        # hash and retry once; if that also fails, fall through to the normal
+        # RPC error handling below.
+        if access_hash is not None and _is_invalid_user_id_error(exc):
+            try:
+                user_peer = await client.get_entity(user_id)
+                logger.bind(
+                    group_id=group_id, user_id=user_id
+                ).warning("agent_invite_retry_without_cached_hash")
+                if group_is_channel:
+                    invite_result = await client(
+                        InviteToChannelRequest(channel=invite_peer, users=[user_peer])
+                    )
+                    missing_invitees = getattr(invite_result, "missing_invitees", None) or []
+                    if any(_user_id_of(entry) == user_id for entry in missing_invitees):
+                        return _failure(
+                            group_id=group_id,
+                            user_id=user_id,
+                            error_code=ERROR_USER_PRIVACY_RESTRICTED,
+                        )
+                    # Retry succeeded — continue to post-add verification below.
+                    bound_logger.info("agent_add_user_to_group_succeeded_after_hash_retry")
+                    if verify:
+                        present: bool | None = None
+                        verify_entity = invite_peer if group_is_channel else group_entity
+                        for attempt in range(3):
+                            present = await is_user_in_group(client, verify_entity, user_peer)
+                            if present is not False:
+                                break
+                            await asyncio.sleep(2.0 * (attempt + 1))
+                        if present is False:
+                            return _failure(
+                                group_id=group_id,
+                                user_id=user_id,
+                                error_code=ERROR_VERIFICATION_FAILED,
+                            )
+                    bound_logger.info("agent_add_user_to_group_succeeded")
+                    return AddUserResult(success=True)
+                legacy_chat_id = int(getattr(group_entity, "id"))
+                await client(
+                    AddChatUserRequest(chat_id=legacy_chat_id, user_id=user_peer, fwd_limit=0)
+                )
+                bound_logger.info("agent_add_user_to_group_succeeded")
+                return AddUserResult(success=True)
+            except RPCError:
+                pass
+            except (ValueError, KeyError):
+                pass
+        # Any error here is a genuine failure (or the retry also failed).
+        logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning(
+            "agent_invite_to_channel_rpc_error"
+        )
         if "admin" in str(exc).lower() or "forbidden" in str(exc).lower():
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)

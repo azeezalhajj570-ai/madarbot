@@ -240,3 +240,67 @@ async def test_add_user_to_group_returns_unknown_on_generic_telegram_error() -> 
 
     assert result.success is False
     assert result.error_code == ERROR_UNKNOWN
+
+
+# ─── Stale access_hash retry ──────────────────────────────────────────────────
+
+
+def _invalid_user_id_error() -> RPCError:
+    return RPCError(
+        request=None,
+        message=(
+            "Invalid object ID for a user. Make sure to pass the right types, "
+            "for instance making sure that the request is designed for users "
+            "or otherwise look for a different one more suited"
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_retries_without_stale_access_hash() -> None:
+    client = AsyncMock()
+    # get_entity resolves: group, then the retry re-resolves the user.
+    # (The initial user peer is built from the cached access_hash, so no
+    # get_entity call for it.)
+    client.get_entity = AsyncMock(
+        side_effect=[_build_channel(1007), _build_user(84)]
+    )
+    # The invite RPC fails once with the stale-hash signature, then succeeds;
+    # the third call is the post-add verification (GetParticipantRequest).
+    client.side_effect = [_invalid_user_id_error(), None, None]
+
+    result = await add_user_to_group(
+        client, -1001007, 84, access_hash=999999999
+    )
+
+    assert result.success is True
+    # The retry re-resolved the user (group + retry = 2 get_entity calls).
+    assert client.get_entity.await_count == 2
+    # The two invite attempts both used InviteToChannelRequest (megagroup);
+    # the remaining calls are the post-add verification requests.
+    invite_calls = [
+        call.args[0]
+        for call in client.call_args_list
+        if isinstance(call.args[0], InviteToChannelRequest)
+    ]
+    assert len(invite_calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_returns_unknown_when_retry_also_fails() -> None:
+    client = AsyncMock()
+    # get_entity resolves: group, then the retry re-resolves the user.
+    client.get_entity = AsyncMock(
+        side_effect=[_build_channel(1008), _build_user(85)]
+    )
+    client.side_effect = [
+        _invalid_user_id_error(),
+        RPCError(request=None, message="boom again"),
+    ]
+
+    result = await add_user_to_group(
+        client, -1001008, 85, access_hash=999999999
+    )
+
+    assert result.success is False
+    assert result.error_code == ERROR_UNKNOWN
