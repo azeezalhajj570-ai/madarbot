@@ -106,6 +106,7 @@ class BulkMemberAddRequest(BaseModel):
     user_ids: list[int] = Field(min_length=1, max_length=5000)
     send_invite_link_on_privacy_restricted: bool = Field(default=False)
     custom_invite_message: str | None = Field(default=None, max_length=2000)
+    acknowledge_risk: bool = Field(default=False)
 
 
 class BlacklistAddEntry(BaseModel):
