@@ -852,6 +852,8 @@
     "searching": "جارٍ البحث...",
     "noMembersFound": "لم يتم العثور على أعضاء",
     "alreadyInGroup": "موجود بالفعل",
+    "alreadyProcessed": "تمت معالجته بالفعل",
+    "alreadyProcessedError": "فشل ({error}) — لن تتم إعادة معالجته",
     "inRunningJob": "ضمن مهمة قيد التنفيذ",
     "invitationSent": "تم إرسال الدعوة",
     "invitationSentByOther": "تم إرسال الدعوة بواسطة عميل آخر",

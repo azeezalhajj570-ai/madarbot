@@ -292,6 +292,8 @@ export interface AgentGroupMember {
     is_own?: boolean
   } | null
   already_added?: boolean
+  processed?: boolean
+  processing_error?: string | null
 }
 
 export interface AgentGroupMembersPage {

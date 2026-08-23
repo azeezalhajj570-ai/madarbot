@@ -550,6 +550,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                       {bulkMembers.filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin')).map((m) => {
                         const inTarget = bulkTargetMemberIds.has(m.user_id)
                         const persistedAdded = !!m.already_added
+                        const processed = !!m.processed
                         const selected = bulkSelectedMembers.includes(m.user_id)
                         const claim = m.claim
                         const heldByOther = !!(claim && !claim.is_own)
@@ -558,7 +559,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                         const joinedViaInvite = m.invitation_status?.status === 'joined'
                         const invitedByOther = !!(m.invitation_status && m.invitation_status.is_own === false)
                         const inRunningJob = bulkHeldMemberIds.has(m.user_id)
-                        const isDisabled = inTarget || persistedAdded || heldByOther || invited || inRunningJob
+                        const isDisabled = inTarget || persistedAdded || processed || heldByOther || invited || inRunningJob
                         return (
                           <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: isDisabled ? 'default' : 'pointer', opacity: isDisabled ? 0.5 : 1, borderBottom: '1px solid var(--miniapp-border-soft)' }}>
                             <input type="checkbox" checked={selected || !!heldBySelf} disabled={isDisabled} onChange={() => setBulkSelectedMembers((prev) => prev.includes(m.user_id) ? prev.filter((id) => id !== m.user_id) : [...prev, m.user_id])} />
@@ -567,6 +568,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                               {m.username ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>@{m.username}</div> : null}
                             </div>
                             {inTarget || persistedAdded ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')}</span> : null}
+                            {processed && !inTarget && !persistedAdded ? <span style={{ fontSize: 10, color: m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)', fontWeight: 600 }}>{m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')}</span> : null}
                             {inRunningJob ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.inRunningJob')}</span> : null}
                             {invited && !joinedViaInvite ? <span style={{ fontSize: 10, color: invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)', fontWeight: 600 }}>{invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')}</span> : null}
                             {heldByOther ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.heldByOther')}</span> : null}
