@@ -1179,6 +1179,7 @@ class BulkAddMembersRuntime:
 
         try:
             for index, user_id in enumerate(user_ids):
+                skip_interval_wait = False
                 cooldown_mins = agent_cooldown
                 if cooldown_mins is not None and cooldown_mins > 0:
                     in_cooldown, cd_remaining = await limiter.is_in_cooldown(agent_id_val, cooldown_mins)
@@ -1347,10 +1348,12 @@ class BulkAddMembersRuntime:
                     if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
                         skip_count += 1
                         failure_count += 0
+                        skip_interval_wait = True
                         result_entry["status"] = "skipped"
                         result_entry["reason"] = "already_in_target_group"
                     elif add_result.error_code == ERROR_IS_BOT:
                         skip_count += 1
+                        skip_interval_wait = True
                         result_entry["status"] = "skipped"
                         result_entry["reason"] = "is_bot"
                     else:
@@ -1358,7 +1361,22 @@ class BulkAddMembersRuntime:
                         send_invite_link = bool(
                             normalized.get("send_invite_link_on_privacy_restricted", False)
                         )
-                        if user_id in existing_ops:
+                        if (
+                            add_result.error_code == ERROR_USER_PRIVACY_RESTRICTED
+                            and not send_invite_link
+                        ):
+                            # Privacy-restricted members cannot be added directly and
+                            # no invite-link fallback is enabled. Do not apply the
+                            # normal add interval — continue immediately (issue #231).
+                            skip_count += 1
+                            skip_interval_wait = True
+                            result_entry["status"] = "skipped"
+                            result_entry["reason"] = "privacy_restricted"
+                            logger.bind(
+                                group_id=target_tg_group_id,
+                                user_id=user_id,
+                            ).info("agent_member_add_privacy_restricted_skipped")
+                        elif user_id in existing_ops:
                             # Another agent already sent an invitation
                             failure_count += 1
                             result_entry["status"] = "skipped"
@@ -1501,7 +1519,11 @@ class BulkAddMembersRuntime:
                 if base_interval > 0:
                     jitter = random.uniform(-0.3, 0.3) * base_interval
                     effective_interval = max(0.5, base_interval + jitter)
-                if index < len(user_ids) - 1 and effective_interval > 0:
+                if (
+                    not skip_interval_wait
+                    and index < len(user_ids) - 1
+                    and effective_interval > 0
+                ):
                     await self.sleep(effective_interval)
 
             return {
