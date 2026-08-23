@@ -108,6 +108,69 @@ def test_normalize_member_add_payload_truncates_long_custom_message() -> None:
     assert len(normalized["custom_invite_message"]) == 2000
 
 
+# ─── Issue #235: lower interval below 1800s with risk acknowledgment ──────────
+
+
+def test_normalize_member_add_payload_clamps_below_1800_without_ack() -> None:
+    normalized = normalize_member_add_payload(
+        {
+            "target_tg_group_id": -1001,
+            "user_ids": [1, 2],
+            "interval_seconds": 60,
+        }
+    )
+    assert normalized["interval_seconds"] == 30 * 60
+    assert normalized["acknowledge_risk"] is False
+
+
+def test_normalize_member_add_payload_keeps_default_1800_without_ack() -> None:
+    normalized = normalize_member_add_payload(
+        {
+            "target_tg_group_id": -1001,
+            "user_ids": [1, 2],
+            "interval_seconds": 1800,
+        }
+    )
+    assert normalized["interval_seconds"] == 30 * 60
+
+
+def test_normalize_member_add_payload_accepts_below_1800_with_ack() -> None:
+    normalized = normalize_member_add_payload(
+        {
+            "target_tg_group_id": -1001,
+            "user_ids": [1, 2],
+            "interval_seconds": 120,
+            "acknowledge_risk": True,
+        }
+    )
+    assert normalized["interval_seconds"] == 120
+    assert normalized["acknowledge_risk"] is True
+
+
+def test_normalize_member_add_payload_applies_hard_floor_with_ack() -> None:
+    normalized = normalize_member_add_payload(
+        {
+            "target_tg_group_id": -1001,
+            "user_ids": [1, 2],
+            "interval_seconds": 5,
+            "acknowledge_risk": True,
+        }
+    )
+    assert normalized["interval_seconds"] == 30
+
+
+def test_normalize_member_add_payload_keeps_high_interval_with_ack() -> None:
+    normalized = normalize_member_add_payload(
+        {
+            "target_tg_group_id": -1001,
+            "user_ids": [1, 2],
+            "interval_seconds": 3600,
+            "acknowledge_risk": True,
+        }
+    )
+    assert normalized["interval_seconds"] == 3600
+
+
 # ─── Issue #216: already-sent invitation state ───────────────────────────────
 #
 # The tests below exercise the DB-backed member-search response. They are

@@ -163,6 +163,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<number[]>([])
   const [bulkTargetMemberIds, setBulkTargetMemberIds] = useState<Set<number>>(new Set())
   const [bulkInterval, setBulkInterval] = useState('3600')
+  const [bulkRiskAcknowledged, setBulkRiskAcknowledged] = useState(false)
   const [bulkSendInvite, setBulkSendInvite] = useState(false)
   const [bulkCustomMessage, setBulkCustomMessage] = useState('')
   const [bulkExcludeAdminsBots, setBulkExcludeAdminsBots] = useState(true)
@@ -344,6 +345,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
     setBulkTargetMemberIds(new Set())
     setBulkHeldMemberIds(new Set())
     setBulkInterval('3600')
+    setBulkRiskAcknowledged(false)
     setBulkSendInvite(false)
     setBulkCustomMessage('')
     setBulkExcludeAdminsBots(true)
@@ -413,15 +415,21 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
       if (!bulkSourceGroup?.tg_group_id || !bulkTargetGroup?.tg_group_id || !bulkSelectedMembers.length) {
         notify(t('automation.bulkAddRequired')); return
       }
+      const intervalSeconds = Math.max(30, Number(bulkInterval) || 30)
+      const lowInterval = intervalSeconds < 60 * 60
+      if (lowInterval && !bulkRiskAcknowledged) {
+        notify(t('automation.bulkRiskAckRequired')); return
+      }
       setIsSaving(true)
       try {
         await agentsApi.bulkAddMembers(account.id, {
           target_tg_group_id: bulkTargetGroup.tg_group_id,
           source_tg_group_id: bulkSourceGroup.tg_group_id,
-          interval_seconds: Math.max(60 * 60, Number(bulkInterval) || 60 * 60),
+          interval_seconds: intervalSeconds,
           user_ids: bulkSelectedMembers,
           send_invite_link_on_privacy_restricted: bulkSendInvite,
           custom_invite_message: bulkCustomMessage.trim() ? bulkCustomMessage.trim() : null,
+          acknowledge_risk: lowInterval,
         })
         onSaved(t('automation.bulkAddCreated'))
         setIsFormOpen(false)
@@ -580,6 +588,17 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   </div>
                 ) : null}
                 <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="3600" />
+                {Number(bulkInterval) > 0 && Number(bulkInterval) < 60 * 60 ? (
+                  <div style={{ display: 'grid', gap: 6, background: 'var(--miniapp-coral-dim)', border: '1px solid var(--miniapp-border)', borderRadius: 10, padding: '10px 12px' }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-coral)', lineHeight: 1.5 }}>
+                      {t('automation.bulkRiskWarning')}
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={bulkRiskAcknowledged} onChange={(e) => setBulkRiskAcknowledged(e.target.checked)} />
+                      {t('automation.bulkRiskAcknowledge')}
+                    </label>
+                  </div>
+                ) : null}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={bulkSendInvite} onChange={(e) => setBulkSendInvite(e.target.checked)} />
                   {t('automation.bulkSendInvite')}

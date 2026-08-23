@@ -444,6 +444,7 @@ export interface BulkMemberAddPayload {
   user_ids: number[]
   send_invite_link_on_privacy_restricted?: boolean
   custom_invite_message?: string | null
+  acknowledge_risk?: boolean
 }
 
 export async function bulkAddMembers(agentId: number, payload: BulkMemberAddPayload) {
