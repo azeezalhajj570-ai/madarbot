@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, or_, select
+from sqlalchemy import case, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agents.contracts import AgentJobOwnership
@@ -310,7 +310,8 @@ class AgentJobService(AgentServiceSupport):
                 "message_count": len(messages),
             }
 
-        # Fetch scraped member data for selected users
+        # Fetch scraped member data for selected users. With per-agent rows, a
+        # user may have multiple rows; prefer the executing agent's own row.
         members_data = (
             await self.session.execute(
                 select(
@@ -320,9 +321,18 @@ class AgentJobService(AgentServiceSupport):
                     ScrapedMember.phone,
                     ScrapedMember.username,
                     ScrapedMember.scraped_by_agent_id,
-                ).where(
+                )
+                .where(
                     ScrapedMember.tg_group_id == source_group_id,
                     ScrapedMember.tg_user_id.in_(selected_user_ids),
+                )
+                .order_by(
+                    case(
+                        (ScrapedMember.scraped_by_agent_id == agent.id, 0),
+                        (ScrapedMember.scraped_by_agent_id.is_(None), 1),
+                        else_=2,
+                    ),
+                    ScrapedMember.scraped_at.desc(),
                 )
             )
         ).all()
@@ -331,17 +341,18 @@ class AgentJobService(AgentServiceSupport):
         phones: list[str] = []
         usernames: list[str] = []
         not_scraped_by_agent: set[int] = set()
+        has_own_row: set[int] = set()
         for row in members_data:
-            member_map[int(row.tg_user_id)] = {
-                "role": row.role or "member",
-                "is_bot": bool(row.is_bot),
-                "phone": row.phone,
-                "username": row.username,
-            }
-            # Members whose entity data was captured by a different agent in the
-            # workspace cannot be resolved/added by this agent's session.
-            if row.scraped_by_agent_id is not None and int(row.scraped_by_agent_id) != agent.id:
-                not_scraped_by_agent.add(int(row.tg_user_id))
+            uid = int(row.tg_user_id)
+            if uid not in member_map:
+                member_map[uid] = {
+                    "role": row.role or "member",
+                    "is_bot": bool(row.is_bot),
+                    "phone": row.phone,
+                    "username": row.username,
+                }
+                if row.scraped_by_agent_id is None or int(row.scraped_by_agent_id) == agent.id:
+                    has_own_row.add(uid)
             if row.phone:
                 normalized = row.phone.strip()
                 if normalized not in phones:
@@ -350,6 +361,10 @@ class AgentJobService(AgentServiceSupport):
                 normalized = row.username.strip().lower()
                 if normalized not in usernames:
                     usernames.append(normalized)
+
+        # A member is unresolvable only when this agent has no row of its own
+        # (nor a legacy NULL row); another agent's row alone is not enough.
+        not_scraped_by_agent = {uid for uid in selected_user_ids if uid not in has_own_row}
 
         # Separate admins, bots, and others
         admins: set[int] = set()

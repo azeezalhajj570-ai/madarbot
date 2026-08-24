@@ -503,7 +503,7 @@ async def _try_auto_broadcast_dispatch(
     from sqlalchemy import func, select
 
     member_count = await session.scalar(
-        select(func.count())
+        select(func.count(func.distinct(ScrapedMember.tg_user_id)))
         .select_from(ScrapedMember)
         .where(ScrapedMember.scraped_group_id == int(source_group_id))
     )

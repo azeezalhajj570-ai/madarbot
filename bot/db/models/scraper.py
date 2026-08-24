@@ -86,7 +86,7 @@ class ScrapedMember(Base):
     __table_args__ = (
         Index("ix_scraped_members_tg_group_id", "tg_group_id"),
         Index("ix_scraped_members_user_id", "tg_user_id"),
-        Index("ix_scraped_members_group_user", "tg_group_id", "tg_user_id", unique=True),
+        Index("ix_scraped_members_group_user_agent", "tg_group_id", "tg_user_id", "scraped_by_agent_id", unique=True),
         Index("ix_scraped_members_username", "username"),
     )
 

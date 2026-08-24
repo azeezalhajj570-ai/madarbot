@@ -134,7 +134,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
                     await self.session.execute(
                         select(
                             ScrapedMember.scraped_group_id,
-                            func.count(ScrapedMember.id).label("member_count"),
+                            func.count(func.distinct(ScrapedMember.tg_user_id)).label(
+                                "member_count"
+                            ),
                         )
                         .where(
                             ScrapedMember.scraped_group_id.in_([int(r.id) for r in scraped_rows])
@@ -645,32 +647,19 @@ class AccountGroupMembershipService(AgentServiceSupport):
                     select(MemberClaim).where(
                         MemberClaim.tenant_id == agent.tenant_id,
                         MemberClaim.scraped_group_id == scraped_group.id,
-                        MemberClaim.scraped_member_id.in_(
-                            select(ScrapedMember.id).where(
-                                ScrapedMember.scraped_group_id == scraped_group.id,
-                                ScrapedMember.tg_user_id.in_(user_ids),
-                            )
-                        ),
+                        MemberClaim.tg_user_id.in_(user_ids),
                         MemberClaim.status == "active",
                     )
                 )
             ).scalars().all()
             for claim in claim_rows:
-                # Find the tg_user_id for this claim's scraped_member_id
-                sm_result = await self.session.execute(
-                    select(ScrapedMember.tg_user_id).where(
-                        ScrapedMember.id == claim.scraped_member_id
-                    )
-                )
-                sm_row = sm_result.first()
-                if sm_row:
-                    tg_uid = int(sm_row[0])
-                    member_claims[tg_uid] = {
-                        "claim_id": claim.id,
-                        "agent_id": claim.agent_id,
-                        "is_own": claim.agent_id == agent.id,
-                        "expires_at": claim.expires_at.isoformat() if claim.expires_at else None,
-                    }
+                tg_uid = int(claim.tg_user_id)
+                member_claims[tg_uid] = {
+                    "claim_id": claim.id,
+                    "agent_id": claim.agent_id,
+                    "is_own": claim.agent_id == agent.id,
+                    "expires_at": claim.expires_at.isoformat() if claim.expires_at else None,
+                }
 
         # Query invitation status for these members (for the target group, if provided).
         # Scoped to the whole workspace (all agents sharing agent.tenant_id) so that

@@ -107,7 +107,7 @@ class AdminActivityService:
             scraped_members_count = int(
                 (
                     await self.session.execute(
-                        select(func.count(ScrapedMember.id)).where(
+                        select(func.count(func.distinct(ScrapedMember.tg_user_id))).where(
                             ScrapedMember.scraped_group_id == scraped_group.id
                         )
                     )

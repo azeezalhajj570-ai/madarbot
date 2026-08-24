@@ -990,15 +990,13 @@ async def webapp_bulk_add_members(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
 
-    # Resolve tg_user_ids to scraped_member_ids for claiming
+    # Resolve the source scraped group id for claiming
     user_ids = normalized.get("user_ids", [])
     source_tg_group_id = normalized.get("source_tg_group_id")
 
-    scraped_member_map: dict[int, int] = {}  # tg_user_id -> scraped_member_id
     scraped_group_id: int | None = None
 
     if user_ids and source_tg_group_id:
-        # Look up scraped members for this source group
         from bot.db.models.scraper import ScrapedGroup
 
         sg_result = await session.execute(
@@ -1007,32 +1005,21 @@ async def webapp_bulk_add_members(
         scraped_group = sg_result.scalar_one_or_none()
         if scraped_group:
             scraped_group_id = scraped_group.id
-            sm_result = await session.execute(
-                sql_select(ScrapedMember).where(
-                    ScrapedMember.scraped_group_id == scraped_group.id,
-                    ScrapedMember.tg_user_id.in_(user_ids),
-                )
-            )
-            for sm in sm_result.scalars().all():
-                scraped_member_map[int(sm.tg_user_id)] = sm.id
 
-    # Create claims for members that can be resolved
+    # Create claims for the requested members
     claim_result = None
-    if scraped_member_map and scraped_group_id:
+    if user_ids and scraped_group_id:
         claim_result = await claim_members(
             session,
             tenant_id=agent.tenant_id,
             agent_id=agent.id,
             scraped_group_id=scraped_group_id,
-            member_ids=list(scraped_member_map.values()),
+            tg_user_ids=user_ids,
         )
         await session.commit()
 
         # Filter user_ids to only include successfully claimed members
-        claimed_member_ids = set(claim_result.claimed)
-        claimed_tg_user_ids = [
-            uid for uid, mid in scraped_member_map.items() if mid in claimed_member_ids
-        ]
+        claimed_tg_user_ids = list(claim_result.claimed)
         normalized["user_ids"] = claimed_tg_user_ids
 
         # If no members were claimed, return conflicts without creating a job
@@ -1042,7 +1029,7 @@ async def webapp_bulk_add_members(
                 "claimed_count": 0,
                 "conflicts": [
                     {
-                        "scraped_member_id": c.scraped_member_id,
+                        "tg_user_id": c.tg_user_id,
                         "claimed_by_agent_id": c.claimed_by_agent_id,
                         "expires_at": c.expires_at.isoformat(),
                     }
@@ -1071,7 +1058,7 @@ async def webapp_bulk_add_members(
                 MemberClaim.agent_job_id == None,  # noqa: E711
                 MemberClaim.agent_id == agent.id,
                 MemberClaim.scraped_group_id == scraped_group_id,
-                MemberClaim.scraped_member_id.in_(claim_result.claimed),
+                MemberClaim.tg_user_id.in_(claim_result.claimed),
                 MemberClaim.status == "active",
             )
         )
@@ -1101,7 +1088,7 @@ async def webapp_bulk_add_members(
     if claim_result and claim_result.conflicts:
         response["conflicts"] = [
             {
-                "scraped_member_id": c.scraped_member_id,
+                "tg_user_id": c.tg_user_id,
                 "claimed_by_agent_id": c.claimed_by_agent_id,
                 "expires_at": c.expires_at.isoformat(),
             }
