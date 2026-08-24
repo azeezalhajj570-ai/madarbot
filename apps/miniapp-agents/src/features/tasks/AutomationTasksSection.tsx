@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmModal } from '../../components/ConfirmModal'
@@ -35,8 +36,10 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
   executor_types: ['agent'],
 }
 
-// Compact status icon. Wrapped in a positioned container that reveals a styled
-// hover tooltip (title + optional detail line) so the badge self-explains.
+// Compact status icon with a hover tooltip. The tooltip is rendered through a
+// portal to document.body at a fixed position derived from the icon's bounding
+// rect, so it is never clipped by the member-list scroll container. It flips
+// above/below the icon depending on how much viewport space is available.
 function StatusIcon({ kind, color, title, detail }: { kind: 'check' | 'error' | 'clock' | 'mail' | 'lock' | 'selected' | 'shield' | 'bot'; color: string; title: string; detail?: string }) {
   const paths: Record<string, string> = {
     check: 'M5 12l4 4L19 6',
@@ -48,32 +51,62 @@ function StatusIcon({ kind, color, title, detail }: { kind: 'check' | 'error' | 
     shield: 'M12 3l7 3v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6l7-3z',
     bot: 'M12 8a3 3 0 100 6 3 3 0 000-6zm-7 3h2m10 0h2M12 2v2',
   }
+  const ref = useRef<HTMLSpanElement>(null)
+  const [tip, setTip] = useState<{ x: number; y: number; above: boolean } | null>(null)
+
   return (
-    <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }} className="mb-status-icon">
-      <style>
-        {`.mb-status-icon { cursor: help; }
-          .mb-status-icon .mb-tip {
-            position: absolute; bottom: calc(100% + 6px); right: -8px; z-index: 20;
-            min-width: 170px; max-width: 240px; padding: 7px 9px;
-            background: var(--miniapp-surface); border: 1px solid var(--miniapp-border);
-            border-radius: 8px; box-shadow: var(--miniapp-shadow-sm, 0 4px 14px rgba(0,0,0,.12));
-            font-size: 11px; line-height: 1.4; color: var(--miniapp-text-primary);
-            opacity: 0; transform: translateY(4px); pointer-events: none;
-            transition: opacity .12s ease, transform .12s ease; white-space: normal;
-          }
-          .mb-status-icon:hover .mb-tip { opacity: 1; transform: translateY(0); }
-          .mb-tip-title { font-weight: 600; }
-          .mb-tip-detail { color: var(--miniapp-text-secondary); word-break: break-word; }
-        `}
-      </style>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-label={title} role="img">
-        <path d={paths[kind]} />
-      </svg>
-      <span className="mb-tip" role="tooltip">
-        <span className="mb-tip-title">{title}</span>
-        {detail ? <div className="mb-tip-detail">{detail}</div> : null}
+    <>
+      <span
+        ref={ref}
+        style={{ display: 'inline-flex', flexShrink: 0, cursor: 'help' }}
+        aria-label={title}
+        role="img"
+        onMouseEnter={() => {
+          const el = ref.current
+          if (!el) return
+          const rect = el.getBoundingClientRect()
+          const above = rect.top > 70
+          setTip({
+            x: rect.right,
+            y: above ? rect.top - 6 : rect.bottom + 6,
+            above,
+          })
+        }}
+        onMouseLeave={() => setTip(null)}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d={paths[kind]} />
+        </svg>
       </span>
-    </span>
+      {tip ? createPortal(
+        <span
+          className="mb-tip"
+          role="tooltip"
+          style={{
+            position: 'fixed',
+            left: tip.x,
+            top: tip.y,
+            transform: tip.above ? 'translate(-100%, -100%)' : 'translate(calc(-100% - 8px), 0)',
+            minWidth: 170,
+            maxWidth: 240,
+            padding: '7px 9px',
+            background: 'var(--miniapp-surface)',
+            border: '1px solid var(--miniapp-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.16)',
+            fontSize: 11,
+            lineHeight: 1.4,
+            color: 'var(--miniapp-text-primary)',
+            zIndex: 1000,
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>{title}</span>
+          {detail ? <div style={{ color: 'var(--miniapp-text-secondary)', wordBreak: 'break-word' }}>{detail}</div> : null}
+        </span>,
+        document.body,
+      ) : null}
+    </>
   )
 }
 
