@@ -283,7 +283,26 @@ async def add_user_to_group(
         # RPC error handling below.
         if access_hash is not None and _is_invalid_user_id_error(exc):
             try:
-                user_peer = await client.get_entity(user_id)
+                # Re-resolve the user fresh. A bare user id needs the account's
+                # entity cache; fall back to InputUser(user_id, 0) which makes
+                # Telethon attempt a users.getUsers lookup for a fresh hash.
+                try:
+                    user_peer = await client.get_entity(user_id)
+                except (ValueError, KeyError, PeerIdInvalidError) as resolve_exc:
+                    logger.bind(
+                        group_id=group_id,
+                        user_id=user_id,
+                        resolve_error=str(resolve_exc),
+                    ).warning("agent_invite_retry_get_entity_failed")
+                    try:
+                        user_peer = await client.get_entity(InputUser(user_id, 0))
+                    except Exception as zero_hash_exc:
+                        logger.bind(
+                            group_id=group_id,
+                            user_id=user_id,
+                            resolve_error=str(zero_hash_exc),
+                        ).warning("agent_invite_retry_zero_hash_failed")
+                        raise ValueError(f"cannot resolve user {user_id}: {zero_hash_exc}")
                 logger.bind(
                     group_id=group_id, user_id=user_id
                 ).warning("agent_invite_retry_without_cached_hash")
