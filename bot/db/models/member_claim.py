@@ -6,12 +6,12 @@ from typing import Optional
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,12 +23,12 @@ class MemberClaim(Base):
     """Temporary reservation of a source-group member by a bulk operation.
 
     Ensures workspace-level concurrency: one active claim per
-    (tenant_id, scraped_member_id) combination.
+    (tenant_id, tg_user_id) combination.
     """
 
     __tablename__ = "member_claims"
     __table_args__ = (
-        Index("ix_member_claims_tenant_scraped_member", "tenant_id", "scraped_member_id"),
+        Index("ix_member_claims_tenant_member", "tenant_id", "tg_user_id"),
         Index("ix_member_claims_tenant_scraped_group", "tenant_id", "scraped_group_id"),
         Index("ix_member_claims_agent_id", "agent_id"),
         Index("ix_member_claims_status", "status"),
@@ -36,7 +36,7 @@ class MemberClaim(Base):
         Index(
             "uq_member_claims_active_per_member",
             "tenant_id",
-            "scraped_member_id",
+            "tg_user_id",
             unique=True,
             postgresql_where=text("status = 'active'"),
         ),
@@ -49,9 +49,7 @@ class MemberClaim(Base):
     scraped_group_id: Mapped[int] = mapped_column(
         ForeignKey("scraped_groups.id", ondelete="CASCADE"), nullable=False
     )
-    scraped_member_id: Mapped[int] = mapped_column(
-        ForeignKey("scraped_members.id", ondelete="CASCADE"), nullable=False
-    )
+    tg_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     agent_id: Mapped[int] = mapped_column(
         ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )

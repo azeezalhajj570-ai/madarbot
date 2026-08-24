@@ -1156,10 +1156,12 @@ class ScraperService:
 
     async def _get_existing_admin_roles(self, scraped_group_id: int) -> dict[int, str]:
         result = await self.session.execute(
-            select(ScrapedMember).where(
+            select(ScrapedMember)
+            .where(
                 ScrapedMember.scraped_group_id == scraped_group_id,
                 ScrapedMember.role.in_(["admin", "creator"]),
             )
+            .order_by(ScrapedMember.scraped_at.desc())
         )
         return {int(m.tg_user_id): str(m.role) for m in result.scalars().all()}
 
@@ -1414,9 +1416,18 @@ class ScraperService:
                 .where(
                     ScrapedMember.tg_group_id == canonical_group_id,
                 )
+                .order_by(ScrapedMember.scraped_at.desc())
                 .limit(limit)
             )
             rows = (await self.session.execute(stmt)).scalars().all()
+            seen: set[int] = set()
+            deduped_rows: list[ScrapedMember] = []
+            for m in rows:
+                uid = int(m.tg_user_id)
+                if uid in seen:
+                    continue
+                seen.add(uid)
+                deduped_rows.append(m)
             records = [
                 {
                     "tg_user_id": m.tg_user_id,
@@ -1430,7 +1441,7 @@ class ScraperService:
                     "role": m.role,
                     "joined_date": m.joined_date.isoformat() if m.joined_date else None,
                 }
-                for m in rows
+                for m in deduped_rows
             ]
         elif data_type == "conversations":
             stmt = (
@@ -1530,10 +1541,12 @@ class ScraperService:
             member_rows = (
                 (
                     await self.session.execute(
-                        select(ScrapedMember).where(
+                        select(ScrapedMember)
+                        .where(
                             ScrapedMember.tg_group_id == canonical_group_id,
                             ScrapedMember.tg_user_id.in_(user_ids),
                         )
+                        .order_by(ScrapedMember.scraped_at.desc())
                     )
                 )
                 .scalars()

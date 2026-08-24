@@ -50,16 +50,20 @@ async def bulk_upsert_scraped_members(
     if not rows:
         return
 
-    unique_rows = {(row["tg_group_id"], row["tg_user_id"]): row for row in rows}
-    rows = list(unique_rows.values())
     if scraped_by_agent_id is not None:
         for row in rows:
             row["scraped_by_agent_id"] = scraped_by_agent_id
 
+    unique_rows = {
+        (row["tg_group_id"], row["tg_user_id"], row["scraped_by_agent_id"]): row
+        for row in rows
+    }
+    rows = list(unique_rows.values())
+
     statement = await build_upsert_statement(
         model=ScrapedMember,
         rows=rows,
-        index_elements=["tg_group_id", "tg_user_id"],
+        index_elements=["tg_group_id", "tg_user_id", "scraped_by_agent_id"],
         update_columns=[
             "scraped_group_id",
             "scraped_by_agent_id",

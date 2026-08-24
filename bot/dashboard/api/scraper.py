@@ -530,7 +530,7 @@ async def get_scraped_group(
     await _ensure_scraped_group_access(scraped_group=group, session=session, identity=identity)
 
     members_total, messages_total = await asyncio.gather(
-        session.scalar(select(func.count(ScrapedMember.id)).where(ScrapedMember.scraped_group_id == group.id)),
+        session.scalar(select(func.count(func.distinct(ScrapedMember.tg_user_id))).where(ScrapedMember.scraped_group_id == group.id)),
         session.scalar(select(func.count(ScrapedMessage.id)).where(ScrapedMessage.scraped_group_id == group.id)),
     )
 
@@ -599,9 +599,16 @@ async def get_scraped_members(
 
     offset = (page - 1) * page_size
 
+    # Deduplicate per-agent rows to one row per member (latest insert wins).
+    latest_id = (
+        select(func.max(ScrapedMember.id))
+        .where(ScrapedMember.scraped_group_id == group_id)
+        .group_by(ScrapedMember.tg_user_id)
+        .scalar_subquery()
+    )
     stmt = (
         select(ScrapedMember)
-        .where(ScrapedMember.scraped_group_id == group_id)
+        .where(ScrapedMember.id.in_(latest_id))
         .order_by(ScrapedMember.scraped_at.desc())
         .offset(offset)
         .limit(page_size)
@@ -609,8 +616,8 @@ async def get_scraped_members(
     result = await session.execute(stmt)
     members = result.scalars().all()
 
-    # Get total count
-    count_stmt = select(func.count(ScrapedMember.id)).where(
+    # Get total count (distinct members, not per-agent rows)
+    count_stmt = select(func.count(func.distinct(ScrapedMember.tg_user_id))).where(
         ScrapedMember.scraped_group_id == group_id
     )
     total = int((await session.execute(count_stmt)).scalar_one() or 0)

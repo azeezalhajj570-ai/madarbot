@@ -27,7 +27,7 @@ DEFAULT_CLAIM_TTL_MINUTES = 30
 class ClaimConflict:
     """A member that could not be claimed due to an existing active claim."""
 
-    scraped_member_id: int
+    tg_user_id: int
     claimed_by_agent_id: int
     claimed_by_agent_name: str | None
     expires_at: datetime
@@ -37,7 +37,7 @@ class ClaimConflict:
 class ClaimResult:
     """Result of a bulk claim operation."""
 
-    claimed: list[int]  # successfully claimed member IDs
+    claimed: list[int]  # successfully claimed tg_user_ids
     conflicts: list[ClaimConflict]  # members already claimed by another agent
 
 
@@ -46,7 +46,7 @@ class ActiveClaimInfo:
     """Information about an active claim for display."""
 
     claim_id: int
-    scraped_member_id: int
+    tg_user_id: int
     agent_id: int
     agent_name: str | None
     status: str
@@ -61,18 +61,18 @@ async def claim_members(
     tenant_id: int,
     agent_id: int,
     scraped_group_id: int,
-    member_ids: Sequence[int],
+    tg_user_ids: Sequence[int],
     agent_job_id: int | None = None,
     ttl_minutes: int = DEFAULT_CLAIM_TTL_MINUTES,
 ) -> ClaimResult:
     """Atomically claim members for a bulk operation.
 
     Uses INSERT ... ON CONFLICT DO NOTHING with the partial unique index
-    to guarantee one active claim per (tenant, member) at the database level.
+    to guarantee one active claim per (tenant, tg_user_id) at the database level.
 
     Returns ClaimResult with successfully claimed members and conflicts.
     """
-    if not member_ids:
+    if not tg_user_ids:
         return ClaimResult(claimed=[], conflicts=[])
 
     now = datetime.now(timezone.utc)
@@ -83,7 +83,7 @@ async def claim_members(
         {
             "tenant_id": tenant_id,
             "scraped_group_id": scraped_group_id,
-            "scraped_member_id": member_id,
+            "tg_user_id": tg_user_id,
             "agent_id": agent_id,
             "agent_job_id": agent_job_id,
             "status": "active",
@@ -92,16 +92,16 @@ async def claim_members(
             "created_at": now,
             "updated_at": now,
         }
-        for member_id in member_ids
+        for tg_user_id in tg_user_ids
     ]
 
     # Atomic bulk insert with conflict detection
     stmt = pg_insert(MemberClaim).values(rows)
     stmt = stmt.on_conflict_do_nothing(
-        index_elements=["tenant_id", "scraped_member_id"],
+        index_elements=["tenant_id", "tg_user_id"],
         index_where=text("status = 'active'"),
     )
-    stmt = stmt.returning(MemberClaim.scraped_member_id)
+    stmt = stmt.returning(MemberClaim.tg_user_id)
 
     result = await session.execute(stmt)
     claimed_ids = [row[0] for row in result.fetchall()]
@@ -109,17 +109,17 @@ async def claim_members(
 
     # Find conflicts: members that were not claimed
     claimed_set = set(claimed_ids)
-    conflict_member_ids = [m for m in member_ids if m not in claimed_set]
+    conflict_tg_user_ids = [m for m in tg_user_ids if m not in claimed_set]
 
     conflicts: list[ClaimConflict] = []
-    if conflict_member_ids:
+    if conflict_tg_user_ids:
         # Fetch conflict details from existing active claims
         conflict_stmt = (
             select(MemberClaim)
             .where(
                 and_(
                     MemberClaim.tenant_id == tenant_id,
-                    MemberClaim.scraped_member_id.in_(conflict_member_ids),
+                    MemberClaim.tg_user_id.in_(conflict_tg_user_ids),
                     MemberClaim.status == "active",
                 )
             )
@@ -130,7 +130,7 @@ async def claim_members(
         for claim in existing_claims:
             conflicts.append(
                 ClaimConflict(
-                    scraped_member_id=claim.scraped_member_id,
+                    tg_user_id=claim.tg_user_id,
                     claimed_by_agent_id=claim.agent_id,
                     claimed_by_agent_name=None,  # resolved later if needed
                     expires_at=claim.expires_at,
@@ -142,7 +142,7 @@ async def claim_members(
         tenant_id=tenant_id,
         agent_id=agent_id,
         scraped_group_id=scraped_group_id,
-        requested=len(member_ids),
+        requested=len(tg_user_ids),
         claimed=len(claimed_ids),
         conflicts=len(conflicts),
     )
@@ -288,7 +288,7 @@ async def get_active_claims_for_group(
     return [
         ActiveClaimInfo(
             claim_id=claim.id,
-            scraped_member_id=claim.scraped_member_id,
+            tg_user_id=claim.tg_user_id,
             agent_id=claim.agent_id,
             agent_name=None,  # resolved by caller if needed
             status=claim.status,
@@ -304,14 +304,14 @@ async def get_claim_status_for_members(
     session: AsyncSession,
     *,
     tenant_id: int,
-    member_ids: Sequence[int],
+    tg_user_ids: Sequence[int],
     current_agent_id: int | None = None,
 ) -> dict[int, ActiveClaimInfo | None]:
     """Get claim status for a list of members.
 
-    Returns a dict mapping member_id -> ActiveClaimInfo (or None if unclaimed).
+    Returns a dict mapping tg_user_id -> ActiveClaimInfo (or None if unclaimed).
     """
-    if not member_ids:
+    if not tg_user_ids:
         return {}
 
     stmt = (
@@ -319,7 +319,7 @@ async def get_claim_status_for_members(
         .where(
             and_(
                 MemberClaim.tenant_id == tenant_id,
-                MemberClaim.scraped_member_id.in_(member_ids),
+                MemberClaim.tg_user_id.in_(tg_user_ids),
                 MemberClaim.status == "active",
             )
         )
@@ -327,12 +327,12 @@ async def get_claim_status_for_members(
     result = await session.execute(stmt)
     claims = result.scalars().all()
 
-    # Build lookup: member_id -> claim
+    # Build lookup: tg_user_id -> claim
     claim_map: dict[int, ActiveClaimInfo] = {}
     for claim in claims:
-        claim_map[claim.scraped_member_id] = ActiveClaimInfo(
+        claim_map[claim.tg_user_id] = ActiveClaimInfo(
             claim_id=claim.id,
-            scraped_member_id=claim.scraped_member_id,
+            tg_user_id=claim.tg_user_id,
             agent_id=claim.agent_id,
             agent_name=None,
             status=claim.status,
@@ -343,7 +343,7 @@ async def get_claim_status_for_members(
 
     # Return results for all requested members
     return {
-        mid: claim_map.get(mid) for mid in member_ids
+        mid: claim_map.get(mid) for mid in tg_user_ids
     }
 
 

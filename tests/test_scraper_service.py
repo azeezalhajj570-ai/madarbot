@@ -29,7 +29,8 @@ async def test_scraper_bulk_upserts_replace_existing_rows_without_duplicates(db_
                 role="member",
                 raw_data={"source": "initial"},
             )
-        ]
+        ],
+        scraped_by_agent_id=1,
     )
     await service._bulk_upsert_scraped_members(
         [
@@ -43,7 +44,8 @@ async def test_scraper_bulk_upserts_replace_existing_rows_without_duplicates(db_
                 role="admin",
                 raw_data={"source": "updated"},
             )
-        ]
+        ],
+        scraped_by_agent_id=1,
     )
 
     await service._bulk_upsert_scraped_messages(
