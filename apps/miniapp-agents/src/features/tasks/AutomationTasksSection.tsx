@@ -35,14 +35,6 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
   executor_types: ['agent'],
 }
 
-// Add-attempt terminal error codes recorded on a member that should never be
-// re-offered in the bulk-add member list. Mirrors the backend codes in
-// bot/agents/group_membership.py (ERROR_VERIFICATION_FAILED / ERROR_UNKNOWN),
-// surfaced to the miniapp as the member's processing_error.
-function isTerminalAddError(m: { processing_error?: string | null }): boolean {
-  return m.processing_error === 'VERIFICATION_FAILED' || m.processing_error === 'UNKNOWN'
-}
-
 // Compact status icon rendered as an inline SVG. `title` gives the row a
 // tooltip so the icon remains self-explanatory without a separate label.
 function StatusIcon({ kind, color, title }: { kind: 'check' | 'error' | 'clock' | 'mail' | 'lock' | 'selected' | 'shield' | 'bot'; color: string; title: string }) {
@@ -558,7 +550,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !isTerminalAddError(m) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
+                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !m.claim && !m.invitation_status && !m.processed && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
                         <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
                       </div>
                     </div>
