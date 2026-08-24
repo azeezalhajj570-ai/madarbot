@@ -1573,6 +1573,36 @@ async def webapp_agent_analytics(
         )
     ).scalar_one()
 
+    # Today's member-add activity: count direct-add successes and invite-link
+    # sends from member_add jobs started today.
+    from datetime import datetime, time, timezone
+
+    today_start = datetime.combine(
+        datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc
+    )
+    today_jobs = (
+        (
+            await session.execute(
+                select(AgentJob.job_payload).where(
+                    AgentJob.agent_id == agent.id,
+                    AgentJob.job_type == "member_add",
+                    AgentJob.created_at >= today_start,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    members_added_today = 0
+    invites_sent_today = 0
+    for job_payload in (j for j in today_jobs if j):
+        progress = dict(job_payload.get("progress") or {})
+        for r in progress.get("results", []):
+            if r.get("status") == "success":
+                members_added_today += 1
+            elif r.get("status") == "invite_link_sent":
+                invites_sent_today += 1
+
     return {
         "agent": serialize_agent(agent),
         "leads": lead_stats,
@@ -1583,6 +1613,10 @@ async def webapp_agent_analytics(
             "queued": queued_jobs,
             "running": running_jobs,
             "pending": total_jobs - completed_jobs - failed_jobs - queued_jobs - running_jobs,
+        },
+        "today": {
+            "members_added": members_added_today,
+            "invites_sent": invites_sent_today,
         },
         "notifications": {
             "unseen": unseen_notifications,

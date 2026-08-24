@@ -3142,7 +3142,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {t('tasks.retry')}
                             </button>
                           ) : null}
-                          {(isCompleted || isRunning || isQueued) && job.id ? (
+                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued) && job.id ? (
                             <button type="button" onClick={() => { setMenuJobId(null); setLogsJobId(job.id) }}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
@@ -3152,7 +3152,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {isRunning || isQueued ? t('tasks.viewProgress') : t('tasks.viewLogs')}
                             </button>
                           ) : null}
-                          {(isCompleted || isRunning || isQueued) && job.id ? (
+                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued) && job.id ? (
                             <button
                               type="button"
                               disabled={exportingJobId !== null && exportingJobId !== job.id}
@@ -3449,6 +3449,14 @@ function AccountAnalyticsPage({ account }: { account: Agent }) {
           <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: a?.notifications?.unseen ? 'var(--miniapp-coral)' : 'var(--miniapp-sage)' }}>{a?.notifications?.unseen ?? 0}</div>
             <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.unseenAlerts')}</div>
+          </div>
+          <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#36664e' }}>{a?.today?.members_added ?? 0}</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.membersAddedToday')}</div>
+          </div>
+          <div style={{ padding: 16, background: 'var(--miniapp-bg)', borderRadius: 14, textAlign: 'center' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#475977' }}>{a?.today?.invites_sent ?? 0}</div>
+            <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('analytics.invitesSentToday')}</div>
           </div>
         </div>
       </div>

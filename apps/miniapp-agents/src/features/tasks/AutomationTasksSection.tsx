@@ -230,6 +230,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   const [bulkSendInvite, setBulkSendInvite] = useState(false)
   const [bulkCustomMessage, setBulkCustomMessage] = useState('')
   const [bulkExcludeAdminsBots, setBulkExcludeAdminsBots] = useState(true)
+  const [bulkStatusFilter, setBulkStatusFilter] = useState('all')
   const [bulkSearching, setBulkSearching] = useState(false)
   const [bulkLoadingTarget, setBulkLoadingTarget] = useState(false)
 
@@ -592,6 +593,24 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
                       <div style={{ display: 'flex', gap: 6 }}>
+                        <select
+                          value={bulkStatusFilter}
+                          onChange={(e) => setBulkStatusFilter(e.target.value)}
+                          aria-label={t('automation.filterStatus')}
+                          style={{
+                            fontSize: 11, padding: '3px 6px', borderRadius: 8,
+                            border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)',
+                            color: 'var(--miniapp-text-primary)', fontFamily: 'inherit',
+                          }}
+                        >
+                          <option value="all">{t('automation.filterAll')}</option>
+                          <option value="privacy_restricted">{t('automation.filterPrivacyRestricted')}</option>
+                          <option value="claimed">{t('automation.filterClaimed')}</option>
+                          <option value="added">{t('automation.filterAdded')}</option>
+                          <option value="invited">{t('automation.filterInvited')}</option>
+                          <option value="processed">{t('automation.filterProcessed')}</option>
+                          <option value="available">{t('automation.filterAvailable')}</option>
+                        </select>
                         <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !m.claim && !m.invitation_status && !m.processed && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
                         <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
                       </div>
@@ -610,7 +629,30 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8 }}>
                       {bulkSearching ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.searching')}</div> : null}
                       {!bulkSearching && bulkMembers.length === 0 ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
-                      {bulkMembers.filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin')).map((m) => {
+                      {bulkMembers
+                        .filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin'))
+                        .filter((m) => {
+                          if (bulkStatusFilter === 'all') return true
+                          const inTarget = bulkTargetMemberIds.has(m.user_id)
+                          const persistedAdded = !!m.already_added
+                          const processed = !!m.processed
+                          const claim = m.claim
+                          const heldByOther = !!(claim && !claim.is_own)
+                          const heldBySelf = !!(claim && claim.is_own)
+                          const invited = !!m.invitation_status
+                          const inRunningJob = bulkHeldMemberIds.has(m.user_id)
+                          const isPrivacyRestricted = m.role === 'restricted'
+                          switch (bulkStatusFilter) {
+                            case 'privacy_restricted': return isPrivacyRestricted
+                            case 'claimed': return heldByOther || heldBySelf || inRunningJob
+                            case 'added': return inTarget || persistedAdded
+                            case 'invited': return invited
+                            case 'processed': return processed
+                            case 'available': return !inTarget && !persistedAdded && !processed && !heldByOther && !invited && !inRunningJob && !isPrivacyRestricted
+                            default: return true
+                          }
+                        })
+                        .map((m) => {
                         const inTarget = bulkTargetMemberIds.has(m.user_id)
                         const persistedAdded = !!m.already_added
                         const processed = !!m.processed

@@ -600,6 +600,10 @@ export interface AgentAnalytics {
     failed: number
     pending: number
   }
+  today: {
+    members_added: number
+    invites_sent: number
+  }
   notifications: {
     unseen: number
   }
