@@ -641,7 +641,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                           const heldBySelf = !!(claim && claim.is_own)
                           const invited = !!m.invitation_status
                           const inRunningJob = bulkHeldMemberIds.has(m.user_id)
-                          const isPrivacyRestricted = m.role === 'restricted'
+                          const isPrivacyRestricted = !!m.privacy_restricted
                           switch (bulkStatusFilter) {
                             case 'privacy_restricted': return isPrivacyRestricted
                             case 'claimed': return heldByOther || heldBySelf || inRunningJob
@@ -681,6 +681,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                               {heldBySelf ? <StatusIcon kind="selected" color="var(--miniapp-coral)" title={t('automation.selectedByYou')} /> : null}
                               {m.role === 'admin' || m.role === 'creator' ? <StatusIcon kind="shield" color="var(--miniapp-clay)" title={m.role} /> : null}
                               {m.is_bot ? <StatusIcon kind="bot" color="var(--miniapp-text-muted)" title={t('campaigns.bot')} /> : null}
+                              {m.privacy_restricted ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.privacyRestricted')} /> : null}
                             </div>
                           </label>
                         )

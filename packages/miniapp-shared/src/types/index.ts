@@ -294,6 +294,7 @@ export interface AgentGroupMember {
   already_added?: boolean
   processed?: boolean
   processing_error?: string | null
+  privacy_restricted?: boolean
 }
 
 export interface AgentGroupMembersPage {
