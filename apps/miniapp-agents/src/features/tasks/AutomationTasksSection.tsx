@@ -35,6 +35,35 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
   executor_types: ['agent'],
 }
 
+// Add-attempt terminal error codes recorded on a member that should never be
+// re-offered in the bulk-add member list. Mirrors the backend codes in
+// bot/agents/group_membership.py (ERROR_VERIFICATION_FAILED / ERROR_UNKNOWN),
+// surfaced to the miniapp as the member's processing_error.
+function isTerminalAddError(m: { processing_error?: string | null }): boolean {
+  return m.processing_error === 'VERIFICATION_FAILED' || m.processing_error === 'UNKNOWN'
+}
+
+// Compact status icon rendered as an inline SVG. `title` gives the row a
+// tooltip so the icon remains self-explanatory without a separate label.
+function StatusIcon({ kind, color, title }: { kind: 'check' | 'error' | 'clock' | 'mail' | 'lock' | 'selected' | 'shield' | 'bot'; color: string; title: string }) {
+  const paths: Record<string, string> = {
+    check: 'M5 12l4 4L19 6',
+    error: 'M12 8v4m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z',
+    clock: 'M12 6v6l4 2M12 22a10 10 0 100-20 10 10 0 000 20z',
+    mail: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm18 0l-9 6-9-6',
+    lock: 'M5 11h14v9H5v-9zm3 0V7a4 4 0 018 0v4',
+    selected: 'M9 12l2 2 4-4m1 11H6a2 2 0 01-2-2V7a2 2 0 012-2h3m4 0h3a2 2 0 012 2v9',
+    shield: 'M12 3l7 3v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6l7-3z',
+    bot: 'M12 8a3 3 0 100 6 3 3 0 000-6zm-7 3h2m10 0h2M12 2v2',
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-label={title}>
+      <title>{title}</title>
+      <path d={paths[kind]} />
+    </svg>
+  )
+}
+
 // Map task keys to i18n labels so catalog titles and descriptions
 // render in the active language regardless of what the backend returns.
 const TASK_LABEL_KEYS: Record<string, { title: string; description: string }> = {
@@ -520,8 +549,8 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   loading={bulkTargetGroupsLoading}
                   mode="single"
                   selectedGroup={bulkTargetGroup}
-                  onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery('') }}
-                  onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery('') }}
+                  onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery(''); setBulkMemberPage(1); setBulkSelectedMembers([]) }}
+                  onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery(''); setBulkMemberPage(1); setBulkSelectedMembers([]) }}
                   t={t}
                 />
                 {bulkSourceGroup?.tg_group_id ? (
@@ -529,7 +558,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
+                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !isTerminalAddError(m) && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
                         <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
                       </div>
                     </div>
@@ -567,14 +596,16 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--miniapp-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `User ${m.user_id}`}</div>
                               {m.username ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>@{m.username}</div> : null}
                             </div>
-                            {inTarget || persistedAdded ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')}</span> : null}
-                            {processed && !inTarget && !persistedAdded ? <span style={{ fontSize: 10, color: m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)', fontWeight: 600 }}>{m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')}</span> : null}
-                            {inRunningJob ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.inRunningJob')}</span> : null}
-                            {invited && !joinedViaInvite ? <span style={{ fontSize: 10, color: invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)', fontWeight: 600 }}>{invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')}</span> : null}
-                            {heldByOther ? <span style={{ fontSize: 10, color: '#e67e22', fontWeight: 600 }}>{t('automation.heldByOther')}</span> : null}
-                            {heldBySelf ? <span style={{ fontSize: 10, color: 'var(--miniapp-coral)', fontWeight: 600 }}>{t('automation.selectedByYou')}</span> : null}
-                            {m.role === 'admin' || m.role === 'creator' ? <span style={{ fontSize: 10, color: 'var(--miniapp-clay)', fontWeight: 600 }}>{m.role}</span> : null}
-                            {m.is_bot ? <span style={{ fontSize: 10, color: 'var(--miniapp-text-muted)', fontWeight: 600 }}>{t('campaigns.bot')}</span> : null}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                              {inTarget || persistedAdded ? <StatusIcon kind="check" color="var(--miniapp-coral)" title={joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')} /> : null}
+                              {processed && !inTarget && !persistedAdded ? <StatusIcon kind="error" color={m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)'} title={m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')} /> : null}
+                              {inRunningJob ? <StatusIcon kind="clock" color="#e67e22" title={t('automation.inRunningJob')} /> : null}
+                              {invited && !joinedViaInvite ? <StatusIcon kind="mail" color={invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)'} title={invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')} /> : null}
+                              {heldByOther ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.heldByOther')} /> : null}
+                              {heldBySelf ? <StatusIcon kind="selected" color="var(--miniapp-coral)" title={t('automation.selectedByYou')} /> : null}
+                              {m.role === 'admin' || m.role === 'creator' ? <StatusIcon kind="shield" color="var(--miniapp-clay)" title={m.role} /> : null}
+                              {m.is_bot ? <StatusIcon kind="bot" color="var(--miniapp-text-muted)" title={t('campaigns.bot')} /> : null}
+                            </div>
                           </label>
                         )
                       })}
