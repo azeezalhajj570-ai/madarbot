@@ -51,6 +51,7 @@ dump.rdb
 
 # Local state
 .local/
+.commandcode/
 
 # OS
 .DS_Store
