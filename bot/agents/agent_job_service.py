@@ -319,6 +319,7 @@ class AgentJobService(AgentServiceSupport):
                     ScrapedMember.is_bot,
                     ScrapedMember.phone,
                     ScrapedMember.username,
+                    ScrapedMember.scraped_by_agent_id,
                 ).where(
                     ScrapedMember.tg_group_id == source_group_id,
                     ScrapedMember.tg_user_id.in_(selected_user_ids),
@@ -329,6 +330,7 @@ class AgentJobService(AgentServiceSupport):
         member_map: dict[int, dict[str, Any]] = {}
         phones: list[str] = []
         usernames: list[str] = []
+        not_scraped_by_agent: set[int] = set()
         for row in members_data:
             member_map[int(row.tg_user_id)] = {
                 "role": row.role or "member",
@@ -336,6 +338,10 @@ class AgentJobService(AgentServiceSupport):
                 "phone": row.phone,
                 "username": row.username,
             }
+            # Members whose entity data was captured by a different agent in the
+            # workspace cannot be resolved/added by this agent's session.
+            if row.scraped_by_agent_id is not None and int(row.scraped_by_agent_id) != agent.id:
+                not_scraped_by_agent.add(int(row.tg_user_id))
             if row.phone:
                 normalized = row.phone.strip()
                 if normalized not in phones:
@@ -425,6 +431,7 @@ class AgentJobService(AgentServiceSupport):
         excluded.update(bots)
         excluded.update(already_sent_set)
         excluded.update(blacklisted_set)
+        excluded.update(not_scraped_by_agent)
         filtered = [uid for uid in selected_user_ids if uid not in excluded]
 
         return {

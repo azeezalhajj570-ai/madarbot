@@ -277,10 +277,10 @@ class ScraperService:
                     admin_roles[int(admin_user_id)] = role
                     member_batch.append(admin_row)
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
-                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
                         member_batch = []
                 if member_batch:
-                    await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                    await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
                     member_batch = []
                 logger.info(
                     "admins_fetched_first",
@@ -319,7 +319,7 @@ class ScraperService:
                     member_batch.append(row)
 
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
-                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
                         member_batch = []
                     success_count += 1
                 except Exception as exc:
@@ -332,7 +332,7 @@ class ScraperService:
                     )
 
             if member_batch:
-                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
 
             if success_count > (scraped_group.member_count or 0):
                 scraped_group.member_count = success_count
@@ -501,7 +501,7 @@ class ScraperService:
                             limit=limit,
                         )
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
-                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
                         member_batch = []
                     success_count += 1
                 except Exception as exc:
@@ -523,7 +523,7 @@ class ScraperService:
                     message_rows=message_batch,
                 )
             if member_batch:
-                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
 
             await self.session.commit()
             return {
@@ -848,7 +848,7 @@ class ScraperService:
                         )
                         message_batch = []
                     if len(member_batch) >= self._MEMBER_BATCH_SIZE:
-                        await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                        await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
                         member_batch = []
 
                 if reached_end:
@@ -892,7 +892,7 @@ class ScraperService:
                     }
                 )
             if member_batch:
-                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
 
             checkpoint_state = dict(scraped_group.scrape_state or {})
             checkpoint_state["messages"] = {
@@ -1229,8 +1229,12 @@ class ScraperService:
             raw_data=raw_data,
         )
 
-    async def _bulk_upsert_scraped_members(self, rows: list[dict[str, Any]]) -> None:
-        await bulk_upsert.bulk_upsert_scraped_members(rows, self.session)
+    async def _bulk_upsert_scraped_members(
+        self, rows: list[dict[str, Any]], *, scraped_by_agent_id: int
+    ) -> None:
+        await bulk_upsert.bulk_upsert_scraped_members(
+            rows, self.session, scraped_by_agent_id=scraped_by_agent_id
+        )
 
     async def _bulk_upsert_scraped_messages(self, rows: list[dict[str, Any]]) -> None:
         await bulk_upsert.bulk_upsert_scraped_messages(rows, self.session)

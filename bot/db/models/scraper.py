@@ -96,6 +96,9 @@ class ScrapedMember(Base):
     )
     tg_group_id: Mapped[int] = mapped_column(BigInteger)
     tg_user_id: Mapped[int] = mapped_column(BigInteger)
+    scraped_by_agent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True
+    )  # agent whose session captured this member's entity data
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
