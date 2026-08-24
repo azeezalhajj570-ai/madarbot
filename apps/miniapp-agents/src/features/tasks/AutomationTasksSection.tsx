@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -37,9 +37,8 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
 }
 
 // Compact status icon with a hover tooltip. The tooltip is rendered through a
-// portal to document.body at a fixed position derived from the icon's bounding
-// rect, so it is never clipped by the member-list scroll container. It flips
-// above/below the icon depending on how much viewport space is available.
+// portal to document.body and centered on the screen, so it is never clipped by
+// the member-list scroll container.
 function StatusIcon({ kind, color, title, detail }: { kind: 'check' | 'error' | 'clock' | 'mail' | 'lock' | 'selected' | 'shield' | 'bot'; color: string; title: string; detail?: string }) {
   const paths: Record<string, string> = {
     check: 'M5 12l4 4L19 6',
@@ -51,54 +50,43 @@ function StatusIcon({ kind, color, title, detail }: { kind: 'check' | 'error' | 
     shield: 'M12 3l7 3v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6l7-3z',
     bot: 'M12 8a3 3 0 100 6 3 3 0 000-6zm-7 3h2m10 0h2M12 2v2',
   }
-  const ref = useRef<HTMLSpanElement>(null)
-  const [tip, setTip] = useState<{ x: number; y: number; above: boolean } | null>(null)
+  const [open, setOpen] = useState(false)
 
   return (
     <>
       <span
-        ref={ref}
         style={{ display: 'inline-flex', flexShrink: 0, cursor: 'help' }}
         aria-label={title}
         role="img"
-        onMouseEnter={() => {
-          const el = ref.current
-          if (!el) return
-          const rect = el.getBoundingClientRect()
-          const above = rect.top > 70
-          setTip({
-            x: rect.right,
-            y: above ? rect.top - 6 : rect.bottom + 6,
-            above,
-          })
-        }}
-        onMouseLeave={() => setTip(null)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
           <path d={paths[kind]} />
         </svg>
       </span>
-      {tip ? createPortal(
+      {open ? createPortal(
         <span
           className="mb-tip"
           role="tooltip"
           style={{
             position: 'fixed',
-            left: tip.x,
-            top: tip.y,
-            transform: tip.above ? 'translate(-100%, -100%)' : 'translate(calc(-100% - 8px), 0)',
-            minWidth: 170,
-            maxWidth: 240,
-            padding: '7px 9px',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            minWidth: 220,
+            maxWidth: 'min(320px, calc(100vw - 32px))',
+            padding: '10px 14px',
             background: 'var(--miniapp-surface)',
             border: '1px solid var(--miniapp-border)',
             borderRadius: 8,
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.16)',
-            fontSize: 11,
-            lineHeight: 1.4,
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
+            fontSize: 12,
+            lineHeight: 1.5,
             color: 'var(--miniapp-text-primary)',
             zIndex: 1000,
             pointerEvents: 'none',
+            textAlign: 'center',
           }}
         >
           <span style={{ fontWeight: 600 }}>{title}</span>
