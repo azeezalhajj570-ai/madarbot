@@ -590,6 +590,25 @@ class ScraperService:
             sender_raw_data,
         )
 
+    def _build_checkpoint_state(
+        self,
+        *,
+        scraped_group: Any,
+        agent_id: int,
+        messages_checkpoint: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Store a per-agent message checkpoint in the group's scrape_state.
+
+        Each agent's progress lives under "agents": {"<agent_id>": {"messages":
+        {...}}} so agents in the same workspace can scrape the same group
+        independently without overwriting each other's resume boundary.
+        """
+        state = dict(scraped_group.scrape_state or {})
+        agents = dict(state.get("agents") or {})
+        agents[str(agent_id)] = {"messages": messages_checkpoint}
+        state["agents"] = agents
+        return state
+
     async def _update_scrape_progress(self, job_id: int | None, **kwargs: Any) -> None:
         if job_id is None:
             return
@@ -679,13 +698,36 @@ class ScraperService:
             history_pause_seconds = max(0.0, float(settings.scraper_history_pause_seconds))
             flood_wait_cap_seconds = max(1, int(settings.scraper_flood_wait_cap_seconds))
 
-            ck = (scraped_group.scrape_state or {}).get("messages", {})
+            # Per-agent checkpoints: each agent tracks its own scrape progress
+            # so a second agent in the same workspace can scrape the group
+            # independently and see the full history. An agent without its own
+            # checkpoint starts fresh (full scrape) and writes one at the end.
+            #
+            # Migration: groups scraped before this change stored a single
+            # global "messages" checkpoint that actually belonged to the group's
+            # last_agent. Inherit that as that agent's starting checkpoint so it
+            # resumes incrementally instead of re-scraping, while other agents
+            # start fresh.
+            scrape_state = dict(scraped_group.scrape_state or {})
+            agents_state = scrape_state.get("agents") or {}
+            agent_ck = agents_state.get(str(agent_id))
+            migrated_legacy = False
+            if agent_ck is None and not agents_state:
+                legacy_messages = scrape_state.get("messages")
+                if (
+                    isinstance(legacy_messages, dict)
+                    and scraped_group.last_agent_id is not None
+                    and int(scraped_group.last_agent_id) == int(agent_id)
+                ):
+                    agent_ck = {"messages": legacy_messages}
+                    migrated_legacy = True
+            ck = (agent_ck or {}).get("messages", {})
             last_scraped_id = ck.get("last_scraped_message_id", 0)
-            # A stale/corrupted checkpoint (e.g. written by the old code that
-            # stored the down-walk offset, ending at 1) can be lower than what
-            # is already in the DB. Trust the DB max so we do not re-scrape
-            # history we already have.
-            if last_scraped_id:
+            # The legacy global checkpoint could hold a stale down-walk offset
+            # (ending at 1) written by the pre-#240 code. Clamp it to the DB max
+            # so the migrated agent does not re-scrape history it already has.
+            # An agent's own per-agent checkpoint is authoritative and untouched.
+            if last_scraped_id and migrated_legacy:
                 db_max = await self.session.execute(
                     select(func.max(ScrapedMessage.message_id)).where(
                         ScrapedMessage.scraped_group_id == scraped_group.id
@@ -860,14 +902,17 @@ class ScraperService:
                     await asyncio.sleep(history_pause_seconds)
 
                 if success_count - last_checkpoint >= self._CHECKPOINT_EVERY:
-                    checkpoint_state = dict(scraped_group.scrape_state or {})
-                    checkpoint_state["messages"] = {
-                        "last_scraped_message_id": max_seen_id or offset_id,
-                        "total_success": total_success + success_count,
-                        "total_errors": total_errors + error_count,
-                        "batches_completed": batches_completed + batch_count,
-                        "last_batch_at": datetime.utcnow().isoformat(),
-                    }
+                    checkpoint_state = self._build_checkpoint_state(
+                        scraped_group=scraped_group,
+                        agent_id=agent_id,
+                        messages_checkpoint={
+                            "last_scraped_message_id": max_seen_id or offset_id,
+                            "total_success": total_success + success_count,
+                            "total_errors": total_errors + error_count,
+                            "batches_completed": batches_completed + batch_count,
+                            "last_batch_at": datetime.utcnow().isoformat(),
+                        },
+                    )
                     scraped_group.scrape_state = checkpoint_state
                     scraped_group.updated_at = datetime.utcnow()
                     await self.session.commit()
@@ -894,14 +939,17 @@ class ScraperService:
             if member_batch:
                 await self._bulk_upsert_scraped_members(member_batch, scraped_by_agent_id=agent_id)
 
-            checkpoint_state = dict(scraped_group.scrape_state or {})
-            checkpoint_state["messages"] = {
-                "last_scraped_message_id": max_seen_id or offset_id,
-                "total_success": total_success + success_count,
-                "total_errors": total_errors + error_count,
-                "batches_completed": batches_completed + batch_count,
-                "last_batch_at": datetime.utcnow().isoformat(),
-            }
+            checkpoint_state = self._build_checkpoint_state(
+                scraped_group=scraped_group,
+                agent_id=agent_id,
+                messages_checkpoint={
+                    "last_scraped_message_id": max_seen_id or offset_id,
+                    "total_success": total_success + success_count,
+                    "total_errors": total_errors + error_count,
+                    "batches_completed": batches_completed + batch_count,
+                    "last_batch_at": datetime.utcnow().isoformat(),
+                },
+            )
             scraped_group.scrape_state = checkpoint_state
             scraped_group.updated_at = datetime.utcnow()
             await self.session.commit()
