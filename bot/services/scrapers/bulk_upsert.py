@@ -41,12 +41,20 @@ async def build_upsert_statement(
     )
 
 
-async def bulk_upsert_scraped_members(rows: list[dict[str, Any]], session: AsyncSession) -> None:
+async def bulk_upsert_scraped_members(
+    rows: list[dict[str, Any]],
+    session: AsyncSession,
+    *,
+    scraped_by_agent_id: int | None = None,
+) -> None:
     if not rows:
         return
 
     unique_rows = {(row["tg_group_id"], row["tg_user_id"]): row for row in rows}
     rows = list(unique_rows.values())
+    if scraped_by_agent_id is not None:
+        for row in rows:
+            row["scraped_by_agent_id"] = scraped_by_agent_id
 
     statement = await build_upsert_statement(
         model=ScrapedMember,
@@ -54,6 +62,7 @@ async def bulk_upsert_scraped_members(rows: list[dict[str, Any]], session: Async
         index_elements=["tg_group_id", "tg_user_id"],
         update_columns=[
             "scraped_group_id",
+            "scraped_by_agent_id",
             "username",
             "first_name",
             "last_name",

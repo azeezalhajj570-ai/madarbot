@@ -441,6 +441,15 @@ class AccountGroupMembershipService(AgentServiceSupport):
             if scraped_group is not None
             else (ScrapedMember.tg_group_id == canonical_id)
         ]
+        # Only offer members whose entity data (access_hash) was captured by the
+        # current agent's own session — otherwise the add cannot resolve them.
+        # Legacy rows scraped before agent attribution (NULL) are still offered.
+        filters.append(
+            or_(
+                ScrapedMember.scraped_by_agent_id == agent.id,
+                ScrapedMember.scraped_by_agent_id.is_(None),
+            )
+        )
         if exclude_bots:
             filters.append(ScrapedMember.is_bot.is_(False))
         if exclude_admins:
@@ -1104,7 +1113,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
 
             all_rows = admin_rows + bot_rows
             if all_rows:
-                await bulk_upsert.bulk_upsert_scraped_members(all_rows, self.session)
+                await bulk_upsert.bulk_upsert_scraped_members(
+                    all_rows, self.session, scraped_by_agent_id=agent.id
+                )
                 await self.session.commit()
 
             await AgentNotificationService(self.session).create_notification(
@@ -1192,11 +1203,15 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 total_count += 1
 
                 if len(member_batch) >= 1800:
-                    await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                    await bulk_upsert.bulk_upsert_scraped_members(
+                        member_batch, self.session, scraped_by_agent_id=agent.id
+                    )
                     member_batch = []
 
             if member_batch:
-                await bulk_upsert.bulk_upsert_scraped_members(member_batch, self.session)
+                await bulk_upsert.bulk_upsert_scraped_members(
+                    member_batch, self.session, scraped_by_agent_id=agent.id
+                )
             await self.session.commit()
 
             return {"user_ids": user_ids, "total": total_count}
