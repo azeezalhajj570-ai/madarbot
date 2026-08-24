@@ -1474,8 +1474,11 @@ class BulkAddMembersRuntime:
                                     except Exception:
                                         await session.rollback()
                         else:
-                            # Invite link disabled, record as plain failure
+                            # Invite link disabled, record as plain failure.
+                            # Terminal per-member error (e.g. UNKNOWN) — do not
+                            # apply the normal interval before the next member.
                             failure_count += 1
+                            skip_interval_wait = True
                             if session is not None:
                                 session.add(MembershipAuditLog(
                                     group_id=target_tg_group_id,
