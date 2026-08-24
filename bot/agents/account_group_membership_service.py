@@ -700,6 +700,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         # These were offered in a bulk add job already, so they should not be
         # re-offered in the member list.
         processed_direct_add: dict[int, str | None] = {}  # tg_user_id -> failure_reason
+        privacy_restricted: set[int] = set()  # tg_user_ids that hit USER_PRIVACY_RESTRICTED
         if user_ids and target_tg_group_id:
             da_rows = (
                 await self.session.execute(
@@ -712,6 +713,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
             ).all()
             for row in da_rows:
                 processed_direct_add[int(row[0])] = row[1]
+                if row[1] == "USER_PRIVACY_RESTRICTED":
+                    privacy_restricted.add(int(row[0]))
 
         # Members already present in the target group. This is workspace-independent:
         # a member added by any agent (directly or via invite join) is a member of the group.
@@ -763,6 +766,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 "already_added": tg_uid in already_added,
                 "processed": tg_uid in processed_direct_add,
                 "processing_error": processed_direct_add.get(tg_uid),
+                "privacy_restricted": tg_uid in privacy_restricted,
             }
 
         return {
