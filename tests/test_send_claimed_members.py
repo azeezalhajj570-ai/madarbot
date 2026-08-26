@@ -37,6 +37,19 @@ def test_normalize_send_to_claimed_members_payload_requires_source_group() -> No
         )
 
 
+def test_normalize_send_to_claimed_members_payload_accepts_source_tg_group_id() -> None:
+    # The miniapp sends source_tg_group_id (same key as the claims endpoint);
+    # source_group_id is kept as a backward-compatible alias.
+    normalized = normalize_send_to_claimed_members_payload(
+        {
+            "source_tg_group_id": -1005415931696,
+            "user_ids": [1, 2],
+            "messages": ["hello"],
+        }
+    )
+    assert normalized["source_group_id"] == -1005415931696
+
+
 def test_normalize_send_to_claimed_members_payload_requires_user_ids() -> None:
     with pytest.raises(ValueError, match="At least one valid user_id"):
         normalize_send_to_claimed_members_payload(
