@@ -172,6 +172,19 @@ Listener reconnection: when the listener is disconnected (e.g. because an `agent
 
 This replaced the old `last_agent_id`-only filter so agents see all their groups regardless of which agent last scraped them.
 
+## Bulk-Add Eligibility
+
+`GET /api/agents/{id}/groups` exposes per group:
+- `is_member` — the agent is a scraped member of the group.
+- `is_admin` — the agent's scraped role is `admin`/`creator` (independent of eligibility).
+- `can_add_members` — equals `is_member`. Any member may attempt a bulk-add.
+
+`last_agent_id` is NOT used as a permission substitute — it only controls group
+visibility and scraped-data ownership. Telegram remains the final authority:
+`CHAT_ADMIN_REQUIRED` is mapped to `ERROR_NOT_ADMIN` and recorded as a
+per-member failure; the group and its scraped members are never deleted or
+invalidated by a failed add. See `specs/020-bulk-add-by-non-admin/spec.md`.
+
 ## Owner Dashboard Scoping
 
 Owner endpoints (`/webapp/owner/groups`, `/webapp/owner/agents`, `/webapp/owner/stats`) now filter by the authenticated owner's groups:
@@ -205,6 +218,11 @@ Each bot owner only sees their own groups, agents, and statistics.
 
 <!-- SPECKIT START -->
 ## Current Plan
+
+**Bulk Add by Non-Admin Group Members** (`020-bulk-add-by-non-admin`)
+- Spec: `specs/020-bulk-add-by-non-admin/spec.md`
+- Plan: `specs/020-bulk-add-by-non-admin/plan.md`
+- Tasks: `specs/020-bulk-add-by-non-admin/tasks.md`
 
 **Workspace-Aware Concurrent Member Claiming** (`019-workspace-member-claiming`)
 - Spec: `specs/019-workspace-member-claiming/spec.md`

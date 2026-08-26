@@ -298,7 +298,11 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
         for (const g of allGroups) {
           if (g.tg_group_id == null || seen.has(g.tg_group_id)) continue
           seen.add(g.tg_group_id)
-          if (g.can_add_members !== false) deduped.push(g)
+          // Any group the agent is a member of is a valid bulk-add target.
+          // Membership is what grants eligibility; admin status is not required
+          // (Telegram still enforces each add). `can_add_members` is retained
+          // as a backward-compatible alias of `is_member`.
+          if (g.is_member !== false && g.can_add_members !== false) deduped.push(g)
         }
         setBulkTargetGroups(deduped)
       }).catch(() => setBulkTargetGroups([])).finally(() => setBulkTargetGroupsLoading(false))

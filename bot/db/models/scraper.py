@@ -1,16 +1,21 @@
 """Scraper domain models for groups/channels messages and members."""
 
 from __future__ import annotations
-from typing import Optional
 
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
-from pgvector.sqlalchemy import Vector
 
 from bot.db.base import Base
+
+# On SQLite (tests), TSVECTOR cannot be rendered by the DDL compiler, so the
+# scraped_messages.search_vector column falls back to plain TEXT. PostgreSQL
+# keeps the real TSVECTOR type. See tests/conftest.py (sync_engine fixture).
+TEXT_SEARCH_VECTOR = TSVECTOR().with_variant(Text(), "sqlite")
 
 
 class ScrapedGroup(Base):
@@ -76,7 +81,7 @@ class ScrapedMessage(Base):
     forward_from_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
+    search_vector: Mapped[Optional[str]] = mapped_column(TEXT_SEARCH_VECTOR, nullable=True)
 
 
 class ScrapedMember(Base):
