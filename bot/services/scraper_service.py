@@ -73,6 +73,17 @@ class ScraperService:
 
         try:
             results = []
+            agent_tg_id = agent.telegram_user_id
+            agent_meta = agent.details or {}
+            agent_username = agent_meta.get("username")
+            agent_full_name = agent_meta.get("full_name")
+            agent_first_name = agent_meta.get("first_name")
+            agent_last_name = agent_meta.get("last_name")
+            if agent_full_name and not agent_first_name:
+                parts = [p.strip() for p in str(agent_full_name).split(" ", 1)]
+                agent_first_name = parts[0] or None
+                agent_last_name = parts[1] if len(parts) > 1 else None
+
             async for dialog in managed_client.iter_dialogs():
                 if not dialog.is_group and not dialog.is_channel:
                     continue
@@ -108,6 +119,29 @@ class ScraperService:
                     session=self.session,
                 )
                 results.append(group)
+
+                # Record the agent's own membership so the group shows up as
+                # is_member=true in the miniapp group picker. A plain group
+                # sync used to leave no scraped_members row for the agent
+                # itself, hiding newly-joined groups from outreach/send.
+                if agent_tg_id is not None:
+                    member_row = {
+                        "scraped_group_id": group.id,
+                        "tg_group_id": canonical_tg_group_id(int(dialog.id)),
+                        "tg_user_id": agent_tg_id,
+                        "username": agent_username,
+                        "first_name": agent_first_name,
+                        "last_name": agent_last_name,
+                        "full_name": agent_full_name,
+                        "phone": agent.phone_number,
+                        "is_bot": False,
+                        "role": "member",
+                        "raw_data": {"source": "workspace_sync"},
+                        "scraped_at": datetime.utcnow(),
+                    }
+                    await bulk_upsert.bulk_upsert_scraped_members(
+                        [member_row], self.session, scraped_by_agent_id=agent_id
+                    )
 
             await self.session.commit()
             logger.info("agent_groups_synced", agent_id=agent_id, count=len(results))

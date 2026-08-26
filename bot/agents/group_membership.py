@@ -28,6 +28,7 @@ from telethon.tl.functions.messages import (
 )
 from telethon.tl.types import (
     Channel,
+    Chat,
     InputPeerChannel,
     InputPeerChannelFromMessage,
     InputPeerEmpty,
@@ -211,10 +212,20 @@ async def add_user_to_group(
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
+    # A resolved legacy Chat is a basic group even when the id carries a
+    # canonical -100 prefix (canonical_tg_group_id rewrites basic-group ids
+    # too). Trust the entity type; only fall back to the -100 heuristic when
+    # the entity is a real Channel/Megagroup that came back as a Chat.
     group_is_channel = isinstance(group_entity, Channel) or bool(
         getattr(group_entity, "megagroup", False)
     )
-    if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
+    resolved_as_legacy_chat = isinstance(group_entity, Chat)
+    if (
+        not group_is_channel
+        and not resolved_as_legacy_chat
+        and isinstance(group_id, int)
+        and group_id <= -1000000000000
+    ):
         # Marked -100 ids are channels/megagroups even when entity resolution
         # returned a legacy Chat object.
         group_is_channel = True
