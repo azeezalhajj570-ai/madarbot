@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from dramatiq.message import Message
-import structlog
 from sqlalchemy import select
 
 from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError
@@ -23,21 +23,21 @@ from bot.agents.jobs import (
     get_interval_for_contact,
     normalize_group_member_broadcast_payload,
 )
-from bot.automation.agent_task_store import AgentTaskStore
-from bot.automation.models import TaskEvent
-from bot.automation.registry import Registry
-from bot.config import get_settings
 from bot.agents.rpc_wrapper import (
     call_with_retry,
     check_agent_health,
     iter_participants_with_timeout,
     send_file_with_timeout,
 )
+from bot.automation.agent_task_store import AgentTaskStore
+from bot.automation.models import TaskEvent
+from bot.automation.registry import Registry
+from bot.config import get_settings
 from bot.db.models import Agent, AgentJob, ScrapedMember
 from bot.db.session import SessionLocal
-from bot.utils.rate_limiter import AgentRateLimiter
 from bot.services.notify_destination_approval_service import NotifyDestinationApprovalService
 from bot.services.task_activity_service import TaskActivityService
+from bot.utils.rate_limiter import AgentRateLimiter
 from bot.workers.app import redis_broker
 
 __all__ = [
@@ -142,9 +142,10 @@ class UserAgentExecutor:
 
 class AddContactRuntime:
     async def resolve_group_entity(self, client, tg_group_id: int) -> Any:
-        from bot.services.group_service import canonical_tg_group_id
-        from bot.db.models import ScrapedGroup
         from telethon.tl.types import InputPeerChannel, InputPeerChat
+
+        from bot.db.models import ScrapedGroup
+        from bot.services.group_service import canonical_tg_group_id
 
         canonical_id = canonical_tg_group_id(tg_group_id)
         try:
@@ -283,8 +284,8 @@ class AddContactRuntime:
                         f"Could not resolve user {user_id_int}. Try syncing the workspace or scraping again."
                     )
 
-        from telethon.tl.types import InputPeerUser, InputUser, InputPeerSelf
         from telethon.tl.functions.contacts import AddContactRequest
+        from telethon.tl.types import InputPeerSelf, InputPeerUser, InputUser
 
         # Final type safety check: only users can be added as contacts
         is_user = isinstance(target_peer, (InputPeerUser, InputUser, InputPeerSelf)) or (
@@ -405,15 +406,17 @@ class GroupMemberBroadcastRuntime:
     async def execute(
         self, *, client, agent: Agent, payload: dict[str, Any], session=None
     ) -> dict[str, Any]:
-        import random
         import hashlib
+        import random
         from datetime import datetime, timedelta, timezone
-        from bot.config import get_settings
-        from bot.utils.rate_limiter import AgentRateLimiter
-        from bot.db.models.agent import SentBroadcastMessage, AgentJob
-        from bot.db.models.bulk_messaging import AgentBlacklistEntry
+
         from redis.asyncio import Redis
         from sqlalchemy import or_, select
+
+        from bot.config import get_settings
+        from bot.db.models.agent import AgentJob, SentBroadcastMessage
+        from bot.db.models.bulk_messaging import AgentBlacklistEntry
+        from bot.utils.rate_limiter import AgentRateLimiter
 
         normalized = normalize_group_member_broadcast_payload(payload)
 
@@ -797,9 +800,10 @@ class GroupMemberBroadcastRuntime:
         session,
         campaign_id,
     ) -> dict[str, Any]:
-        import random
         import hashlib
+        import random
         from datetime import datetime, timezone
+
         from bot.db.models.agent import SentBroadcastMessage
 
         agent_max_per_hour = getattr(agent, "max_actions_per_hour", None)
@@ -934,6 +938,361 @@ class GroupMemberBroadcastRuntime:
             "_progress": dict(payload.get("progress") or {}),
             "target_type": "groups",
         }
+
+
+class SendToClaimedMembersRuntime:
+    """Send messages to members claimed by the agent.
+
+    Reuses the per-member rate limiting, pending->sent dedup, checkpointing and
+    per-member result recording of the broadcast runtime, but recipients are the
+    agent's own claimed members. Claims are released in ``finally`` (mirrors
+    ``BulkAddMembersRuntime``) and are never reassigned by a send (FR-009/017/020).
+    """
+
+    def __init__(self, *, sleep=asyncio.sleep) -> None:
+        self.sleep = sleep
+
+    async def execute(
+        self, *, client, agent: Agent, payload: dict[str, Any], session=None
+    ) -> dict[str, Any]:
+        import hashlib
+        import random
+        from datetime import datetime, timedelta, timezone
+
+        from redis.asyncio import Redis
+        from sqlalchemy import or_, select
+
+        from bot.agents.jobs import normalize_send_to_claimed_members_payload
+        from bot.config import get_settings
+        from bot.db.models.agent import AgentJob, SentBroadcastMessage
+        from bot.db.models.bulk_messaging import AgentBlacklistEntry
+        from bot.utils.rate_limiter import AgentRateLimiter
+
+        normalized = normalize_send_to_claimed_members_payload(payload)
+        source_group_id = int(normalized["source_group_id"])
+        selected_user_ids = [int(uid) for uid in normalized.get("user_ids", [])]
+        messages: list[str] = normalized["messages"]
+        media_urls: list[str | None] = list(normalized.get("media_urls") or [])
+        threshold = int(normalized.get("threshold") or 500)
+        base_interval = float(normalized.get("interval_seconds") or 2.0)
+        contact_interval = float(
+            normalized.get("interval_between_contacts") or base_interval
+        )
+        interval_strategy = (
+            str(normalized.get("interval_strategy") or "graduated").strip().lower()
+        )
+
+        redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
+        limiter = AgentRateLimiter(redis_client)
+        agent_tenant_id = agent.tenant_id
+        agent_id_val = agent.id
+        try:
+            await check_agent_health(client)
+
+            recipients: list[int] = []
+            resolved_peers: dict[int, Any] = {}
+            recipient_identities: dict[int, dict[str, str | None]] = {}
+
+            # The recipients were verified to be claimed by this agent at job
+            # creation. Resolve their peer entities for sending.
+            unfound = list(selected_user_ids)
+            if unfound:
+                await _resolve_selected_recipients(
+                    client=client,
+                    agent=agent,
+                    session=session,
+                    user_ids=unfound,
+                    recipients=recipients,
+                    resolved_peers=resolved_peers,
+                    recipient_identities=recipient_identities,
+                    skip_bots=bool(normalized.get("skip_bots", True)),
+                )
+
+            recipients_set = set(recipients)
+            recipients = list(recipients_set)
+            total_selected = len(recipients_set)
+            total_count = len(recipients_set)
+
+            message_hash = hashlib.sha256(
+                "||".join(m.lower().strip() for m in messages).encode()
+            ).hexdigest()
+            dedup_skip_count = 0
+            recently_sent: set[int] = set()
+            if session is not None:
+                seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+                phones = [v["phone"] for v in recipient_identities.values() if v.get("phone")]
+                usernames = [
+                    v["username"] for v in recipient_identities.values() if v.get("username")
+                ]
+                identity_filters = [SentBroadcastMessage.tg_user_id.in_(recipients)]
+                if phones:
+                    identity_filters.append(SentBroadcastMessage.phone_number.in_(phones))
+                if usernames:
+                    identity_filters.append(SentBroadcastMessage.username.in_(usernames))
+                result = await session.execute(
+                    select(SentBroadcastMessage.tg_user_id).where(
+                        SentBroadcastMessage.agent_id == agent.id,
+                        SentBroadcastMessage.tg_group_id == source_group_id,
+                        SentBroadcastMessage.message_hash == message_hash,
+                        SentBroadcastMessage.sent_at >= seven_days_ago,
+                        SentBroadcastMessage.status.in_(["sent", "pending"]),
+                        or_(*identity_filters),
+                    )
+                )
+                recently_sent = {row[0] for row in result if row[0] is not None}
+            filtered = [r for r in recipients if r not in recently_sent]
+            dedup_skip_count = len(recipients) - len(filtered)
+            recipients = filtered
+
+            remaining = recipients[:threshold] if threshold > 0 else recipients
+
+            progress = dict(payload.get("progress") or {})
+            already_sent: set[int] = set(int(uid) for uid in progress.get("sent_users", []))
+            success_count = progress.get("success_count", 0)
+            failure_count = progress.get("failure_count", 0)
+            failures: list[dict[str, Any]] = list(progress.get("failures", []))
+            last_checkpoint_at = progress.get("last_checkpoint_at")
+            checkpoint_send_count = 0
+
+            payload["progress"] = {
+                "total_count": total_count,
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "skipped_count": dedup_skip_count,
+                "dedup_skipped": dedup_skip_count,
+                "sent_users": list(already_sent),
+                "failures": failures,
+                "last_checkpoint_at": last_checkpoint_at or datetime.now(timezone.utc).isoformat(),
+            }
+
+            blacklist_tg_ids: set[int] = set()
+            blacklist_usernames: set[str] = set()
+            blacklist_phones: set[str] = set()
+            if session is not None:
+                bl_stmt = select(AgentBlacklistEntry).where(
+                    AgentBlacklistEntry.agent_id == agent.id
+                )
+                bl_rows = (await session.execute(bl_stmt)).scalars().all()
+                for bl in bl_rows:
+                    if bl.tg_user_id:
+                        blacklist_tg_ids.add(int(bl.tg_user_id))
+                    if bl.username:
+                        blacklist_usernames.add(bl.username.strip().lower())
+                    if bl.phone:
+                        blacklist_phones.add(bl.phone.strip().lower())
+
+            for index, recipient_id in enumerate(remaining):
+                cooldown_mins = getattr(agent, "cooldown_minutes", None)
+                if cooldown_mins is not None and cooldown_mins > 0:
+                    in_cooldown, cd_remaining = await limiter.is_in_cooldown(
+                        agent.id, cooldown_mins
+                    )
+                    if in_cooldown:
+                        payload["progress"]["stopped_at"] = index
+                        payload["progress"]["stop_reason"] = "cooldown"
+                        payload["progress"]["retry_after"] = int(cd_remaining)
+                        raise Exception(f"Agent cooldown: {cd_remaining}s")
+
+                max_per_hour = getattr(agent, "max_actions_per_hour", None)
+                if max_per_hour is not None and max_per_hour > 0:
+                    allowed, hour_count = await limiter.check_and_increment(agent.id, max_per_hour)
+                    if not allowed:
+                        payload["progress"]["stopped_at"] = index
+                        payload["progress"]["stop_reason"] = "hourly_limit"
+                        raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
+
+                max_per_day = getattr(agent, "max_messages_per_day", None) or 500
+
+                min_delay = getattr(agent, "min_delay_seconds", None)
+                if min_delay is not None and min_delay > 0:
+                    wait = await limiter.enforce_delay(agent.id, float(min_delay))
+                    if wait > 0:
+                        await self.sleep(wait)
+
+                identity = recipient_identities.get(recipient_id, {})
+                id_phone = (identity.get("phone") or "").strip().lower()
+                id_username = (identity.get("username") or "").strip().lower()
+
+                if recipient_id in blacklist_tg_ids:
+                    failures.append({"user_id": str(recipient_id), "error": "blacklisted"})
+                    continue
+                if id_username and id_username in blacklist_usernames:
+                    failures.append({"user_id": str(recipient_id), "error": "blacklisted"})
+                    continue
+                if id_phone and id_phone in blacklist_phones:
+                    failures.append({"user_id": str(recipient_id), "error": "blacklisted"})
+                    continue
+
+                if max_per_day > 0:
+                    allowed, day_count = await limiter.check_daily_limit(
+                        agent.id, max_per_day, recipient_id
+                    )
+                    if not allowed:
+                        payload["progress"]["stopped_at"] = index
+                        payload["progress"]["stop_reason"] = "daily_limit"
+                        raise Exception(
+                            f"Daily unique contact limit reached ({day_count}/{max_per_day})"
+                        )
+
+                pending_record = None
+                try:
+                    if session is not None:
+                        identity = recipient_identities.get(recipient_id, {})
+                        pending_record = SentBroadcastMessage(
+                            agent_id=agent.id,
+                            sender_tg_user_id=agent.telegram_user_id,
+                            job_id=payload.get("job_id"),
+                            tg_user_id=recipient_id,
+                            phone_number=identity.get("phone"),
+                            username=identity.get("username"),
+                            message_id=None,
+                            tg_chat_id=recipient_id,
+                            tg_group_id=source_group_id,
+                            message_text="\n\n".join(messages),
+                            message_hash=message_hash,
+                            status="pending",
+                            sent_at=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc),
+                        )
+                        session.add(pending_record)
+                        await session.commit()
+
+                    sent_msg = None
+                    target_peer = resolved_peers.get(recipient_id, recipient_id)
+                    for mi, msg in enumerate(messages):
+                        media_url = media_urls[mi] if mi < len(media_urls) else None
+                        if media_url:
+                            sent_msg = await send_file_with_timeout(
+                                client, target_peer, msg, media_url
+                            )
+                        else:
+                            sent_msg = await send_message_with_timeout(client, target_peer, msg)
+                        if mi < len(messages) - 1 and base_interval > 0:
+                            jitter = random.uniform(-0.3, 0.3) * base_interval
+                            msg_interval = max(0.3, base_interval + jitter)
+                            await self.sleep(msg_interval)
+                    success_count += 1
+                    already_sent.add(recipient_id)
+                    checkpoint_send_count += 1
+
+                    if pending_record is not None:
+                        pending_record.status = "sent"
+                        pending_record.message_id = sent_msg.id if sent_msg else None
+                        await session.commit()
+
+                    await limiter.record_send(agent.id, recipient_id)
+
+                    should_checkpoint = (
+                        checkpoint_send_count >= 10
+                        or last_checkpoint_at is None
+                        or (
+                            datetime.now(timezone.utc) - datetime.fromisoformat(last_checkpoint_at)
+                        ).total_seconds()
+                        >= 60
+                    )
+                    if should_checkpoint and session is not None:
+                        last_checkpoint_at = datetime.now(timezone.utc).isoformat()
+                        payload["progress"] = {
+                            "total_count": total_count,
+                            "success_count": success_count,
+                            "failure_count": failure_count,
+                            "skipped_count": dedup_skip_count,
+                            "dedup_skipped": dedup_skip_count,
+                            "sent_users": list(already_sent),
+                            "failures": failures,
+                            "last_checkpoint_at": last_checkpoint_at,
+                        }
+                        job_obj = (
+                            await session.execute(
+                                select(AgentJob).where(AgentJob.id == payload.get("job_id"))
+                            )
+                            if payload.get("job_id")
+                            else None
+                        )
+                        if job_obj is not None:
+                            job_record = job_obj.scalar_one_or_none()
+                            if job_record is not None:
+                                job_record.job_payload = dict(payload)
+                                await session.commit()
+                        checkpoint_send_count = 0
+                except Exception as exc:
+                    failure_count += 1
+                    if pending_record is not None:
+                        pending_record.status = "failed"
+                        await session.commit()
+                    translated = _translate_client_exception(exc)
+                    if translated is not None:
+                        payload["progress"]["stopped_at"] = index
+                        payload["progress"]["stop_reason"] = type(translated).__name__
+                        payload["progress"]["sent_users"] = list(already_sent)
+                        payload["progress"]["success_count"] = success_count
+                        payload["progress"]["failure_count"] = failure_count
+                        raise translated from exc
+                    failures.append({"user_id": str(recipient_id), "error": str(exc)[:200]})
+
+                effective_interval = get_interval_for_contact(
+                    success_count, interval_strategy, contact_interval
+                )
+                if effective_interval > 0:
+                    jitter = random.uniform(-0.1, 0.1) * effective_interval
+                    effective_interval = max(0.3, effective_interval + jitter)
+                logger.info(
+                    "send_claimed_interval",
+                    strategy=interval_strategy,
+                    contact_interval=contact_interval,
+                    success_count=success_count,
+                    effective_interval=round(effective_interval, 1),
+                    index=index,
+                    total=len(remaining),
+                )
+                if index % 5 == 0 and session is not None and payload.get("job_id"):
+                    job_check = await session.execute(
+                        select(AgentJob).where(AgentJob.id == payload["job_id"])
+                    )
+                    job_row = job_check.scalar_one_or_none()
+                    if job_row is not None and job_row.status == JOB_STATUS_ABORTED:
+                        logger.info("send_claimed_aborted_detected", job_id=payload["job_id"])
+                        raise Exception("Job aborted by user")
+
+                if index < len(remaining) - 1 and effective_interval > 0:
+                    await self.sleep(effective_interval)
+
+            return {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "total_count": total_count,
+                "total_selected": total_selected,
+                "skipped_already_sent": len(already_sent),
+                "dedup_skipped": dedup_skip_count,
+                "failures": failures,
+                "_progress": dict(payload.get("progress") or {}),
+                "target_type": "members",
+            }
+        finally:
+            # Release member claims for this operation — sending never
+            # reassigns a claim (FR-009/FR-017/FR-020).
+            claim_ids = payload.get("claim_ids")
+            if claim_ids and agent_tenant_id:
+                try:
+                    from bot.db.session import SessionLocal
+                    from bot.services.member_claim_service import release_claims
+
+                    async with SessionLocal() as claim_session:
+                        await release_claims(
+                            claim_session,
+                            tenant_id=agent_tenant_id,
+                            agent_id=agent_id_val,
+                            claim_ids=claim_ids,
+                        )
+                        await claim_session.commit()
+                except Exception as exc:
+                    logger.warning(
+                        "send_claimed_claim_release_failed",
+                        agent_id=agent_id_val,
+                        claim_ids=claim_ids,
+                        error=str(exc),
+                    )
+            await redis_client.aclose()
 
 
 class ScraperRuntime:
@@ -1090,16 +1449,18 @@ class BulkAddMembersRuntime:
     async def execute(
         self, *, client, agent: Agent, payload: dict[str, Any], session=None
     ) -> dict[str, Any]:
+        from datetime import datetime, timezone
+
+        from redis.asyncio import Redis
+
         from bot.agents.group_membership import add_user_to_group
         from bot.agents.jobs import normalize_member_add_payload
+        from bot.config import get_settings
         from bot.db.models.audit import MembershipAuditLog
         from bot.db.models.group import GroupMember
         from bot.db.models.member_operation import MemberOperation
         from bot.db.models.scraper import ScrapedMember
-        from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
-        from datetime import datetime, timezone
-        from redis.asyncio import Redis
 
         normalized = normalize_member_add_payload(payload)
         target_tg_group_id = int(normalized["target_tg_group_id"])

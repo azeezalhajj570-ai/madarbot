@@ -1559,7 +1559,7 @@ export default function App() {
               ) : null}
                {route.page === 'outreach' ? (
                 <>
-                  <CampaignsPage account={selectedAccount} onSaved={setStatus} />
+                  <CampaignsPage account={selectedAccount} workspaceId={activeWorkspace?.id} onSaved={setStatus} />
                   <LeadsAcquisitionSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <AccountLeadsPage account={selectedAccount} />
                 </>

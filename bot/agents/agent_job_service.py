@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.agents.contracts import AgentJobOwnership
 from bot.agents.jobs import (
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
-    MEMBER_ADD_JOB_TYPE,
     JOB_STATUS_SCHEDULED,
+    MEMBER_ADD_JOB_TYPE,
+    SEND_TO_CLAIMED_MEMBERS_JOB_TYPE,
     normalize_group_member_broadcast_payload,
+    normalize_send_to_claimed_members_payload,
 )
 from bot.core.event_bus import EventBus
 from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, ScrapedMember, SentBroadcastMessage
@@ -59,6 +61,16 @@ def _job_queued_notification(
             "job_payload": dict(payload),
         }
         return "Bulk add members queued", summary, notification_payload
+
+    if job_type == SEND_TO_CLAIMED_MEMBERS_JOB_TYPE:
+        user_count = len(list(payload.get("user_ids") or []))
+        summary = f"Queued to send to {user_count} claimed member(s)."
+        notification_payload = {
+            "job_type": job_type,
+            "user_count": user_count,
+            "job_payload": dict(payload),
+        }
+        return "Send messages to members queued", summary, notification_payload
 
     return (
         "Job queued",
@@ -135,6 +147,15 @@ class AgentJobService(AgentServiceSupport):
                     await self._validate_broadcast_rate_limits(agent, normalized_payload)
 
         status = JOB_STATUS_SCHEDULED if scheduled_at else "pending"
+
+        if normalized_job_type == SEND_TO_CLAIMED_MEMBERS_JOB_TYPE:
+            normalized_payload = normalize_send_to_claimed_members_payload(normalized_payload)
+            # Recipients are already claim-scoped to this agent — no ownership
+            # exclusions (compute_bulk_exclusions) apply. Per-agent rate limits
+            # still apply (FR-019).
+            if not scheduled_at:
+                await self._validate_broadcast_rate_limits(agent, normalized_payload)
+
         job = AgentJob(
             agent_id=agent.id,
             job_type=normalized_job_type,
@@ -463,8 +484,8 @@ class AgentJobService(AgentServiceSupport):
     async def check_broadcast_accessibility(
         self, *, actor_user_id: int, agent_id: int, group_ids: list[int]
     ) -> dict[str, Any]:
-        from bot.agents.session import SessionManager
         from bot.agents.exceptions import JobValidationError
+        from bot.agents.session import SessionManager
 
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -599,9 +620,10 @@ class AgentJobService(AgentServiceSupport):
         }
 
     async def _validate_broadcast_preflight(self, agent: Agent, payload: dict[str, Any]) -> None:
+        from redis.asyncio import Redis
+
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
-        from redis.asyncio import Redis
 
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         try:
@@ -644,9 +666,10 @@ class AgentJobService(AgentServiceSupport):
             await redis_client.aclose()
 
     async def _validate_broadcast_rate_limits(self, agent: Agent, payload: dict[str, Any]) -> None:
+        from redis.asyncio import Redis
+
         from bot.config import get_settings
         from bot.utils.rate_limiter import AgentRateLimiter
-        from redis.asyncio import Redis
 
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         try:

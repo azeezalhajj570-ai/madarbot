@@ -32,8 +32,17 @@ const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 
 const _groupNameCache: Record<number, string> = {}
 
-export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
+export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agent; workspaceId?: number | null; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
+
+  // Ensure claim/send requests carry the active workspace context so the
+  // backend validates workspace ownership (FR-011).
+  useEffect(() => {
+    if (workspaceId) {
+      void import('@miniapp/shared').then(({ setWorkspaceContext }) => setWorkspaceContext(String(workspaceId)))
+    }
+  }, [workspaceId])
+
   const [groups, setGroups] = useState<AgentManagedGroup[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -61,6 +70,9 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<AgentGroupMember[]>([])
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [loadingBulkMembers, setLoadingBulkMembers] = useState(false)
+  const [claimingMembers, setClaimingMembers] = useState(false)
+  const [releasingClaims, setReleasingClaims] = useState(false)
+  const [myClaimIds, setMyClaimIds] = useState<number[]>([])
   const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
   const [bulkScheduledAt, setBulkScheduledAt] = useState('')
   const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
@@ -242,19 +254,42 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
     if (bulkSummary) {
       setBulkSaving(true)
       try {
+        if (bulkTargetType === 'members') {
+          // Claimed-members send: the recipients must already be claimed by
+          // this agent. Unclaimed/other-agent members are rejected by the
+          // backend with a conflict report (FR-021/FR-012).
+          const result = await agentsApi.sendToClaimedMembers(account.id, {
+            source_tg_group_id: bulkSourceGroup!.tg_group_id,
+            user_ids: bulkSummary.filtered_user_ids,
+            messages: filledMessages,
+            media_urls: bulkMediaUrls,
+            threshold,
+            interval_seconds: intervalSeconds,
+            interval_between_contacts: intervalContacts,
+          })
+          if (result.status === 'conflicts') {
+            const unclaimedCount = result.unclaimed?.length ?? 0
+            const otherCount = result.claimed_by_other?.length ?? 0
+            notify(t('campaigns.claimedSendConflicts', { unclaimed: unclaimedCount, other: otherCount }))
+            setBulkSummary(null)
+            setBulkSaving(false)
+            return
+          }
+          setBulkSummary(null); resetForm(); setStatus(null)
+          onSaved(t('campaigns.queued'))
+          setBulkSaving(false)
+          return
+        }
         const jobPayload: Record<string, unknown> = {
-          target_type: bulkTargetType,
+          target_type: 'groups',
           messages: filledMessages,
           media_urls: bulkMediaUrls,
           threshold,
           interval_seconds: intervalSeconds,
           interval_between_contacts: intervalContacts,
-          messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined
+          messages_per_day: Number.parseInt(messagesPerDay, 10) || undefined,
+          target_group_ids: bulkSelectedTargetGroups.map((g) => g.tg_group_id),
         }
-        if (bulkTargetType === 'members') {
-          jobPayload.source_group_id = bulkSourceGroup!.tg_group_id; jobPayload.source_group_title = bulkSourceGroup!.title
-          jobPayload.selected_user_ids = bulkSummary.filtered_user_ids
-        } else { jobPayload.target_group_ids = bulkSelectedTargetGroups.map((g) => g.tg_group_id) }
         await agentsApi.createAgentJob(account.id, BULK_MESSAGE_TASK_KEY, jobPayload)
         setBulkSummary(null); resetForm(); setStatus(null)
         onSaved(t('campaigns.queued'))
@@ -282,6 +317,55 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
       setBulkSummary(result)
     } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
     finally { setLoadingBulkSummary(false) }
+  }
+
+  /** Collect the claim ids for members already claimed by this agent (in the current selection). */
+  function selectedOwnClaimIds(): number[] {
+    const ids: number[] = []
+    for (const m of bulkSelectedMembers) {
+      const claim = m.claim
+      if (claim && claim.is_own && claim.claim_id) ids.push(claim.claim_id)
+    }
+    return ids
+  }
+
+  async function handleClaimMembers() {
+    if (!bulkSourceGroup?.tg_group_id || !bulkSelectedMembers.length) return
+    setClaimingMembers(true)
+    try {
+      const result = await agentsApi.claimMembers(account.id, {
+        source_tg_group_id: bulkSourceGroup.tg_group_id,
+        user_ids: bulkSelectedMembers.map((m) => m.user_id),
+      })
+      const claimedSet = new Set(result.claimed)
+      const claimIds: number[] = []
+      setBulkSelectedMembers((current) => current.map((m) => {
+        if (claimedSet.has(m.user_id) && m.claim?.is_own && m.claim.claim_id) claimIds.push(m.claim.claim_id)
+        return m.claim?.is_own ? m : { ...m, claim: { claim_id: m.claim?.claim_id ?? 0, agent_id: account.id, is_own: true, expires_at: m.claim?.expires_at ?? null } }
+      }))
+      if (claimIds.length) setMyClaimIds((c) => Array.from(new Set([...c, ...claimIds])))
+      if (result.conflicts.length) {
+        notify(t('campaigns.claimConflicts', { claimed: result.claimed.length, conflicts: result.conflicts.length }))
+      } else if (result.claimed.length) {
+        notify(t('campaigns.claimedCount', { count: result.claimed.length }), 'success')
+      }
+      setBulkMemberQuery((q) => (q ? `${q} ` : q))
+    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedClaim')) }
+    finally { setClaimingMembers(false) }
+  }
+
+  async function handleReleaseClaims() {
+    const ids = selectedOwnClaimIds()
+    if (!ids.length) return
+    setReleasingClaims(true)
+    try {
+      const result = await agentsApi.releaseClaims(account.id, ids)
+      if (result.released > 0) {
+        setMyClaimIds((c) => c.filter((id) => !ids.includes(id)))
+        notify(t('campaigns.releasedCount', { count: result.released }), 'success')
+      }
+    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedRelease')) }
+    finally { setReleasingClaims(false) }
   }
 
   return (
@@ -399,6 +483,15 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
                 </span>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+              <Button tone="secondary" disabled={claimingMembers || !bulkSelectedMembers.length} onClick={() => void handleClaimMembers()}>
+                {claimingMembers ? t('campaigns.claiming') : t('campaigns.claimSelected')}
+              </Button>
+              <Button tone="secondary" disabled={releasingClaims || selectedOwnClaimIds().length === 0} onClick={() => void handleReleaseClaims()}>
+                {releasingClaims ? t('campaigns.releasing') : t('campaigns.releaseMyClaims')}
+              </Button>
+              {myClaimIds.length > 0 ? <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.myClaimsCount', { count: myClaimIds.length })}</span> : null}
+            </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--miniapp-clay)' }}>
               <span>{t('campaigns.sort')}</span>
               <button type="button" onClick={() => setOrderByMsgCount(orderByMsgCount === 'asc' ? 'desc' : 'asc')} style={{ background: 'none', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -421,13 +514,17 @@ export function CampaignsPage({ account, onSaved }: { account: Agent; onSaved: (
             {bulkMemberStatus && !loadingBulkMembers ? <Note>{bulkMemberStatus}</Note> : null}
             {!loadingBulkMembers && bulkMemberResults.length > 0 ? (
               <div style={{ display: 'grid', gap: 6 }}>
-                {bulkMemberResults.map((member) => (
-                  <button key={member.user_id} type="button" onClick={() => { setBulkSelectedMembers((c) => [...c, member]); setBulkMemberResults((r) => r.filter((m) => m.user_id !== member.user_id)) }}
-                    style={{ textAlign: 'left', padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', cursor: 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', display: 'grid', gap: 2 }}>
-                    <strong>{member.full_name || member.username || t('campaigns.userFallback', { userId: member.user_id })}</strong>
-                    <div style={{ color: '#655d52' }}>{t('campaigns.memberMeta', { username: member.username, count: member.message_count, role: member.role || t('campaigns.member') })}{member.is_bot ? ' · 🤖' : ''}{member.sent_by_agent ? ' · ✓' : ''}</div>
-                  </button>
-                ))}
+                {bulkMemberResults.map((member) => {
+                  const heldByOther = !!member.claim && !member.claim.is_own
+                  const heldBySelf = !!member.claim && member.claim.is_own
+                  return (
+                    <button key={member.user_id} type="button" disabled={heldByOther} onClick={() => { setBulkSelectedMembers((c) => [...c, member]); setBulkMemberResults((r) => r.filter((m) => m.user_id !== member.user_id)) }}
+                      style={{ textAlign: 'left', padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', cursor: heldByOther ? 'not-allowed' : 'pointer', fontSize: 13, color: 'var(--miniapp-text-primary)', display: 'grid', gap: 2, opacity: heldByOther ? 0.5 : 1 }}>
+                      <strong>{member.full_name || member.username || t('campaigns.userFallback', { userId: member.user_id })}{heldBySelf ? ' ✓' : ''}</strong>
+                      <div style={{ color: '#655d52' }}>{t('campaigns.memberMeta', { username: member.username, count: member.message_count, role: member.role || t('campaigns.member') })}{member.is_bot ? ' · 🤖' : ''}{member.sent_by_agent ? ' · ✓' : ''}{heldByOther ? ` · ${t('campaigns.heldByOther')}` : ''}{heldBySelf ? ` · ${t('campaigns.heldBySelf')}` : ''}</div>
+                    </button>
+                  )
+                })}
               </div>
             ) : null}
             {bulkMemberResults.length > 0 || bulkMemberTotal > 0 ? (

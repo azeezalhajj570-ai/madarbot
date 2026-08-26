@@ -22,6 +22,8 @@ import type {
   CampaignList,
   CampaignRecurrenceLogList,
   CampaignSendLogList,
+  ClaimConflict,
+  ClaimResult,
   SendLogsResponse,
   TaskCatalogItem,
 } from '../types'
@@ -450,6 +452,48 @@ export interface BulkMemberAddPayload {
 export async function bulkAddMembers(agentId: number, payload: BulkMemberAddPayload) {
   return apiClient.post<{ status: string; job: { id: number; agent_id: number; job_type: string; status: string; user_count: number; target_tg_group_id: number } }>(
     `${AGENTS_API_PREFIX}/${agentId}/member-adds`,
+    payload,
+  )
+}
+
+export async function claimMembers(
+  agentId: number,
+  payload: { source_tg_group_id: number; user_ids: number[] },
+) {
+  return apiClient.post<ClaimResult>(`${AGENTS_API_PREFIX}/${agentId}/claims`, payload)
+}
+
+export async function releaseClaims(agentId: number, claimIds: number[]) {
+  return apiClient.deleteWithBody<{ status: string; released: number }>(
+    `${AGENTS_API_PREFIX}/${agentId}/claims`,
+    { claim_ids: claimIds },
+  )
+}
+
+export interface SendToClaimedMembersPayload {
+  source_tg_group_id: number
+  user_ids: number[]
+  message?: string
+  messages?: string[]
+  media_urls?: (string | null)[]
+  interval_seconds?: number
+  interval_between_contacts?: number
+  threshold?: number
+}
+
+export interface SendToClaimedMembersResult {
+  status: string
+  job?: { id: number; agent_id: number; job_type: string; status: string; user_count: number; source_tg_group_id: number }
+  unclaimed?: number[]
+  claimed_by_other?: ClaimConflict[]
+}
+
+export async function sendToClaimedMembers(
+  agentId: number,
+  payload: SendToClaimedMembersPayload,
+) {
+  return apiClient.post<SendToClaimedMembersResult>(
+    `${AGENTS_API_PREFIX}/${agentId}/claimed-send`,
     payload,
   )
 }

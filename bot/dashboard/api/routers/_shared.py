@@ -109,6 +109,36 @@ class BulkMemberAddRequest(BaseModel):
     acknowledge_risk: bool = Field(default=False)
 
 
+class ClaimMembersRequest(BaseModel):
+    source_tg_group_id: int = Field(...)
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+class ReleaseClaimsRequest(BaseModel):
+    claim_ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+class SendToClaimedMembersRequest(BaseModel):
+    source_tg_group_id: int = Field(...)
+    user_ids: list[int] = Field(min_length=1, max_length=5000)
+    message: str = Field(default="")
+    messages: list[str] = Field(default_factory=list)
+    media_urls: list[str | None] = Field(default_factory=list)
+    threshold: int = Field(default=500, ge=1, le=5000)
+    interval_seconds: float = Field(default=0, ge=0)
+    interval_between_contacts: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _normalize_messages(self) -> SendToClaimedMembersRequest:
+        if self.messages:
+            self.messages = [m.strip() for m in self.messages if m.strip()]
+        if not self.messages and self.message.strip():
+            self.messages = [self.message.strip()]
+        if not self.messages:
+            raise ValueError("messages is required")
+        return self
+
+
 class BlacklistAddEntry(BaseModel):
     tg_user_id: int | None = Field(default=None, ge=0)
     username: str | None = Field(default=None, min_length=1, max_length=255)

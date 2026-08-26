@@ -209,6 +209,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "is_member": is_member,
                         "is_admin": tg_group_id in admin_group_ids,
                         "can_add_members": is_member,
+                        "can_send_messages": is_member,
                     }
                 )
             return results
