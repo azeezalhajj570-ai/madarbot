@@ -243,7 +243,9 @@ def normalize_send_to_claimed_members_payload(payload: dict[str, Any] | None) ->
     if not messages:
         raise ValueError("messages is required")
 
-    source_group_id = _normalize_group_reference(normalized.get("source_group_id"))
+    source_group_id = _normalize_group_reference(
+        normalized.get("source_tg_group_id", normalized.get("source_group_id"))
+    )
     if source_group_id is None:
         raise ValueError("source_group_id is required")
 
