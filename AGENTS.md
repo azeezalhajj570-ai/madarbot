@@ -172,6 +172,40 @@ Listener reconnection: when the listener is disconnected (e.g. because an `agent
 
 This replaced the old `last_agent_id`-only filter so agents see all their groups regardless of which agent last scraped them.
 
+## Bulk-Add Eligibility
+
+`GET /api/agents/{id}/groups` exposes per group:
+- `is_member` — the agent is a scraped member of the group.
+- `is_admin` — the agent's scraped role is `admin`/`creator` (independent of eligibility).
+- `can_add_members` — equals `is_member`. Any member may attempt a bulk-add.
+
+`last_agent_id` is NOT used as a permission substitute — it only controls group
+visibility and scraped-data ownership. Telegram remains the final authority:
+`CHAT_ADMIN_REQUIRED` is mapped to `ERROR_NOT_ADMIN` and recorded as a
+per-member failure; the group and its scraped members are never deleted or
+invalidated by a failed add. See `specs/020-bulk-add-by-non-admin/spec.md`.
+
+## Send Messages to Claimed Members
+
+Send Messages to Group Members reuses the same member-claiming system as Bulk
+Add (same `MemberClaim` table, `claim_members`/`release_claims` services, and
+30-minute claim TTL). The miniapp CampaignsPage lets the user select one agent,
+select members, claim them, then send messages to the members claimed by that
+agent.
+
+- `POST /api/agents/{id}/claims` — claim members for an agent (reuses
+  `claim_members`; already-claimed members are conflicts, never reassigned).
+- `DELETE /api/agents/{id}/claims` — release the agent's own claims.
+- `POST /api/agents/{id}/claimed-send` — create a `send_to_claimed_members` job.
+  Every recipient must have an active claim belonging to that agent; unclaimed
+  or other-agent-claimed members are rejected with a conflict report and no job
+  is created (FR-021).
+- The runtime sends via the claiming agent's session, enforces the per-agent
+  rate limits, records per-member results, and releases the claims in a
+  `finally` block — sending never reassigns a claim (FR-009/017/020).
+
+See `specs/021-send-messages-member-claiming/spec.md`.
+
 ## Owner Dashboard Scoping
 
 Owner endpoints (`/webapp/owner/groups`, `/webapp/owner/agents`, `/webapp/owner/stats`) now filter by the authenticated owner's groups:
@@ -205,6 +239,16 @@ Each bot owner only sees their own groups, agents, and statistics.
 
 <!-- SPECKIT START -->
 ## Current Plan
+
+**Member Claiming for Send Messages to Group Members** (`021-send-messages-member-claiming`)
+- Spec: `specs/021-send-messages-member-claiming/spec.md`
+- Plan: `specs/021-send-messages-member-claiming/plan.md`
+- Tasks: `specs/021-send-messages-member-claiming/tasks.md`
+
+**Bulk Add by Non-Admin Group Members** (`020-bulk-add-by-non-admin`)
+- Spec: `specs/020-bulk-add-by-non-admin/spec.md`
+- Plan: `specs/020-bulk-add-by-non-admin/plan.md`
+- Tasks: `specs/020-bulk-add-by-non-admin/tasks.md`
 
 **Workspace-Aware Concurrent Member Claiming** (`019-workspace-member-claiming`)
 - Spec: `specs/019-workspace-member-claiming/spec.md`

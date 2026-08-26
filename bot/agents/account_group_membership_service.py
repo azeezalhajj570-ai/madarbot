@@ -20,10 +20,10 @@ from bot.db.models import (
     ScrapedMessage,
     User,
 )
-from bot.db.models.member_operation import MemberOperation
 from bot.db.models.agent import SentBroadcastMessage
 from bot.db.models.bulk_messaging import AgentBlacklistEntry
 from bot.db.models.member_claim import MemberClaim
+from bot.db.models.member_operation import MemberOperation
 from bot.services.group_service import canonical_tg_group_id
 from bot.services.scraper_service import ScraperService
 
@@ -192,6 +192,11 @@ class AccountGroupMembershipService(AgentServiceSupport):
             results = []
             for row in scraped_rows:
                 tg_group_id = int(row.tg_group_id)
+                # Bulk-add eligibility is based on the agent's actual membership
+                # in the group, not on admin/creator status and not on
+                # last_agent_id (which is a scraped-data ownership marker only).
+                # Telegram remains the final authority over each add operation.
+                is_member = tg_group_id in agent_member_group_ids
                 results.append(
                     {
                         "id": row.id,
@@ -201,7 +206,10 @@ class AccountGroupMembershipService(AgentServiceSupport):
                         "group_type": row.group_type,
                         "member_count": member_counts.get(int(row.id), int(row.member_count or 0)),
                         "messages_count": message_counts.get(int(row.id), 0),
-                        "can_add_members": tg_group_id in agent_member_group_ids or row.last_agent_id == agent.id,
+                        "is_member": is_member,
+                        "is_admin": tg_group_id in admin_group_ids,
+                        "can_add_members": is_member,
+                        "can_send_messages": is_member,
                     }
                 )
             return results
@@ -1007,8 +1015,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         agent_id: int,
         tg_group_id: int,
     ) -> dict[str, int]:
-        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
         from bot.services.group_service import canonical_tg_group_id
+        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
 
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -1138,8 +1146,8 @@ class AccountGroupMembershipService(AgentServiceSupport):
         tg_group_id: int,
         limit: int = 10000,
     ) -> dict[str, Any]:
-        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
         from bot.services.group_service import canonical_tg_group_id
+        from bot.services.scrapers import bulk_upsert, entity_resolver, serializers
 
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:

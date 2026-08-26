@@ -359,6 +359,9 @@ export const apiClient = {
   patch: <T>(path: string, body?: unknown, params?: QueryParams) =>
     apiRequest<T>(path, { method: 'PATCH', body, params }),
   delete: <T>(path: string, params?: QueryParams) => apiRequest<T>(path, { method: 'DELETE', params }),
+  /** DELETE with a JSON body (the apiRequest helper supports it; keep it explicit). */
+  deleteWithBody: <T>(path: string, body?: unknown, params?: QueryParams) =>
+    apiRequest<T>(path, { method: 'DELETE', body, params }),
   upload: <T>(path: string, body: Blob | ArrayBuffer, params?: QueryParams) =>
     apiUploadRequest<T>(path, body, params),
 }

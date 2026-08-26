@@ -18,7 +18,12 @@ interface AgentGroup {
   group_type?: string
   member_count?: number
   messages_count?: number
-  can_add_members: boolean
+  /** Whether the agent is a member of the group (bulk-add eligibility). */
+  is_member?: boolean
+  /** Whether the agent is an admin/creator of the group. Independent of can_add_members. */
+  is_admin?: boolean
+  /** Deprecated alias of is_member — kept for backward compatibility. */
+  can_add_members?: boolean
 }
 
 interface MemberItem {
@@ -110,7 +115,11 @@ function AsyncGroupAutoComplete({ agentId, value, onChange, placeholder, canAddM
         for (const g of data) {
           if (seen.has(g.tg_group_id)) continue
           seen.add(g.tg_group_id)
-          if (canAddMembersOnly && !g.can_add_members) continue
+          // Any group the agent is a member of is a valid bulk-add target.
+          // Membership grants eligibility; admin status is not required
+          // (Telegram still enforces each add). `can_add_members` is retained
+          // as a backward-compatible alias of `is_member`.
+          if (canAddMembersOnly && !g.is_member && !g.can_add_members) continue
           deduped.push(g)
         }
         setOptions(deduped)

@@ -6,8 +6,8 @@ import logging
 import sys
 
 import dramatiq
-from dramatiq.middleware.current_message import CurrentMessage
 import structlog
+from dramatiq.middleware.current_message import CurrentMessage
 from sqlalchemy import select
 
 from bot.agents.agent_notification_service import AgentNotificationService
@@ -20,19 +20,20 @@ from bot.agents.exceptions import (
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
-    KNOWLEDGE_EXTRACTION_JOB_TYPE,
-    MEMBER_ADD_JOB_TYPE,
+    JOB_STATUS_ABORTED,
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_ENQUEUE_FAILED,
+    JOB_STATUS_FAILED,
     JOB_STATUS_PENDING,
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
-    JOB_STATUS_COMPLETED,
-    JOB_STATUS_FAILED,
-    JOB_STATUS_ABORTED,
-    JOB_STATUS_ENQUEUE_FAILED,
+    KNOWLEDGE_EXTRACTION_JOB_TYPE,
+    MEMBER_ADD_JOB_TYPE,
     SCRAPER_FULL_GROUP_JOB_TYPE,
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
+    SEND_TO_CLAIMED_MEMBERS_JOB_TYPE,
 )
 from bot.agents.runtime import (
     AddContactRuntime,
@@ -40,6 +41,7 @@ from bot.agents.runtime import (
     BulkAddMembersRuntime,
     GroupMemberBroadcastRuntime,
     ScraperRuntime,
+    SendToClaimedMembersRuntime,
 )
 from bot.agents.session import SessionManager
 from bot.automation.registry import build_default_registry
@@ -47,7 +49,6 @@ from bot.db import session as db_session
 from bot.db.models import Agent, AgentJob, ScrapedMessage
 from bot.services.scrapers.conversation_builder import build_conversations_from_scrape
 from bot.workers.app import redis_broker  # noqa: F401
-
 
 logger = structlog.get_logger(__name__)
 
@@ -240,6 +241,35 @@ def _build_job_notification(
                 "member_add_failed",
                 "Bulk add members failed",
                 _trim_message(error or "Could not add members to the target group."),
+                notification_payload,
+            )
+        return None
+
+    if job.job_type == SEND_TO_CLAIMED_MEMBERS_JOB_TYPE:
+        sent_count = int(result_payload.get("success_count") or 0)
+        failed_count = int(result_payload.get("failure_count") or 0)
+        total_count = int(result_payload.get("total_count") or 0)
+        notification_payload = {
+            "job_type": job.job_type,
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "total_count": total_count,
+        }
+        if status == JOB_STATUS_COMPLETED:
+            body = f"Sent to {sent_count} member(s)."
+            if failed_count:
+                body = f"Sent to {sent_count} member(s), {failed_count} failed."
+            return (
+                "send_messages_completed",
+                "Send messages completed",
+                body,
+                notification_payload,
+            )
+        if status == JOB_STATUS_FAILED:
+            return (
+                "send_messages_failed",
+                "Send messages failed",
+                _trim_message(error or "Could not send messages to the claimed members."),
                 notification_payload,
             )
         return None
@@ -499,8 +529,9 @@ async def _try_auto_broadcast_dispatch(
     if not source_group_id:
         bound_logger.debug("agent_auto_broadcast_skipped_no_group_id")
         return
-    from bot.db.models.scraper import ScrapedMember
     from sqlalchemy import func, select
+
+    from bot.db.models.scraper import ScrapedMember
 
     member_count = await session.scalar(
         select(func.count(func.distinct(ScrapedMember.tg_user_id)))
@@ -555,6 +586,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     scraper_runtime = ScraperRuntime()
     contact_runtime = AddContactRuntime()
     member_add_runtime = BulkAddMembersRuntime()
+    send_claimed_runtime = SendToClaimedMembersRuntime()
 
     async with _session_local_factory()() as session:
         job = (
@@ -571,8 +603,8 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
             await session.commit()
 
         if job.job_type == KNOWLEDGE_EXTRACTION_JOB_TYPE:
-            from bot.services.knowledge_extractor import KnowledgeExtractor
             from bot.plugins.ai_pilot.system_config import load_ai_config
+            from bot.services.knowledge_extractor import KnowledgeExtractor
 
             payload = dict(job.job_payload or {})
             scraped_group_id = payload.get("scraped_group_id")
@@ -672,6 +704,73 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                         if total_count > 0 and success_count == 0:
                             job.status = JOB_STATUS_FAILED
                             broadcast_payload["last_error"] = "All messages failed to send"
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_FAILED, result=result,
+                                error="All messages failed to send",
+                            )
+                        else:
+                            job.status = JOB_STATUS_COMPLETED
+                            await session.commit()
+                            await _create_job_notification(
+                                session, job, status=JOB_STATUS_COMPLETED, result=result
+                            )
+                    else:
+                        await _set_job_state(session, job_id, JOB_STATUS_COMPLETED, result=result)
+                    handled = True
+                elif job.job_type == SEND_TO_CLAIMED_MEMBERS_JOB_TYPE:
+                    send_claimed_payload = dict(job.job_payload or {})
+                    send_claimed_payload["job_id"] = job.id
+                    result = await send_claimed_runtime.execute(
+                        client=client, agent=agent, payload=send_claimed_payload, session=session
+                    )
+                    progress = (
+                        result.pop("_progress", None) if isinstance(result, dict) else None
+                    )
+                    if progress:
+                        send_claimed_payload["progress"] = {
+                            "total_count": progress.get("total_count", 0),
+                            "success_count": progress.get("success_count", 0),
+                            "failure_count": progress.get("failure_count", 0),
+                            "skipped_count": progress.get("skipped_count", 0),
+                            "sent_users": progress.get("sent_users", []),
+                            "failures": progress.get("failures", []),
+                            "stopped_at": progress.get("stopped_at"),
+                            "stop_reason": progress.get("stop_reason"),
+                            "last_checkpoint_at": progress.get("last_checkpoint_at"),
+                        }
+                        if progress.get("stopped_at") is not None:
+                            delay_sec = max(int(progress.get("retry_after", 60)), 5)
+                            send_claimed_payload["progress"]["retry_after"] = delay_sec
+                            job.job_payload = send_claimed_payload
+                            await session.commit()
+                            if final_attempt:
+                                await _set_job_state(
+                                    session,
+                                    job_id,
+                                    JOB_STATUS_FAILED,
+                                    error=f"Max retries exhausted, last stop reason: {progress.get('stop_reason')}",
+                                )
+                                return
+                            execute_agent_job.send_with_options(
+                                args=(agent_id, job_id), delay=delay_sec * 1000
+                            )
+                            bound_logger.info(
+                                "agent_send_claimed_partial_rescheduled",
+                                agent_id=agent_id,
+                                job_id=job_id,
+                                sent=progress.get("success_count", 0),
+                                reason=progress.get("stop_reason"),
+                            )
+                            handled = True
+                            return
+                        send_claimed_payload["result"] = result
+                        job.job_payload = send_claimed_payload
+                        success_count = progress.get("success_count", 0)
+                        total_count = progress.get("total_count", 0)
+                        if total_count > 0 and success_count == 0:
+                            job.status = JOB_STATUS_FAILED
+                            send_claimed_payload["last_error"] = "All messages failed to send"
                             await session.commit()
                             await _create_job_notification(
                                 session, job, status=JOB_STATUS_FAILED, result=result,

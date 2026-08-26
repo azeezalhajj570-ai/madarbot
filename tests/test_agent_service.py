@@ -3,6 +3,9 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import select
 
+from bot.agents.account_group_membership_service import AccountGroupMembershipService
+from bot.agents.account_session_service import AccountSessionService
+from bot.agents.agent_job_service import AgentJobService
 from bot.agents.auth import (
     AgentTelegramAuthResult,
     AgentTelegramAuthSession,
@@ -15,9 +18,6 @@ from bot.agents.contracts import (
     LinkedAccountIdentity,
 )
 from bot.agents.linked_account_service import LinkedAccountService
-from bot.agents.account_session_service import AccountSessionService
-from bot.agents.account_group_membership_service import AccountGroupMembershipService
-from bot.agents.agent_job_service import AgentJobService
 from bot.agents.runtime import GROUP_MEMBER_BROADCAST_JOB_TYPE
 from bot.agents.service import AgentService
 from bot.db.models import (
@@ -815,6 +815,188 @@ async def test_account_group_membership_service_returns_member_message_counts_an
     assert messages_payload["total"] == 2
     assert [message["message_id"] for message in messages_payload["messages"]] == [102, 101]
     assert messages_payload["messages"][0]["text"] == "second message"
+
+
+# ─── Bulk-add eligibility: membership (not admin/creator, not last scraper) ──
+
+
+async def _seed_agent_group_membership_rows(
+    db_session,
+    *,
+    owner_tg_id: int,
+    agent_tg_id: int,
+    group_tg_id: int,
+    last_agent_id: int | None = None,
+) -> dict[str, int]:
+    """Seed a User + Group + active Agent + ScrapedGroup, returning ids."""
+    user = User(tg_user_id=owner_tg_id, username=f"owner{owner_tg_id}", full_name="Owner")
+    db_session.add(user)
+    await db_session.flush()
+
+    group = Group(
+        tg_group_id=group_tg_id, title="Bulk Target Group", owner_user_id=user.id, is_active=True
+    )
+    db_session.add(group)
+    await db_session.flush()
+
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=agent_tg_id,
+        linked_by_user_id=user.tg_user_id,
+        external_account_id=f"member-agent-{agent_tg_id}",
+        status="active",
+        auth_state="active",
+        session_string="session:member",
+        details={},
+    )
+    db_session.add(agent)
+    await db_session.flush()
+
+    scraped_group = ScrapedGroup(
+        tg_group_id=group_tg_id,
+        title=group.title,
+        group_type="supergroup",
+        last_agent_id=last_agent_id if last_agent_id is not None else agent.id,
+        member_count=1,
+    )
+    db_session.add(scraped_group)
+    await db_session.flush()
+    await db_session.commit()
+
+    return {"agent_id": agent.id, "scraped_group_id": scraped_group.id}
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_eligibility_normal_member_can_be_selected(db_session) -> None:
+    """FR-001/FR-002/FR-008: a normal member (is_member=True, is_admin=False)
+    must get can_add_members=True and appear in the bulk-add target selector."""
+    ids = await _seed_agent_group_membership_rows(
+        db_session,
+        owner_tg_id=9001,
+        agent_tg_id=9101,
+        group_tg_id=-1009001,
+    )
+    db_session.add(
+        ScrapedMember(
+            scraped_group_id=ids["scraped_group_id"],
+            tg_group_id=-1009001,
+            tg_user_id=9101,  # the agent itself, as a normal member
+            username="agent_member",
+            full_name="Agent Member",
+            role="member",
+        )
+    )
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    groups = await service.list_managed_member_groups(
+        actor_user_id=9001,
+        agent_id=ids["agent_id"],
+    )
+
+    assert len(groups) == 1
+    entry = groups[0]
+    assert entry["is_member"] is True
+    assert entry["is_admin"] is False
+    assert entry["can_add_members"] is True
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_eligibility_admin_can_be_selected(db_session) -> None:
+    """FR-001/FR-002: an admin (is_member=True, is_admin=True) keeps
+    can_add_members=True and stays selectable."""
+    ids = await _seed_agent_group_membership_rows(
+        db_session,
+        owner_tg_id=9002,
+        agent_tg_id=9102,
+        group_tg_id=-1009002,
+    )
+    db_session.add(
+        ScrapedMember(
+            scraped_group_id=ids["scraped_group_id"],
+            tg_group_id=-1009002,
+            tg_user_id=9102,
+            username="agent_admin",
+            full_name="Agent Admin",
+            role="admin",
+        )
+    )
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    groups = await service.list_managed_member_groups(
+        actor_user_id=9002,
+        agent_id=ids["agent_id"],
+    )
+
+    assert len(groups) == 1
+    entry = groups[0]
+    assert entry["is_member"] is True
+    assert entry["is_admin"] is True
+    assert entry["can_add_members"] is True
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_eligibility_last_scraper_alone_is_not_membership(db_session) -> None:
+    """FR-003: last_agent_id alone (is_member=False) must NOT grant
+    can_add_members — the group is not selectable as a bulk-add target."""
+    ids = await _seed_agent_group_membership_rows(
+        db_session,
+        owner_tg_id=9003,
+        agent_tg_id=9103,
+        group_tg_id=-1009003,
+        last_agent_id=None,  # scraped_group.last_agent_id stays NULL
+    )
+    # No ScrapedMember row for the agent: it is not a member of the group.
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    groups = await service.list_managed_member_groups(
+        actor_user_id=9003,
+        agent_id=ids["agent_id"],
+    )
+
+    # The group is still visible via the last_agent_id filter in the listing
+    # query, but eligibility is denied: is_member=False and can_add_members=False.
+    assert len(groups) == 1
+    entry = groups[0]
+    assert entry["is_member"] is False
+    assert entry["can_add_members"] is False
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_eligibility_non_member_not_selectable(db_session) -> None:
+    """FR-008: a group the agent is not a member of is not eligible."""
+    ids = await _seed_agent_group_membership_rows(
+        db_session,
+        owner_tg_id=9004,
+        agent_tg_id=9104,
+        group_tg_id=-1009004,
+        last_agent_id=None,
+    )
+    # A ScrapedMember row for a *different* user — the agent is not a member.
+    db_session.add(
+        ScrapedMember(
+            scraped_group_id=ids["scraped_group_id"],
+            tg_group_id=-1009004,
+            tg_user_id=9204,
+            username="other_member",
+            full_name="Other Member",
+            role="member",
+        )
+    )
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    groups = await service.list_managed_member_groups(
+        actor_user_id=9004,
+        agent_id=ids["agent_id"],
+    )
+
+    assert len(groups) == 1
+    entry = groups[0]
+    assert entry["is_member"] is False
+    assert entry["can_add_members"] is False
 
 
 @pytest.mark.asyncio

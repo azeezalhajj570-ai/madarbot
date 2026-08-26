@@ -21,7 +21,6 @@ from bot.agents.jobs import normalize_member_add_payload
 from bot.agents.runtime import BulkAddMembersRuntime
 from bot.db.models import MemberOperation
 
-
 # ─── Issue #217: custom invite message ────────────────────────────────────────
 
 
@@ -658,3 +657,133 @@ async def test_bulk_add_runtime_resume_skips_processed_users_on_retry(
         {"user_id": 779001, "status": "success", "error_code": None},
         {"user_id": 779002, "status": "success", "error_code": None},
     ]
+
+
+# ─── Non-admin bulk add: Telegram remains the final authority ────────────────
+
+
+def _not_admin_result() -> SimpleNamespace:
+    return SimpleNamespace(
+        success=False,
+        error_code="NOT_ADMIN",
+        flood_wait_seconds=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_runtime_records_not_admin_failure_without_invalidating_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR-004/FR-005: when Telegram rejects an add with a permission error
+    (CHAT_ADMIN_REQUIRED -> NOT_ADMIN), the runtime records the failure for
+    that member and continues — the target group and its scraped data are
+    never deleted or invalidated."""
+    from bot.db.models import ScrapedGroup, ScrapedMember
+    from bot.db.models.audit import MembershipAuditLog
+
+    add_user_mock = AsyncMock(
+        side_effect=[
+            _not_admin_result(),
+            _success_result(),
+        ]
+    )
+    monkeypatch.setattr(
+        "bot.agents.group_membership.add_user_to_group",
+        add_user_mock,
+    )
+
+    # Recording session that keeps rows added via session.add().
+    class RecordingSession(_NoOpSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.added: list = []
+
+        def add(self, instance) -> None:
+            self.added.append(instance)
+            super().add(instance)
+
+    session = RecordingSession()
+    runtime = _RecordingRuntime()
+    payload = {
+        "target_tg_group_id": -100779001,
+        "user_ids": [779001, 779002],
+        "interval_seconds": 1800,
+        "send_invite_link_on_privacy_restricted": False,
+        "job_id": 1,
+    }
+    client = SimpleNamespace()
+    agent = _FakeAgent()
+
+    result = await runtime.execute(
+        client=client, agent=agent, payload=payload, session=session
+    )
+
+    # The permission failure is a per-member failure; the job keeps going.
+    assert result["results"] == [
+        {
+            "user_id": 779001,
+            "status": "failed",
+            "error_code": "NOT_ADMIN",
+        },
+        {
+            "user_id": 779002,
+            "status": "success",
+            "error_code": None,
+        },
+    ]
+    assert result["failure_count"] == 1
+    assert result["success_count"] == 1
+
+    # Nothing added to the session may delete or invalidate the target group
+    # or its scraped members.
+    for instance in session.added:
+        assert not isinstance(instance, (ScrapedGroup, ScrapedMember))
+    # A MembershipAuditLog is written for the failed add attempt.
+    assert any(
+        isinstance(instance, MembershipAuditLog)
+        and instance.result == "NOT_ADMIN"
+        for instance in session.added
+    )
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_runtime_continues_after_not_admin_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR-004/FR-006: a permission failure on one member does not stop the
+    batch; remaining members are still attempted."""
+    add_user_mock = AsyncMock(
+        side_effect=[
+            _not_admin_result(),
+            _not_admin_result(),
+            _success_result(),
+        ]
+    )
+    monkeypatch.setattr(
+        "bot.agents.group_membership.add_user_to_group",
+        add_user_mock,
+    )
+
+    runtime = _RecordingRuntime()
+    payload = {
+        "target_tg_group_id": -100779001,
+        "user_ids": [779001, 779002, 779003],
+        "interval_seconds": 1800,
+        "send_invite_link_on_privacy_restricted": False,
+        "job_id": 1,
+    }
+    client = SimpleNamespace()
+    agent = _FakeAgent()
+
+    result = await runtime.execute(
+        client=client, agent=agent, payload=payload, session=_NoOpSession()
+    )
+
+    assert add_user_mock.await_count == 3
+    assert [r["error_code"] for r in result["results"]] == [
+        "NOT_ADMIN",
+        "NOT_ADMIN",
+        None,
+    ]
+    assert result["failure_count"] == 2
+    assert result["success_count"] == 1

@@ -2400,7 +2400,10 @@
       const draft = state.ui.bulkAddMembersDraft || {};
       const selectedAgentId = Number(draft.agent_id || 0);
       const sourceGroups = selectedAgentId ? (state.cache.agentGroups[selectedAgentId] || []) : [];
-      const targetGroups = sourceGroups.filter((group) => Boolean(group.can_add_members));
+      // Membership grants bulk-add eligibility; admin status is not required
+      // (Telegram still enforces each add). `can_add_members` is retained as
+      // a backward-compatible alias of `is_member`.
+      const targetGroups = sourceGroups.filter((group) => group.is_member !== false && Boolean(group.can_add_members));
       const sourceGroupId = Number(draft.source_group_id || 0);
       const candidateMembers = sourceGroupId
         ? (state.cache.liveMemberSearch[liveMemberSearchKey(sourceGroupId, draft.user_query || "")] || [])

@@ -263,7 +263,14 @@ export interface AgentManagedGroup {
   group_type?: string
   member_count?: number
   messages_count?: number
+  /** Whether the agent is a member of the group (bulk-add eligibility). */
+  is_member?: boolean
+  /** Whether the agent is an admin/creator of the group. Independent of can_add_members. */
+  is_admin?: boolean
+  /** Deprecated — kept for backward compatibility; equals is_member. */
   can_add_members?: boolean
+  /** Whether the agent is a member (send-messages eligibility). Equals is_member. */
+  can_send_messages?: boolean
 }
 
 export interface MemberClaimInfo {
@@ -271,6 +278,18 @@ export interface MemberClaimInfo {
   agent_id: number
   is_own: boolean
   expires_at?: string | null
+}
+
+export interface ClaimConflict {
+  tg_user_id: number
+  claimed_by_agent_id: number
+  expires_at?: string | null
+}
+
+export interface ClaimResult {
+  status: string
+  claimed: number[]
+  conflicts: ClaimConflict[]
 }
 
 export interface AgentGroupMember {

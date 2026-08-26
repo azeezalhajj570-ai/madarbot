@@ -5,6 +5,7 @@ from typing import Any
 GROUP_MEMBER_BROADCAST_JOB_TYPE = "group_member_broadcast"
 ADD_CONTACT_JOB_TYPE = "add_contact"
 MEMBER_ADD_JOB_TYPE = "member_add"
+SEND_TO_CLAIMED_MEMBERS_JOB_TYPE = "send_to_claimed_members"
 SCRAPER_GROUP_INFO_JOB_TYPE = "scraper_group_info"
 SCRAPER_MEMBERS_JOB_TYPE = "scraper_members"
 SCRAPER_MESSAGES_JOB_TYPE = "scraper_messages"
@@ -222,4 +223,89 @@ def normalize_member_add_payload(payload: dict[str, Any] | None) -> dict[str, An
     custom_msg = normalized.get("custom_invite_message")
     if isinstance(custom_msg, str) and custom_msg.strip():
         result["custom_invite_message"] = custom_msg.strip()[:2000]
+    return result
+
+
+def normalize_send_to_claimed_members_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize a send-messages-to-claimed-members job payload.
+
+    Recipients are the agent's own claimed members (the endpoint verifies the
+    claims before creating the job), so no per-agent ownership exclusions are
+    applied here — the claim is the ownership.
+    """
+    normalized = dict(payload or {})
+
+    messages_raw = normalized.get("messages")
+    if not messages_raw:
+        message = str(normalized.get("message") or "").strip()
+        messages_raw = [message] if message else []
+    messages = [str(m).strip() for m in messages_raw if str(m).strip()]
+    if not messages:
+        raise ValueError("messages is required")
+
+    source_group_id = _normalize_group_reference(normalized.get("source_group_id"))
+    if source_group_id is None:
+        raise ValueError("source_group_id is required")
+
+    user_ids: list[int] = []
+    for value in list(normalized.get("user_ids") or []):
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in user_ids:
+            user_ids.append(uid)
+    if not user_ids:
+        raise ValueError("At least one valid user_id is required")
+
+    try:
+        threshold = int(normalized.get("threshold") or 500)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("threshold must be a positive integer") from exc
+    if threshold <= 0:
+        raise ValueError("threshold must be a positive integer")
+
+    interval_raw = normalized.get("interval_seconds", 0)
+    try:
+        interval_seconds = float(interval_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("interval_seconds must be a non-negative number") from exc
+    if interval_seconds < 0:
+        raise ValueError("interval_seconds must be a non-negative number")
+
+    interval_between_contacts = float(
+        normalized.get("interval_between_contacts") or interval_seconds
+    )
+    has_explicit_interval = normalized.get("interval_between_contacts") is not None
+    interval_strategy = str(normalized.get("interval_strategy") or "").strip().lower()
+    if not interval_strategy:
+        interval_strategy = (
+            "fixed" if has_explicit_interval and interval_between_contacts > 0 else "graduated"
+        )
+    if interval_strategy not in ("graduated", "fixed"):
+        raise ValueError("interval_strategy must be 'graduated' or 'fixed'")
+
+    media_urls_raw = normalized.get("media_urls")
+    if isinstance(media_urls_raw, list):
+        media_urls = [
+            str(u).strip() if u is not None and str(u).strip() else None for u in media_urls_raw
+        ]
+    else:
+        media_urls = []
+    if len(media_urls) < len(messages):
+        media_urls += [None] * (len(messages) - len(media_urls))
+
+    result = {
+        "target_type": "members",
+        "source_group_id": source_group_id,
+        "user_ids": user_ids,
+        "messages": messages,
+        "media_urls": media_urls[: len(messages)],
+        "message": "\n\n".join(messages),
+        "threshold": threshold,
+        "interval_seconds": interval_seconds,
+        "interval_between_contacts": interval_between_contacts,
+        "interval_strategy": interval_strategy,
+        "skip_bots": bool(normalized.get("skip_bots", True)),
+    }
     return result

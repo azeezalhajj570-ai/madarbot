@@ -11,10 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from telethon.errors import ChatAdminRequiredError
 
 from bot.agents.account_group_membership_service import AccountGroupMembershipService
-from bot.agents.agent_notification_service import AgentNotificationService
 from bot.agents.account_session_service import AccountSessionService
 from bot.agents.agent_job_service import AgentJobService
-from bot.agents.linked_account_service import LinkedAccountService
+from bot.agents.agent_notification_service import AgentNotificationService
 from bot.agents.dispatch import dispatch_agent_job
 from bot.agents.jobs import (
     JOB_STATUS_ABORTED,
@@ -29,12 +28,19 @@ from bot.agents.jobs import (
     SCRAPER_GROUP_INFO_JOB_TYPE,
     SCRAPER_MEMBERS_JOB_TYPE,
     SCRAPER_MESSAGES_JOB_TYPE,
+    SEND_TO_CLAIMED_MEMBERS_JOB_TYPE,
     normalize_member_add_payload,
+    normalize_send_to_claimed_members_payload,
 )
+from bot.agents.linked_account_service import LinkedAccountService
 from bot.db.models import AgentJob
 from bot.db.models.scraper import ScrapedMember
 from bot.db.session import get_session
-from bot.services.member_claim_service import claim_members
+from bot.services.member_claim_service import (
+    claim_members,
+    get_claim_status_for_members,
+    release_claims,
+)
 from bot.services.scraper_service import ScraperService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
 
@@ -47,22 +53,25 @@ from ..dependencies import (
     require_active_workspace,
     require_business_plan,
 )
-from .auth_boundary import require_agents_boundary, require_any_boundary
 from ._shared import (
     AgentJobCreateRequest,
     AgentLinkRequest,
     AgentLoginCodeRequest,
     AgentLoginPasswordRequest,
     AgentLoginStartRequest,
+    AgentSafetyUpdateRequest,
+    AgentUpdateRequest,
     BlacklistAddRequest,
     BlacklistResolveRequest,
     BulkMemberAddRequest,
     BulkPreflightRequest,
-    AgentSafetyUpdateRequest,
-    AgentUpdateRequest,
+    ClaimMembersRequest,
     LeadUpdateRequest,
+    ReleaseClaimsRequest,
+    SendToClaimedMembersRequest,
     serialize_agent,
 )
+from .auth_boundary import require_agents_boundary, require_any_boundary
 
 router = APIRouter(tags=["agents"])
 
@@ -214,6 +223,7 @@ async def webapp_agent_jobs(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     from sqlalchemy import select
+
     from bot.db.models.scraper import ScrapedGroup
 
     agent = await ensure_agent_admin(agent_id, session, identity)
@@ -283,6 +293,7 @@ async def webapp_agent_send_logs(
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     from sqlalchemy import desc, select
+
     from bot.db.models.agent import AgentJob, SentBroadcastMessage
 
     # Attribute actions to the USER ACCOUNT that owns the linked session,
@@ -464,8 +475,9 @@ async def webapp_agent_send_logs(
 
         group_ids = {int(msg.tg_group_id) for msg in rows if msg.tg_user_id is None}
         if group_ids:
-            from bot.db.models.scraper import ScrapedGroup
             from sqlalchemy import select as sql_select
+
+            from bot.db.models.scraper import ScrapedGroup
 
             group_rows = (
                 await session.execute(
@@ -746,6 +758,7 @@ async def webapp_stored_members(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     from sqlalchemy import select
+
     from bot.db.models import ScrapedGroup
 
     scraped_group = (
@@ -1097,6 +1110,188 @@ async def webapp_bulk_add_members(
         response["claimed_count"] = len(claim_result.claimed)
 
     return response
+
+
+@router.post(
+    "/api/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+async def webapp_claim_members(
+    agent_id: int,
+    payload: ClaimMembersRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Claim group members for an agent, reusing the Bulk Add claiming system."""
+    from sqlalchemy import select as sql_select
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    if agent.auth_state != "active":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Agent is not authenticated",
+        )
+
+    from bot.db.models.scraper import ScrapedGroup
+
+    scraped_group_result = await session.execute(
+        sql_select(ScrapedGroup).where(ScrapedGroup.tg_group_id == payload.source_tg_group_id)
+    )
+    scraped_group = scraped_group_result.scalar_one_or_none()
+    if scraped_group is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Source group not found",
+        )
+
+    claim_result = await claim_members(
+        session,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        scraped_group_id=scraped_group.id,
+        tg_user_ids=payload.user_ids,
+    )
+    await session.commit()
+
+    return {
+        "status": "ok",
+        "claimed": list(claim_result.claimed),
+        "conflicts": [
+            {
+                "tg_user_id": c.tg_user_id,
+                "claimed_by_agent_id": c.claimed_by_agent_id,
+                "expires_at": c.expires_at.isoformat(),
+            }
+            for c in claim_result.conflicts
+        ],
+    }
+
+
+@router.delete(
+    "/api/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+@router.delete(
+    "/webapp/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+async def webapp_release_claims(
+    agent_id: int,
+    payload: ReleaseClaimsRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Release this agent's own claims (agent + workspace scoped)."""
+    agent = await ensure_agent_admin(agent_id, session, identity)
+
+    released = await release_claims(
+        session,
+        tenant_id=agent.tenant_id,
+        agent_id=agent.id,
+        claim_ids=payload.claim_ids,
+    )
+    await session.commit()
+    return {"status": "ok", "released": released}
+
+
+@router.post(
+    "/api/agents/{agent_id}/claimed-send", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/claimed-send", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+async def webapp_send_to_claimed_members(
+    agent_id: int,
+    payload: SendToClaimedMembersRequest,
+    identity: TelegramWebAppIdentity = Depends(require_active_subscription),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Send messages to members claimed by this agent.
+
+    Recipients must already be actively claimed by this agent (FR-006/FR-007).
+    Unclaimed or other-agent-claimed members are rejected with a conflict
+    report and no job is created (FR-012/FR-021).
+    """
+    from sqlalchemy import select as sql_select
+
+    agent = await ensure_agent_admin(agent_id, session, identity)
+    if agent.auth_state != "active":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Agent is not authenticated",
+        )
+    try:
+        normalized = normalize_send_to_claimed_members_payload(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    user_ids = normalized.get("user_ids", [])
+
+    # Verify every recipient is actively claimed by THIS agent.
+    claims = await get_claim_status_for_members(
+        session,
+        tenant_id=agent.tenant_id,
+        tg_user_ids=user_ids,
+        current_agent_id=agent.id,
+    )
+
+    unclaimed: list[int] = []
+    claimed_by_other: list[dict[str, Any]] = []
+    claim_ids: list[int] = []
+    for uid in user_ids:
+        claim = claims.get(uid)
+        if claim is None:
+            unclaimed.append(uid)
+        elif claim.agent_id != agent.id:
+            claimed_by_other.append(
+                {
+                    "tg_user_id": uid,
+                    "claimed_by_agent_id": claim.agent_id,
+                    "expires_at": claim.expires_at.isoformat(),
+                }
+            )
+        else:
+            claim_ids.append(claim.claim_id)
+
+    if unclaimed or claimed_by_other:
+        return {
+            "status": "conflicts",
+            "unclaimed": unclaimed,
+            "claimed_by_other": claimed_by_other,
+        }
+
+    try:
+        job = await AgentJobService(session).create_job(
+            actor_user_id=identity.user_id,
+            agent_id=agent.id,
+            job_type=SEND_TO_CLAIMED_MEMBERS_JOB_TYPE,
+            job_payload=normalized,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    # Persist claim_ids so the runtime releases them on completion.
+    normalized["claim_ids"] = claim_ids
+    job.job_payload = normalized
+    await session.commit()
+
+    await dispatch_agent_job(job.id)
+
+    return {
+        "status": "ok",
+        "job": {
+            "id": job.id,
+            "agent_id": agent.id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "user_count": len(user_ids),
+            "source_tg_group_id": normalized.get("source_group_id"),
+        },
+    }
 
 
 @router.post(
@@ -1516,9 +1711,10 @@ async def webapp_agent_analytics(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
-    from bot.services.agent_lead_service import AgentLeadService
     from sqlalchemy import func, select
+
     from bot.db.models import AgentJob, AgentNotification
+    from bot.services.agent_lead_service import AgentLeadService
 
     lead_stats = await AgentLeadService(session).lead_stats(agent_id=agent.id)
 
