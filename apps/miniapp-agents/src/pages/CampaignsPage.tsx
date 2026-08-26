@@ -432,6 +432,8 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
               onClaimsLoaded={setMyClaimIds}
               onEmptyChange={setBulkMembersEmpty}
               onSelectedOwnClaimIdsChange={setSelectedOwnClaimIds}
+              hideSelectControls
+              hideEmptyState
             />
             {bulkSourceGroup && bulkMembersEmpty ? (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
