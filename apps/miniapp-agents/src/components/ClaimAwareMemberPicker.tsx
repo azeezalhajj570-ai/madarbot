@@ -30,6 +30,10 @@ type ClaimAwareMemberPickerProps = {
   onEmptyChange?: (isEmpty: boolean) => void
   /** Claim ids of the currently SELECTED members that are claimed by this agent. */
   onSelectedOwnClaimIdsChange?: (claimIds: number[]) => void
+  /** Hide the "Select members (N)" header and the select-all/unselect-all buttons. */
+  hideSelectControls?: boolean
+  /** Hide the "No members found" empty-state container. */
+  hideEmptyState?: boolean
 }
 
 type StatusFilter = 'all' | 'privacy_restricted' | 'claimed' | 'added' | 'invited' | 'processed' | 'available'
@@ -55,6 +59,8 @@ export function ClaimAwareMemberPicker({
   onClaimsLoaded,
   onEmptyChange,
   onSelectedOwnClaimIdsChange,
+  hideSelectControls = false,
+  hideEmptyState = false,
 }: ClaimAwareMemberPickerProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -156,29 +162,33 @@ export function ClaimAwareMemberPicker({
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({selected.length})</label>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            aria-label={t('automation.filterStatus')}
-            style={{
-              fontSize: 11, padding: '3px 6px', borderRadius: 8,
-              border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)',
-              color: 'var(--miniapp-text-primary)', fontFamily: 'inherit',
-            }}
-          >
-            <option value="all">{t('automation.filterAll')}</option>
-            <option value="privacy_restricted">{t('automation.filterPrivacyRestricted')}</option>
-            <option value="claimed">{t('automation.filterClaimed')}</option>
-            <option value="added">{t('automation.filterAdded')}</option>
-            <option value="invited">{t('automation.filterInvited')}</option>
-            <option value="processed">{t('automation.filterProcessed')}</option>
-            <option value="available">{t('automation.filterAvailable')}</option>
-          </select>
-          <button type="button" onClick={selectAll} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
-          <button type="button" onClick={() => onSelectedChange([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
-        </div>
+        {hideSelectControls ? null : (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({selected.length})</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                aria-label={t('automation.filterStatus')}
+                style={{
+                  fontSize: 11, padding: '3px 6px', borderRadius: 8,
+                  border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)',
+                  color: 'var(--miniapp-text-primary)', fontFamily: 'inherit',
+                }}
+              >
+                <option value="all">{t('automation.filterAll')}</option>
+                <option value="privacy_restricted">{t('automation.filterPrivacyRestricted')}</option>
+                <option value="claimed">{t('automation.filterClaimed')}</option>
+                <option value="added">{t('automation.filterAdded')}</option>
+                <option value="invited">{t('automation.filterInvited')}</option>
+                <option value="processed">{t('automation.filterProcessed')}</option>
+                <option value="available">{t('automation.filterAvailable')}</option>
+              </select>
+              <button type="button" onClick={selectAll} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
+              <button type="button" onClick={() => onSelectedChange([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
+            </div>
+          </>
+        )}
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-text-muted)', cursor: 'pointer' }}>
         <input type="checkbox" checked={exclude} onChange={(e) => { const v = e.target.checked; if (onExcludeAdminsBotsChange) onExcludeAdminsBotsChange(v); setInternalExclude(v) }} />
@@ -193,7 +203,7 @@ export function ClaimAwareMemberPicker({
       />
       <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8 }}>
         {searching ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.searching')}</div> : null}
-        {!searching && members.length === 0 ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
+        {!searching && members.length === 0 && !hideEmptyState ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
         {visibleMembers.map((m) => {
           const inTarget = targetMemberIds.has(m.user_id)
           const persistedAdded = !!m.already_added

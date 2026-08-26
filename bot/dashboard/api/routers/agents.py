@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.exc import IntegrityError
@@ -616,6 +617,62 @@ async def webapp_sync_workspace(
     agent = await ensure_agent_admin(agent_id, session, identity)
     synced = await ScraperService(session).sync_agent_groups(agent_id=agent.id)
     return {"status": "ok", "count": len(synced)}
+
+
+@router.post(
+    "/api/agents/{agent_id}/media/upload", dependencies=[Depends(require_agents_boundary)]
+)
+@router.post(
+    "/webapp/agents/{agent_id}/media/upload", dependencies=[Depends(require_agents_boundary)]
+)
+async def webapp_agent_media_upload(
+    agent_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    """Save an uploaded media file and return its public URL.
+
+    The miniapp uploads images/videos/PDFs here (sandboxed WebViews block
+    browser downloads), stores them under the static /uploads mount, and the
+    send runtime later downloads the URL and sends it via Telethon.
+    """
+    import re
+    import uuid
+
+    from bot.dashboard.api.main import UPLOADS_DIR
+
+    await ensure_agent_admin(agent_id, session, identity)
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="missing_filename")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty_upload")
+    max_bytes = 45 * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="file_too_large",
+        )
+
+    safe_base = re.sub(r"[^A-Za-z0-9._-]", "_", Path(file.filename).name).strip("._") or "file"
+    ext = Path(safe_base).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".pdf"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_file_type")
+
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    try:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        (UPLOADS_DIR / unique_name).write_bytes(data)
+    except OSError as exc:
+        logger.warning("media_upload_save_failed", agent_id=agent_id, error=str(exc))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="upload_failed")
+
+    base_url = str(request.base_url).rstrip("/")
+    return {"url": f"{base_url}/uploads/{unique_name}"}
 
 
 @router.get(
