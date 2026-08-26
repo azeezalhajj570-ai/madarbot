@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { FormActions } from '../../components/FormActions'
+import { ClaimAwareMemberPicker } from '../../components/ClaimAwareMemberPicker'
 
 import {
   agentsApi,
@@ -17,7 +17,6 @@ import {
 } from '@miniapp/shared'
 import type {
   Agent,
-  AgentGroupMember,
   AgentManagedGroup,
   AutomationTask,
   TaskCatalogItem,
@@ -34,68 +33,6 @@ const BULK_ADD_ITEM: TaskCatalogItem = {
   title: 'Bulk Add Members',
   description: 'Add members from a source group to a target group',
   executor_types: ['agent'],
-}
-
-// Compact status icon with a hover tooltip. The tooltip is rendered through a
-// portal to document.body and centered on the screen, so it is never clipped by
-// the member-list scroll container.
-function StatusIcon({ kind, color, title, detail }: { kind: 'check' | 'error' | 'clock' | 'mail' | 'lock' | 'selected' | 'shield' | 'bot'; color: string; title: string; detail?: string }) {
-  const paths: Record<string, string> = {
-    check: 'M5 12l4 4L19 6',
-    error: 'M12 8v4m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z',
-    clock: 'M12 6v6l4 2M12 22a10 10 0 100-20 10 10 0 000 20z',
-    mail: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm18 0l-9 6-9-6',
-    lock: 'M5 11h14v9H5v-9zm3 0V7a4 4 0 018 0v4',
-    selected: 'M9 12l2 2 4-4m1 11H6a2 2 0 01-2-2V7a2 2 0 012-2h3m4 0h3a2 2 0 012 2v9',
-    shield: 'M12 3l7 3v5c0 4.4-3 7.4-7 9-4-1.6-7-4.6-7-9V6l7-3z',
-    bot: 'M12 8a3 3 0 100 6 3 3 0 000-6zm-7 3h2m10 0h2M12 2v2',
-  }
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      <span
-        style={{ display: 'inline-flex', flexShrink: 0, cursor: 'help' }}
-        aria-label={title}
-        role="img"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <path d={paths[kind]} />
-        </svg>
-      </span>
-      {open ? createPortal(
-        <span
-          className="mb-tip"
-          role="tooltip"
-          style={{
-            position: 'fixed',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            minWidth: 220,
-            maxWidth: 'min(320px, calc(100vw - 32px))',
-            padding: '10px 14px',
-            background: 'var(--miniapp-surface)',
-            border: '1px solid var(--miniapp-border)',
-            borderRadius: 8,
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
-            fontSize: 12,
-            lineHeight: 1.5,
-            color: 'var(--miniapp-text-primary)',
-            zIndex: 1000,
-            pointerEvents: 'none',
-            textAlign: 'center',
-          }}
-        >
-          <span style={{ fontWeight: 600 }}>{title}</span>
-          {detail ? <div style={{ color: 'var(--miniapp-text-secondary)', wordBreak: 'break-word' }}>{detail}</div> : null}
-        </span>,
-        document.body,
-      ) : null}
-    </>
-  )
 }
 
 // Map task keys to i18n labels so catalog titles and descriptions
@@ -219,20 +156,16 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   const [bulkTargetGroup, setBulkTargetGroup] = useState<SelectedGroupChip | null>(null)
   const [bulkSourceGroupQuery, setBulkSourceGroupQuery] = useState('')
   const [bulkTargetGroupQuery, setBulkTargetGroupQuery] = useState('')
-  const [bulkMemberQuery, setBulkMemberQuery] = useState('')
-  const [bulkMembers, setBulkMembers] = useState<AgentGroupMember[]>([])
-  const [bulkMemberTotal, setBulkMemberTotal] = useState(0)
-  const [bulkMemberPage, setBulkMemberPage] = useState(1)
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<number[]>([])
-  const [bulkTargetMemberIds, setBulkTargetMemberIds] = useState<Set<number>>(new Set())
   const [bulkInterval, setBulkInterval] = useState('3600')
   const [bulkRiskAcknowledged, setBulkRiskAcknowledged] = useState(false)
   const [bulkSendInvite, setBulkSendInvite] = useState(false)
   const [bulkCustomMessage, setBulkCustomMessage] = useState('')
   const [bulkExcludeAdminsBots, setBulkExcludeAdminsBots] = useState(true)
-  const [bulkStatusFilter, setBulkStatusFilter] = useState('all')
-  const [bulkSearching, setBulkSearching] = useState(false)
-  const [bulkLoadingTarget, setBulkLoadingTarget] = useState(false)
+  // Members already part of a running/pending member_add job for the selected
+  // target group are "held" — disable re-selection so the same member isn't
+  // queued twice while the earlier job is still in flight.
+  const [bulkHeldMemberIds, setBulkHeldMemberIds] = useState<Set<number>>(new Set())
 
   const canSave = useMemo(() => {
     if (isBulkAdd) {
@@ -311,34 +244,6 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   }, [isBulkAdd, account.id, bulkTargetGroupQuery])
 
   useEffect(() => {
-    if (!isBulkAdd || !bulkSourceGroup?.tg_group_id) { setBulkMembers([]); setBulkMemberTotal(0); return }
-    setBulkSearching(true)
-    void agentsApi.searchAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id, bulkMemberQuery || undefined, 50, false, bulkMemberPage, 'message_count', false, false, bulkTargetGroup?.tg_group_id)
-      .then((res) => { setBulkMembers(res.members || []); setBulkMemberTotal(res.total || 0) })
-      .catch(() => { setBulkMembers([]); setBulkMemberTotal(0) })
-      .finally(() => setBulkSearching(false))
-  }, [isBulkAdd, account.id, bulkSourceGroup?.tg_group_id, bulkMemberQuery, bulkMemberPage, bulkTargetGroup?.tg_group_id])
-
-  useEffect(() => { setBulkMemberPage(1); setBulkSelectedMembers([]) }, [bulkSourceGroup?.tg_group_id, bulkMemberQuery])
-
-  useEffect(() => {
-    if (!isBulkAdd || !bulkTargetGroup?.tg_group_id) { setBulkTargetMemberIds(new Set()); return }
-    setBulkLoadingTarget(true)
-    void agentsApi.fetchTargetGroupMembers(account.id, bulkTargetGroup.tg_group_id)
-      .then((res) => {
-        const ids = new Set(res.user_ids || [])
-        setBulkTargetMemberIds(ids)
-        setBulkSelectedMembers((prev) => prev.filter((id) => !ids.has(id)))
-      })
-      .catch(() => setBulkTargetMemberIds(new Set()))
-      .finally(() => setBulkLoadingTarget(false))
-  }, [isBulkAdd, account.id, bulkTargetGroup?.tg_group_id])
-
-  // Members already part of a running/pending member_add job for the selected
-  // target group are "held" — disable re-selection so the same member isn't
-  // queued twice while the earlier job is still in flight.
-  const [bulkHeldMemberIds, setBulkHeldMemberIds] = useState<Set<number>>(new Set())
-  useEffect(() => {
     if (!isBulkAdd || !bulkTargetGroup?.tg_group_id) { setBulkHeldMemberIds(new Set()); return }
     let cancelled = false
     void agentsApi.fetchAgentJobs(account.id, 'member_add', 100, true)
@@ -405,12 +310,7 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
     setBulkTargetGroup(null)
     setBulkSourceGroupQuery('')
     setBulkTargetGroupQuery('')
-    setBulkMemberQuery('')
-    setBulkMembers([])
-    setBulkMemberTotal(0)
-    setBulkMemberPage(1)
     setBulkSelectedMembers([])
-    setBulkTargetMemberIds(new Set())
     setBulkHeldMemberIds(new Set())
     setBulkInterval('3600')
     setBulkRiskAcknowledged(false)
@@ -588,118 +488,22 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                   loading={bulkTargetGroupsLoading}
                   mode="single"
                   selectedGroup={bulkTargetGroup}
-                  onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery(''); setBulkMemberPage(1); setBulkSelectedMembers([]) }}
-                  onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery(''); setBulkMemberPage(1); setBulkSelectedMembers([]) }}
+                  onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
+                  onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
                   t={t}
                 />
                 {bulkSourceGroup?.tg_group_id ? (
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-text-primary)' }}>{t('automation.bulkSelectMembers')} ({bulkSelectedMembers.length})</label>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <select
-                          value={bulkStatusFilter}
-                          onChange={(e) => setBulkStatusFilter(e.target.value)}
-                          aria-label={t('automation.filterStatus')}
-                          style={{
-                            fontSize: 11, padding: '3px 6px', borderRadius: 8,
-                            border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)',
-                            color: 'var(--miniapp-text-primary)', fontFamily: 'inherit',
-                          }}
-                        >
-                          <option value="all">{t('automation.filterAll')}</option>
-                          <option value="privacy_restricted">{t('automation.filterPrivacyRestricted')}</option>
-                          <option value="claimed">{t('automation.filterClaimed')}</option>
-                          <option value="added">{t('automation.filterAdded')}</option>
-                          <option value="invited">{t('automation.filterInvited')}</option>
-                          <option value="processed">{t('automation.filterProcessed')}</option>
-                          <option value="available">{t('automation.filterAvailable')}</option>
-                        </select>
-                        <button type="button" onClick={() => setBulkSelectedMembers(bulkMembers.filter((m) => !bulkTargetMemberIds.has(m.user_id) && !m.already_added && !bulkHeldMemberIds.has(m.user_id) && !m.claim && !m.invitation_status && !m.processed && !(bulkExcludeAdminsBots && (m.is_bot || m.role === 'creator' || m.role === 'admin'))).map((m) => m.user_id))} style={{ fontSize: 11, color: 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.selectAll')}</button>
-                        <button type="button" onClick={() => setBulkSelectedMembers([])} style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>{t('automation.unselectAll')}</button>
-                      </div>
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--miniapp-text-muted)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={bulkExcludeAdminsBots} onChange={(e) => setBulkExcludeAdminsBots(e.target.checked)} />
-                      {t('automation.excludeAdminsBots')}
-                    </label>
-                    <input
-                      type="text"
-                      value={bulkMemberQuery}
-                      onChange={(e) => setBulkMemberQuery(e.target.value)}
-                      placeholder={t('automation.searchMembers')}
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10, border: '1px solid var(--miniapp-border)', background: 'var(--miniapp-surface)', color: 'var(--miniapp-text-primary)', fontSize: 13, fontFamily: 'inherit' }}
-                    />
-                    <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--miniapp-border-soft)', borderRadius: 8 }}>
-                      {bulkSearching ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.searching')}</div> : null}
-                      {!bulkSearching && bulkMembers.length === 0 ? <div style={{ padding: 12, textAlign: 'center', color: 'var(--miniapp-text-muted)', fontSize: 13 }}>{t('automation.noMembersFound')}</div> : null}
-                      {bulkMembers
-                        .filter((m) => !bulkExcludeAdminsBots || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin'))
-                        .filter((m) => {
-                          if (bulkStatusFilter === 'all') return true
-                          const inTarget = bulkTargetMemberIds.has(m.user_id)
-                          const persistedAdded = !!m.already_added
-                          const processed = !!m.processed
-                          const claim = m.claim
-                          const heldByOther = !!(claim && !claim.is_own)
-                          const heldBySelf = !!(claim && claim.is_own)
-                          const invited = !!m.invitation_status
-                          const inRunningJob = bulkHeldMemberIds.has(m.user_id)
-                          const isPrivacyRestricted = !!m.privacy_restricted
-                          switch (bulkStatusFilter) {
-                            case 'privacy_restricted': return isPrivacyRestricted
-                            case 'claimed': return heldByOther || heldBySelf || inRunningJob
-                            case 'added': return inTarget || persistedAdded
-                            case 'invited': return invited
-                            case 'processed': return processed
-                            case 'available': return !inTarget && !persistedAdded && !processed && !heldByOther && !invited && !inRunningJob && !isPrivacyRestricted
-                            default: return true
-                          }
-                        })
-                        .map((m) => {
-                        const inTarget = bulkTargetMemberIds.has(m.user_id)
-                        const persistedAdded = !!m.already_added
-                        const processed = !!m.processed
-                        const selected = bulkSelectedMembers.includes(m.user_id)
-                        const claim = m.claim
-                        const heldByOther = !!(claim && !claim.is_own)
-                        const heldBySelf = !!(claim && claim.is_own)
-                        const invited = !!m.invitation_status
-                        const joinedViaInvite = m.invitation_status?.status === 'joined'
-                        const invitedByOther = !!(m.invitation_status && m.invitation_status.is_own === false)
-                        const inRunningJob = bulkHeldMemberIds.has(m.user_id)
-                        const isDisabled = inTarget || persistedAdded || processed || heldByOther || invited || inRunningJob
-                        return (
-                          <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: isDisabled ? 'default' : 'pointer', opacity: isDisabled ? 0.5 : 1, borderBottom: '1px solid var(--miniapp-border-soft)' }}>
-                            <input type="checkbox" checked={selected || !!heldBySelf} disabled={isDisabled} onChange={() => setBulkSelectedMembers((prev) => prev.includes(m.user_id) ? prev.filter((id) => id !== m.user_id) : [...prev, m.user_id])} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--miniapp-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.full_name || `User ${m.user_id}`}</div>
-                              {m.username ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>@{m.username}</div> : null}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                              {inTarget || persistedAdded ? <StatusIcon kind="check" color="var(--miniapp-coral)" title={joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')} /> : null}
-                              {processed && !inTarget && !persistedAdded ? <StatusIcon kind="error" color={m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)'} title={m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')} detail={m.processing_error || undefined} /> : null}
-                              {inRunningJob ? <StatusIcon kind="clock" color="#e67e22" title={t('automation.inRunningJob')} /> : null}
-                              {invited && !joinedViaInvite ? <StatusIcon kind="mail" color={invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)'} title={invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')} /> : null}
-                              {heldByOther ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.heldByOther')} /> : null}
-                              {heldBySelf ? <StatusIcon kind="selected" color="var(--miniapp-coral)" title={t('automation.selectedByYou')} /> : null}
-                              {m.role === 'admin' || m.role === 'creator' ? <StatusIcon kind="shield" color="var(--miniapp-clay)" title={m.role} /> : null}
-                              {m.is_bot ? <StatusIcon kind="bot" color="var(--miniapp-text-muted)" title={t('campaigns.bot')} /> : null}
-                              {m.privacy_restricted ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.privacyRestricted')} /> : null}
-                            </div>
-                          </label>
-                        )
-                      })}
-                    </div>
-                    {bulkMemberTotal > 50 ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, fontSize: 12 }}>
-                        <button type="button" disabled={bulkMemberPage <= 1} onClick={() => setBulkMemberPage((p) => p - 1)} style={{ fontSize: 12, color: bulkMemberPage <= 1 ? 'var(--miniapp-text-muted)' : 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: bulkMemberPage <= 1 ? 'default' : 'pointer' }}>{t('automation.prev')}</button>
-                        <span style={{ color: 'var(--miniapp-text-muted)' }}>{bulkMemberPage} / {Math.ceil(bulkMemberTotal / 50)}</span>
-                        <button type="button" disabled={bulkMemberPage * 50 >= bulkMemberTotal} onClick={() => setBulkMemberPage((p) => p + 1)} style={{ fontSize: 12, color: bulkMemberPage * 50 >= bulkMemberTotal ? 'var(--miniapp-text-muted)' : 'var(--miniapp-coral)', background: 'none', border: 'none', cursor: bulkMemberPage * 50 >= bulkMemberTotal ? 'default' : 'pointer' }}>{t('automation.next')}</button>
-                      </div>
-                    ) : null}
-                    {bulkLoadingTarget ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('automation.loadingTarget')}</div> : null}
-                  </div>
+                  <ClaimAwareMemberPicker
+                    account={account}
+                    sourceGroup={bulkSourceGroup}
+                    targetGroup={bulkTargetGroup}
+                    heldMemberIds={bulkHeldMemberIds}
+                    selected={bulkSelectedMembers}
+                    onSelectedChange={setBulkSelectedMembers}
+                    excludeAdminsBots={bulkExcludeAdminsBots}
+                    onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
+                    pageSize={50}
+                  />
                 ) : null}
                 <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="3600" />
                 {Number(bulkInterval) > 0 && Number(bulkInterval) < 60 * 60 ? (

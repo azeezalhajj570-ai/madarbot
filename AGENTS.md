@@ -204,6 +204,16 @@ agent.
   rate limits, records per-member results, and releases the claims in a
   `finally` block — sending never reassigns a claim (FR-009/017/020).
 
+### Shared member picker
+
+The Bulk Add task widget and the Send Messages page use the **same member-list
+component**: `apps/miniapp-agents/src/components/ClaimAwareMemberPicker.tsx`
+(checkbox rows, status icons via `components/StatusIcon.tsx`, status filter,
+exclude-admins/bots toggle, select-all/unselect-all, search, pagination,
+claim-aware disable). The send-messages group autocomplete also filters to
+membership-eligible groups (`is_member !== false && can_send_messages !== false`),
+the same as the bulk-add target picker.
+
 See `specs/021-send-messages-member-claiming/spec.md`.
 
 ## Owner Dashboard Scoping
