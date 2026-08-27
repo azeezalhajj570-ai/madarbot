@@ -645,6 +645,7 @@
     "heldByOther": "held by another agent",
     "heldBySelf": "claimed by you",
     "claimedSendConflicts": "{unclaimed} member(s) are not claimed and {other} are claimed by another agent — claim them first",
+    "claimedSendSkipped": "Sending to {count} member(s); {skipped} already held by another agent were skipped",
     "syncCompleted": "Sync completed",
     "syncFailed": "Sync failed",
     "failedSearchMembers": "Failed to search group members",

@@ -68,9 +68,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [bulkMemberStatus, setBulkMemberStatus] = useState<string | null>(null)
   const [bulkMembersEmpty, setBulkMembersEmpty] = useState(false)
   const [bulkSelectedMembers, setBulkSelectedMembers] = useState<number[]>([])
-  const [claimingMembers, setClaimingMembers] = useState(false)
-  const [releasingClaims, setReleasingClaims] = useState(false)
-  const [myClaimIds, setMyClaimIds] = useState<number[]>([])
   const [bulkScheduleMode, setBulkScheduleMode] = useState<'now' | 'schedule'>('now')
   const [bulkScheduledAt, setBulkScheduledAt] = useState('')
   const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
@@ -166,7 +163,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages(['']); setBulkMediaUrls([null])
     setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
-    setBulkSelectedMembers([]); setBulkMemberStatus(null); setMyClaimIds([])
+    setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
     setExcludeAdmins(false); setBulkSummary(null); setEditingCampaignId(null)
@@ -226,10 +223,27 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
         if (bulkTargetType === 'members') {
           // Claimed-members send: the recipients must already be claimed by
           // this agent. Unclaimed/other-agent members are rejected by the
-          // backend with a conflict report (FR-021/FR-012).
-          const result = await agentsApi.sendToClaimedMembers(account.id, {
+          // backend with a conflict report (FR-021/FR-012). Claim the selected
+          // members up front (idempotent) so sends work regardless of whether
+          // the picker's claims were released or expired.
+          const claimResult = await agentsApi.claimMembers(account.id, {
             source_tg_group_id: bulkSourceGroup!.tg_group_id,
             user_ids: bulkSummary.filtered_user_ids,
+          })
+          const otherConflicts = claimResult.conflicts.filter((c) => c.claimed_by_agent_id !== account.id)
+          const recipientIds = bulkSummary.filtered_user_ids.filter(
+            (id) =>
+              claimResult.claimed.includes(id) ||
+              claimResult.conflicts.some((c) => c.tg_user_id === id && c.claimed_by_agent_id === account.id),
+          )
+          if (recipientIds.length === 0) {
+            notify(t('campaigns.claimedSendConflicts', { unclaimed: bulkSummary.filtered_user_ids.length, other: otherConflicts.length }))
+            setBulkSummary(null)
+            return
+          }
+          const result = await agentsApi.sendToClaimedMembers(account.id, {
+            source_tg_group_id: bulkSourceGroup!.tg_group_id,
+            user_ids: recipientIds,
             messages: filledMessages,
             media_urls: bulkMediaUrls,
             threshold,
@@ -237,16 +251,19 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
             interval_between_contacts: intervalContacts,
           })
           if (result.status === 'conflicts') {
+            // Rare race: a claim expired/reassigned between our claim and the send.
             const unclaimedCount = result.unclaimed?.length ?? 0
             const otherCount = result.claimed_by_other?.length ?? 0
             notify(t('campaigns.claimedSendConflicts', { unclaimed: unclaimedCount, other: otherCount }))
             setBulkSummary(null)
-            setBulkSaving(false)
             return
           }
+          if (otherConflicts.length > 0) {
+            notify(t('campaigns.claimedSendSkipped', { count: recipientIds.length, skipped: otherConflicts.length }), 'info')
+          } else {
+            onSaved(t('campaigns.queued'))
+          }
           setBulkSummary(null); resetForm(); setStatus(null)
-          onSaved(t('campaigns.queued'))
-          setBulkSaving(false)
           return
         }
         const jobPayload: Record<string, unknown> = {
@@ -286,39 +303,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
       setBulkSummary(result)
     } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedPrepare')) }
     finally { setLoadingBulkSummary(false) }
-  }
-
-  /** Claim ids of the selected members that are already claimed by this agent. */
-  const [selectedOwnClaimIds, setSelectedOwnClaimIds] = useState<number[]>([])
-
-  async function handleClaimMembers() {
-    if (!bulkSourceGroup?.tg_group_id || !bulkSelectedMembers.length) return
-    setClaimingMembers(true)
-    try {
-      const result = await agentsApi.claimMembers(account.id, {
-        source_tg_group_id: bulkSourceGroup.tg_group_id,
-        user_ids: bulkSelectedMembers,
-      })
-      if (result.conflicts.length) {
-        notify(t('campaigns.claimConflicts', { claimed: result.claimed.length, conflicts: result.conflicts.length }))
-      } else if (result.claimed.length) {
-        notify(t('campaigns.claimedCount', { count: result.claimed.length }), 'success')
-      }
-    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedClaim')) }
-    finally { setClaimingMembers(false) }
-  }
-
-  async function handleReleaseClaims() {
-    if (!selectedOwnClaimIds.length) return
-    setReleasingClaims(true)
-    try {
-      const result = await agentsApi.releaseClaims(account.id, selectedOwnClaimIds)
-      if (result.released > 0) {
-        setMyClaimIds((c) => c.filter((id) => !selectedOwnClaimIds.includes(id)))
-        notify(t('campaigns.releasedCount', { count: result.released }), 'success')
-      }
-    } catch (error) { notify(error instanceof Error ? error.message : t('campaigns.failedRelease')) }
-    finally { setReleasingClaims(false) }
   }
 
   return (
@@ -365,9 +349,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     pageSize={20}
                     selected={bulkSelectedMembers}
                     onSelectedChange={setBulkSelectedMembers}
-                    onClaimsLoaded={setMyClaimIds}
                     onEmptyChange={setBulkMembersEmpty}
-                    onSelectedOwnClaimIdsChange={setSelectedOwnClaimIds}
                     hideEmptyState
                   />
                   {bulkSourceGroup && bulkMembersEmpty ? (
