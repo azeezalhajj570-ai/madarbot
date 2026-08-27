@@ -166,7 +166,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     setBulkSelectedMembers([]); setBulkMemberStatus(null)
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
-    setExcludeAdmins(false); setBulkSummary(null); setEditingCampaignId(null)
+    setExcludeAdmins(true); setBulkSummary(null); setEditingCampaignId(null)
     setStatus(null)
   }
 
@@ -350,6 +350,9 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     selected={bulkSelectedMembers}
                     onSelectedChange={setBulkSelectedMembers}
                     onEmptyChange={setBulkMembersEmpty}
+                    excludeAdminsBots={excludeAdmins}
+                    onExcludeAdminsBotsChange={setExcludeAdmins}
+                    autoClaim
                     hideEmptyState
                   />
                   {bulkSourceGroup && bulkMembersEmpty ? (
