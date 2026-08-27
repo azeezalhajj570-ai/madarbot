@@ -847,7 +847,6 @@ async def test_add_user_to_group_real_channel_still_uses_channel_path(
 
     from bot.agents import group_membership as gm
 
-    user_peer = SimpleNamespace(id=8078506561, bot=False, access_hash=12345)
     group_entity = SimpleNamespace(
         id=5488771951, title="TEST0007", megagroup=False, bot=False
     )
