@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusIcon } from './StatusIcon'
@@ -24,6 +24,12 @@ type ClaimAwareMemberPickerProps = {
   onExcludeAdminsBotsChange?: (value: boolean) => void
   /** Page size (bulk-add uses 50; send-messages uses 20). */
   pageSize?: number
+  /**
+   * When true, selecting a member automatically claims it for this agent
+   * (idempotent) so the claim status shows in the list and downstream
+   * operations (send/add) are immediately eligible.
+   */
+  autoClaim?: boolean
   /** Expose claim state for parent buttons (claim/release). */
   onClaimsLoaded?: (ownClaimIds: number[]) => void
   /** Called when the current search has no members (empty source group). */
@@ -61,6 +67,7 @@ export function ClaimAwareMemberPicker({
   onSelectedOwnClaimIdsChange,
   hideSelectControls = false,
   hideEmptyState = false,
+  autoClaim = false,
 }: ClaimAwareMemberPickerProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -73,17 +80,19 @@ export function ClaimAwareMemberPicker({
   const [loadingTarget, setLoadingTarget] = useState(false)
   const [heldIds, setHeldIds] = useState<Set<number>>(new Set())
   const [internalExclude, setInternalExclude] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const claimedRef = useRef<Set<number>>(new Set())
   const exclude = excludeAdminsBots ?? internalExclude
 
   // Search members from the source group.
   useEffect(() => {
     if (!sourceGroup?.tg_group_id) { setMembers([]); setTotal(0); return }
     setSearching(true)
-    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, false, page, 'message_count', false, false, targetGroup?.tg_group_id)
+    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, exclude, page, 'message_count', exclude, false, targetGroup?.tg_group_id)
       .then((res) => { setMembers(res.members || []); setTotal(res.total || 0) })
       .catch(() => { setMembers([]); setTotal(0) })
       .finally(() => setSearching(false))
-  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id])
+  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id, exclude, refreshKey])
 
   // Members already in the target group are flagged and disabled.
   useEffect(() => {
@@ -94,6 +103,39 @@ export function ClaimAwareMemberPicker({
       .catch(() => setTargetMemberIds(new Set()))
       .finally(() => setLoadingTarget(false))
   }, [account.id, targetGroup?.tg_group_id])
+
+  // Auto-claim selected members (opt-in) so the claim status renders in the
+  // list and the claimed-send/member-add job is immediately eligible. Claims
+  // are idempotent per (tenant, member): already-self-claimed members come
+  // back as conflicts attributed to this agent and are recorded as claimed.
+  const selectedKey = selected.join(',')
+  useEffect(() => {
+    if (!autoClaim || !sourceGroup?.tg_group_id || selected.length === 0) return
+    const toClaim = selected.filter((id) => !claimedRef.current.has(id))
+    if (toClaim.length === 0) return
+    const timer = window.setTimeout(() => {
+      void agentsApi.claimMembers(account.id, {
+        source_tg_group_id: sourceGroup!.tg_group_id,
+        user_ids: toClaim,
+      })
+        .then((res) => {
+          let changed = false
+          for (const id of res.claimed) {
+            claimedRef.current.add(id)
+            changed = true
+          }
+          for (const c of res.conflicts) {
+            if (c.claimed_by_agent_id === account.id) {
+              claimedRef.current.add(c.tg_user_id)
+              changed = true
+            }
+          }
+          if (changed) setRefreshKey((k) => k + 1)
+        })
+        .catch(() => {})
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [autoClaim, account.id, sourceGroup?.tg_group_id, selectedKey])
 
   // Members held by running/pending jobs (passed in by the parent when known).
   useEffect(() => { setHeldIds(new Set(heldMemberIds || [])) }, [heldMemberIds])
@@ -123,6 +165,10 @@ export function ClaimAwareMemberPicker({
   }, [members, selected, onSelectedOwnClaimIdsChange])
 
   useEffect(() => { setPage(1) }, [sourceGroup?.tg_group_id, query])
+
+  // Reset the auto-claim memory when the source group changes so a member of a
+  // different group is claimed for its own group.
+  useEffect(() => { claimedRef.current.clear() }, [sourceGroup?.tg_group_id, targetGroup?.tg_group_id])
 
   const toggle = (userId: number) => {
     onSelectedChange(selected.includes(userId) ? selected.filter((id) => id !== userId) : [...selected, userId])
