@@ -211,30 +211,34 @@ async def add_user_to_group(
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
-    group_is_channel = isinstance(group_entity, Channel) or bool(
-        getattr(group_entity, "megagroup", False)
-    )
-    if not group_is_channel and isinstance(group_id, int) and group_id <= -1000000000000:
-        # Marked -100 ids are channels/megagroups even when entity resolution
-        # returned a legacy Chat object.
-        group_is_channel = True
-
+    # A group is a channel when its resolved entity is a Channel/megagroup. A
+    # -100-prefixed id usually denotes a channel/supergroup, but a genuine legacy
+    # basic group (Chat) can also carry such an id in some databases. In that
+    # case we must not force the channel path (which would try to build an
+    # InputPeerChannel from a Chat and fail, mapping to PEER_NOT_FOUND); instead
+    # confirm via the input entity and fall back to the legacy group path.
     invite_peer = group_entity
-    if group_is_channel and not isinstance(group_entity, Channel):
-        resolved = None
-        try:
-            candidate = await client.get_input_entity(group_id)
-            if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
-                resolved = candidate
-        except (ValueError, KeyError):
-            resolved = None
-        if resolved is None:
-            dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
-            if isinstance(dialogs_entity, Channel):
-                resolved = dialogs_entity
-        if resolved is None:
-            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
-        invite_peer = resolved
+    if not isinstance(group_entity, Channel) and not bool(
+        getattr(group_entity, "megagroup", False)
+    ):
+        group_is_channel = False
+        if isinstance(group_id, int) and group_id <= -1000000000000:
+            try:
+                candidate = await client.get_input_entity(group_id)
+                if isinstance(candidate, (InputPeerChannel, InputPeerChannelFromMessage)):
+                    group_is_channel = True
+                    invite_peer = candidate
+                elif candidate is not None:
+                    dialogs_entity = await _resolve_group_from_dialogs(client, group_id)
+                    if isinstance(dialogs_entity, Channel):
+                        group_is_channel = True
+                        invite_peer = dialogs_entity
+                    else:
+                        group_is_channel = False
+            except (ValueError, KeyError):
+                group_is_channel = False
+    else:
+        group_is_channel = True
 
     try:
         if group_is_channel:

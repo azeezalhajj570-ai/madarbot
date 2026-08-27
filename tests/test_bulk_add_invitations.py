@@ -787,3 +787,92 @@ async def test_bulk_add_runtime_continues_after_not_admin_failure(
     ]
     assert result["failure_count"] == 2
     assert result["success_count"] == 1
+
+
+# ─── Issue #273: basic groups (legacy Chat) must not force the channel path ──
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_basic_group_uses_legacy_chat_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FR: a legacy basic group (Chat, not a Channel) with a -100-prefixed id in
+    the DB must be added via AddChatUserRequest, not forced onto the channel
+    path (which used to fail to build an InputPeerChannel and map to
+    PEER_NOT_FOUND)."""
+    from bot.agents import group_membership as gm
+
+    group_entity = SimpleNamespace(
+        id=5488771951, title="TEST0007", megagroup=False, bot=False
+    )
+
+    rpc_calls: list[str] = []
+
+    class _BasicClient:
+        async def get_entity(self, entity):
+            return group_entity
+
+        async def get_input_entity(self, entity):
+            return SimpleNamespace()
+
+        async def __call__(self, request):
+            rpc_calls.append(type(request).__name__)
+            return SimpleNamespace(updates=[])
+
+    client = _BasicClient()
+    monkeypatch.setattr(
+        gm, "_resolve_group_from_dialogs", AsyncMock(return_value=None)
+    )
+
+    result = await gm.add_user_to_group(
+        client, -1005488771951, 8078506561, access_hash=12345, verify=False
+    )
+
+    assert result.success is True
+    assert result.error_code is None
+    # Only the legacy AddChatUserRequest RPC may be issued; the channel invite
+    # path must never be used for a basic group (which used to yield
+    # PEER_NOT_FOUND).
+    assert rpc_calls == ["AddChatUserRequest"]
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_real_channel_still_uses_channel_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The channel path must still be used when get_input_entity resolves a
+    real InputPeerChannel for a -100 id (supergroups that surfaced as a Chat)."""
+    from telethon.tl.functions.channels import InviteToChannelRequest
+    from telethon.tl.types import InputPeerChannel
+
+    from bot.agents import group_membership as gm
+
+    user_peer = SimpleNamespace(id=8078506561, bot=False, access_hash=12345)
+    group_entity = SimpleNamespace(
+        id=5488771951, title="TEST0007", megagroup=False, bot=False
+    )
+    channel_peer = InputPeerChannel(channel_id=5488771951, access_hash=12345)
+
+    rpc_calls: list[str] = []
+
+    class _ChannelClient:
+        async def get_entity(self, entity):
+            return group_entity
+
+        async def get_input_entity(self, entity):
+            return channel_peer
+
+        async def __call__(self, request):
+            assert isinstance(request, InviteToChannelRequest)
+            rpc_calls.append(type(request).__name__)
+            return SimpleNamespace(missing_invitees=[], users=[])
+
+    client = _ChannelClient()
+
+    result = await gm.add_user_to_group(
+        client, -1005488771951, 8078506561, access_hash=12345, verify=False
+    )
+
+    assert result.success is True
+    assert result.error_code is None
+    assert rpc_calls == ["InviteToChannelRequest"]
