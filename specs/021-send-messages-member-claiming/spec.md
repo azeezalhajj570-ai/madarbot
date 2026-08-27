@@ -38,8 +38,10 @@ Multiple agents are supported naturally by repeating the claim operation.
 
 Only the action after claiming differs. The claim system is shared verbatim:
 `MemberClaim` model, `claim_members` / `release_claims` services, the member-list
-claim annotation, the `claim_ids`-in-payload + runtime release pattern, and the
-`AgentJob` + Dramatiq worker pipeline.
+claim annotation, the `claim_ids`-in-payload pattern, and the `AgentJob` +
+Dramatiq worker pipeline. For sends, claims are intentionally kept after the
+job finishes (TTL expiry cleans them up); for bulk-add they are released in a
+runtime `finally`.
 
 ## Requirements (FR-001 … FR-021)
 
@@ -114,7 +116,8 @@ claim annotation, the `claim_ids`-in-payload + runtime release pattern, and the
 - Constant: `SEND_TO_CLAIMED_MEMBERS_JOB_TYPE = "send_to_claimed_members"`
 - Normalizer: `normalize_send_to_claimed_members_payload` (messages required;
   source_group_id required; ≥1 user_id; interval fields; media_urls aligned).
-- Payload stores `claim_ids` (released by the runtime `finally`).
+- Payload stores `claim_ids`; claims are NOT released when the job finishes —
+  members stay claimed by this agent until the claim TTL expires.
 
 ## Files Changed
 
@@ -126,8 +129,8 @@ claim annotation, the `claim_ids`-in-payload + runtime release pattern, and the
 - `bot/agents/agent_job_service.py` — `create_job` branch (normalize + skip
   ownership exclusions + broadcast rate-limit preflight) and
   `_job_queued_notification` mapping.
-- `bot/agents/runtime.py` — `SendToClaimedMembersRuntime` (broadcast send loop +
-  bulk-add claim-release `finally`).
+- `bot/agents/runtime.py` — `SendToClaimedMembersRuntime` (broadcast send loop;
+  claims intentionally kept after the job finishes, TTL expires them).
 - `bot/agents/worker.py` — dispatch branch (partial-reschedule on `stopped_at`,
   complete/fail logic) + notification branch.
 - `bot/agents/account_group_membership_service.py` — `can_send_messages` field
