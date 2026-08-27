@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, memo } from 'react'
+import { useMemo, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 export interface ColumnDef<T> {
@@ -53,7 +53,7 @@ function DebouncedInput({ value, onChange, placeholder }: { value: string; onCha
   )
 }
 
-const TableRow = memo(function TableRow<T>({
+function TableRow<T>({
   row, columns, keyField, onRowClick, isExpanded, onToggleExpand, renderExpanded,
 }: {
   row: T
@@ -89,7 +89,7 @@ const TableRow = memo(function TableRow<T>({
       ) : null}
     </>
   )
-})
+}
 
 export function DataTable<T extends Record<string, unknown>>({
   data, columns, keyField,
