@@ -50,7 +50,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [showSendForm, setShowSendForm] = useState(false)
 
   // Send form
-  const [qsSelectedCampaignId, setQsSelectedCampaignId] = useState<number | ''>('')
   const [showQuickCreate, setShowQuickCreate] = useState(false)
   const [quickName, setQuickName] = useState('')
   const [quickMessage, setQuickMessage] = useState('')
@@ -77,9 +76,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
   const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_SCHEDULE)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
-  const [syncingAdminsBots, setSyncingAdminsBots] = useState(false)
   const [scrapingGroup, setScrapingGroup] = useState(false)
-  const [syncAdminsBotsStatus, setSyncAdminsBotsStatus] = useState<string | null>(null)
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [bulkSaving, setBulkSaving] = useState(false)
@@ -165,12 +162,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     return () => clearTimeout(timer)
   }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
 
-  useEffect(() => {
-    if (qsSelectedCampaignId === '') return
-    const campaign = campaigns.find((c) => c.id === qsSelectedCampaignId)
-    if (campaign?.message_template) setBulkMessages([campaign.message_template])
-  }, [qsSelectedCampaignId])
-
   function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages(['']); setBulkMediaUrls([null])
     setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
@@ -179,7 +170,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
     setExcludeAdmins(false); setBulkSummary(null); setEditingCampaignId(null)
-    setQsSelectedCampaignId(''); setStatus(null)
+    setStatus(null)
   }
 
   async function handleSend() {
@@ -339,23 +330,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
         ) : null}
         {showSendForm ? (
           <div className="mb-send-flow">
-            {/* Campaign selector */}
-            <div className="mb-section">
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.campaignOptional')}</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
-                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', colorScheme: 'dark' }}>
-                    <option value="">{t('campaigns.noCampaign')}</option>
-                    {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-                  </select>
-                  <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}
-                    aria-label={t('campaigns.createCampaign')}
-                    style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }}>+</button>
-                </div>
-              </label>
-            </div>
-
             {/* Step 1: Audience */}
             <div className="mb-section">
               <div className="mb-step-head">
@@ -384,14 +358,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     selectedGroup={bulkSourceGroup}
                     onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
                     onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery(''); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
-                    syncButton={<button type="button" disabled={syncingAdminsBots} onClick={async () => {
-                      if (!account || !bulkSourceGroup) return; setSyncingAdminsBots(true); setSyncAdminsBotsStatus(null)
-                      try { const r = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id); setSyncAdminsBotsStatus(r.message || t('campaigns.syncCompleted')) }
-                      catch (e) { setSyncAdminsBotsStatus(e instanceof Error ? e.message : t('campaigns.syncFailed')) }
-                      finally { setSyncingAdminsBots(false) }
-                    }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
                   />
-                  {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
                   <ClaimAwareMemberPicker
                     account={account}
                     sourceGroup={bulkSourceGroup}
@@ -401,7 +368,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     onClaimsLoaded={setMyClaimIds}
                     onEmptyChange={setBulkMembersEmpty}
                     onSelectedOwnClaimIdsChange={setSelectedOwnClaimIds}
-                    hideSelectControls
                     hideEmptyState
                   />
                   {bulkSourceGroup && bulkMembersEmpty ? (
@@ -417,15 +383,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     </div>
                   ) : null}
                   {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
-                  <div className="mb-claimbar">
-                    <Button tone="secondary" disabled={claimingMembers || !bulkSelectedMembers.length} onClick={() => void handleClaimMembers()}>
-                      {claimingMembers ? t('campaigns.claiming') : t('campaigns.claimSelected')}
-                    </Button>
-                    <Button tone="secondary" disabled={releasingClaims || selectedOwnClaimIds.length === 0} onClick={() => void handleReleaseClaims()}>
-                      {releasingClaims ? t('campaigns.releasing') : t('campaigns.releaseMyClaims')}
-                    </Button>
-                    {myClaimIds.length > 0 ? <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.myClaimsCount', { count: myClaimIds.length })}</span> : null}
-                  </div>
                 </>
               ) : (
                 <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} t={t}
@@ -435,13 +392,13 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
               )}
             </div>
 
-            {/* Step 2: Compose */}
+            {/* Step 2: Compose & delivery */}
             <div className="mb-section">
               <div className="mb-step-head">
                 <span className="mb-step-num">2</span>
                 <div>
-                  <div className="mb-step-title">{t('campaigns.stepCompose')}</div>
-                  <div className="mb-step-sub">{t('campaigns.stepComposeSub')}</div>
+                  <div className="mb-step-title">{t('campaigns.stepOptions')}</div>
+                  <div className="mb-step-sub">{t('campaigns.stepOptionsSub')}</div>
                 </div>
               </div>
               <MessageComposer
@@ -451,18 +408,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                 onChange={(messages, mediaUrls) => { setBulkMessages(messages); setBulkMediaUrls(mediaUrls) }}
                 onError={(msg) => notify(msg)}
               />
-            </div>
-
-            {/* Step 3: Delivery */}
-            <div className="mb-section">
-              <div className="mb-step-head">
-                <span className="mb-step-num">3</span>
-                <div>
-                  <div className="mb-step-title">{t('campaigns.stepDeliver')}</div>
-                  <div className="mb-step-sub">{t('campaigns.stepDeliverSub')}</div>
-                </div>
-              </div>
-
               <details className="mb-delivery">
                 <summary>{t('campaigns.deliverySettings')}</summary>
                 <div style={{ display: 'grid', gap: 10 }}>
@@ -519,8 +464,11 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
       </Card>
 
       {/* Campaigns list */}
-      {campaigns.length > 0 ? (
-        <Card title={t('campaigns.campaigns')} subtitle={t('campaigns.campaignsSubtitle')}>
+      <Card title={t('campaigns.campaigns')} subtitle={t('campaigns.campaignsSubtitle')}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button tone="secondary" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}>{t('campaigns.newCampaign')}</Button>
+        </div>
+        {campaigns.length > 0 ? (
           <div style={{ display: 'grid', gap: 6 }}>
             {campaigns.map((c) => (
               <div key={c.id} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--miniapp-border-soft)', background: 'var(--miniapp-surface)', display: 'grid', gap: 5 }}>
@@ -594,8 +542,10 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
               </div>
             ))}
           </div>
-        </Card>
-      ) : null}
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.noCampaigns')}</div>
+        )}
+      </Card>
 
       {/* Campaign create modal */}
       {showQuickCreate ? (
@@ -611,7 +561,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                 if (!quickName.trim() || !quickMessage.trim()) return; setQuickSaving(true)
                 try {
                   const c = await agentsApi.createCampaign(account.id, { name: quickName.trim(), message_template: quickMessage.trim() })
-                  setCampaigns((prev) => [...prev, c]); setQsSelectedCampaignId(c.id); setBulkMessages([quickMessage.trim()]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
+                  setCampaigns((prev) => [...prev, c]); setShowQuickCreate(false); onSaved(t('campaigns.campaignCreated'))
                 } catch (e) { notify(e instanceof Error ? e.message : t('campaigns.failedCreate')) }
                 finally { setQuickSaving(false) }
               }}>{t('common.save')}</Button>
