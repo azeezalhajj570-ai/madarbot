@@ -87,8 +87,10 @@ export function MessageComposer({
               <button
                 type="button"
                 onClick={() => {
-                  updateMessages(messages.filter((_, j) => j !== i))
-                  updateMediaUrls(mediaUrls.filter((_, j) => j !== i))
+                  onChange(
+                    messages.filter((_, j) => j !== i),
+                    mediaUrls.filter((_, j) => j !== i),
+                  )
                 }}
                 aria-label={t('campaigns.removeMessage')}
                 style={{
@@ -154,8 +156,7 @@ export function MessageComposer({
       <button
         type="button"
         onClick={() => {
-          updateMessages([...messages, ''])
-          updateMediaUrls([...mediaUrls, null])
+          onChange([...messages, ''], [...mediaUrls, null])
         }}
         style={{
           background: 'var(--miniapp-bg)',

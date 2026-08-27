@@ -145,7 +145,7 @@ function resolveAvailableInitData() {
   return readStoredInitData()
 }
 
-function buildUrl(path: string, params?: QueryParams) {
+export function buildUrl(path: string, params?: QueryParams) {
   const url = new URL(path, `${apiBaseUrl}/`)
   if (!params) {
     return url.toString()

@@ -512,7 +512,6 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                       excludeAdminsBots={bulkExcludeAdminsBots}
                       onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
                       pageSize={50}
-                      hideSelectControls
                     />
                   ) : null}
                 </div>

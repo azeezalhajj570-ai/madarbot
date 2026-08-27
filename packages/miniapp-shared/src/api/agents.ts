@@ -1,4 +1,4 @@
-import { apiClient, ensureMiniappToken } from './base'
+import { apiClient, buildUrl, ensureMiniappToken } from './base'
 import type {
   Agent,
   AgentAnalytics,
@@ -416,26 +416,55 @@ export async function resolveBlacklistPhones(agentId: number, phones: string[]) 
 }
 
 export async function uploadAgentMedia(agentId: number, file: File) {
-  const token = await ensureMiniappToken()
-  const headers: Record<string, string> = {
-    'X-App-Boundary': 'agents',
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  } else {
-    const initData = window.Telegram?.WebApp?.initData?.trim()
-    if (initData) {
-      headers['X-Telegram-Init-Data'] = initData
+  const url = buildUrl(`/webapp/agents/${agentId}/media/upload`)
+
+  async function buildHeaders(forceTokenRefresh = false) {
+    if (forceTokenRefresh) {
+      // clear cached token so ensureMiniappToken mints a fresh one
+      window.sessionStorage.removeItem('miniapp_auth_token')
     }
+    const token = await ensureMiniappToken()
+    const headers: Record<string, string> = {
+      'X-App-Boundary': 'agents',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    } else {
+      const initData = window.Telegram?.WebApp?.initData?.trim()
+      if (initData) {
+        headers['X-Telegram-Init-Data'] = initData
+      }
+    }
+    return headers
   }
 
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`/webapp/agents/${agentId}/media/upload`, { method: 'POST', headers, body: form })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text.slice(0, 100) || `Upload failed with status ${res.status}`)
+
+  async function send(forceTokenRefresh = false) {
+    const res = await fetch(url, { method: 'POST', headers: await buildHeaders(forceTokenRefresh), body: form })
+    return res
   }
+
+  let res = await send()
+  if (res.status === 401) {
+    res = await send(true)
+  }
+
+  if (!res.ok) {
+    let detail = `Upload failed with status ${res.status}`
+    try {
+      const payload = await res.json()
+      if (payload && typeof payload === 'object' && typeof payload.detail === 'string') {
+        detail = payload.detail
+      }
+    } catch {
+      const text = await res.text()
+      if (text) detail = text.slice(0, 100)
+    }
+    throw new Error(detail)
+  }
+
   return res.json() as Promise<{ url: string }>
 }
 
