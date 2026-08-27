@@ -201,8 +201,10 @@ agent.
   or other-agent-claimed members are rejected with a conflict report and no job
   is created (FR-021).
 - The runtime sends via the claiming agent's session, enforces the per-agent
-  rate limits, records per-member results, and releases the claims in a
-  `finally` block — sending never reassigns a claim (FR-009/017/020).
+  rate limits, records per-member results, and does NOT release the claims when
+  the job finishes — members stay claimed by this agent (badge persists, other
+  agents cannot grab them) until the 30-minute claim TTL expires. Sending never
+  reassigns a claim (FR-009/017/020).
 
 ### Shared member picker
 

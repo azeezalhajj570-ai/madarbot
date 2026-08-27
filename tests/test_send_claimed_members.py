@@ -3,7 +3,9 @@
 Covers:
 - Payload normalization for send_to_claimed_members.
 - The runtime sends via the claiming agent's session and records per-member results.
-- Claims are released on completion and are never reassigned by a failed send (FR-009/020).
+- Claims are kept after the send (not released on completion) so members stay
+  claimed by this agent until the TTL expires; a failed send never reassigns
+  a claim (FR-009/020).
 - Unclaimed / other-agent-claimed members are rejected at job creation (FR-012/021).
 """
 
@@ -273,16 +275,16 @@ async def test_send_claimed_runtime_survives_failed_send_and_keeps_claim(
 
     assert result["success_count"] == 0
     assert result["failure_count"] == 1
-    # The claim ids were passed to the runtime and are released in finally, but
-    # nothing reassigns them — the claim remains on the same agent.
+    # Nothing reassigns the claim — the member stays with the claiming agent.
     assert result["total_count"] == 1
 
 
 @pytest.mark.asyncio
-async def test_send_claimed_runtime_releases_claims_in_finally(
+async def test_send_claimed_runtime_keeps_claims_after_send(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Claims are released when the operation finishes (mirrors bulk-add)."""
+    """Members stay claimed after the send task is created — the runtime must
+    NOT release the claims when the job finishes (TTL expiry handles cleanup)."""
     release_mock = AsyncMock(return_value=2)
     monkeypatch.setattr(
         "bot.services.member_claim_service.release_claims", release_mock
@@ -303,11 +305,7 @@ async def test_send_claimed_runtime_releases_claims_in_finally(
         client=_fake_client(), agent=_FakeAgent(), payload=_payload(), session=session
     )
 
-    release_mock.assert_awaited()
-    call_kwargs = release_mock.await_args.kwargs
-    assert call_kwargs["tenant_id"] == 1
-    assert call_kwargs["agent_id"] == 42
-    assert call_kwargs["claim_ids"] == [11, 12]
+    release_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -945,8 +945,9 @@ class SendToClaimedMembersRuntime:
 
     Reuses the per-member rate limiting, pending->sent dedup, checkpointing and
     per-member result recording of the broadcast runtime, but recipients are the
-    agent's own claimed members. Claims are released in ``finally`` (mirrors
-    ``BulkAddMembersRuntime``) and are never reassigned by a send (FR-009/017/020).
+    agent's own claimed members. Claims are intentionally NOT released when the
+    job finishes — members stay claimed until the TTL expires so the "claimed by
+    you" badge persists and other agents cannot grab them mid/after a send.
     """
 
     def __init__(self, *, sleep=asyncio.sleep) -> None:
@@ -984,8 +985,6 @@ class SendToClaimedMembersRuntime:
 
         redis_client = Redis.from_url(get_settings().redis_url, decode_responses=True)
         limiter = AgentRateLimiter(redis_client)
-        agent_tenant_id = agent.tenant_id
-        agent_id_val = agent.id
         try:
             await check_agent_health(client)
 
@@ -1269,29 +1268,10 @@ class SendToClaimedMembersRuntime:
                 "target_type": "members",
             }
         finally:
-            # Release member claims for this operation — sending never
-            # reassigns a claim (FR-009/FR-017/FR-020).
-            claim_ids = payload.get("claim_ids")
-            if claim_ids and agent_tenant_id:
-                try:
-                    from bot.db.session import SessionLocal
-                    from bot.services.member_claim_service import release_claims
-
-                    async with SessionLocal() as claim_session:
-                        await release_claims(
-                            claim_session,
-                            tenant_id=agent_tenant_id,
-                            agent_id=agent_id_val,
-                            claim_ids=claim_ids,
-                        )
-                        await claim_session.commit()
-                except Exception as exc:
-                    logger.warning(
-                        "send_claimed_claim_release_failed",
-                        agent_id=agent_id_val,
-                        claim_ids=claim_ids,
-                        error=str(exc),
-                    )
+            # Claims are intentionally NOT released here: members stay claimed
+            # by this agent after the send task is created so they keep showing
+            # the "claimed by you" badge and other agents cannot grab them. The
+            # claim TTL still expires them naturally.
             await redis_client.aclose()
 
 
