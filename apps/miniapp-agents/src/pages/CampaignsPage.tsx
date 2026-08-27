@@ -73,6 +73,11 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [bulkSendMode, setBulkSendMode] = useState<'standard' | 'recurring'>('standard')
   const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_SCHEDULE)
   const [excludeAdmins, setExcludeAdmins] = useState(true)
+  // Members already part of a running/pending send_to_claimed_members job for
+  // the selected source group are "held" — disable re-selection so the same
+  // member isn't queued twice while the earlier job is still in flight (same
+  // behavior as the bulk-add task's member picker).
+  const [bulkHeldMemberIds, setBulkHeldMemberIds] = useState<Set<number>>(new Set())
   const [scrapingGroup, setScrapingGroup] = useState(false)
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
@@ -159,11 +164,39 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     return () => clearTimeout(timer)
   }, [account.id, bulkSourceGroupQuery, bulkTargetGroupQuery])
 
+  // Members currently targeted by a running/pending send_to_claimed_members job
+  // for the selected source group are "held" — they show the running-job clock
+  // badge and are disabled in the picker (parity with the bulk-add picker).
+  useEffect(() => {
+    if (!bulkSourceGroup?.tg_group_id) { setBulkHeldMemberIds(new Set()); return }
+    let cancelled = false
+    void agentsApi.fetchAgentJobs(account.id, 'send_to_claimed_members', 100, true)
+      .then((jobs) => {
+        if (cancelled) return
+        const held = new Set<number>()
+        for (const j of jobs) {
+          const active = ['running', 'pending', 'queued'].includes(j.status)
+          if (!active) continue
+          const payload = j.job_payload || {}
+          if (Number(payload.source_group_id) !== bulkSourceGroup.tg_group_id) continue
+          const ids = Array.isArray(payload.user_ids) ? payload.user_ids : []
+          for (const uid of ids) {
+            const n = Number(uid)
+            if (n > 0) held.add(n)
+          }
+        }
+        setBulkHeldMemberIds(held)
+      })
+      .catch(() => setBulkHeldMemberIds(new Set()))
+    return () => { cancelled = true }
+  }, [account.id, bulkSourceGroup?.tg_group_id])
+
   function resetForm() {
     setBulkTargetType('members'); setBulkSourceGroupQuery(''); setBulkSourceGroup(null); setBulkMessages(['']); setBulkMediaUrls([null])
     setBulkThreshold('25'); setBulkIntervalSeconds('5'); setBulkIntervalContacts('5'); setMessagesPerDay(String(account.max_messages_per_day ?? 30))
     setBulkTargetGroupQuery(''); setBulkSelectedTargetGroups([])
     setBulkSelectedMembers([]); setBulkMemberStatus(null)
+    setBulkHeldMemberIds(new Set())
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
     setExcludeAdmins(true); setBulkSummary(null); setEditingCampaignId(null)
@@ -346,6 +379,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                   <ClaimAwareMemberPicker
                     account={account}
                     sourceGroup={bulkSourceGroup}
+                    heldMemberIds={bulkHeldMemberIds}
                     pageSize={20}
                     selected={bulkSelectedMembers}
                     onSelectedChange={setBulkSelectedMembers}
