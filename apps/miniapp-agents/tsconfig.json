@@ -14,7 +14,9 @@
     "baseUrl": ".",
     "paths": {
       "@miniapp/shared": ["../../packages/miniapp-shared/src/index.ts"],
-      "@miniapp/shared/*": ["../../packages/miniapp-shared/src/*"]
+      "@miniapp/shared/*": ["../../packages/miniapp-shared/src/*"],
+      "react": ["node_modules/@types/react"],
+      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime"]
     }
   },
   "include": ["src", "../../packages/miniapp-shared/src"]

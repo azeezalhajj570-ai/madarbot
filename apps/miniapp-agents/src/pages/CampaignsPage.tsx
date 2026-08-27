@@ -5,6 +5,7 @@ import { formatDateTime, formatTime } from '../i18n/format'
 import { FormActions } from '../components/FormActions'
 import { BlacklistSection } from '../features/blacklist/BlacklistSection'
 import { ClaimAwareMemberPicker } from '../components/ClaimAwareMemberPicker'
+import { MessageComposer } from '../components/MessageComposer'
 import { SchedulePicker, DEFAULT_SCHEDULE } from '../components/SchedulePicker'
 import type { ScheduleConfig } from '../components/SchedulePicker'
 
@@ -32,14 +33,14 @@ const BULK_MESSAGE_TASK_KEY = 'group_member_broadcast'
 
 const _groupNameCache: Record<number, string> = {}
 
-export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agent; workspaceId?: number | null; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
+export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agent; workspaceId?: string | null; onSaved: (message: string, kind?: 'error' | 'success' | 'info') => void }) {
   const { t } = useTranslation()
 
   // Ensure claim/send requests carry the active workspace context so the
   // backend validates workspace ownership (FR-011).
   useEffect(() => {
     if (workspaceId) {
-      void import('@miniapp/shared').then(({ setWorkspaceContext }) => setWorkspaceContext(String(workspaceId)))
+      void import('@miniapp/shared').then(({ setWorkspaceContext }) => setWorkspaceContext(workspaceId))
     }
   }, [workspaceId])
 
@@ -82,7 +83,6 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [bulkSaving, setBulkSaving] = useState(false)
-  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null)
   const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
   const [groupNameMap, setGroupNameMap] = useState<Record<number, string>>({})
 
@@ -337,231 +337,185 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
         {!showSendForm ? (
           <Button onClick={() => { resetForm(); setShowSendForm(true) }}>{t('campaigns.newMessage')}</Button>
         ) : null}
-        {showSendForm ? (<>
-        {/* Campaign selector */}
-        <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.campaignOptional')}</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', colorScheme: 'dark' }}>
-              <option value="">{t('campaigns.noCampaign')}</option>
-              {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-            </select>
-            <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}
-              style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }} title={t('campaigns.createCampaign')}>+</button>
-          </div>
-        </div>
+        {showSendForm ? (
+          <div className="mb-send-flow">
+            {/* Campaign selector */}
+            <div className="mb-section">
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.campaignOptional')}</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <select value={qsSelectedCampaignId} onChange={(e) => setQsSelectedCampaignId(e.target.value === '' ? '' : Number(e.target.value))}
+                    style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', colorScheme: 'dark' }}>
+                    <option value="">{t('campaigns.noCampaign')}</option>
+                    {campaigns.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                  </select>
+                  <button type="button" onClick={() => { setQuickName(''); setQuickMessage(''); setStatus(null); setShowQuickCreate(true) }}
+                    aria-label={t('campaigns.createCampaign')}
+                    style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '11px 14px', cursor: 'pointer', fontSize: 18, lineHeight: '18px', display: 'flex', alignItems: 'center' }}>+</button>
+                </div>
+              </label>
+            </div>
 
-        {/* Target type toggle */}
-        <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['members', 'groups'] as const).map((type) => {
-            const disabled = bulkSendMode === 'recurring' && type === 'members'
-            return (
-              <button key={type} type="button" disabled={disabled} onClick={() => { if (!disabled) { setBulkTargetType(type); setBulkSummary(null) } }} style={{
-                flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: disabled ? 'not-allowed' : 'pointer',
-                background: bulkTargetType === type ? 'var(--miniapp-surface)' : 'transparent',
-                color: disabled ? 'var(--miniapp-text-muted)' : (bulkTargetType === type ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)'),
-                fontWeight: bulkTargetType === type ? 600 : 400, fontSize: 13, opacity: disabled ? 0.4 : 1,
-              }}>{type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}</button>
-            )
-          })}
-        </div>
+            {/* Step 1: Audience */}
+            <div className="mb-section">
+              <div className="mb-step-head">
+                <span className="mb-step-num">1</span>
+                <div>
+                  <div className="mb-step-title">{t('campaigns.stepAudience')}</div>
+                  <div className="mb-step-sub">{t('campaigns.stepAudienceSub')}</div>
+                </div>
+              </div>
 
-        {bulkTargetType === 'members' ? (
-          <>
-            <GroupAutocomplete label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups} t={t}
-              mode="single"
-              selectedGroup={bulkSourceGroup}
-              onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
-              onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery(''); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
-              syncButton={<button type="button" disabled={syncingAdminsBots} onClick={async () => {
-                if (!account || !bulkSourceGroup) return; setSyncingAdminsBots(true); setSyncAdminsBotsStatus(null)
-                try { const r = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id); setSyncAdminsBotsStatus(r.message || t('campaigns.syncCompleted')) }
-                catch (e) { setSyncAdminsBotsStatus(e instanceof Error ? e.message : t('campaigns.syncFailed')) }
-                finally { setSyncingAdminsBots(false) }
-              }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
-            />
-            {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
-            <div style={{ display: 'grid', gap: 8 }}>
-              {bulkMessages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                    <textarea value={msg} onChange={(e) => {
-                      const next = [...bulkMessages]
-                      next[i] = e.target.value
-                      setBulkMessages(next)
-                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
-                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
-                    {bulkMessages.length > 1 ? (
-                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
-                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
-                    ) : null}
+              <div className="mb-toggle" role="group" aria-label={t('campaigns.targetType')}>
+                {(['members', 'groups'] as const).map((type) => {
+                  const disabled = bulkSendMode === 'recurring' && type === 'members'
+                  return (
+                    <button key={type} type="button" disabled={disabled} aria-pressed={bulkTargetType === type} onClick={() => { if (!disabled) { setBulkTargetType(type); setBulkSummary(null) } }} className="mb-toggle-btn">
+                      {type === 'members' ? t('campaigns.sendToMembers') : t('campaigns.sendToGroups')}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {bulkTargetType === 'members' ? (
+                <>
+                  <GroupAutocomplete label={t('campaigns.sourceGroup')} query={bulkSourceGroupQuery} onQueryChange={setBulkSourceGroupQuery} groups={groups} t={t}
+                    mode="single"
+                    selectedGroup={bulkSourceGroup}
+                    onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery(g.title); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
+                    onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery(''); setBulkSelectedMembers([]); setBulkMemberStatus(null) }}
+                    syncButton={<button type="button" disabled={syncingAdminsBots} onClick={async () => {
+                      if (!account || !bulkSourceGroup) return; setSyncingAdminsBots(true); setSyncAdminsBotsStatus(null)
+                      try { const r = await agentsApi.syncAgentGroupAdminsBots(account.id, bulkSourceGroup.tg_group_id); setSyncAdminsBotsStatus(r.message || t('campaigns.syncCompleted')) }
+                      catch (e) { setSyncAdminsBotsStatus(e instanceof Error ? e.message : t('campaigns.syncFailed')) }
+                      finally { setSyncingAdminsBots(false) }
+                    }} style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, padding: '10px 12px', fontSize: 18, lineHeight: '18px', cursor: syncingAdminsBots ? 'default' : 'pointer', opacity: syncingAdminsBots ? 0.6 : 1 }}>{syncingAdminsBots ? '…' : '↻'}</button>}
+                  />
+                  {syncAdminsBotsStatus ? <Note>{syncAdminsBotsStatus}</Note> : null}
+                  <ClaimAwareMemberPicker
+                    account={account}
+                    sourceGroup={bulkSourceGroup}
+                    pageSize={20}
+                    selected={bulkSelectedMembers}
+                    onSelectedChange={setBulkSelectedMembers}
+                    onClaimsLoaded={setMyClaimIds}
+                    onEmptyChange={setBulkMembersEmpty}
+                    onSelectedOwnClaimIdsChange={setSelectedOwnClaimIds}
+                    hideSelectControls
+                    hideEmptyState
+                  />
+                  {bulkSourceGroup && bulkMembersEmpty ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>{t('campaigns.noScrapedMembers')}</div>
+                      <Button tone="secondary" disabled={scrapingGroup} onClick={async () => {
+                        setScrapingGroup(true)
+                        try { await agentsApi.scrapeAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id); setBulkMembersEmpty(false) }
+                        catch (e) { setBulkMemberStatus(e instanceof Error ? e.message : t('campaigns.scrapeFailed')) }
+                        finally { setScrapingGroup(false) }
+                      }}>{scrapingGroup ? t('campaigns.scraping') : t('campaigns.scrapeGroup')}</Button>
+                      <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>{t('campaigns.scrapingNote')}</div>
+                    </div>
+                  ) : null}
+                  {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
+                  <div className="mb-claimbar">
+                    <Button tone="secondary" disabled={claimingMembers || !bulkSelectedMembers.length} onClick={() => void handleClaimMembers()}>
+                      {claimingMembers ? t('campaigns.claiming') : t('campaigns.claimSelected')}
+                    </Button>
+                    <Button tone="secondary" disabled={releasingClaims || selectedOwnClaimIds.length === 0} onClick={() => void handleReleaseClaims()}>
+                      {releasingClaims ? t('campaigns.releasing') : t('campaigns.releaseMyClaims')}
+                    </Button>
+                    {myClaimIds.length > 0 ? <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.myClaimsCount', { count: myClaimIds.length })}</span> : null}
                   </div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
-                      <span>{uploadingIdx === i ? '⏳ Uploading...' : (bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media')}</span>
-                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
-                        const MAX_SIZE = 20 * 1024 * 1024
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
-                        setUploadingIdx(i)
-                        try {
-                          const data = await agentsApi.uploadAgentMedia(account.id, file)
-                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
-                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
-                        finally { setUploadingIdx(null) }
-                      }} />
-                    </label>
-                    {bulkMediaUrls[i] ? (
-                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
-                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
-                    ) : null}
+                </>
+              ) : (
+                <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} t={t}
+                  mode="multi" selected={bulkSelectedTargetGroups}
+                  onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])}
+                  onRemove={(id) => setBulkSelectedTargetGroups((c) => c.filter((x) => x.tg_group_id !== id))} />
+              )}
+            </div>
+
+            {/* Step 2: Compose */}
+            <div className="mb-section">
+              <div className="mb-step-head">
+                <span className="mb-step-num">2</span>
+                <div>
+                  <div className="mb-step-title">{t('campaigns.stepCompose')}</div>
+                  <div className="mb-step-sub">{t('campaigns.stepComposeSub')}</div>
+                </div>
+              </div>
+              <MessageComposer
+                account={account}
+                messages={bulkMessages}
+                mediaUrls={bulkMediaUrls}
+                onChange={(messages, mediaUrls) => { setBulkMessages(messages); setBulkMediaUrls(mediaUrls) }}
+                onError={(msg) => notify(msg)}
+              />
+            </div>
+
+            {/* Step 3: Delivery */}
+            <div className="mb-section">
+              <div className="mb-step-head">
+                <span className="mb-step-num">3</span>
+                <div>
+                  <div className="mb-step-title">{t('campaigns.stepDeliver')}</div>
+                  <div className="mb-step-sub">{t('campaigns.stepDeliverSub')}</div>
+                </div>
+              </div>
+
+              <details className="mb-delivery">
+                <summary>{t('campaigns.deliverySettings')}</summary>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+                    <div style={{ flex: 1 }}>
+                      <InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" />
+                      <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.thresholdHint')}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
+                      <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalHint')}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+                    <div style={{ flex: 1 }}>
+                      <InputField label={t('campaigns.intervalContacts')} value={bulkIntervalContacts} onChange={setBulkIntervalContacts} type="number" />
+                      <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalContactsHint')}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <InputField label={t('campaigns.messagesPerDay')} value={messagesPerDay} onChange={setMessagesPerDay} type="number" />
+                    <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.messagesPerDayHint')}</div>
                   </div>
                 </div>
-              ))}
-              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
-                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
+              </details>
+
+              <div className="mb-toggle" role="group" aria-label={t('campaigns.sendMode')}>
+                {(['standard', 'recurring'] as const).map((m) => (
+                  <button key={m} type="button" aria-pressed={bulkSendMode === m} className="mb-toggle-btn" onClick={() => { setBulkSendMode(m); setBulkSummary(null); if (m === 'recurring') setBulkTargetType('groups') }}>
+                    {t(m === 'standard' ? 'campaigns.sendOnce' : 'campaigns.recurring')}
+                  </button>
+                ))}
+              </div>
+
+              {bulkSendMode === 'recurring' ? (
+                <SchedulePicker value={scheduleConfig} onChange={setScheduleConfig} />
+              ) : null}
             </div>
-            <ClaimAwareMemberPicker
-              account={account}
-              sourceGroup={bulkSourceGroup}
-              pageSize={20}
-              selected={bulkSelectedMembers}
-              onSelectedChange={setBulkSelectedMembers}
-              onClaimsLoaded={setMyClaimIds}
-              onEmptyChange={setBulkMembersEmpty}
-              onSelectedOwnClaimIdsChange={setSelectedOwnClaimIds}
-              hideSelectControls
-              hideEmptyState
-            />
-            {bulkSourceGroup && bulkMembersEmpty ? (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>{t('campaigns.noScrapedMembers')}</div>
-                <Button tone="secondary" disabled={scrapingGroup} onClick={async () => {
-                  setScrapingGroup(true)
-                  try { await agentsApi.scrapeAgentGroupMembers(account.id, bulkSourceGroup.tg_group_id); setBulkMembersEmpty(false) }
-                  catch (e) { setBulkMemberStatus(e instanceof Error ? e.message : t('campaigns.scrapeFailed')) }
-                  finally { setScrapingGroup(false) }
-                }}>{scrapingGroup ? t('campaigns.scraping') : t('campaigns.scrapeGroup')}</Button>
-                <div style={{ fontSize: 12, color: 'var(--miniapp-clay)' }}>{t('campaigns.scrapingNote')}</div>
+
+            {bulkSummary ? (
+              <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
+                <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>
+                <div>{t('campaigns.summaryTotal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.matched'), count: bulkSummary.total })}</div>
+                {(bulkSummary.message_count ?? 0) > 1 ? <div>{t('campaigns.summaryMessages', { count: bulkSummary.message_count ?? 1 })}</div> : null}
+                {bulkSummary.target_type !== 'groups' ? (<>{bulkSummary.admins_excluded > 0 ? <div>{t('campaigns.summaryAdminsExcluded', { count: bulkSummary.admins_excluded })}</div> : null}{bulkSummary.bots_excluded > 0 ? <div>{t('campaigns.summaryBotsExcluded', { count: bulkSummary.bots_excluded })}</div> : null}{bulkSummary.already_sent_excluded > 0 ? <div>{t('campaigns.summaryAlreadySent', { count: bulkSummary.already_sent_excluded })}</div> : null}{bulkSummary.blacklisted_excluded > 0 ? <div>{t('campaigns.summaryBlacklisted', { count: bulkSummary.blacklisted_excluded })}</div> : null}</>) : null}
+                <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>{t('campaigns.summaryFinal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.recipients'), count: bulkSummary.final_count })}</div>
+                {(bulkSummary.message_count ?? 0) > 0 ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.summaryTotalSends', { contacts: bulkSummary.final_count, msgs: bulkSummary.message_count ?? 1, total: bulkSummary.final_count * (bulkSummary.message_count ?? 1) })}</div> : null}
               </div>
             ) : null}
-            {bulkMemberStatus ? <Note>{bulkMemberStatus}</Note> : null}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>
-              <Button tone="secondary" disabled={claimingMembers || !bulkSelectedMembers.length} onClick={() => void handleClaimMembers()}>
-                {claimingMembers ? t('campaigns.claiming') : t('campaigns.claimSelected')}
-              </Button>
-              <Button tone="secondary" disabled={releasingClaims || selectedOwnClaimIds.length === 0} onClick={() => void handleReleaseClaims()}>
-                {releasingClaims ? t('campaigns.releasing') : t('campaigns.releaseMyClaims')}
-              </Button>
-              {myClaimIds.length > 0 ? <span style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.myClaimsCount', { count: myClaimIds.length })}</span> : null}
-            </div>
-          </>
-        ) : (
-          <>
-            <GroupAutocomplete label={t('campaigns.targetGroups')} query={bulkTargetGroupQuery} onQueryChange={setBulkTargetGroupQuery} groups={groups} t={t}
-              mode="multi" selected={bulkSelectedTargetGroups}
-              onToggle={(g) => setBulkSelectedTargetGroups((c) => c.some((x) => x.tg_group_id === g.tg_group_id) ? c.filter((x) => x.tg_group_id !== g.tg_group_id) : [...c, g])}
-              onRemove={(id) => setBulkSelectedTargetGroups((c) => c.filter((x) => x.tg_group_id !== id))} />
-            <div style={{ display: 'grid', gap: 8 }}>
-              {bulkMessages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                    <textarea value={msg} onChange={(e) => {
-                      const next = [...bulkMessages]
-                      next[i] = e.target.value
-                      setBulkMessages(next)
-                    }} rows={3} placeholder={t('campaigns.messagePlaceholder')}
-                      style={{ flex: 1, boxSizing: 'border-box', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', fontFamily: 'var(--miniapp-sans)', fontSize: 13, color: 'var(--miniapp-text-primary)', outline: 'none', resize: 'vertical' }} />
-                    {bulkMessages.length > 1 ? (
-                      <button type="button" onClick={() => { setBulkMessages((m) => m.filter((_, j) => j !== i)); setBulkMediaUrls((u) => u.filter((_, j) => j !== i)) }}
-                        style={{ flexShrink: 0, background: 'var(--miniapp-bg)', color: 'var(--miniapp-coral)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '10px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
-                    ) : null}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <label style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', background: 'var(--miniapp-bg)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '6px 10px', fontFamily: 'var(--miniapp-sans)', fontSize: 12, color: 'var(--miniapp-text-secondary)' }}>
-                      <span>{uploadingIdx === i ? '⏳ Uploading...' : (bulkMediaUrls[i] ? '📎 ' + decodeURIComponent(bulkMediaUrls[i]!.split('/').pop() || 'file') : '+ Attach media')}</span>
-                      <input type="file" accept="image/*,video/*,application/pdf" style={{ display: 'none' }} onChange={async (e) => {
-                        const MAX_SIZE = 20 * 1024 * 1024
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        if (file.size > MAX_SIZE) { notify(`File too large (max 20MB)`); return }
-                        setUploadingIdx(i)
-                        try {
-                          const data = await agentsApi.uploadAgentMedia(account.id, file)
-                          const next = [...bulkMediaUrls]; next[i] = data.url; setBulkMediaUrls(next)
-                        } catch (err) { notify(err instanceof Error ? err.message : 'Upload failed') }
-                        finally { setUploadingIdx(null) }
-                      }} />
-                    </label>
-                    {bulkMediaUrls[i] ? (
-                      <button type="button" onClick={() => { const next = [...bulkMediaUrls]; next[i] = null; setBulkMediaUrls(next) }}
-                        style={{ flexShrink: 0, background: 'none', color: 'var(--miniapp-coral)', border: 'none', cursor: 'pointer', fontSize: 16, padding: '4px' }}>✕</button>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-              <button type="button" onClick={() => { setBulkMessages((m) => [...m, '']); setBulkMediaUrls((u) => [...u, null]) }}
-                style={{ background: 'var(--miniapp-bg)', color: 'var(--miniapp-text-primary)', border: '1px solid var(--miniapp-border-soft)', borderRadius: 'var(--miniapp-radius-sm)', padding: '8px 12px', cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>+ {t('campaigns.addMessage')}</button>
-            </div>
-          </>
-        )}
-
-        <div style={{ display: 'grid', gap: 6, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', marginBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>{t('campaigns.deliverySettings')}</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-            <div style={{ flex: 1 }}>
-              <InputField label={t('campaigns.threshold')} value={bulkThreshold} onChange={setBulkThreshold} type="number" />
-              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.thresholdHint')}</div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <InputField label={t('campaigns.intervalSeconds')} value={bulkIntervalSeconds} onChange={setBulkIntervalSeconds} type="number" />
-              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalHint')}</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
-            <div style={{ flex: 1 }}>
-              <InputField label={t('campaigns.intervalContacts')} value={bulkIntervalContacts} onChange={setBulkIntervalContacts} type="number" />
-              <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.intervalContactsHint')}</div>
-            </div>
-          </div>
-          <div>
-            <InputField label={t('campaigns.messagesPerDay')} value={messagesPerDay} onChange={setMessagesPerDay} type="number" />
-            <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)', marginTop: 4 }}>{t('campaigns.messagesPerDayHint')}</div>
-          </div>
-        </div>
-
-        {/* Send mode: standard vs recurring */}
-        <div style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 12, background: 'var(--miniapp-bg)', borderRadius: 10, border: '1px solid var(--miniapp-border-soft)' }}>
-          {(['standard', 'recurring'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => { setBulkSendMode(m); setBulkSummary(null); if (m === 'recurring') setBulkTargetType('groups') }} style={{
-              flex: 1, padding: '8px 12px', border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: bulkSendMode === m ? 'var(--miniapp-surface)' : 'transparent',
-              color: bulkSendMode === m ? 'var(--miniapp-text-primary)' : 'var(--miniapp-text-muted)',
-              fontWeight: bulkSendMode === m ? 600 : 400, fontSize: 13,
-            }}>{t(m === 'standard' ? 'campaigns.sendOnce' : 'campaigns.recurring')}</button>
-          ))}
-        </div>
-
-        {bulkSendMode === 'recurring' ? (
-          <div style={{ marginBottom: 12 }}>
-            <SchedulePicker value={scheduleConfig} onChange={setScheduleConfig} />
+            {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
+            <FormActions submitLabel={bulkSummary ? t('campaigns.confirmSend') : t('campaigns.prepare')} submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
           </div>
         ) : null}
-        {bulkSummary ? (
-          <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--miniapp-border-soft)', borderRadius: 12, background: 'var(--miniapp-bg)', fontSize: 13 }}>
-            <strong style={{ fontSize: 14 }}>{t('campaigns.summaryTitle')}</strong>
-            <div>{t('campaigns.summaryTotal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.matched'), count: bulkSummary.total })}</div>
-            {bulkSummary.message_count > 1 ? <div>{t('campaigns.summaryMessages', { count: bulkSummary.message_count })}</div> : null}
-            {bulkSummary.target_type !== 'groups' ? (<>{bulkSummary.admins_excluded > 0 ? <div>{t('campaigns.summaryAdminsExcluded', { count: bulkSummary.admins_excluded })}</div> : null}{bulkSummary.bots_excluded > 0 ? <div>{t('campaigns.summaryBotsExcluded', { count: bulkSummary.bots_excluded })}</div> : null}{bulkSummary.already_sent_excluded > 0 ? <div>{t('campaigns.summaryAlreadySent', { count: bulkSummary.already_sent_excluded })}</div> : null}{bulkSummary.blacklisted_excluded > 0 ? <div>{t('campaigns.summaryBlacklisted', { count: bulkSummary.blacklisted_excluded })}</div> : null}</>) : null}
-            <div style={{ fontWeight: 700, color: 'var(--miniapp-coral)' }}>{t('campaigns.summaryFinal', { type: bulkSummary.target_type === 'groups' ? t('campaigns.groups') : t('campaigns.recipients'), count: bulkSummary.final_count })}</div>
-            {bulkSummary.message_count > 0 ? <div style={{ fontSize: 11, color: 'var(--miniapp-text-muted)' }}>{t('campaigns.summaryTotalSends', { contacts: bulkSummary.final_count, msgs: bulkSummary.message_count, total: bulkSummary.final_count * (bulkSummary.message_count || 1) })}</div> : null}
-          </div>
-        ) : null}
-        {loadingBulkSummary ? <Note>{t('campaigns.preparingSummary')}</Note> : null}
-        <FormActions submitLabel={t('common.save')} submitDisabled={!isFormValid || loadingBulkSummary || bulkSaving || (bulkSummary !== null && bulkSummary.final_count === 0)} onSubmit={() => void handleSend()} onCancel={() => { resetForm(); setShowSendForm(false) }} />
-        </>) : null}
       </Card>
 
       {/* Campaigns list */}
