@@ -467,69 +467,91 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
               })}
             </SelectField>
             {isBulkAdd ? (
-              <div style={{ display: 'grid', gap: 8 }}>
-                <GroupAutocomplete
-                  label={t('automation.bulkSourceGroup')}
-                  query={bulkSourceGroupQuery}
-                  onQueryChange={setBulkSourceGroupQuery}
-                  groups={bulkSourceGroups}
-                  loading={bulkSourceGroupsLoading}
-                  mode="single"
-                  selectedGroup={bulkSourceGroup}
-                  onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery('') }}
-                  onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery('') }}
-                  t={t}
-                />
-                <GroupAutocomplete
-                  label={t('automation.bulkTargetGroup')}
-                  query={bulkTargetGroupQuery}
-                  onQueryChange={setBulkTargetGroupQuery}
-                  groups={bulkTargetGroups}
-                  loading={bulkTargetGroupsLoading}
-                  mode="single"
-                  selectedGroup={bulkTargetGroup}
-                  onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
-                  onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
-                  t={t}
-                />
-                {bulkSourceGroup?.tg_group_id ? (
-                  <ClaimAwareMemberPicker
-                    account={account}
-                    sourceGroup={bulkSourceGroup}
-                    targetGroup={bulkTargetGroup}
-                    heldMemberIds={bulkHeldMemberIds}
-                    selected={bulkSelectedMembers}
-                    onSelectedChange={setBulkSelectedMembers}
-                    excludeAdminsBots={bulkExcludeAdminsBots}
-                    onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
-                    pageSize={50}
-                  />
-                ) : null}
-                <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="3600" />
-                {Number(bulkInterval) > 0 && Number(bulkInterval) < 60 * 60 ? (
-                  <div style={{ display: 'grid', gap: 6, background: 'var(--miniapp-coral-dim)', border: '1px solid var(--miniapp-border)', borderRadius: 10, padding: '10px 12px' }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-coral)', lineHeight: 1.5 }}>
-                      {t('automation.bulkRiskWarning')}
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={bulkRiskAcknowledged} onChange={(e) => setBulkRiskAcknowledged(e.target.checked)} />
-                      {t('automation.bulkRiskAcknowledge')}
-                    </label>
+              <div className="mb-send-flow">
+                {/* Step 1: Audience */}
+                <div className="mb-section">
+                  <div className="mb-step-head">
+                    <span className="mb-step-num">1</span>
+                    <div>
+                      <div className="mb-step-title">{t('automation.bulkStepAudience')}</div>
+                      <div className="mb-step-sub">{t('automation.bulkStepAudienceSub')}</div>
+                    </div>
                   </div>
-                ) : null}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={bulkSendInvite} onChange={(e) => setBulkSendInvite(e.target.checked)} />
-                  {t('automation.bulkSendInvite')}
-                </label>
-                {bulkSendInvite ? (
-                  <TextAreaField
-                    label={t('automation.bulkCustomMessage')}
-                    value={bulkCustomMessage}
-                    onChange={setBulkCustomMessage}
-                    rows={3}
-                    placeholder={t('automation.bulkCustomMessagePlaceholder')}
+                  <GroupAutocomplete
+                    label={t('automation.bulkSourceGroup')}
+                    query={bulkSourceGroupQuery}
+                    onQueryChange={setBulkSourceGroupQuery}
+                    groups={bulkSourceGroups}
+                    loading={bulkSourceGroupsLoading}
+                    mode="single"
+                    selectedGroup={bulkSourceGroup}
+                    onSelect={(g) => { setBulkSourceGroup(g); setBulkSourceGroupQuery('') }}
+                    onClear={() => { setBulkSourceGroup(null); setBulkSourceGroupQuery('') }}
+                    t={t}
                   />
-                ) : null}
+                  <GroupAutocomplete
+                    label={t('automation.bulkTargetGroup')}
+                    query={bulkTargetGroupQuery}
+                    onQueryChange={setBulkTargetGroupQuery}
+                    groups={bulkTargetGroups}
+                    loading={bulkTargetGroupsLoading}
+                    mode="single"
+                    selectedGroup={bulkTargetGroup}
+                    onSelect={(g) => { setBulkTargetGroup(g); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
+                    onClear={() => { setBulkTargetGroup(null); setBulkTargetGroupQuery(''); setBulkSelectedMembers([]) }}
+                    t={t}
+                  />
+                  {bulkSourceGroup?.tg_group_id ? (
+                    <ClaimAwareMemberPicker
+                      account={account}
+                      sourceGroup={bulkSourceGroup}
+                      targetGroup={bulkTargetGroup}
+                      heldMemberIds={bulkHeldMemberIds}
+                      selected={bulkSelectedMembers}
+                      onSelectedChange={setBulkSelectedMembers}
+                      excludeAdminsBots={bulkExcludeAdminsBots}
+                      onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
+                      pageSize={50}
+                      hideSelectControls
+                    />
+                  ) : null}
+                </div>
+
+                {/* Step 2: Options */}
+                <div className="mb-section">
+                  <div className="mb-step-head">
+                    <span className="mb-step-num">2</span>
+                    <div>
+                      <div className="mb-step-title">{t('automation.bulkStepOptions')}</div>
+                      <div className="mb-step-sub">{t('automation.bulkStepOptionsSub')}</div>
+                    </div>
+                  </div>
+                  <InputField label={t('automation.bulkInterval')} value={bulkInterval} onChange={setBulkInterval} placeholder="3600" />
+                  {Number(bulkInterval) > 0 && Number(bulkInterval) < 60 * 60 ? (
+                    <div style={{ display: 'grid', gap: 6, background: 'var(--miniapp-coral-dim)', border: '1px solid var(--miniapp-border)', borderRadius: 10, padding: '10px 12px' }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--miniapp-coral)', lineHeight: 1.5 }}>
+                        {t('automation.bulkRiskWarning')}
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={bulkRiskAcknowledged} onChange={(e) => setBulkRiskAcknowledged(e.target.checked)} />
+                        {t('automation.bulkRiskAcknowledge')}
+                      </label>
+                    </div>
+                  ) : null}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--miniapp-text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={bulkSendInvite} onChange={(e) => setBulkSendInvite(e.target.checked)} />
+                    {t('automation.bulkSendInvite')}
+                  </label>
+                  {bulkSendInvite ? (
+                    <TextAreaField
+                      label={t('automation.bulkCustomMessage')}
+                      value={bulkCustomMessage}
+                      onChange={setBulkCustomMessage}
+                      rows={3}
+                      placeholder={t('automation.bulkCustomMessagePlaceholder')}
+                    />
+                  ) : null}
+                </div>
               </div>
             ) : (
               <>

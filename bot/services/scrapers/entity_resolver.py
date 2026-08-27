@@ -43,8 +43,8 @@ async def resolve_group_entity(client: Any, tg_group_id: int, session: AsyncSess
             if access_hash:
                 from telethon.tl.types import InputPeerChannel, InputPeerChat
 
-                if str(tg_group_id).startswith("-100"):
-                    pure_id = int(str(tg_group_id)[4:])
+                if str(canonical_id).startswith("-100"):
+                    pure_id = int(str(canonical_id)[4:])
                     try:
                         return await client.get_entity(
                             InputPeerChannel(channel_id=pure_id, access_hash=int(access_hash))
@@ -53,12 +53,21 @@ async def resolve_group_entity(client: Any, tg_group_id: int, session: AsyncSess
                         pass
                 else:
                     try:
-                        return await client.get_entity(InputPeerChat(chat_id=abs(tg_group_id)))
+                        return await client.get_entity(InputPeerChat(chat_id=abs(canonical_id)))
+                    except Exception:
+                        pass
+                # A canonical -100 id may actually be a legacy basic group
+                # (canonical_tg_group_id rewrites basic-group ids too). Try the
+                # InputPeerChat path before falling through to the dialog scan.
+                if str(canonical_id).startswith("-100"):
+                    pure_id = int(str(canonical_id)[4:])
+                    try:
+                        return await client.get_entity(InputPeerChat(chat_id=pure_id))
                     except Exception:
                         pass
 
         async for dialog in client.iter_dialogs():
-            if int(dialog.id) == tg_group_id:
+            if canonical_tg_group_id(int(dialog.id)) == canonical_id:
                 return dialog.entity
 
         raise
