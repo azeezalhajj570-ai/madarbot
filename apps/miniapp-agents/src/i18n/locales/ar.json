@@ -645,6 +645,7 @@
     "heldByOther": "محدد بواسطة وكيل آخر",
     "heldBySelf": "محدد بواسطتك",
     "claimedSendConflicts": "{unclaimed} أعضاء غير محددين و{other} محددون بواسطة وكيل آخر — حددهم أولاً",
+    "claimedSendSkipped": "جارٍ الإرسال إلى {count} أعضاء؛ تم تخطي {skipped} محددون بالفعل بواسطة وكيل آخر",
     "syncCompleted": "تمت المزامنة",
     "syncFailed": "فشلت المزامنة",
     "failedSearchMembers": "فشل البحث عن الأعضاء",
