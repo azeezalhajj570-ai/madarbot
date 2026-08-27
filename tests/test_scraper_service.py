@@ -358,3 +358,113 @@ async def test_checkpoint_resume_scrapes_only_new_messages(
     # Two new messages were scraped, and the boundary advanced to 19001.
     assert result["success_count"] == 2
     assert fake_group.scrape_state["messages"]["last_scraped_message_id"] == 19001
+
+
+# ─── sync_agent_groups records the agent's own membership ────────────────────
+
+
+class _FakeDialog:
+    def __init__(self, entity) -> None:
+        self.entity = entity
+        self.is_group = True
+        self.is_channel = False
+
+
+class _FakeEntity:
+    def __init__(self, *, id: int, title: str, username: str | None) -> None:
+        self.id = id
+        self.title = title
+        self.username = username
+        self.broadcast = False
+        self.megagroup = True
+        self.participants_count = 10
+        self.user_count = None
+        self.access_hash = 999
+        self.bot = False
+        self.premium = False
+
+
+class _FakeClient:
+    def __init__(self, dialogs: list) -> None:
+        self._dialogs = dialogs
+
+    async def iter_dialogs(self):
+        for dialog in self._dialogs:
+            yield dialog
+
+    async def disconnect(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_sync_agent_groups_records_agent_own_membership(
+    db_session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sync_agent_groups must upsert a ScrapedMember row for the agent's own
+    telegram_user_id per dialog group, so the group shows as is_member=True in
+    the members list without requiring a full scrape."""
+    from bot.agents.account_group_membership_service import AccountGroupMembershipService
+    from bot.db.models import Agent, Group, User
+
+    owner = User(tg_user_id=70001, username="owner", full_name="Owner")
+    db_session.add(owner)
+    await db_session.flush()
+
+    group = Group(
+        tg_group_id=-10077001, title="Synced Group", owner_user_id=owner.id, is_active=True
+    )
+    db_session.add(group)
+    await db_session.flush()
+
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=77101,
+        linked_by_user_id=owner.tg_user_id,
+        external_account_id="sync-agent",
+        status="active",
+        auth_state="active",
+        session_string="session:sync",
+        details={"username": "agent_self", "full_name": "Agent Self"},
+    )
+    db_session.add(agent)
+    await db_session.flush()
+    await db_session.commit()
+
+    from bot.services import scraper_service as svc
+
+    async def fake_get_active_agent(agent_id: int, session=None):
+        return (
+            await db_session.execute(select(Agent).where(Agent.id == agent_id))
+        ).scalar_one_or_none()
+
+    monkeypatch.setattr(svc.entity_resolver, "get_active_agent", fake_get_active_agent)
+
+    fake_entity = _FakeEntity(
+        id=-10077001, title="Synced Group", username="synced_group"
+    )
+    client = _FakeClient([_FakeDialog(fake_entity)])
+    service = svc.ScraperService(db_session)
+    results = await service.sync_agent_groups(agent_id=agent.id, client=client)
+
+    assert len(results) == 1
+
+    member = (
+        await db_session.execute(
+            select(ScrapedMember).where(
+                ScrapedMember.tg_group_id == -10077001,
+                ScrapedMember.tg_user_id == 77101,
+            )
+        )
+    ).scalar_one_or_none()
+    assert member is not None
+    assert member.username == "agent_self"
+    assert member.role == "member"
+
+    groups = await AccountGroupMembershipService(db_session).list_managed_member_groups(
+        actor_user_id=owner.tg_user_id,
+        agent_id=agent.id,
+    )
+    assert len(groups) == 1
+    assert groups[0]["tg_group_id"] == -10077001
+    assert groups[0]["is_member"] is True
+    assert groups[0]["can_add_members"] is True

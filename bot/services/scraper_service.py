@@ -73,6 +73,7 @@ class ScraperService:
 
         try:
             results = []
+            member_rows: list[dict[str, Any]] = []
             async for dialog in managed_client.iter_dialogs():
                 if not dialog.is_group and not dialog.is_channel:
                     continue
@@ -108,6 +109,35 @@ class ScraperService:
                     session=self.session,
                 )
                 results.append(group)
+
+                # The account is in this dialog, so it is a member by definition.
+                # Record the agent's own membership row so the group shows up as
+                # `is_member: true` in the members list without requiring a full scrape.
+                if agent.telegram_user_id is not None:
+                    agent_details = dict(agent.details or {})
+                    member_rows.append(
+                        serializers.build_scraped_member_row(
+                            scraped_group_id=group.id,
+                            tg_group_id=canonical_tg_group_id(int(dialog.id)),
+                            tg_user_id=int(agent.telegram_user_id),
+                            username=agent_details.get("username"),
+                            full_name=agent_details.get("full_name"),
+                            is_bot=False,
+                            is_premium=False,
+                            role="member",
+                            raw_data={
+                                "source": "dialog_sync",
+                                "id": int(agent.telegram_user_id),
+                                "username": agent_details.get("username"),
+                                "full_name": agent_details.get("full_name"),
+                            },
+                        )
+                    )
+
+            if member_rows:
+                await bulk_upsert.bulk_upsert_scraped_members(
+                    member_rows, self.session, scraped_by_agent_id=agent_id
+                )
 
             await self.session.commit()
             logger.info("agent_groups_synced", agent_id=agent_id, count=len(results))
