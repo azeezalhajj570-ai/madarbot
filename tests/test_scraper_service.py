@@ -366,6 +366,7 @@ async def test_checkpoint_resume_scrapes_only_new_messages(
 class _FakeDialog:
     def __init__(self, entity) -> None:
         self.entity = entity
+        self.id = entity.id
         self.is_group = True
         self.is_channel = False
 

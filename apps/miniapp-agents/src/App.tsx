@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatTime, formatDateTime, formatNumber } from './i18n/format'
 
@@ -2749,6 +2750,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
   const [jobGroupNames, setJobGroupNames] = useState<Record<number, string>>({})
   const jobCardRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const [menuJobId, setMenuJobId] = useState<number | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ jobId: number; action: 'stop' | 'retry' | 'resume' } | null>(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
@@ -2978,14 +2980,37 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
 
   useEffect(() => {
     if (menuJobId === null) return
+    function close() {
+      setMenuJobId(null)
+      setMenuPos(null)
+    }
     function onDocClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuJobId(null)
+        close()
       }
     }
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
   }, [menuJobId])
+
+  useLayoutEffect(() => {
+    if (menuJobId == null || menuPos == null) return
+    const el = menuRef.current
+    if (!el) return
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const left = Math.max(8, Math.min(menuPos.left, window.innerWidth - w - 8))
+    const top = menuPos.top + h > window.innerHeight - 8 ? Math.max(8, window.innerHeight - h - 8) : menuPos.top
+    if (left !== menuPos.left || top !== menuPos.top) {
+      setMenuPos({ left, top })
+    }
+  }, [menuJobId, menuPos])
 
   return (
     <Card title={t('tasks.activityTitle')} subtitle={t('tasks.activitySubtitle')}>
@@ -3046,6 +3071,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
             const isFailed = job.status === 'failed'
             const isScheduled = job.status === 'scheduled'
             const isStopped = p.stop_reason != null
+            const isPendingFlood = isStopped && p.stop_reason === 'flood_wait'
             const taskName = job.message_preview
               ? `${job.message_preview.slice(0, 48)}${job.message_preview.length > 48 ? '...' : ''}`
               : `${job.target_type === 'groups' ? t('tasks.broadcastName', { id: job.id }) : t('tasks.membersName', { id: job.id })}`
@@ -3080,12 +3106,23 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                       {isStopped ? t('tasks.stopped') : job.status}
                     </span>
                     {/* Overflow menu */}
-                    <div ref={menuJobId === job.id ? menuRef : undefined} style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
                       <button
                         type="button"
                         aria-label={t('tasks.moreActions')}
                         aria-expanded={menuJobId === job.id}
-                        onClick={(e) => { e.stopPropagation(); setMenuJobId(menuJobId === job.id ? null : job.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (menuJobId === job.id) {
+                            setMenuJobId(null)
+                            setMenuPos(null)
+                          } else {
+                            const r = e.currentTarget.getBoundingClientRect()
+                            const left = Math.max(8, Math.min(r.right - 178, window.innerWidth - 186))
+                            setMenuJobId(job.id)
+                            setMenuPos({ top: Math.round(r.bottom + 6), left: Math.round(left) })
+                          }
+                        }}
                         style={{
                           display: 'grid', placeItems: 'center', width: 28, height: 28, borderRadius: 8,
                           background: menuJobId === job.id ? 'var(--miniapp-bg-deep)' : 'transparent',
@@ -3095,9 +3132,10 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                       >
                         ⋯
                       </button>
-                      {menuJobId === job.id ? (
-                        <div style={{
-                          position: 'absolute', top: 32, insetInlineEnd: 0, zIndex: 30, minWidth: 160,
+                      {menuJobId === job.id && menuPos ? createPortal(
+                        <div ref={menuRef} style={{
+                          position: 'fixed', top: menuPos.top, left: menuPos.left, zIndex: 1300,
+                          whiteSpace: 'nowrap',
                           background: 'var(--miniapp-surface)', border: '1px solid var(--miniapp-border-soft)',
                           borderRadius: 12, padding: 4, boxShadow: '0 12px 32px rgba(32,25,16,0.18)',
                           display: 'grid', gap: 2,
@@ -3122,7 +3160,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {t('tasks.cancel')}
                             </button>
                           ) : null}
-                          {isStopped && (isFailed || job.status === 'aborted') ? (
+                          {isStopped && (isFailed || job.status === 'aborted' || isPendingFlood) ? (
                             <button type="button" onClick={() => setConfirmAction({ jobId: job.id, action: 'resume' })}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
@@ -3142,7 +3180,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {t('tasks.retry')}
                             </button>
                           ) : null}
-                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued) && job.id ? (
+                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued || isStopped) && job.id ? (
                             <button type="button" onClick={() => { setMenuJobId(null); setLogsJobId(job.id) }}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
@@ -3152,7 +3190,7 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {isRunning || isQueued ? t('tasks.viewProgress') : t('tasks.viewLogs')}
                             </button>
                           ) : null}
-                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued) && job.id ? (
+                          {(isCompleted || isFailed || job.status === 'aborted' || isRunning || isQueued || isStopped) && job.id ? (
                             <button
                               type="button"
                               disabled={exportingJobId !== null && exportingJobId !== job.id}
@@ -3166,7 +3204,8 @@ function TaskActivity({ account, scrollToJobId, onScrolled }: { account: Agent; 
                               {exportingJobId === job.id ? t('tasks.exportingPdf') : t('tasks.exportPdf')}
                             </button>
                           ) : null}
-                        </div>
+                        </div>,
+                        document.body,
                       ) : null}
                     </div>
                   </div>
