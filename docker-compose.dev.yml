@@ -1,17 +1,100 @@
+# Dev overlay for running the stack "as dev" inside containers, separate from
+# the production image. Overrides every backend service to build from
+# Dockerfile.dev (runtime + test/lint tooling) and mounts the source tree for
+# hot reload.
+#
+# Usage (always include the base compose file first):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm test
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm lint
+
 services:
   migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     volumes:
       - .:/app
     environment:
       PYTHONPATH: /app
 
   bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     volumes:
       - .:/app
     environment:
       PYTHONPATH: /app
 
+  agent_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$TELEGRAM_API_ID" ] || [ -z "$$TELEGRAM_API_HASH" ]; then
+          echo "ERROR: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in .env" >&2
+          exit 1
+        fi
+        exec dramatiq bot.agents.worker --queues agent scraper membership --processes 2 --threads 4 --watch /app
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+    command:
+      - uvicorn
+      - bot.dashboard.api.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --reload
+    restart: unless-stopped
+
   miniapp_agents:
     volumes:
       - ./apps/miniapp-agents:/app
       - /app/node_modules
+
+  # Runs the test suite inside the dev container (not on the host).
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: sqlite+aiosqlite:////app/test-dev.sqlite3
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    entrypoint: ["pytest"]
+    command: ["-q"]
+
+  # Runs ruff lint/format checks inside the dev container.
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      PYTHONPATH: /app
+    entrypoint: ["ruff"]
+    command: ["check", "."]

@@ -59,6 +59,40 @@ docker compose build backend && docker compose up -d backend
 docker compose build agent_worker && docker compose up -d agent_worker
 ```
 
+## Development in a Container
+
+Dev runs inside containers **separate from production**, using a dedicated
+`Dockerfile.dev` image (runtime + test/lint tooling) and live source mounts
+for hot reload. Overlays are applied via `docker-compose.dev.yml` on top of the
+base stack — production is untouched.
+
+```bash
+# Build the dev image + stack
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+
+# Run the whole stack in dev mode
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Hot reload: bot + backend (uvicorn --reload) + agent_worker (dramatiq --watch /app)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up bot backend agent_worker
+
+# Run tests inside the dev container (not on the host)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm test
+
+# Run ruff lint inside the dev container
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm lint
+```
+
+Notes:
+- `Dockerfile.dev` installs the package editable (`pip install -e .[dev]`) with
+  pytest/pytest-asyncio/pytest-mock, testcontainers, aiosqlite, and ruff.
+- Every backend service (`migrate`, `bot`, `agent_worker`, `backend`) builds from
+  `Dockerfile.dev` and mounts `.:/app`, so code changes are picked up without a
+  rebuild. `agent_worker` uses `dramatiq ... --watch /app` and `backend` uses
+  `uvicorn ... --reload`.
+- Session/state persistence still lives in Postgres + Redis (shared volumes from
+  the base compose), not on the host.
+
 ## Development Toolchain & Commands
 
 Backend is Python **3.11+** (`requires-python = ">=3.11"` in `pyproject.toml`); CI runs tests on **3.12**, runtime images use **3.11-slim**. Frontends use Node **20**.

@@ -1,0 +1,32 @@
+# Dev image for running the backend inside a container, separate from the
+# production image. Adds test/lint tooling on top of the runtime base and
+# mounts the source tree for hot reload (see docker-compose.dev.yml).
+#
+# Build/run:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up bot agent_worker backend
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends procps && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
+
+# Runtime deps first (cache-friendly), then the package in editable mode plus
+# the dev extra (pytest, pytest-asyncio, pytest-mock, testcontainers, aiosqlite, ruff).
+COPY requirements.txt .
+COPY pyproject.toml .
+COPY bot ./bot
+COPY alembic ./alembic
+COPY alembic.ini .
+
+RUN pip install -r requirements.txt && pip install -e .[dev]
+
+ENV BOT_APP_KIND=agents
+
+CMD ["python", "-m", "bot.main"]
