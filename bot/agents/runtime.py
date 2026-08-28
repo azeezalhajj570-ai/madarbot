@@ -2152,6 +2152,26 @@ class AgentTaskRuntime:
 
                     asyncio.ensure_future(_delete_later())
 
+            forward_msg_id = result.get("forward_message_id")
+            forward_from_chat_id = result.get("forward_from_chat_id")
+            if forward_msg_id is not None and forward_from_chat_id is not None:
+                try:
+                    await client.forward_messages(
+                        chat_id,
+                        messages=[forward_msg_id],
+                        from_peer=forward_from_chat_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "agent_task_forward_failed",
+                        agent_id=agent.id,
+                        task_key=task_key,
+                        chat_id=chat_id,
+                        forward_from=forward_from_chat_id,
+                        forward_msg_id=forward_msg_id,
+                        error=str(exc),
+                    )
+
             if self.activity_service and assignment_id:
                 await self.activity_service.record_activity(
                     assignment_id=str(assignment_id),
