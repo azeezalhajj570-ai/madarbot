@@ -10,7 +10,11 @@ from aiogram import Bot
 from dramatiq.message import Message
 from sqlalchemy import select
 
-from bot.agents.exceptions import AgentBannedError, AgentFloodWaitError
+from bot.agents.exceptions import (
+    AgentBannedError,
+    AgentFloodWaitError,
+    AgentStopError,
+)
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
@@ -1692,29 +1696,16 @@ class BulkAddMembersRuntime:
                             "stop_reason": "flood_wait",
                             "retry_after": add_result.flood_wait_seconds,
                         }
-                        # Persist flood progress so the job resumes from this point
-                        # after the flood wait instead of re-inviting from scratch,
-                        # and so the dashboard shows the stop reason.
-                        if session is not None and payload.get("job_id"):
-                            try:
-                                job_row = (
-                                    await session.execute(
-                                        select(AgentJob).where(AgentJob.id == payload["job_id"])
-                                    )
-                                ).scalar_one_or_none()
-                                if job_row is not None:
-                                    updated_payload = dict(job_row.job_payload or {})
-                                    updated_payload["progress"] = dict(payload["progress"])
-                                    job_row.job_payload = updated_payload
-                                    await session.commit()
-                            except Exception:
-                                await session.rollback()
-                                logger.warning(
-                                    "member_add_flood_progress_persist_failed",
-                                    job_id=payload.get("job_id"),
-                                    user_id=user_id,
-                                )
-                        raise AgentFloodWaitError(int(add_result.flood_wait_seconds))
+                        # The worker handles AgentStopError: it persists the
+                        # progress we carry in the exception, marks the job
+                        # PENDING, and re-dispatches after `delay` seconds so the
+                        # job resumes from this point instead of re-inviting from
+                        # scratch, and so the dashboard shows the stop reason.
+                        raise AgentStopError(
+                            stop_reason="flood_wait",
+                            delay=int(add_result.flood_wait_seconds),
+                            progress=payload["progress"],
+                        )
 
                     if add_result.error_code == ERROR_USER_ALREADY_IN_GROUP:
                         skip_count += 1
