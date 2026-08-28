@@ -16,6 +16,7 @@ from bot.agents.exceptions import (
     AgentFloodWaitError,
     AgentSessionError,
     AgentSessionRevokedError,
+    AgentStopError,
 )
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
@@ -868,6 +869,62 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     return
             finally:
                 await client.disconnect()
+        except AgentStopError as exc:
+            # Job-level graceful stop (e.g. flood wait mid bulk-add): the
+            # runtime already persisted the current progress into the exception.
+            # Persist it on the job, mark PENDING, and re-dispatch after the
+            # delay so the job resumes from the remaining recipients. This is a
+            # per-job stop, NOT an agent-session flood, so we intentionally do
+            # NOT call session_manager.mark_flood_wait here.
+            await _set_job_state(
+                session,
+                job_id,
+                JOB_STATUS_PENDING,
+                error=f"{exc.stop_reason} for {exc.delay} seconds",
+            )
+            try:
+                job_row = (
+                    await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+                ).scalar_one_or_none()
+                if job_row is not None and exc.progress:
+                    updated_payload = dict(job_row.job_payload or {})
+                    updated_payload["progress"] = dict(exc.progress)
+                    job_row.job_payload = updated_payload
+                    await session.commit()
+            except Exception:
+                await session.rollback()
+                bound_logger.warning(
+                    "agent_stop_progress_persist_failed",
+                    agent_id=agent_id,
+                    job_id=job_id,
+                    stop_reason=exc.stop_reason,
+                )
+            if final_attempt:
+                await _set_job_state(
+                    session,
+                    job_id,
+                    JOB_STATUS_FAILED,
+                    error=f"{exc.stop_reason} for {exc.delay} seconds (max retries exhausted)",
+                )
+                bound_logger.warning(
+                    "agent_job_stop_final",
+                    agent_id=agent_id,
+                    job_id=job_id,
+                    stop_reason=exc.stop_reason,
+                    delay=exc.delay,
+                )
+                return
+            execute_agent_job.send_with_options(
+                args=(agent_id, job_id), delay=exc.delay * 1000
+            )
+            bound_logger.warning(
+                "agent_job_stopped",
+                agent_id=agent_id,
+                job_id=job_id,
+                stop_reason=exc.stop_reason,
+                delay=exc.delay,
+            )
+            return
         except AgentFloodWaitError as exc:
             await session_manager.mark_flood_wait(agent_id, exc.retry_after)
             is_broadcast = job.job_type == GROUP_MEMBER_BROADCAST_JOB_TYPE

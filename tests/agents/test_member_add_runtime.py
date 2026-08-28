@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from bot.agents.exceptions import AgentFloodWaitError
+from bot.agents.exceptions import AgentStopError
 from bot.agents.runtime import BulkAddMembersRuntime
 
 
@@ -91,7 +91,7 @@ def _make_agent() -> SimpleNamespace:
     )
 
 
-async def test_member_add_raises_agent_flood_wait_error_on_flood(
+async def test_member_add_raises_agent_stop_error_on_flood(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _fake_add_user_to_group(client, group_id, user_id, **kwargs):
@@ -116,12 +116,13 @@ async def test_member_add_raises_agent_flood_wait_error_on_flood(
         "job_id": 140,
     }
 
-    with pytest.raises(AgentFloodWaitError) as exc_info:
+    with pytest.raises(AgentStopError) as exc_info:
         await runtime.execute(client=object(), agent=agent, payload=payload, session=session)
 
-    assert exc_info.value.retry_after == 60
+    assert exc_info.value.delay == 60
+    assert exc_info.value.stop_reason == "flood_wait"
 
-    progress = session.job_row.job_payload["progress"]
+    progress = exc_info.value.progress
     assert progress["stop_reason"] == "flood_wait"
     assert progress["retry_after"] == 60
     assert progress["failure_count"] == 1
