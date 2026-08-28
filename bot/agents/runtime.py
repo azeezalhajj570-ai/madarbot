@@ -1685,6 +1685,11 @@ class BulkAddMembersRuntime:
                     if is_flood:
                         failure_count += 1
                         result_entry["flood_wait_seconds"] = add_result.flood_wait_seconds
+                        # Record the flood-blocked user in results BEFORE stopping
+                        # so the resumed run skips it (processed_user_ids is built
+                        # from results). Without this, every resume re-attempts the
+                        # same user and the job loops forever on the same flood.
+                        results.append(result_entry)
                         payload["progress"] = {
                             "total_count": total_count,
                             "success_count": success_count,

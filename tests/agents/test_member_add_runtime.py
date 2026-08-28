@@ -126,3 +126,13 @@ async def test_member_add_raises_agent_stop_error_on_flood(
     assert progress["stop_reason"] == "flood_wait"
     assert progress["retry_after"] == 60
     assert progress["failure_count"] == 1
+    # The flood-blocked user must be recorded so the resumed run skips it
+    # instead of re-attempting the same user forever (the resume loop).
+    assert progress["results"] == [
+        {
+            "user_id": 1726217833,
+            "status": "failed",
+            "error_code": "FLOOD_WAIT",
+            "flood_wait_seconds": 60,
+        }
+    ]
