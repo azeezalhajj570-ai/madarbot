@@ -110,6 +110,12 @@ class ScraperService:
                 )
                 results.append(group)
 
+                # Flush so a newly-created group's `id` is populated before we
+                # reference it in the membership rows below. Otherwise the member
+                # bulk-upsert would try to insert a NULL scraped_group_id and the
+                # whole sync would roll back (with no groups synced at all).
+                await self.session.flush()
+
                 # The account is in this dialog, so it is a member by definition.
                 # Record the agent's own membership row so the group shows up as
                 # `is_member: true` in the members list without requiring a full scrape.
