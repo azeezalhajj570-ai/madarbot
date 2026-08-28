@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
@@ -46,6 +47,7 @@ ERROR_IS_BOT: Final = "IS_BOT"
 ERROR_VERIFICATION_FAILED: Final = "VERIFICATION_FAILED"
 ERROR_UNKNOWN: Final = "UNKNOWN"
 ERROR_NOT_ADMIN: Final = "NOT_ADMIN"
+ERROR_CHAT_MEMBER_ADD_FAILED: Final = "CHAT_MEMBER_ADD_FAILED"
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +58,34 @@ class AddUserResult(BaseModel):
     success: bool
     error_code: str | None = None
     flood_wait_seconds: int | None = None
+
+
+_FLOOD_MARKERS = (
+    "too many requests",
+    "flood wait",
+    "wait of ",
+    "seconds is required",
+    "slowmode",
+    "slow mode",
+)
+
+
+def _parse_flood_seconds(exc: RPCError) -> int | None:
+    """Extract a flood-wait duration from a raw RPCError message.
+
+    Telegram surfaces rate limits as either a typed FloodWaitError (handled
+    separately) or a generic RPCError whose message is the flood indicator,
+    e.g. "Too many requests (caused by InviteToChannelRequest)" or
+    "A wait of 123 seconds is required...". This helper normalizes those
+    generic messages so they map to ERROR_FLOOD_WAIT instead of UNKNOWN.
+    """
+    message = str(exc).lower()
+    if not any(marker in message for marker in _FLOOD_MARKERS):
+        return None
+    match = re.search(r"(\d+)\s*(?:second|sec|s)s?", message)
+    if match:
+        return max(1, int(match.group(1)))
+    return 60  # generic flood/throttle with no explicit duration
 
 
 def _failure(
@@ -209,6 +239,14 @@ async def add_user_to_group(
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_add_user_to_group_rpc_error")
         if "admin" in str(exc).lower():
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+        flood_seconds = _parse_flood_seconds(exc)
+        if flood_seconds is not None:
+            return _failure(
+                group_id=group_id,
+                user_id=user_id,
+                error_code=ERROR_FLOOD_WAIT,
+                flood_wait_seconds=flood_seconds,
+            )
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     # A group is a channel when its resolved entity is a Channel/megagroup. A
@@ -353,8 +391,24 @@ async def add_user_to_group(
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning(
             "agent_invite_to_channel_rpc_error"
         )
-        if "admin" in str(exc).lower() or "forbidden" in str(exc).lower():
+        message = str(exc)
+        lowered = message.lower()
+        if "admin" in lowered or "forbidden" in lowered:
             return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+        flood_seconds = _parse_flood_seconds(exc)
+        if flood_seconds is not None:
+            return _failure(
+                group_id=group_id,
+                user_id=user_id,
+                error_code=ERROR_FLOOD_WAIT,
+                flood_wait_seconds=flood_seconds,
+            )
+        if "chat_member_add_failed" in lowered or "member_add_failed" in lowered:
+            return _failure(
+                group_id=group_id,
+                user_id=user_id,
+                error_code=ERROR_CHAT_MEMBER_ADD_FAILED,
+            )
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
     if verify:
