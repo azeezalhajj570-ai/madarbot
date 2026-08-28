@@ -17,6 +17,7 @@ from telethon.tl.functions.messages import AddChatUserRequest
 from telethon.tl.types import Channel, Chat, ChatPhotoEmpty, MissingInvitee, User
 
 from bot.agents.group_membership import (
+    ERROR_CHAT_MEMBER_ADD_FAILED,
     ERROR_FLOOD_WAIT,
     ERROR_PEER_NOT_FOUND,
     ERROR_UNKNOWN,
@@ -240,6 +241,56 @@ async def test_add_user_to_group_returns_unknown_on_generic_telegram_error() -> 
 
     assert result.success is False
     assert result.error_code == ERROR_UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_too_many_requests_to_flood_wait() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(86), _build_channel(1009)])
+    client.side_effect = RPCError(
+        request=None,
+        message="Too many requests (caused by InviteToChannelRequest)",
+    )
+
+    result = await add_user_to_group(client, -1001009, 86)
+
+    assert result.success is False
+    assert result.error_code == ERROR_FLOOD_WAIT
+    assert result.flood_wait_seconds is not None and result.flood_wait_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_parses_explicit_flood_seconds() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(87), _build_channel(1010)])
+    client.side_effect = RPCError(
+        request=None,
+        message=(
+            "A wait of 123 seconds is required "
+            "(caused by InviteToChannelRequest)"
+        ),
+    )
+
+    result = await add_user_to_group(client, -1001010, 87)
+
+    assert result.success is False
+    assert result.error_code == ERROR_FLOOD_WAIT
+    assert result.flood_wait_seconds == 123
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_chat_member_add_failed_to_distinct_code() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(88), _build_channel(1011)])
+    client.side_effect = RPCError(
+        request=None,
+        message="RPCError 400: CHAT_MEMBER_ADD_FAILED (caused by InviteToChannelRequest)",
+    )
+
+    result = await add_user_to_group(client, -1001011, 88)
+
+    assert result.success is False
+    assert result.error_code == ERROR_CHAT_MEMBER_ADD_FAILED
 
 
 # ─── Stale access_hash retry ──────────────────────────────────────────────────
