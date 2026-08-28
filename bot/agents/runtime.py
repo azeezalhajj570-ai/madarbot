@@ -1634,12 +1634,13 @@ class BulkAddMembersRuntime:
 
                 add_result = await add_user_to_group(client, target_tg_group_id, user_id, access_hash=access_hashes.get(user_id))
 
+                attempted_at = datetime.now(timezone.utc).isoformat()
                 result_entry: dict[str, Any] = {
                     "user_id": user_id,
                     "status": "success" if add_result.success else "failed",
                     "error_code": add_result.error_code,
+                    "attempted_at": attempted_at,
                 }
-
                 if add_result.success:
                     success_count += 1
                     if session is not None:

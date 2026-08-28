@@ -223,7 +223,7 @@ class AgentJobService(AgentServiceSupport):
                     select(Agent.id).where(Agent.tenant_id == tenant_id)
                 )
             )
-        stmt = stmt.order_by(desc(AgentJob.created_at), desc(AgentJob.id)).limit(limit)
+        stmt = stmt.order_by(desc(AgentJob.updated_at), desc(AgentJob.id)).limit(limit)
         return list((await self.session.execute(stmt)).scalars())
 
     async def queue_automation_task_job(
