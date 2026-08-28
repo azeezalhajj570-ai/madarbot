@@ -59,6 +59,36 @@ docker compose build backend && docker compose up -d backend
 docker compose build agent_worker && docker compose up -d agent_worker
 ```
 
+## Development Toolchain & Commands
+
+Backend is Python **3.11+** (`requires-python = ">=3.11"` in `pyproject.toml`); CI runs tests on **3.12**, runtime images use **3.11-slim**. Frontends use Node **20**.
+
+### Test suite
+- Tests live in `tests/` (root-level unit/integration tests + `tests/agents/` for agent membership logic). The path is set via `testpaths = ["tests"]` in `pyproject.toml`.
+- Run the full suite:
+  ```bash
+  pytest -q
+  # or targeted:
+  pytest tests/agents/test_group_membership.py -q
+  # unit-only (exclude containerized integration markers):
+  pytest -q -m "not integration"
+  ```
+- `tests/conftest.py` sets up a deterministic env (in-memory/SQLite DB, Redis stub) so most tests run without the Docker stack.
+
+### Lint & format (PEP8 + Ruff)
+- Ruff config in `pyproject.toml`: `line-length = 100`, target `py311`, ignores `E402, F403, F405, F821, E741`.
+- Run:
+  ```bash
+  ruff check .            # lint
+  ruff format --check .   # formatting check (no auto-edit)
+  ruff check --fix .      # auto-fix where safe
+  ```
+- CI runs all of the above plus a full `pytest` run on every push/PR. **Run lint + tests before opening a PR.**
+
+### Code style conventions
+- Follow existing patterns in the touched module (imports, typing, logging via `structlog`).
+- Keep lines ≤ 100 columns.
+
 ## Settings (Environment Variables)
 
 All settings are defined in `bot/config.py` using Pydantic's `BaseSettings`.
