@@ -126,3 +126,14 @@ async def test_member_add_raises_agent_stop_error_on_flood(
     assert progress["stop_reason"] == "flood_wait"
     assert progress["retry_after"] == 60
     assert progress["failure_count"] == 1
+    # The flood-blocked user must be recorded so the resumed run skips it
+    # instead of re-attempting the same user forever (the resume loop).
+    assert len(progress["results"]) == 1
+    flood_entry = progress["results"][0]
+    assert flood_entry["user_id"] == 1726217833
+    assert flood_entry["status"] == "failed"
+    assert flood_entry["error_code"] == "FLOOD_WAIT"
+    assert flood_entry["flood_wait_seconds"] == 60
+    # Each result row carries its own attempt timestamp so task-log rows show
+    # distinct times instead of the job's updated_at for every row.
+    assert flood_entry["attempted_at"]

@@ -410,7 +410,11 @@ async def webapp_agent_send_logs(
                     "agent_id": agent.id,
                     "agent_name": actor_label,
                     "agent_phone": agent.phone_number,
-                    "sent_at": job.updated_at.isoformat() if job.updated_at else None,
+                    # Prefer the per-row attempt timestamp recorded by the
+                    # runtime so each log row shows its own time instead of the
+                    # job's updated_at (which is identical for every row).
+                    "sent_at": r.get("attempted_at")
+                    or (job.updated_at.isoformat() if job.updated_at else None),
                 })
 
         if job and job.job_type in {
