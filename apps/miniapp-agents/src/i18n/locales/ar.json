@@ -1006,6 +1006,14 @@
     "tryChangeAndOr": "جرّب تغيير AND إلى OR",
     "tryWidenDate": "جرّب توسيع نطاق التاريخ",
     "tryMoreGroups": "جرّب اختيار المزيد من المجموعات",
-    "searchError": "فشل البحث: {error}"
+    "searchError": "فشل البحث: {error}",
+    "advancedFilter": "فلتر متقدم",
+    "filterActive": "الفلتر نشط —",
+    "dialogTitle": "فلتر الأعضاء المتقدم",
+    "dialogSubtitle": "طابق الأعضاء حسب الملف الشخصي وحسب ما كتبوه في المجموعة.",
+    "conditions": "الشروط",
+    "counting": "جارٍ العد…",
+    "clear": "مسح",
+    "apply": "تطبيق"
   }
 }

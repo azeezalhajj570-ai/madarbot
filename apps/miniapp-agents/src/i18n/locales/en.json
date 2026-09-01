@@ -1006,6 +1006,14 @@
     "tryChangeAndOr": "Try changing AND to OR",
     "tryWidenDate": "Try widening the date range",
     "tryMoreGroups": "Try selecting more groups",
-    "searchError": "Search failed: {error}"
+    "searchError": "Search failed: {error}",
+    "advancedFilter": "Advanced filter",
+    "filterActive": "Filter active —",
+    "dialogTitle": "Advanced member filter",
+    "dialogSubtitle": "Match members by profile and by what they said in the group.",
+    "conditions": "Conditions",
+    "counting": "counting…",
+    "clear": "Clear",
+    "apply": "Apply"
   }
 }

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { FormActions } from '../../components/FormActions'
 import { ClaimAwareMemberPicker } from '../../components/ClaimAwareMemberPicker'
+import { MemberFilterDialog, isEmptyFilter, resolveFilterMemberIds } from '../memberSearch'
+import type { MemberFilterValue } from '../memberSearch'
 
 import {
   agentsApi,
@@ -167,6 +169,11 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
   // queued twice while the earlier job is still in flight.
   const [bulkHeldMemberIds, setBulkHeldMemberIds] = useState<Set<number>>(new Set())
 
+  // Advanced member filter (dialog) — narrows the member picker to matching ids.
+  const [bulkFilterOpen, setBulkFilterOpen] = useState(false)
+  const [bulkFilter, setBulkFilter] = useState<MemberFilterValue | null>(null)
+  const [bulkNarrowIds, setBulkNarrowIds] = useState<number[] | null>(null)
+
   const canSave = useMemo(() => {
     if (isBulkAdd) {
       return !!bulkSourceGroup && !!bulkTargetGroup && bulkSelectedMembers.length > 0
@@ -317,6 +324,9 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
     setBulkSendInvite(false)
     setBulkCustomMessage('')
     setBulkExcludeAdminsBots(true)
+    setBulkFilter(null)
+    setBulkNarrowIds(null)
+    setBulkFilterOpen(false)
     setStatus(null)
   }
 
@@ -502,17 +512,31 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
                     t={t}
                   />
                   {bulkSourceGroup?.tg_group_id ? (
-                    <ClaimAwareMemberPicker
-                      account={account}
-                      sourceGroup={bulkSourceGroup}
-                      targetGroup={bulkTargetGroup}
-                      heldMemberIds={bulkHeldMemberIds}
-                      selected={bulkSelectedMembers}
-                      onSelectedChange={setBulkSelectedMembers}
-                      excludeAdminsBots={bulkExcludeAdminsBots}
-                      onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
-                      pageSize={50}
-                    />
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                        <Button tone="secondary" onClick={() => setBulkFilterOpen(true)}>
+                          {t('memberSearch.advancedFilter')}
+                        </Button>
+                        {bulkFilter ? (
+                          <span style={{ fontSize: 12.5, color: 'var(--miniapp-text-muted)' }}>
+                            {t('memberSearch.filterActive')}{' '}
+                            {bulkNarrowIds ? `${bulkNarrowIds.length}` : '…'}
+                          </span>
+                        ) : null}
+                      </div>
+                      <ClaimAwareMemberPicker
+                        account={account}
+                        sourceGroup={bulkSourceGroup}
+                        targetGroup={bulkTargetGroup}
+                        heldMemberIds={bulkHeldMemberIds}
+                        selected={bulkSelectedMembers}
+                        onSelectedChange={setBulkSelectedMembers}
+                        excludeAdminsBots={bulkExcludeAdminsBots}
+                        onExcludeAdminsBotsChange={setBulkExcludeAdminsBots}
+                        pageSize={50}
+                        narrowToMemberIds={bulkNarrowIds}
+                      />
+                    </>
                   ) : null}
                 </div>
 
@@ -688,6 +712,25 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
           </div>
         ) : null}
       </Card>
+
+      <MemberFilterDialog
+        open={bulkFilterOpen}
+        onClose={() => setBulkFilterOpen(false)}
+        value={bulkFilter ?? { filter: null, groupIds: [], dateFrom: null, dateTo: null, sort: 'newest_matching_activity' }}
+        groups={(bulkSourceGroups ?? []).filter((g) => g.tg_group_id != null).map((g) => ({ tg_group_id: g.tg_group_id!, title: g.title || `Group ${g.tg_group_id}` }))}
+        countMatches={async (v) => {
+          const { total } = await resolveFilterMemberIds(account.id, v, { pageSize: 1, maxPages: 1 })
+          return total
+        }}
+        onApply={(v) => {
+          setBulkFilter(isEmptyFilter(v) ? null : v)
+          if (isEmptyFilter(v)) {
+            setBulkNarrowIds(null)
+          } else {
+            void resolveFilterMemberIds(account.id, v).then(({ ids }) => setBulkNarrowIds(ids))
+          }
+        }}
+      />
       {!loading && tasks.length > 0 ? (
         <Card title={t('automation.configuredTitle')} subtitle={t('automation.configuredSubtitle')}>
           <div style={{ display: 'grid', gap: 8 }}>
