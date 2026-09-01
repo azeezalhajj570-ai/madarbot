@@ -27,8 +27,10 @@ export async function resolveFilterMemberIds(
 ): Promise<{ ids: number[]; total: number | null }> {
   if (isEmptyFilter(value)) return { ids: [], total: null }
 
-  const pageSize = opts.pageSize ?? 100
-  const maxPages = opts.maxPages ?? 20
+  // page_size is capped at 50 by the backend, so default to it and page
+  // through all matches so the full filtered set is captured.
+  const pageSize = opts.pageSize ? Math.min(opts.pageSize, 50) : 50
+  const maxPages = opts.maxPages ?? 40
   const ids: number[] = []
   let total: number | null = null
   let page = 1
