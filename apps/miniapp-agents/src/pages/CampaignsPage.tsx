@@ -614,6 +614,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
         onClose={() => setBulkFilterOpen(false)}
         value={bulkFilter ?? { filter: null, groupIds: [], dateFrom: null, dateTo: null, sort: 'newest_matching_activity' }}
         groups={(groups ?? []).filter((g) => g.tg_group_id != null).map((g) => ({ tg_group_id: g.tg_group_id!, title: g.title || `Group ${g.tg_group_id}` }))}
+        scopeGroup={bulkSourceGroup ? { tg_group_id: bulkSourceGroup.tg_group_id, title: bulkSourceGroup.title } : null}
         countMatches={async (v) => {
           const { total } = await resolveFilterMemberIds(account.id, v, { pageSize: 1, maxPages: 1 })
           return total

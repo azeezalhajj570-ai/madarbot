@@ -1,10 +1,15 @@
 import { memberSearch } from '@miniapp/shared'
 import type { MemberFilterValue } from './MemberFilterDialog'
 
-/** True when the filter value carries no actual narrowing (no AST, scope or date). */
+/**
+ * True when the filter value carries no actual narrowing. The group scope is
+ * ambient (the form's selected source group), so only the filter AST and date
+ * range count — an empty AST + no dates means "no filter" regardless of which
+ * group is selected.
+ */
 export function isEmptyFilter(v: MemberFilterValue | null): boolean {
   if (!v) return true
-  return !v.filter && v.groupIds.length === 0 && !v.dateFrom && !v.dateTo
+  return !v.filter && !v.dateFrom && !v.dateTo
 }
 
 /**

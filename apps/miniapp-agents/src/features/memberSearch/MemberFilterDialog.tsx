@@ -26,6 +26,12 @@ export interface MemberFilterDialogProps {
   /** Groups available for the scope selector. */
   groups: GroupChip[]
   /**
+   * When set, the group scope is locked to this single group (the one already
+   * selected in the form) — the group selector is hidden and the applied
+   * filter always scopes to this group.
+   */
+  scopeGroup?: GroupChip | null
+  /**
    * Called to count matching members for the current draft (debounced by the
    * dialog). The parent owns the actual search (it knows the agent id).
    * Return null when a count isn't available (e.g. count > 10k).
@@ -69,6 +75,7 @@ export function MemberFilterDialog({
   value,
   onApply,
   groups,
+  scopeGroup,
   countMatches,
 }: MemberFilterDialogProps) {
   const { t } = useTranslation()
@@ -101,20 +108,26 @@ export function MemberFilterDialog({
 
   const range = datePreset === 'custom' ? customRange : presetRange(datePreset)
   const usable = draftFilter !== null && isFilterUsable(draftFilter)
-  const scopeLabel =
-    draftGroupIds.length === 0
+
+  // Group scope — when scopeGroup is provided the filter is locked to that
+  // single group (the one already selected in the form) and the selector is
+  // hidden; otherwise the dialog's own group selector applies.
+  const effectiveGroupIds = scopeGroup ? [scopeGroup.tg_group_id] : draftGroupIds
+  const scopeLabel = scopeGroup
+    ? (scopeGroup.title || `Group ${scopeGroup.tg_group_id}`)
+    : effectiveGroupIds.length === 0
       ? t('memberSearch.allGroups')
-      : t('memberSearch.nGroups', { count: draftGroupIds.length })
+      : t('memberSearch.nGroups', { count: effectiveGroupIds.length })
 
   const draftValue = useMemo<MemberFilterValue>(
     () => ({
       filter: draftFilter,
-      groupIds: draftGroupIds,
+      groupIds: effectiveGroupIds,
       dateFrom: range.from,
       dateTo: range.to,
       sort: draftSort,
     }),
-    [draftFilter, draftGroupIds, range.from, range.to, draftSort],
+    [draftFilter, effectiveGroupIds, range.from, range.to, draftSort],
   )
   const draftKey = useMemo(() => JSON.stringify(draftValue), [draftValue])
 
@@ -224,14 +237,34 @@ export function MemberFilterDialog({
           {/* Scope: groups + date + sort */}
           <div style={{ display: 'grid', gap: 10, paddingTop: 4 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <SelectField label={t('memberSearch.group')} value={draftGroupIds.length === 1 ? String(draftGroupIds[0]) : ''} onChange={(v) => setDraftGroupIds(v ? [Number(v)] : [])}>
-                <option value="">{t('memberSearch.allGroups')}</option>
-                {groups.map((g) => (
-                  <option key={g.tg_group_id} value={g.tg_group_id}>
-                    {g.title || `Group ${g.tg_group_id}`}
-                  </option>
-                ))}
-              </SelectField>
+              {scopeGroup ? (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
+                    {t('memberSearch.group')}
+                  </span>
+                  <div style={{
+                    background: 'var(--miniapp-bg)',
+                    border: '1px solid var(--miniapp-border-soft)',
+                    borderRadius: 'var(--miniapp-radius-sm)',
+                    padding: '8px 10px',
+                    fontFamily: 'var(--miniapp-sans)',
+                    fontSize: 13,
+                    color: 'var(--miniapp-text-primary)',
+                    boxSizing: 'border-box',
+                  }}>
+                    {scopeLabel}
+                  </div>
+                </div>
+              ) : (
+                <SelectField label={t('memberSearch.group')} value={draftGroupIds.length === 1 ? String(draftGroupIds[0]) : ''} onChange={(v) => setDraftGroupIds(v ? [Number(v)] : [])}>
+                  <option value="">{t('memberSearch.allGroups')}</option>
+                  {groups.map((g) => (
+                    <option key={g.tg_group_id} value={g.tg_group_id}>
+                      {g.title || `Group ${g.tg_group_id}`}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
 
               <SelectField label={t('memberSearch.date')} value={datePreset} onChange={(v) => setDatePreset(v as DatePreset)}>
                 <option value="any">{t('memberSearch.dateAny')}</option>
