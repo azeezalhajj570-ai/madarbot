@@ -636,3 +636,79 @@ export interface AgentAnalytics {
     safety_mode_until?: string | null
   }
 }
+
+// ── Dynamic member search ────────────────────────────────────────────────
+
+export type MemberSearchOperator =
+  | 'contains'
+  | 'not_contains'
+  | 'equals'
+  | 'not_equals'
+  | 'starts_with'
+  | 'ends_with'
+  | 'greater_than'
+  | 'greater_than_or_equal'
+  | 'less_than'
+  | 'less_than_or_equal'
+  | 'between'
+  | 'before'
+  | 'after'
+
+export type MemberSearchField =
+  | 'member.username'
+  | 'member.display_name'
+  | 'member.user_id'
+  | 'member.status'
+  | 'member.claim_status'
+  | 'member.message_count'
+  | 'member.first_message_at'
+  | 'member.last_message_at'
+  | 'group.id'
+  | 'group.name'
+  | 'message.content'
+  | 'message.created_at'
+  | 'message.group_id'
+  | 'message.author_id'
+
+export type MemberSearchMatch = 'substring' | 'token' | 'phrase'
+
+export interface MemberSearchCondition {
+  type: 'condition'
+  field: MemberSearchField
+  operator: MemberSearchOperator
+  value: string | number | string[] | { from?: string | number; to?: string | number }
+  match?: MemberSearchMatch
+}
+
+export interface MemberSearchGroup {
+  type: 'group'
+  operator: 'AND' | 'OR'
+  conditions: MemberSearchNode[]
+}
+
+export type MemberSearchNode = MemberSearchCondition | MemberSearchGroup
+
+export type MemberSearchSort = 'newest_matching_activity' | 'last_active' | 'message_count' | 'username'
+
+export interface MemberSearchResultItem {
+  member_id: number
+  tg_user_id: number
+  username: string | null
+  display_name: string | null
+  first_name?: string | null
+  last_name?: string | null
+  full_name?: string | null
+  role?: string | null
+  is_bot?: boolean
+  tg_group_id: number
+  message_count?: number | null
+  last_message_at?: string | null
+}
+
+export interface MemberSearchResult {
+  items: MemberSearchResultItem[]
+  page: number
+  page_size: number
+  has_more: boolean
+  total?: number | null
+}
