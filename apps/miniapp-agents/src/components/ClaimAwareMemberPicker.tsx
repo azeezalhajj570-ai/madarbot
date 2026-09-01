@@ -92,15 +92,17 @@ export function ClaimAwareMemberPicker({
   const claimedRef = useRef<Set<number>>(new Set())
   const exclude = excludeAdminsBots ?? internalExclude
 
-  // Search members from the source group.
+  // Search members from the source group. When an advanced filter is active
+  // (narrowToMemberIds), the ids are passed server-side so the total + page
+  // reflect the filtered set.
   useEffect(() => {
     if (!sourceGroup?.tg_group_id) { setMembers([]); setTotal(0); return }
     setSearching(true)
-    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, exclude, page, 'message_count', exclude, false, targetGroup?.tg_group_id)
+    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, exclude, page, 'message_count', exclude, false, targetGroup?.tg_group_id, narrowToMemberIds || undefined)
       .then((res) => { setMembers(res.members || []); setTotal(res.total || 0) })
       .catch(() => { setMembers([]); setTotal(0) })
       .finally(() => setSearching(false))
-  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id, exclude, refreshKey])
+  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id, exclude, refreshKey, narrowToMemberIds])
 
   // Members already in the target group are flagged and disabled.
   useEffect(() => {

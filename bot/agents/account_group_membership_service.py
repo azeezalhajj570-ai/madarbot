@@ -424,6 +424,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         exclude_self: bool = True,
         order_by: str = "message_count",
         target_tg_group_id: int | None = None,
+        member_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -522,6 +523,13 @@ class AccountGroupMembershipService(AgentServiceSupport):
             )
         ).subquery()
         filters.append(ScrapedMember.tg_user_id.notin_(select(already_sent_subq)))
+
+        # Optional advanced-filter narrowing: only members whose tg_user_id is
+        # in this set (resolved by the dynamic member-search endpoint) are
+        # returned. Applied server-side so pagination + total reflect the
+        # filtered set, not the whole group.
+        if member_ids:
+            filters.append(ScrapedMember.tg_user_id.in_(member_ids))
 
         try:
             total = int(

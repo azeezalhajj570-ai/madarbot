@@ -717,11 +717,18 @@ async def webapp_agent_member_search(
     only_admins: bool = Query(default=False),
     only_bots: bool = Query(default=False),
     target_tg_group_id: int | None = Query(default=None),
+    member_ids: str | None = Query(default=None),
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     try:
+        # Comma-separated list of tg_user_ids from the advanced member filter.
+        parsed_member_ids: list[int] | None = None
+        if member_ids:
+            parsed_member_ids = [
+                int(part) for part in member_ids.split(",") if part.strip().isdigit()
+            ]
         payload = await AccountGroupMembershipService(session).list_scraped_agent_group_members(
             actor_user_id=identity.user_id,
             agent_id=agent.id,
@@ -735,6 +742,7 @@ async def webapp_agent_member_search(
             only_admins=only_admins,
             only_bots=only_bots,
             target_tg_group_id=target_tg_group_id,
+            member_ids=parsed_member_ids or None,
         )
         return payload
     except ValueError as exc:
