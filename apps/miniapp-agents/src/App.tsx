@@ -42,6 +42,7 @@ import { LanguageSwitcher } from './components/LanguageSwitcher'
 import { ToastContainer, type Toast } from './components/ToastContainer'
 import { CampaignsPage } from './pages/CampaignsPage'
 import { LeadsAcquisitionSection } from './features/leads/LeadsAcquisitionSection'
+import { MemberSearchSection } from './features/memberSearch'
 import { AutomationTasksSection } from './features/tasks/AutomationTasksSection'
 import { ConfirmModal } from './components/ConfirmModal'
 import { FormActions } from './components/FormActions'
@@ -1561,6 +1562,7 @@ export default function App() {
                {route.page === 'outreach' ? (
                 <>
                   <CampaignsPage account={selectedAccount} workspaceId={activeWorkspace?.id} onSaved={setStatus} />
+                  <MemberSearchSection account={selectedAccount} sessionGroups={session.groups} onSaved={setStatus} />
                   <LeadsAcquisitionSection account={selectedAccount} groupId={effectiveGroupId} onSaved={setStatus} />
                   <AccountLeadsPage account={selectedAccount} />
                 </>

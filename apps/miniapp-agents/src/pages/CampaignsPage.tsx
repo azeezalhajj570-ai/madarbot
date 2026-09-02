@@ -8,6 +8,8 @@ import { ClaimAwareMemberPicker } from '../components/ClaimAwareMemberPicker'
 import { MessageComposer } from '../components/MessageComposer'
 import { SchedulePicker, DEFAULT_SCHEDULE } from '../components/SchedulePicker'
 import type { ScheduleConfig } from '../components/SchedulePicker'
+import { MemberFilterDialog, isEmptyFilter, resolveFilterMemberIds } from '../features/memberSearch'
+import type { MemberFilterValue } from '../features/memberSearch'
 
 import {
   agentsApi,
@@ -82,6 +84,10 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
   const [bulkSummary, setBulkSummary] = useState<BulkPreflightResult | null>(null)
   const [loadingBulkSummary, setLoadingBulkSummary] = useState(false)
   const [bulkSaving, setBulkSaving] = useState(false)
+  // Advanced member filter (dialog) — narrows the member picker to matching ids.
+  const [bulkFilterOpen, setBulkFilterOpen] = useState(false)
+  const [bulkFilter, setBulkFilter] = useState<MemberFilterValue | null>(null)
+  const [bulkNarrowIds, setBulkNarrowIds] = useState<number[] | null>(null)
   const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null)
   const [groupNameMap, setGroupNameMap] = useState<Record<number, string>>({})
 
@@ -200,6 +206,7 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
     setBulkScheduleMode('now'); setBulkScheduledAt('')
     setBulkSendMode('standard'); setScheduleConfig(DEFAULT_SCHEDULE)
     setExcludeAdmins(true); setBulkSummary(null); setEditingCampaignId(null)
+    setBulkFilter(null); setBulkNarrowIds(null); setBulkFilterOpen(false)
     setStatus(null)
   }
 
@@ -388,7 +395,19 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                     onExcludeAdminsBotsChange={setExcludeAdmins}
                     autoClaim
                     hideEmptyState
+                    narrowToMemberIds={bulkNarrowIds}
                   />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <Button tone="secondary" onClick={() => setBulkFilterOpen(true)}>
+                      {t('memberSearch.advancedFilter')}
+                    </Button>
+                    {bulkFilter ? (
+                      <span style={{ fontSize: 12.5, color: 'var(--miniapp-text-muted)' }}>
+                        {t('memberSearch.filterActive')}{' '}
+                        {bulkNarrowIds ? `${bulkNarrowIds.length}` : '…'}
+                      </span>
+                    ) : null}
+                  </div>
                   {bulkSourceGroup && bulkMembersEmpty ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <div style={{ fontSize: 13, color: 'var(--miniapp-clay)' }}>{t('campaigns.noScrapedMembers')}</div>
@@ -589,6 +608,26 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
           </div>
         </div>
       ) : null}
+
+      <MemberFilterDialog
+        open={bulkFilterOpen}
+        onClose={() => setBulkFilterOpen(false)}
+        value={bulkFilter ?? { filter: null, groupIds: [], dateFrom: null, dateTo: null, sort: 'newest_matching_activity' }}
+        groups={(groups ?? []).filter((g) => g.tg_group_id != null).map((g) => ({ tg_group_id: g.tg_group_id!, title: g.title || `Group ${g.tg_group_id}` }))}
+        scopeGroup={bulkSourceGroup ? { tg_group_id: bulkSourceGroup.tg_group_id, title: bulkSourceGroup.title } : null}
+        countMatches={async (v) => {
+          const { total } = await resolveFilterMemberIds(account.id, v, { pageSize: 1, maxPages: 1 })
+          return total
+        }}
+        resolveIds={async (v) => {
+          const { ids } = await resolveFilterMemberIds(account.id, v)
+          return ids
+        }}
+        onApply={(v) => {
+          setBulkFilter(isEmptyFilter(v) ? null : v)
+          setBulkNarrowIds(v.memberIds && v.memberIds.length ? v.memberIds : null)
+        }}
+      />
 
       <BlacklistSection account={account} />
     </>

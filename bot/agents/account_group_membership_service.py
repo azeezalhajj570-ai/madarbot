@@ -424,6 +424,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         exclude_self: bool = True,
         order_by: str = "message_count",
         target_tg_group_id: int | None = None,
+        member_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         agent = await self.get_agent(agent_id=agent_id)
         if agent is None:
@@ -522,6 +523,13 @@ class AccountGroupMembershipService(AgentServiceSupport):
             )
         ).subquery()
         filters.append(ScrapedMember.tg_user_id.notin_(select(already_sent_subq)))
+
+        # Optional advanced-filter narrowing: only members whose tg_user_id is
+        # in this set (resolved by the dynamic member-search endpoint) are
+        # returned. Applied server-side so pagination + total reflect the
+        # filtered set, not the whole group.
+        if member_ids:
+            filters.append(ScrapedMember.tg_user_id.in_(member_ids))
 
         try:
             total = int(
@@ -651,15 +659,19 @@ class AccountGroupMembershipService(AgentServiceSupport):
         member_claims: dict[int, dict[str, Any]] = {}  # tg_user_id -> claim info
         if user_ids and scraped_group:
             claim_rows = (
-                await self.session.execute(
-                    select(MemberClaim).where(
-                        MemberClaim.tenant_id == agent.tenant_id,
-                        MemberClaim.scraped_group_id == scraped_group.id,
-                        MemberClaim.tg_user_id.in_(user_ids),
-                        MemberClaim.status == "active",
+                (
+                    await self.session.execute(
+                        select(MemberClaim).where(
+                            MemberClaim.tenant_id == agent.tenant_id,
+                            MemberClaim.scraped_group_id == scraped_group.id,
+                            MemberClaim.tg_user_id.in_(user_ids),
+                            MemberClaim.status == "active",
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for claim in claim_rows:
                 tg_uid = int(claim.tg_user_id)
                 member_claims[tg_uid] = {
@@ -674,7 +686,9 @@ class AccountGroupMembershipService(AgentServiceSupport):
         # an invite sent by one agent is visible to every other agent in the workspace.
         # "joined" operations mean the member accepted the invite and is now in the group,
         # so they are treated as both already-invited and already-added.
-        invitation_status: dict[int, dict[str, Any]] = {}  # tg_user_id -> {status, sent_at, invitation_link, agent_id}
+        invitation_status: dict[
+            int, dict[str, Any]
+        ] = {}  # tg_user_id -> {status, sent_at, invitation_link, agent_id}
         if user_ids and target_tg_group_id:
             workspace_agent_ids: set[int] = set()
             if agent.tenant_id is not None:
@@ -686,15 +700,19 @@ class AccountGroupMembershipService(AgentServiceSupport):
                 workspace_agent_ids = {int(row[0]) for row in ws_agents}
             if workspace_agent_ids:
                 op_rows = (
-                    await self.session.execute(
-                        select(MemberOperation).where(
-                            MemberOperation.tg_group_id == target_tg_group_id,
-                            MemberOperation.tg_user_id.in_(user_ids),
-                            MemberOperation.agent_id.in_(workspace_agent_ids),
-                            MemberOperation.status.in_(["pending", "sent", "joined"]),
+                    (
+                        await self.session.execute(
+                            select(MemberOperation).where(
+                                MemberOperation.tg_group_id == target_tg_group_id,
+                                MemberOperation.tg_user_id.in_(user_ids),
+                                MemberOperation.agent_id.in_(workspace_agent_ids),
+                                MemberOperation.status.in_(["pending", "sent", "joined"]),
+                            )
                         )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 for op in op_rows:
                     invitation_status[int(op.tg_user_id)] = {
                         "status": op.status,
@@ -748,9 +766,7 @@ class AccountGroupMembershipService(AgentServiceSupport):
         # Members whose invitation operation was confirmed "joined" are already in
         # the group even though no GroupMember row was created for the invite path.
         already_added.update(
-            int(uid)
-            for uid, info in invitation_status.items()
-            if info.get("status") == "joined"
+            int(uid) for uid, info in invitation_status.items() if info.get("status") == "joined"
         )
 
         def _member_dict(member) -> dict[str, Any]:
@@ -1188,7 +1204,10 @@ class AccountGroupMembershipService(AgentServiceSupport):
                     continue
 
                 row = serializers.build_member_row_from_participant(
-                    participant, scraped_group.id, canonical_id, uid,
+                    participant,
+                    scraped_group.id,
+                    canonical_id,
+                    uid,
                 )
                 role = "member"
                 if hasattr(participant, "creator") and participant.creator:

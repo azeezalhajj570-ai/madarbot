@@ -130,7 +130,7 @@ export async function preflightBulkMessage(agentId: number, payload: {
   return apiClient.post<BulkPreflightResult>(`${AGENTS_API_PREFIX}/${agentId}/jobs/bulk-preflight`, payload)
 }
 
-export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', excludeAdmins = false, onlyBots = false, targetTgGroupId?: number) {
+export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', excludeAdmins = false, onlyBots = false, targetTgGroupId?: number, memberIds?: number[]) {
   return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
     q: query || undefined,
@@ -141,6 +141,7 @@ export async function searchAgentGroupMembers(agentId: number, tgGroupId: number
     exclude_bots: excludeBots,
     only_bots: onlyBots,
     target_tg_group_id: targetTgGroupId || undefined,
+    member_ids: memberIds && memberIds.length ? memberIds.join(',') : undefined,
   })
 }
 

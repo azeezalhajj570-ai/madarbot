@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusIcon } from './StatusIcon'
@@ -40,6 +40,13 @@ type ClaimAwareMemberPickerProps = {
   hideSelectControls?: boolean
   /** Hide the "No members found" empty-state container. */
   hideEmptyState?: boolean
+  /**
+   * When set, only members whose tg_user_id is in this set are shown. Used by
+   * the "Advanced filter" — the parent resolves the dynamic member filter to a
+   * list of matching ids and the picker narrows its rows to them (while still
+   * applying its own exclude-admins/bots and status filters on top).
+   */
+  narrowToMemberIds?: number[] | null
 }
 
 type StatusFilter = 'all' | 'privacy_restricted' | 'claimed' | 'added' | 'invited' | 'processed' | 'available'
@@ -68,6 +75,7 @@ export function ClaimAwareMemberPicker({
   hideSelectControls = false,
   hideEmptyState = false,
   autoClaim = false,
+  narrowToMemberIds,
 }: ClaimAwareMemberPickerProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -84,15 +92,17 @@ export function ClaimAwareMemberPicker({
   const claimedRef = useRef<Set<number>>(new Set())
   const exclude = excludeAdminsBots ?? internalExclude
 
-  // Search members from the source group.
+  // Search members from the source group. When an advanced filter is active
+  // (narrowToMemberIds), the ids are passed server-side so the total + page
+  // reflect the filtered set.
   useEffect(() => {
     if (!sourceGroup?.tg_group_id) { setMembers([]); setTotal(0); return }
     setSearching(true)
-    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, exclude, page, 'message_count', exclude, false, targetGroup?.tg_group_id)
+    void agentsApi.searchAgentGroupMembers(account.id, sourceGroup.tg_group_id, query || undefined, pageSize, exclude, page, 'message_count', exclude, false, targetGroup?.tg_group_id, narrowToMemberIds || undefined)
       .then((res) => { setMembers(res.members || []); setTotal(res.total || 0) })
       .catch(() => { setMembers([]); setTotal(0) })
       .finally(() => setSearching(false))
-  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id, exclude, refreshKey])
+  }, [account.id, sourceGroup?.tg_group_id, query, page, pageSize, targetGroup?.tg_group_id, exclude, refreshKey, narrowToMemberIds])
 
   // Members already in the target group are flagged and disabled.
   useEffect(() => {
@@ -176,12 +186,19 @@ export function ClaimAwareMemberPicker({
 
   const selectAll = () => {
     const ids = members
+      .filter((m) => (narrowSet ? narrowSet.has(m.user_id) : true))
       .filter((m) => !targetMemberIds.has(m.user_id) && !m.already_added && !heldIds.has(m.user_id) && !m.claim && !m.invitation_status && !m.processed && !(exclude && (m.is_bot || m.role === 'creator' || m.role === 'admin')))
       .map((m) => m.user_id)
     onSelectedChange(Array.from(new Set([...selected, ...ids])))
   }
 
+  const narrowSet = useMemo(
+    () => (narrowToMemberIds ? new Set(narrowToMemberIds) : null),
+    [narrowToMemberIds],
+  )
+
   const visibleMembers = members
+    .filter((m) => (narrowSet ? narrowSet.has(m.user_id) : true))
     .filter((m) => !exclude || (!m.is_bot && m.role !== 'creator' && m.role !== 'admin'))
     .filter((m) => {
       if (statusFilter === 'all') return true

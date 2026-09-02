@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -371,28 +371,65 @@ class JobHealthResponse(BaseModel):
     running_jobs: list[JobHealthItem]
 
 
+# ── Dynamic member search ─────────────────────────────────────────────────
+
+
+class MemberSearchConditionModel(BaseModel):
+    type: Literal["condition"] = "condition"
+    field: str
+    operator: str
+    value: Any
+    match: str | None = None
+
+
+class MemberSearchGroupModel(BaseModel):
+    type: Literal["group"] = "group"
+    operator: Literal["AND", "OR"]
+    conditions: list[MemberSearchNode]
+
+
+MemberSearchNode = MemberSearchConditionModel | MemberSearchGroupModel
+MemberSearchGroupModel.model_rebuild()
+
+
+class MemberSearchRequest(BaseModel):
+    group_ids: list[int] | None = None
+    filter: MemberSearchNode | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=50)
+    sort: str = "newest_matching_activity"
+    include_total: bool = False
+
+
 __all__ = [
+    "BOT_INSTALL_PERMISSION_KEYS",
     "AccessGateUpdateRequest",
-    "BlacklistAddEntry",
-    "BlacklistAddRequest",
-    "BlacklistResolveRequest",
-    "BlacklistResolveResult",
-    "BulkMemberAddRequest",
     "AgentJobCreateRequest",
-    "AgentSafetyUpdateRequest",
     "AgentLinkRequest",
     "AgentLoginCodeRequest",
     "AgentLoginPasswordRequest",
     "AgentLoginStartRequest",
+    "AgentSafetyUpdateRequest",
     "AgentUpdateRequest",
-    "BOT_INSTALL_PERMISSION_KEYS",
+    "BlacklistAddEntry",
+    "BlacklistAddRequest",
+    "BlacklistResolveRequest",
+    "BlacklistResolveResult",
     "BotInstallLinkRequest",
     "BotInstallTarget",
+    "BulkMemberAddRequest",
     "ChangePasswordRequest",
     "EmailPasswordLoginRequest",
+    "JobHealthResponse",
     "JoinRequestActionRequest",
     "LanguageUpdateRequest",
     "MemberRoleUpdateRequest",
+    "MemberSearchConditionModel",
+    "MemberSearchGroupModel",
+    "MemberSearchNode",
+    "MemberSearchRequest",
     "ModerationActionRequest",
     "ModerationSettingsUpdateRequest",
     "NotificationFollowUpRequest",

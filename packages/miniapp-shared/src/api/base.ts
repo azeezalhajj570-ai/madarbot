@@ -260,6 +260,7 @@ async function apiRequest<T>(
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
     params?: QueryParams
     body?: unknown
+    signal?: AbortSignal
   } = {},
 ) {
   async function buildHeaders(forceTokenRefresh = false) {
@@ -296,6 +297,7 @@ async function apiRequest<T>(
     method,
     headers: await buildHeaders(),
     body,
+    signal: options.signal,
   })
 
   if (response.status === 401) {
@@ -303,6 +305,7 @@ async function apiRequest<T>(
       method,
       headers: await buildHeaders(true),
       body,
+      signal: options.signal,
     })
   }
 
@@ -351,17 +354,19 @@ async function apiUploadRequest<T>(
 }
 
 export const apiClient = {
-  get: <T>(path: string, params?: QueryParams) => apiRequest<T>(path, { method: 'GET', params }),
-  post: <T>(path: string, body?: unknown, params?: QueryParams) =>
-    apiRequest<T>(path, { method: 'POST', body, params }),
-  put: <T>(path: string, body?: unknown, params?: QueryParams) =>
-    apiRequest<T>(path, { method: 'PUT', body, params }),
-  patch: <T>(path: string, body?: unknown, params?: QueryParams) =>
-    apiRequest<T>(path, { method: 'PATCH', body, params }),
-  delete: <T>(path: string, params?: QueryParams) => apiRequest<T>(path, { method: 'DELETE', params }),
+  get: <T>(path: string, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'GET', params, signal }),
+  post: <T>(path: string, body?: unknown, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'POST', body, params, signal }),
+  put: <T>(path: string, body?: unknown, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'PUT', body, params, signal }),
+  patch: <T>(path: string, body?: unknown, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'PATCH', body, params, signal }),
+  delete: <T>(path: string, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'DELETE', params, signal }),
   /** DELETE with a JSON body (the apiRequest helper supports it; keep it explicit). */
-  deleteWithBody: <T>(path: string, body?: unknown, params?: QueryParams) =>
-    apiRequest<T>(path, { method: 'DELETE', body, params }),
+  deleteWithBody: <T>(path: string, body?: unknown, params?: QueryParams, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'DELETE', body, params, signal }),
   upload: <T>(path: string, body: Blob | ArrayBuffer, params?: QueryParams) =>
     apiUploadRequest<T>(path, body, params),
 }

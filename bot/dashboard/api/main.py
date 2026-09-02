@@ -24,6 +24,7 @@ from bot.dashboard.api.routers.agents import router as agents_router
 from bot.dashboard.api.routers.campaigns import router as campaigns_router
 from bot.dashboard.api.routers.faq import router as faq_router
 from bot.dashboard.api.routers.messaging import router as messaging_router
+from bot.dashboard.api.routers.members import router as members_router
 from bot.dashboard.api.routers.subscription import router as subscription_router
 from bot.dashboard.api.routers.group_subscriptions import router as group_subscription_router
 from bot.dashboard.api.routers.auth_boundary import router as auth_boundary_router
@@ -302,6 +303,7 @@ app.include_router(subscription_router)
 app.include_router(agents_router)
 app.include_router(campaigns_router)
 app.include_router(messaging_router)
+app.include_router(members_router)
 app.include_router(group_subscription_router)
 app.include_router(internal_router)
 app.include_router(internal_router, prefix="/api/internal")
