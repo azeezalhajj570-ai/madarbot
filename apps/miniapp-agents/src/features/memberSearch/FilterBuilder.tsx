@@ -53,6 +53,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   color: 'var(--miniapp-text-primary)',
   boxSizing: 'border-box',
+  width: '100%',
+  minWidth: 0,
 }
 
 const selectStyle: React.CSSProperties = { ...inputStyle, padding: '8px 8px', minWidth: 0 }
@@ -235,61 +237,64 @@ function ConditionRow({
   const setValue = (value: MemberSearchCondition['value']) => update({ value })
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(130px, 170px) auto 1fr auto',
-        gap: 8,
-        alignItems: 'start',
-      }}
-    >
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span style={labelStyle}>{t('memberSearch.field')}</span>
-        <select
-          value={node.field}
-          onChange={(e) => {
-            const field = e.target.value as MemberSearchField
-            update({ field, operator: defaultOperator(field), value: defaultValueFor(field) })
-          }}
-          style={selectStyle}
-        >
-          {FIELD_DEFS.map((f) => (
-            <option key={f.field} value={f.field}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label style={{ display: 'grid', gap: 4 }}>
-        <span style={labelStyle}>{t('memberSearch.operator')}</span>
-        <select
-          value={node.operator}
-          onChange={(e) => update({ operator: e.target.value as MemberSearchOperator })}
-          style={{ ...selectStyle, whiteSpace: 'nowrap' }}
-        >
-          {def.operators.map((op) => (
-            <option key={op} value={op}>
-              {TEXT_OP_LABELS[op] ?? op}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <ValueInput
-        node={node}
-        groups={groups}
-        setValue={setValue}
-        onMatchChange={(match) => update({ match })}
-      />
-
+    <div style={{ display: 'grid', gap: 6 }}>
       {onRemove ? (
-        <button type="button" style={removeBtnStyle} onClick={onRemove} aria-label={t('common.remove')}>
-          ✕
-        </button>
-      ) : (
-        <span />
-      )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" style={removeBtnStyle} onClick={onRemove} aria-label={t('common.remove')}>
+            ✕
+          </button>
+        </div>
+      ) : null}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 8,
+          alignItems: 'start',
+        }}
+      >
+        <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+          <span style={labelStyle}>{t('memberSearch.field')}</span>
+          <select
+            value={node.field}
+            onChange={(e) => {
+              const field = e.target.value as MemberSearchField
+              update({ field, operator: defaultOperator(field), value: defaultValueFor(field) })
+            }}
+            style={{ ...selectStyle, width: '100%' }}
+          >
+            {FIELD_DEFS.map((f) => (
+              <option key={f.field} value={f.field}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+          <span style={labelStyle}>{t('memberSearch.operator')}</span>
+          <select
+            value={node.operator}
+            onChange={(e) => update({ operator: e.target.value as MemberSearchOperator })}
+            style={{ ...selectStyle, width: '100%', whiteSpace: 'nowrap' }}
+          >
+            {def.operators.map((op) => (
+              <option key={op} value={op}>
+                {TEXT_OP_LABELS[op] ?? op}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div style={{ minWidth: 0 }}>
+          <ValueInput
+            node={node}
+            groups={groups}
+            setValue={setValue}
+            onMatchChange={(match) => update({ match })}
+          />
+        </div>
+      </div>
     </div>
   )
 }
@@ -533,7 +538,7 @@ function NumberInput({
   if (node.operator === 'between') {
     const range = (typeof node.value === 'object' && node.value ? node.value : {}) as { from?: string | number; to?: string | number }
     return (
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
         <input
           type="number"
           value={range.from ?? ''}
@@ -541,7 +546,7 @@ function NumberInput({
           placeholder={t('memberSearch.from')}
           style={inputStyle}
         />
-        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 12 }}>–</span>
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 12, flexShrink: 0 }}>–</span>
         <input
           type="number"
           value={range.to ?? ''}
@@ -574,14 +579,14 @@ function DateInput({
   if (node.operator === 'between') {
     const range = (typeof node.value === 'object' && node.value ? node.value : {}) as { from?: string | number; to?: string | number }
     return (
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
         <input
           type="date"
           value={String(range.from ?? '')}
           onChange={(e) => setValue({ from: e.target.value || undefined, to: range.to })}
           style={inputStyle}
         />
-        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 12 }}>–</span>
+        <span style={{ color: 'var(--miniapp-text-muted)', fontSize: 12, flexShrink: 0 }}>–</span>
         <input
           type="date"
           value={String(range.to ?? '')}

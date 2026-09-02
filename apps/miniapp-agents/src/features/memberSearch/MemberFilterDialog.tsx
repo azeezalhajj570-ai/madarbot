@@ -104,16 +104,22 @@ export function MemberFilterDialog({
   const [count, setCount] = useState<number | null>(null)
   const [counting, setCounting] = useState(false)
   const countKeyRef = useRef(0)
+  // Snapshot the committed filter only when the dialog transitions to open.
+  // Re-initialising on every `value` change would wipe in-progress edits the
+  // moment the parent re-renders (e.g. while adding a condition).
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
-    if (!open) return
-    setDraftFilter(value.filter)
-    setDraftGroupIds(value.groupIds)
-    setDraftSort(value.sort)
-    setDatePreset(value.dateFrom || value.dateTo ? 'custom' : 'any')
-    setCustomRange({ from: value.dateFrom || undefined, to: value.dateTo || undefined })
-    setCount(null)
-  }, [open, value])
+    if (open && !wasOpenRef.current) {
+      setDraftFilter(value.filter)
+      setDraftGroupIds(value.groupIds)
+      setDraftSort(value.sort)
+      setDatePreset(value.dateFrom || value.dateTo ? 'custom' : 'any')
+      setCustomRange({ from: value.dateFrom || undefined, to: value.dateTo || undefined })
+      setCount(null)
+    }
+    wasOpenRef.current = open
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const range = datePreset === 'custom' ? customRange : presetRange(datePreset)
   const usable = draftFilter !== null && isFilterUsable(draftFilter)
@@ -206,8 +212,11 @@ export function MemberFilterDialog({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(720px, 100%)', maxHeight: '88vh',
+          width: 'min(720px, 100%)',
+          maxWidth: '100%',
+          maxHeight: '88vh',
           display: 'flex', flexDirection: 'column',
+          minWidth: 0,
           background: 'var(--miniapp-surface)',
           border: '1px solid var(--miniapp-border-soft)',
           borderRadius: 20, boxShadow: '0 22px 60px rgba(32,25,16,0.22)',
@@ -236,9 +245,13 @@ export function MemberFilterDialog({
           </button>
         </div>
 
-        <div style={{ overflow: 'auto', padding: '12px 20px 20px', display: 'grid', gap: 14 }}>
+        <div style={{
+          overflowX: 'hidden', overflowY: 'auto',
+          padding: '12px 20px 20px', display: 'grid', gap: 14,
+          minWidth: 0,
+        }}>
           {/* Filter builder */}
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
             <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.5px', textTransform: 'uppercase', color: 'var(--miniapp-text-muted)' }}>
               {t('memberSearch.conditions')}
             </span>
