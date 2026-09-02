@@ -10,7 +10,6 @@ import {
   cloneNode,
   defaultOperator,
   emptyCondition,
-  emptyGroup,
   fieldDef,
 } from './types'
 
@@ -145,12 +144,6 @@ function GroupBuilder({
     onChange(next)
   }
 
-  const addGroup = () => {
-    const next = cloneNode(node)
-    next.conditions.push(emptyGroup('OR'))
-    onChange(next)
-  }
-
   const groupStyle: React.CSSProperties = {
     display: 'grid',
     gap: 10,
@@ -208,11 +201,6 @@ function GroupBuilder({
         <button type="button" style={addBtnStyle} onClick={addCondition}>
           + {t('memberSearch.addCondition')}
         </button>
-        {depth < 5 ? (
-          <button type="button" style={addBtnStyle} onClick={addGroup}>
-            + {t('memberSearch.addGroup')}
-          </button>
-        ) : null}
       </div>
     </div>
   )

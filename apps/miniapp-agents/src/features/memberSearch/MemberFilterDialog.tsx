@@ -103,6 +103,7 @@ export function MemberFilterDialog({
   })
   const [count, setCount] = useState<number | null>(null)
   const [counting, setCounting] = useState(false)
+  const [applying, setApplying] = useState(false)
   const countKeyRef = useRef(0)
   // Snapshot the committed filter only when the dialog transitions to open.
   // Re-initialising on every `value` change would wipe in-progress edits the
@@ -170,15 +171,20 @@ export function MemberFilterDialog({
   }, [draftKey, open, usable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleApply = async () => {
-    if (!usable) return
-    let memberIds: number[] | undefined
+    if (!usable || applying) return
+    setApplying(true)
     try {
-      memberIds = await resolveIds(draftValue)
-    } catch {
-      memberIds = undefined
+      let memberIds: number[] | undefined
+      try {
+        memberIds = await resolveIds(draftValue)
+      } catch {
+        memberIds = undefined
+      }
+      onApply({ ...draftValue, memberIds })
+      onClose()
+    } finally {
+      setApplying(false)
     }
-    onApply({ ...draftValue, memberIds })
-    onClose()
   }
 
   const handleClear = () => {
@@ -361,11 +367,20 @@ export function MemberFilterDialog({
 
         <div style={{
           padding: '12px 20px 16px',
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
           borderTop: '1px solid var(--miniapp-border-soft)',
         }}>
-          <Button tone="secondary" onClick={handleClear}>{t('memberSearch.clear')}</Button>
-          <Button disabled={!usable} onClick={handleApply}>{t('memberSearch.apply')}</Button>
+          {applying ? (
+            <span style={{ fontSize: 12.5, color: 'var(--miniapp-text-muted)' }}>
+              {t('memberSearch.applying')}
+            </span>
+          ) : <span />}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button tone="secondary" onClick={handleClear} disabled={applying}>{t('memberSearch.clear')}</Button>
+            <Button disabled={!usable || applying} onClick={() => void handleApply()}>
+              {applying ? t('memberSearch.applying') : t('memberSearch.apply')}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

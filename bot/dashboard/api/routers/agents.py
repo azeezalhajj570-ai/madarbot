@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.exc import IntegrityError
@@ -75,6 +76,23 @@ from ._shared import (
 from .auth_boundary import require_agents_boundary, require_any_boundary
 
 router = APIRouter(tags=["agents"])
+
+
+class MemberSearchBody(BaseModel):
+    """Body for the member-search POST (used when the advanced filter yields
+    more ids than fit safely in a GET query string)."""
+
+    tg_group_id: int
+    q: str | None = None
+    limit: int = 25
+    page: int = 1
+    order_by: str = "message_count"
+    exclude_admins: bool = False
+    exclude_bots: bool = False
+    only_admins: bool = False
+    only_bots: bool = False
+    target_tg_group_id: int | None = None
+    member_ids: list[int] = Field(default_factory=list)
 
 
 @router.get("/api/agents", dependencies=[Depends(require_any_boundary(["admin", "agents"]))])
@@ -760,28 +778,95 @@ async def webapp_agent_member_search(
     identity: TelegramWebAppIdentity = Depends(get_identity),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
+    # Comma-separated list of tg_user_ids from the advanced member filter.
+    parsed_member_ids: list[int] | None = None
+    if member_ids:
+        parsed_member_ids = [
+            int(part) for part in member_ids.split(",") if part.strip().isdigit()
+        ]
+    return await _run_member_search(
+        session=session,
+        identity=identity,
+        agent_id=agent_id,
+        tg_group_id=tg_group_id,
+        q=q,
+        limit=limit,
+        page=page,
+        order_by=order_by,
+        exclude_admins=exclude_admins,
+        exclude_bots=exclude_bots,
+        only_admins=only_admins,
+        only_bots=only_bots,
+        target_tg_group_id=target_tg_group_id,
+        member_ids=parsed_member_ids or None,
+    )
+
+
+@router.post(
+    "/api/agents/{agent_id}/member-search",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/member-search",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+async def webapp_agent_member_search_post(
+    agent_id: int,
+    payload: MemberSearchBody,
+    identity: TelegramWebAppIdentity = Depends(get_identity),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await _run_member_search(
+        session=session,
+        identity=identity,
+        agent_id=agent_id,
+        tg_group_id=payload.tg_group_id,
+        q=payload.q,
+        limit=payload.limit,
+        page=payload.page,
+        order_by=payload.order_by,
+        exclude_admins=payload.exclude_admins,
+        exclude_bots=payload.exclude_bots,
+        only_admins=payload.only_admins,
+        only_bots=payload.only_bots,
+        target_tg_group_id=payload.target_tg_group_id,
+        member_ids=payload.member_ids or None,
+    )
+
+
+async def _run_member_search(
+    *,
+    session: AsyncSession,
+    identity: TelegramWebAppIdentity,
+    agent_id: int,
+    tg_group_id: int,
+    q: str | None,
+    limit: int,
+    page: int,
+    order_by: str,
+    exclude_admins: bool,
+    exclude_bots: bool,
+    only_admins: bool,
+    only_bots: bool,
+    target_tg_group_id: int | None,
+    member_ids: list[int] | None,
+) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     try:
-        # Comma-separated list of tg_user_ids from the advanced member filter.
-        parsed_member_ids: list[int] | None = None
-        if member_ids:
-            parsed_member_ids = [
-                int(part) for part in member_ids.split(",") if part.strip().isdigit()
-            ]
         payload = await AccountGroupMembershipService(session).list_scraped_agent_group_members(
             actor_user_id=identity.user_id,
             agent_id=agent.id,
             tg_group_id=tg_group_id,
             query=q,
             page=page,
-            page_size=limit,
+            page_size=min(max(limit, 1), 50),
             order_by=order_by,
             exclude_admins=exclude_admins,
             exclude_bots=exclude_bots,
             only_admins=only_admins,
             only_bots=only_bots,
             target_tg_group_id=target_tg_group_id,
-            member_ids=parsed_member_ids or None,
+            member_ids=member_ids,
         )
         return payload
     except ValueError as exc:

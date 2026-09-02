@@ -107,7 +107,8 @@ class MemberSearchService(AgentServiceSupport):
 
         planned = plan(node, context)
 
-        scope_filter = compile_scope_filter(context)
+        eligible_subq = self._eligible_member_subq(agent.id, scope_group_ids)
+        scope_filter = compile_scope_filter(context, eligible_member_subq=eligible_subq)
         stmt = compile_member_select(
             planned=planned,
             context=context,
@@ -143,6 +144,23 @@ class MemberSearchService(AgentServiceSupport):
         return result
 
     # ── Scope helpers ──────────────────────────────────────────────────────
+
+    def _eligible_member_subq(self, agent_id: int, group_ids: list[int]) -> Select | None:
+        """Subquery of member rows this agent can actually act on.
+
+        Mirrors the member picker's eligibility (account_group_membership_service):
+        scraped_by this agent, or legacy rows with NULL attribution. Keeps the
+        search universe identical to the list the picker shows.
+        """
+        if not group_ids:
+            return None
+        return select(ScrapedMember.id).where(
+            ScrapedMember.tg_group_id.in_(group_ids),
+            or_(
+                ScrapedMember.scraped_by_agent_id == agent_id,
+                ScrapedMember.scraped_by_agent_id.is_(None),
+            ),
+        )
 
     async def _visible_group_ids(self, agent: Agent) -> list[int]:
         """Visible scraped groups for an agent (mirrors AccountGroupMembershipService):

@@ -31,29 +31,45 @@ export async function resolveFilterMemberIds(
   // through all matches so the full filtered set is captured.
   const pageSize = opts.pageSize ? Math.min(opts.pageSize, 50) : 50
   const maxPages = opts.maxPages ?? 40
-  const ids: number[] = []
-  let total: number | null = null
-  let page = 1
 
-  for (; page <= maxPages; page++) {
-    const res = await memberSearch(agentId, {
-      group_ids: value.groupIds.length ? value.groupIds : undefined,
-      filter: value.filter ?? undefined,
-      date_from: value.dateFrom || undefined,
-      date_to: value.dateTo || undefined,
-      sort: value.sort,
-      page,
-      page_size: pageSize,
-      include_total: page === 1,
-    })
-    for (const item of res.items ?? []) {
-      ids.push(item.tg_user_id)
+  // First page tells us the total; remaining pages are independent, so fetch
+  // them in parallel to avoid N sequential round-trips on Apply.
+  const first = await memberSearch(agentId, {
+    group_ids: value.groupIds.length ? value.groupIds : undefined,
+    filter: value.filter ?? undefined,
+    date_from: value.dateFrom || undefined,
+    date_to: value.dateTo || undefined,
+    sort: value.sort,
+    page: 1,
+    page_size: pageSize,
+    include_total: true,
+  })
+  const total = first.total !== null && first.total !== undefined ? first.total : null
+  const ids = new Set<number>()
+  for (const item of first.items ?? []) ids.add(item.tg_user_id)
+
+  const pages = Math.min(maxPages, Math.ceil((total ?? 0) / pageSize))
+  if (pages > 1) {
+    const rest = await Promise.allSettled(
+      Array.from({ length: pages - 1 }, (_, i) =>
+        memberSearch(agentId, {
+          group_ids: value.groupIds.length ? value.groupIds : undefined,
+          filter: value.filter ?? undefined,
+          date_from: value.dateFrom || undefined,
+          date_to: value.dateTo || undefined,
+          sort: value.sort,
+          page: i + 2,
+          page_size: pageSize,
+          include_total: false,
+        }),
+      ),
+    )
+    for (const r of rest) {
+      if (r.status === 'fulfilled') {
+        for (const item of r.value.items ?? []) ids.add(item.tg_user_id)
+      }
     }
-    if (page === 1 && res.total !== null && res.total !== undefined) {
-      total = res.total
-    }
-    if (!res.has_more || res.items.length === 0) break
   }
 
-  return { ids, total }
+  return { ids: [...ids], total }
 }

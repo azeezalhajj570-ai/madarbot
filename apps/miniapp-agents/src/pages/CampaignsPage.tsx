@@ -402,11 +402,15 @@ export function CampaignsPage({ account, workspaceId, onSaved }: { account: Agen
                       {t('memberSearch.advancedFilter')}
                     </Button>
                     {bulkFilter ? (
-                      <span style={{ fontSize: 12.5, color: 'var(--miniapp-text-muted)' }}>
+                      <span style={{ fontSize: 12.5, color: 'var(--miniapp-coral)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {t('memberSearch.filterActive')}{' '}
-                        {bulkNarrowIds ? `${bulkNarrowIds.length}` : '…'}
+                        {bulkNarrowIds ? `${bulkNarrowIds.length}` : t('memberSearch.resolving')}
                       </span>
-                    ) : null}
+                    ) : (
+                      <span style={{ fontSize: 12.5, color: 'var(--miniapp-text-muted)' }}>
+                        {t('memberSearch.noFilterHint')}
+                      </span>
+                    )}
                   </div>
                   {bulkSourceGroup && bulkMembersEmpty ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

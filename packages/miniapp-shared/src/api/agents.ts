@@ -131,6 +131,22 @@ export async function preflightBulkMessage(agentId: number, payload: {
 }
 
 export async function searchAgentGroupMembers(agentId: number, tgGroupId: number, query?: string, limit = 20, excludeBots = false, page = 1, orderBy = 'message_count', excludeAdmins = false, onlyBots = false, targetTgGroupId?: number, memberIds?: number[]) {
+  // When the advanced filter narrows to a large id set, send them in the POST
+  // body — a long GET query string can exceed proxy request-line limits.
+  if (memberIds && memberIds.length) {
+    return apiClient.post<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
+      tg_group_id: tgGroupId,
+      q: query || undefined,
+      limit,
+      page,
+      order_by: orderBy,
+      exclude_admins: excludeAdmins,
+      exclude_bots: excludeBots,
+      only_bots: onlyBots,
+      target_tg_group_id: targetTgGroupId || undefined,
+      member_ids: memberIds,
+    })
+  }
   return apiClient.get<AgentGroupMembersPage>(`${AGENTS_API_PREFIX}/${agentId}/member-search`, {
     tg_group_id: tgGroupId,
     q: query || undefined,
@@ -141,7 +157,6 @@ export async function searchAgentGroupMembers(agentId: number, tgGroupId: number
     exclude_bots: excludeBots,
     only_bots: onlyBots,
     target_tg_group_id: targetTgGroupId || undefined,
-    member_ids: memberIds && memberIds.length ? memberIds.join(',') : undefined,
   })
 }
 

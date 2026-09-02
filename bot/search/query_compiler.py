@@ -117,13 +117,22 @@ def compile_count_select(
     return stmt
 
 
-def compile_scope_filter(context: SearchContext) -> ColumnElement | None:
-    """Outer scraped_members scope: visible groups + agent-owned scraped rows."""
+def compile_scope_filter(
+    context: SearchContext, *, eligible_member_subq: Select | None = None
+) -> ColumnElement | None:
+    """Outer scraped_members scope: visible groups + agent-owned scraped rows.
+
+    ``eligible_member_subq`` optionally restricts the outer rows to members the
+    acting agent can actually add (scraped by this agent or legacy NULL rows),
+    keeping the search universe aligned with the member picker.
+    """
     clauses: list[ColumnElement] = []
     if context.group_ids:
         clauses.append(ScrapedMember.tg_group_id.in_(context.group_ids))
     if context.exclude_self_user_id is not None:
         clauses.append(ScrapedMember.tg_user_id != context.exclude_self_user_id)
+    if eligible_member_subq is not None:
+        clauses.append(ScrapedMember.id.in_(eligible_member_subq))
     return and_(*clauses) if clauses else None
 
 
