@@ -898,6 +898,7 @@
     "heldByOther": "Held by another agent",
     "selectedByYou": "Selected by you",
     "privacyRestricted": "Privacy restricted",
+    "privacyRestrictedRetryable": "Privacy restricted previously — can retry",
     "selectAll": "Select all",
     "unselectAll": "Unselect all",
     "excludeAdminsBots": "Exclude admins and bots",

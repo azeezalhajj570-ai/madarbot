@@ -898,6 +898,7 @@
     "heldByOther": "محجوز بواسطة عميل آخر",
     "selectedByYou": "محدد بواسطتك",
     "privacyRestricted": "مقيد بالخصوصية",
+    "privacyRestrictedRetryable": "مقيد بالخصوصية سابقاً — يمكن إعادة المحاولة",
     "selectAll": "تحديد الكل",
     "unselectAll": "إلغاء التحديد",
     "excludeAdminsBots": "استثناء المشرفين والبوتات",

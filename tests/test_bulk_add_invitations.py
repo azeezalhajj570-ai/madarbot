@@ -365,7 +365,9 @@ async def test_bulk_add_runtime_skips_member_with_existing_pending_invitation(
         async def execute(self, stmt):
             sql = str(stmt)
             if "member_operation" in sql:
-                return SimpleNamespace(all=lambda: [FakeRow(779003)])
+                return SimpleNamespace(
+                    all=lambda: [FakeRow(779003)], scalar_one_or_none=lambda: None
+                )
             if "group_members" in sql:
                 return SimpleNamespace(scalar_one_or_none=lambda: None)
             return SimpleNamespace(all=lambda: [], scalar_one_or_none=lambda: None)
@@ -444,7 +446,7 @@ class _NoOpSession:
     async def execute(self, stmt):
         sql = str(stmt)
         if "member_operation" in sql:
-            return SimpleNamespace(all=lambda: [])
+            return SimpleNamespace(all=lambda: [], scalar_one_or_none=lambda: None)
         if "group_members" in sql:
             return SimpleNamespace(scalar_one_or_none=lambda: None)
         return SimpleNamespace(all=lambda: [], scalar_one_or_none=lambda: None)
@@ -875,3 +877,248 @@ async def test_add_user_to_group_real_channel_still_uses_channel_path(
     assert result.success is True
     assert result.error_code is None
     assert rpc_calls == ["InviteToChannelRequest"]
+
+
+# ─── Issue #295: retry previously privacy-restricted members ─────────────────
+
+
+@pytest.mark.skip(
+    reason="Requires a test DB; SQLite schema creation fails on "
+    "ScrapedMessage.search_vector (TSVECTOR, pre-existing infra limitation)"
+)
+@pytest.mark.asyncio
+async def test_member_search_marks_privacy_restricted_member_retryable(
+    db_session,
+) -> None:
+    """A member whose only prior direct-add failure was USER_PRIVACY_RESTRICTED
+    (and who is not in the target group) is exposed as retryable so the picker
+    can re-offer them for a new bulk-add job."""
+    from bot.agents.account_group_membership_service import AccountGroupMembershipService
+    from bot.db.models import Agent, Group, ScrapedGroup, ScrapedMember, User
+
+    owner = User(tg_user_id=777101, username="owner", full_name="Owner", is_owner=True)
+    db_session.add(owner)
+    await db_session.flush()
+
+    group = Group(tg_group_id=-100777101, title="Target Group", is_active=True)
+    db_session.add(group)
+    await db_session.flush()
+
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=777102,
+        linked_by_user_id=owner.id,
+        external_account_id="agent-295",
+        auth_state="active",
+        session_string="session",
+    )
+    db_session.add(agent)
+    await db_session.flush()
+
+    scraped_group = ScrapedGroup(
+        tg_group_id=-100777103,
+        title="Source Group",
+        group_type="supergroup",
+        last_agent_id=agent.id,
+    )
+    db_session.add(scraped_group)
+    await db_session.flush()
+
+    db_session.add(
+        ScrapedMember(
+            scraped_group_id=scraped_group.id,
+            tg_group_id=-100777103,
+            tg_user_id=777103,
+            username="restricted",
+            full_name="Restricted User",
+            role="member",
+        )
+    )
+    await db_session.flush()
+
+    # Prior direct_add attempt failed ONLY due to a privacy restriction.
+    db_session.add(
+        MemberOperation(
+            tg_group_id=-100777101,
+            tg_user_id=777103,
+            agent_id=agent.id,
+            operation_type="direct_add",
+            status="failed",
+            failure_reason="USER_PRIVACY_RESTRICTED",
+        )
+    )
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    payload = await service.list_scraped_agent_group_members(
+        actor_user_id=owner.id,
+        agent_id=agent.id,
+        tg_group_id=-100777103,
+        target_tg_group_id=-100777101,
+        page_size=50,
+    )
+
+    assert payload["total"] == 1
+    member_row = payload["members"][0]
+    assert member_row["user_id"] == 777103
+    assert member_row["processed"] is True
+    assert member_row["privacy_restricted"] is True
+    assert member_row["retryable"] is True
+
+
+@pytest.mark.skip(
+    reason="Requires a test DB; SQLite schema creation fails on "
+    "ScrapedMessage.search_vector (TSVECTOR, pre-existing infra limitation)"
+)
+@pytest.mark.asyncio
+async def test_member_search_not_retryable_when_already_added(db_session) -> None:
+    """A privacy-restricted member who is now in the target group is NOT
+    retryable — the member was already added (e.g. accepted an invite)."""
+    from bot.agents.account_group_membership_service import AccountGroupMembershipService
+    from bot.db.models import Agent, Group, GroupMember, ScrapedGroup, ScrapedMember, User
+
+    owner = User(tg_user_id=777201, username="owner", full_name="Owner", is_owner=True)
+    db_session.add(owner)
+    await db_session.flush()
+
+    group = Group(tg_group_id=-100777201, title="Target Group", is_active=True)
+    db_session.add(group)
+    await db_session.flush()
+
+    agent = Agent(
+        group_id=group.id,
+        telegram_user_id=777202,
+        linked_by_user_id=owner.id,
+        external_account_id="agent-295b",
+        auth_state="active",
+        session_string="session",
+    )
+    db_session.add(agent)
+    await db_session.flush()
+
+    scraped_group = ScrapedGroup(
+        tg_group_id=-100777203,
+        title="Source Group",
+        group_type="supergroup",
+        last_agent_id=agent.id,
+    )
+    db_session.add(scraped_group)
+    await db_session.flush()
+
+    db_session.add(
+        ScrapedMember(
+            scraped_group_id=scraped_group.id,
+            tg_group_id=-100777203,
+            tg_user_id=777203,
+            username="joined",
+            full_name="Joined User",
+            role="member",
+        )
+    )
+    await db_session.flush()
+
+    # Prior attempt failed with privacy restriction, BUT the member is now in
+    # the target group (GroupMember row) — must not be offered for retry.
+    db_session.add(
+        MemberOperation(
+            tg_group_id=-100777201,
+            tg_user_id=777203,
+            agent_id=agent.id,
+            operation_type="direct_add",
+            status="failed",
+            failure_reason="USER_PRIVACY_RESTRICTED",
+        )
+    )
+    db_session.add(
+        GroupMember(
+            group_id=group.id,
+            tg_user_id=777203,
+            role="member",
+            source="membership_add",
+        )
+    )
+    await db_session.commit()
+
+    service = AccountGroupMembershipService(db_session)
+    payload = await service.list_scraped_agent_group_members(
+        actor_user_id=owner.id,
+        agent_id=agent.id,
+        tg_group_id=-100777203,
+        target_tg_group_id=-100777201,
+        page_size=50,
+    )
+
+    assert payload["total"] == 1
+    member_row = payload["members"][0]
+    assert member_row["user_id"] == 777203
+    assert member_row["already_added"] is True
+    assert member_row["retryable"] is False
+
+
+@pytest.mark.asyncio
+async def test_bulk_add_runtime_updates_existing_direct_add_row_on_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-running a previously privacy-restricted member must UPDATE the single
+    member_operations direct_add row (issue #295) rather than inserting a
+    duplicate that would violate the unique (group, user, operation_type)
+    constraint. The retried add succeeds, so the row flips to joined."""
+    add_user_mock = AsyncMock(return_value=_success_result())
+    monkeypatch.setattr(
+        "bot.agents.group_membership.add_user_to_group",
+        add_user_mock,
+    )
+
+    existing_row = SimpleNamespace(
+        status="failed",
+        failure_reason="USER_PRIVACY_RESTRICTED",
+        agent_id=42,
+        job_id=None,
+        updated_at=None,
+    )
+
+    class _RetrySession(_NoOpSession):
+        def __init__(self, existing: SimpleNamespace) -> None:
+            super().__init__()
+            self.existing = existing
+            self.added: list = []
+
+        async def execute(self, stmt):
+            sql = str(stmt)
+            # The existing direct_add row lookup (issue #295) returns the row.
+            # Checked first because select(MemberOperation) renders the full
+            # column list (including `status`), so a status-only match would
+            # swallow it.
+            if "operation_type" in sql:
+                return SimpleNamespace(scalar_one_or_none=lambda: self.existing)
+            # Pre-fetch of pending operations returns nothing.
+            if "member_operation" in sql:
+                return SimpleNamespace(all=lambda: [])
+            if "group_members" in sql:
+                return SimpleNamespace(scalar_one_or_none=lambda: None)
+            return SimpleNamespace(all=lambda: [], scalar_one_or_none=lambda: None)
+
+        def add(self, instance) -> None:
+            self.added.append(instance)
+
+    session = _RetrySession(existing_row)
+    runtime = _RecordingRuntime()
+    payload = {
+        "target_tg_group_id": -100779001,
+        "user_ids": [779001],
+        "interval_seconds": 0,
+        "send_invite_link_on_privacy_restricted": False,
+        "job_id": 99,
+    }
+    client = SimpleNamespace()
+    agent = _FakeAgent()
+
+    result = await runtime.execute(client=client, agent=agent, payload=payload, session=session)
+
+    assert result["success_count"] == 1
+    # The existing row was updated in place — no new MemberOperation added.
+    assert existing_row.status == "joined"
+    assert existing_row.failure_reason is None
+    assert existing_row.agent_id == 42
+    assert existing_row.job_id == 99
+    assert not any(isinstance(i, MemberOperation) for i in session.added)

@@ -314,6 +314,12 @@ export interface AgentGroupMember {
   processed?: boolean
   processing_error?: string | null
   privacy_restricted?: boolean
+  /**
+   * True when the member's only prior direct-add failure was
+   * USER_PRIVACY_RESTRICTED and they are not already in the target group,
+   * so a new bulk-add job may re-attempt them.
+   */
+  retryable?: boolean
 }
 
 export interface AgentGroupMembersPage {
