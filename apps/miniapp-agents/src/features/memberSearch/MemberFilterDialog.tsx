@@ -14,6 +14,8 @@ export interface MemberFilterValue {
   dateFrom?: string | null
   dateTo?: string | null
   sort: MemberSearchSort
+  /** Resolved matching member ids (populated on Apply). */
+  memberIds?: number[]
 }
 
 export interface MemberFilterDialogProps {
@@ -37,6 +39,12 @@ export interface MemberFilterDialogProps {
    * Return null when a count isn't available (e.g. count > 10k).
    */
   countMatches: (value: MemberFilterValue) => Promise<number | null>
+  /**
+   * Called when Apply is pressed to resolve the full set of matching member
+   * ids BEFORE the dialog closes, so the parent can narrow immediately.
+   * Returns the ids (may be empty for an empty filter).
+   */
+  resolveIds: (value: MemberFilterValue) => Promise<number[]>
 }
 
 const DATE_PRESETS = ['any', 'today', '7d', '30d', 'custom'] as const
@@ -77,6 +85,7 @@ export function MemberFilterDialog({
   groups,
   scopeGroup,
   countMatches,
+  resolveIds,
 }: MemberFilterDialogProps) {
   const { t } = useTranslation()
 
@@ -154,9 +163,15 @@ export function MemberFilterDialog({
     return () => window.clearTimeout(timer)
   }, [draftKey, open, usable]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!usable) return
-    onApply(draftValue)
+    let memberIds: number[] | undefined
+    try {
+      memberIds = await resolveIds(draftValue)
+    } catch {
+      memberIds = undefined
+    }
+    onApply({ ...draftValue, memberIds })
     onClose()
   }
 

@@ -723,13 +723,13 @@ export function AutomationTasksSection({ account, groupId, onSaved }: { account:
           const { total } = await resolveFilterMemberIds(account.id, v, { pageSize: 1, maxPages: 1 })
           return total
         }}
+        resolveIds={async (v) => {
+          const { ids } = await resolveFilterMemberIds(account.id, v)
+          return ids
+        }}
         onApply={(v) => {
           setBulkFilter(isEmptyFilter(v) ? null : v)
-          if (isEmptyFilter(v)) {
-            setBulkNarrowIds(null)
-          } else {
-            void resolveFilterMemberIds(account.id, v).then(({ ids }) => setBulkNarrowIds(ids))
-          }
+          setBulkNarrowIds(v.memberIds && v.memberIds.length ? v.memberIds : null)
         }}
       />
       {!loading && tasks.length > 0 ? (
