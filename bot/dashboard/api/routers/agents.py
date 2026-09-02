@@ -87,13 +87,17 @@ async def webapp_agents(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
     agents = await LinkedAccountService(session).list_agents(
-        actor_user_id=workspace.identity.user_id, group_id=group_id, tenant_id=workspace.tenant_id,
+        actor_user_id=workspace.identity.user_id,
+        group_id=group_id,
+        tenant_id=workspace.tenant_id,
     )
     return [serialize_agent(agent) for agent in agents]
 
 
 @router.post("/api/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.post("/webapp/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post(
+    "/webapp/agents/link", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
 async def webapp_link_agent(
     payload: AgentLinkRequest,
     workspace: WorkspaceContext = Depends(require_active_workspace),
@@ -111,7 +115,8 @@ async def webapp_link_agent(
         )
         if sub and sub.plan == "pro":
             existing = await LinkedAccountService(session).list_agents(
-                actor_user_id=identity.user_id, tenant_id=workspace.tenant_id,
+                actor_user_id=identity.user_id,
+                tenant_id=workspace.tenant_id,
             )
             if len(existing) >= 1:
                 raise HTTPException(
@@ -143,8 +148,12 @@ async def webapp_link_agent(
     return {"status": "ok", "agent": serialize_agent(agent)}
 
 
-@router.post("/api/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.post("/webapp/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post(
+    "/api/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+@router.post(
+    "/webapp/agents/auth/start", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
 async def webapp_start_agent_auth(
     payload: AgentLoginStartRequest,
     workspace: WorkspaceContext = Depends(require_active_workspace),
@@ -165,8 +174,14 @@ async def webapp_start_agent_auth(
     return {"status": "ok", "agent": serialize_agent(agent)}
 
 
-@router.post("/api/agents/{agent_id}/auth/code", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.post("/webapp/agents/{agent_id}/auth/code", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post(
+    "/api/agents/{agent_id}/auth/code",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/auth/code",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
 async def webapp_complete_agent_auth_code(
     agent_id: int,
     payload: AgentLoginCodeRequest,
@@ -188,10 +203,12 @@ async def webapp_complete_agent_auth_code(
 
 
 @router.post(
-    "/api/agents/{agent_id}/auth/password", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/auth/password",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/auth/password", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/webapp/agents/{agent_id}/auth/password",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_complete_agent_auth_password(
     agent_id: int,
@@ -213,8 +230,13 @@ async def webapp_complete_agent_auth_password(
     return {"status": "ok", "agent": serialize_agent(updated)}
 
 
-@router.get("/api/agents/{agent_id}/jobs", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.get("/webapp/agents/{agent_id}/jobs", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.get(
+    "/api/agents/{agent_id}/jobs", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+)
+@router.get(
+    "/webapp/agents/{agent_id}/jobs",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
 async def webapp_agent_jobs(
     agent_id: int,
     job_type: str | None = None,
@@ -242,17 +264,21 @@ async def webapp_agent_jobs(
         tgid = p.get("target_tg_group_id") or 0
         if tgid:
             tg_ids.add(int(tgid))
-        for gid in (p.get("target_group_ids") or []):
+        for gid in p.get("target_group_ids") or []:
             if gid:
                 tg_ids.add(int(gid))
 
     group_titles: dict[int, str] = {}
     if tg_ids:
         groups = (
-            await session.execute(
-                select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(list(tg_ids)))
+            (
+                await session.execute(
+                    select(ScrapedGroup).where(ScrapedGroup.tg_group_id.in_(list(tg_ids)))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for g in groups:
             group_titles[int(g.tg_group_id)] = g.title or ""
 
@@ -276,7 +302,8 @@ async def webapp_agent_jobs(
             "target_tg_group_id": (job.job_payload or {}).get("target_tg_group_id"),
             "target_group_title": group_titles.get(
                 int((job.job_payload or {}).get("target_tg_group_id") or 0)
-            ) or "",
+            )
+            or "",
         }
         for job in rows
     ]
@@ -353,18 +380,23 @@ async def webapp_agent_send_logs(
                 if title is None and require_agent:
                     title = (
                         await session.execute(
-                            select(ScrapedGroup.title).where(ScrapedGroup.tg_group_id == int(tg_group_id)).limit(1)
+                            select(ScrapedGroup.title)
+                            .where(ScrapedGroup.tg_group_id == int(tg_group_id))
+                            .limit(1)
                         )
                     ).scalar_one_or_none()
                 return title
 
             source_tg_id = job.job_payload.get("source_tg_group_id")
-            source_title = await _group_title(int(source_tg_id), require_agent=False) if source_tg_id else None
+            source_title = (
+                await _group_title(int(source_tg_id), require_agent=False) if source_tg_id else None
+            )
 
             tg_user_ids = [r.get("user_id") for r in results if r.get("user_id")]
             usernames: dict[int, str] = {}
             if tg_user_ids:
                 from bot.db.models.scraper import ScrapedMember
+
                 sm_rows = (
                     await session.execute(
                         select(ScrapedMember.tg_user_id, ScrapedMember.username).where(
@@ -375,9 +407,7 @@ async def webapp_agent_send_logs(
                 usernames = {int(r.tg_user_id): r.username for r in sm_rows if r.username}
 
             target_tg = int(
-                progress.get("target_tg_group_id")
-                or job.job_payload.get("target_tg_group_id")
-                or 0
+                progress.get("target_tg_group_id") or job.job_payload.get("target_tg_group_id") or 0
             )
             group_title = None
             if target_tg:
@@ -394,28 +424,30 @@ async def webapp_agent_send_logs(
                 elif method:
                     msg = f"{status} ({method})"
 
-                logs.append({
-                    "id": -(job.id * 10000 + i),
-                    "job_id": job.id,
-                    "tg_user_id": uid,
-                    "tg_group_id": target_tg,
-                    "username": usernames.get(uid) if uid else None,
-                    "phone_number": None,
-                    "group_title": group_title,
-                    "source_group_title": source_title,
-                    "message_preview": msg,
-                    "message_full": msg,
-                    "status": status,
-                    "method": method or "direct",
-                    "agent_id": agent.id,
-                    "agent_name": actor_label,
-                    "agent_phone": agent.phone_number,
-                    # Prefer the per-row attempt timestamp recorded by the
-                    # runtime so each log row shows its own time instead of the
-                    # job's updated_at (which is identical for every row).
-                    "sent_at": r.get("attempted_at")
-                    or (job.updated_at.isoformat() if job.updated_at else None),
-                })
+                logs.append(
+                    {
+                        "id": -(job.id * 10000 + i),
+                        "job_id": job.id,
+                        "tg_user_id": uid,
+                        "tg_group_id": target_tg,
+                        "username": usernames.get(uid) if uid else None,
+                        "phone_number": None,
+                        "group_title": group_title,
+                        "source_group_title": source_title,
+                        "message_preview": msg,
+                        "message_full": msg,
+                        "status": status,
+                        "method": method or "direct",
+                        "agent_id": agent.id,
+                        "agent_name": actor_label,
+                        "agent_phone": agent.phone_number,
+                        # Prefer the per-row attempt timestamp recorded by the
+                        # runtime so each log row shows its own time instead of the
+                        # job's updated_at (which is identical for every row).
+                        "sent_at": r.get("attempted_at")
+                        or (job.updated_at.isoformat() if job.updated_at else None),
+                    }
+                )
 
         if job and job.job_type in {
             SCRAPER_FULL_GROUP_JOB_TYPE,
@@ -424,9 +456,7 @@ async def webapp_agent_send_logs(
             SCRAPER_GROUP_INFO_JOB_TYPE,
         }:
             result = dict(job.job_payload.get("result") or {})
-            tg_group_id = int(
-                result.get("tg_group_id") or job.job_payload.get("tg_group_id") or 0
-            )
+            tg_group_id = int(result.get("tg_group_id") or job.job_payload.get("tg_group_id") or 0)
             group_info = dict(result.get("group_info") or {})
             group_title = group_info.get("title") or str(tg_group_id or "")
             # scraper_full_group nests counts under members/messages; the
@@ -449,24 +479,26 @@ async def webapp_agent_send_logs(
             summary = ", ".join(summary_parts) or f"scrape {result.get('job_type', job.job_type)}"
             status = "success" if result.get("success", True) else "failed"
 
-            logs.append({
-                "id": -(job.id * 10000),
-                "job_id": job.id,
-                "tg_user_id": None,
-                "tg_group_id": tg_group_id,
-                "username": group_info.get("username"),
-                "phone_number": None,
-                "group_title": group_title,
-                "source_group_title": None,
-                "message_preview": summary,
-                "message_full": summary,
-                "status": status,
-                "method": job.job_type,
-                "agent_id": agent.id,
-                "agent_name": actor_label,
-                "agent_phone": agent.phone_number,
-                "sent_at": job.updated_at.isoformat() if job.updated_at else None,
-            })
+            logs.append(
+                {
+                    "id": -(job.id * 10000),
+                    "job_id": job.id,
+                    "tg_user_id": None,
+                    "tg_group_id": tg_group_id,
+                    "username": group_info.get("username"),
+                    "phone_number": None,
+                    "group_title": group_title,
+                    "source_group_title": None,
+                    "message_preview": summary,
+                    "message_full": summary,
+                    "status": status,
+                    "method": job.job_type,
+                    "agent_id": agent.id,
+                    "agent_name": actor_label,
+                    "agent_phone": agent.phone_number,
+                    "sent_at": job.updated_at.isoformat() if job.updated_at else None,
+                }
+            )
 
     if not logs:
         stmt = select(SentBroadcastMessage).where(SentBroadcastMessage.agent_id == agent.id)
@@ -595,6 +627,7 @@ async def webapp_agent_status(
 ) -> dict[str, Any]:
     agent = await ensure_agent_admin(agent_id, session, identity)
     from bot.agents.session import SessionManager
+
     session_state = await SessionManager().get_session_state(agent.id)
     return {
         "id": agent.id,
@@ -602,7 +635,9 @@ async def webapp_agent_status(
         "status": agent.status,
         "auth_state": agent.auth_state,
         "safety_mode_enabled": agent.safety_mode_enabled,
-        "safety_mode_until": agent.safety_mode_until.isoformat() if agent.safety_mode_until else None,
+        "safety_mode_until": agent.safety_mode_until.isoformat()
+        if agent.safety_mode_until
+        else None,
         **session_state,
     }
 
@@ -623,9 +658,7 @@ async def webapp_sync_workspace(
     return {"status": "ok", "count": len(synced)}
 
 
-@router.post(
-    "/api/agents/{agent_id}/media/upload", dependencies=[Depends(require_agents_boundary)]
-)
+@router.post("/api/agents/{agent_id}/media/upload", dependencies=[Depends(require_agents_boundary)])
 @router.post(
     "/webapp/agents/{agent_id}/media/upload", dependencies=[Depends(require_agents_boundary)]
 )
@@ -673,7 +706,9 @@ async def webapp_agent_media_upload(
         (UPLOADS_DIR / unique_name).write_bytes(data)
     except OSError as exc:
         logger.warning("media_upload_save_failed", agent_id=agent_id, error=str(exc))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="upload_failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="upload_failed"
+        )
 
     base_url = str(request.base_url).rstrip("/")
     return {"url": f"{base_url}/uploads/{unique_name}"}
@@ -701,9 +736,13 @@ async def webapp_agent_groups(
     )
 
 
-@router.get("/api/agents/{agent_id}/member-search", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 @router.get(
-    "/webapp/agents/{agent_id}/member-search", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/member-search",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.get(
+    "/webapp/agents/{agent_id}/member-search",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_agent_member_search(
     agent_id: int,
@@ -751,9 +790,13 @@ async def webapp_agent_member_search(
         ) from exc
 
 
-@router.get("/api/agents/{agent_id}/target-group-members/{tg_group_id}", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
 @router.get(
-    "/webapp/agents/{agent_id}/target-group-members/{tg_group_id}", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/target-group-members/{tg_group_id}",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.get(
+    "/webapp/agents/{agent_id}/target-group-members/{tg_group_id}",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_agent_target_group_members(
     agent_id: int,
@@ -1046,10 +1089,12 @@ async def webapp_bulk_preflight(
 
 
 @router.post(
-    "/api/agents/{agent_id}/member-adds", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/member-adds",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/member-adds", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/webapp/agents/{agent_id}/member-adds",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_bulk_add_members(
     agent_id: int,
@@ -1182,10 +1227,12 @@ async def webapp_bulk_add_members(
 
 
 @router.post(
-    "/api/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/claims",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/webapp/agents/{agent_id}/claims",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_claim_members(
     agent_id: int,
@@ -1239,10 +1286,12 @@ async def webapp_claim_members(
 
 
 @router.delete(
-    "/api/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/claims",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.delete(
-    "/webapp/agents/{agent_id}/claims", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/webapp/agents/{agent_id}/claims",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_release_claims(
     agent_id: int,
@@ -1264,10 +1313,12 @@ async def webapp_release_claims(
 
 
 @router.post(
-    "/api/agents/{agent_id}/claimed-send", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/api/agents/{agent_id}/claimed-send",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/claimed-send", dependencies=[Depends(require_any_boundary(["agents", "admin"]))]
+    "/webapp/agents/{agent_id}/claimed-send",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_send_to_claimed_members(
     agent_id: int,
@@ -1842,9 +1893,7 @@ async def webapp_agent_analytics(
     # sends from member_add jobs started today.
     from datetime import datetime, time, timezone
 
-    today_start = datetime.combine(
-        datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc
-    )
+    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
     today_jobs = (
         (
             await session.execute(
@@ -1910,8 +1959,14 @@ async def webapp_reconcile_stale_jobs(
     return await reconcile_stale_jobs(max_hours=max_hours, mark_failed=mark_failed)
 
 
-@router.get("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.get("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.get(
+    "/api/agents/{agent_id}/blacklist",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.get(
+    "/webapp/agents/{agent_id}/blacklist",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
 async def webapp_get_blacklist(
     agent_id: int,
     page: int = Query(default=1, ge=1),
@@ -1933,8 +1988,14 @@ async def webapp_get_blacklist(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.post("/api/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
-@router.post("/webapp/agents/{agent_id}/blacklist", dependencies=[Depends(require_any_boundary(["agents", "admin"]))])
+@router.post(
+    "/api/agents/{agent_id}/blacklist",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
+@router.post(
+    "/webapp/agents/{agent_id}/blacklist",
+    dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
+)
 async def webapp_add_blacklist_entries(
     agent_id: int,
     payload: BlacklistAddRequest,
@@ -2042,7 +2103,9 @@ async def webapp_send_report_pdf(
     if not data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty_pdf_upload")
     if len(data) > 45 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="pdf_too_large")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="pdf_too_large"
+        )
 
     safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", filename).strip("._") or "report"
     if not safe_name.lower().endswith(".pdf"):
@@ -2053,7 +2116,9 @@ async def webapp_send_report_pdf(
     try:
         bot_token = get_settings().resolve_bot_token("agents")
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="bot_token_unconfigured") from exc
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="bot_token_unconfigured"
+        ) from exc
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -2064,12 +2129,16 @@ async def webapp_send_report_pdf(
             )
     except httpx.HTTPError as exc:
         logger.warning("sendDocument failed for user %s: %s", identity.user_id, exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="telegram_send_failed") from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="telegram_send_failed"
+        ) from exc
 
     if response.status_code != 200 or not response.json().get("ok"):
         logger.warning(
             "sendDocument rejected for user %s: %s %s",
-            identity.user_id, response.status_code, response.text[:200],
+            identity.user_id,
+            response.status_code,
+            response.text[:200],
         )
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="telegram_send_failed")
 
