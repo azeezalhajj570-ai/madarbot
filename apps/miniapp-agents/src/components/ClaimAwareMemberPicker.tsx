@@ -187,7 +187,7 @@ export function ClaimAwareMemberPicker({
   const selectAll = () => {
     const ids = members
       .filter((m) => (narrowSet ? narrowSet.has(m.user_id) : true))
-      .filter((m) => !targetMemberIds.has(m.user_id) && !m.already_added && !heldIds.has(m.user_id) && !m.claim && !m.invitation_status && !m.processed && !(exclude && (m.is_bot || m.role === 'creator' || m.role === 'admin')))
+      .filter((m) => !targetMemberIds.has(m.user_id) && !m.already_added && !heldIds.has(m.user_id) && !m.claim && !m.invitation_status && !(m.processed && !m.retryable) && !(exclude && (m.is_bot || m.role === 'creator' || m.role === 'admin')))
       .map((m) => m.user_id)
     onSelectedChange(Array.from(new Set([...selected, ...ids])))
   }
@@ -205,6 +205,10 @@ export function ClaimAwareMemberPicker({
       const inTarget = targetMemberIds.has(m.user_id)
       const persistedAdded = !!m.already_added
       const processed = !!m.processed
+      const retryable = !!m.retryable
+      // A retryable member was never actually added — treat it as not
+      // "effectively processed" so it can be filtered as available and re-selected.
+      const effectiveProcessed = processed && !retryable
       const claim = m.claim
       const heldByOther = !!(claim && !claim.is_own)
       const heldBySelf = !!(claim && claim.is_own)
@@ -216,8 +220,8 @@ export function ClaimAwareMemberPicker({
         case 'claimed': return heldByOther || heldBySelf || inRunningJob
         case 'added': return inTarget || persistedAdded
         case 'invited': return invited
-        case 'processed': return processed
-        case 'available': return !inTarget && !persistedAdded && !processed && !heldByOther && !invited && !inRunningJob && !isPrivacyRestricted
+        case 'processed': return effectiveProcessed
+        case 'available': return !inTarget && !persistedAdded && !effectiveProcessed && !heldByOther && !invited && !inRunningJob && !isPrivacyRestricted
         default: return true
       }
     })
@@ -271,6 +275,10 @@ export function ClaimAwareMemberPicker({
           const inTarget = targetMemberIds.has(m.user_id)
           const persistedAdded = !!m.already_added
           const processed = !!m.processed
+          const retryable = !!m.retryable
+          // A retryable member was never actually added — allow re-selection
+          // even though `processed` is set from the earlier failed attempt.
+          const effectiveProcessed = processed && !retryable
           const isSelected = selected.includes(m.user_id)
           const claim = m.claim
           const heldByOther = !!(claim && !claim.is_own)
@@ -279,7 +287,7 @@ export function ClaimAwareMemberPicker({
           const joinedViaInvite = m.invitation_status?.status === 'joined'
           const invitedByOther = !!(m.invitation_status && m.invitation_status.is_own === false)
           const inRunningJob = heldIds.has(m.user_id)
-          const isDisabled = inTarget || persistedAdded || processed || heldByOther || invited || inRunningJob
+          const isDisabled = inTarget || persistedAdded || effectiveProcessed || heldByOther || invited || inRunningJob
           return (
             <label key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: isDisabled ? 'default' : 'pointer', opacity: isDisabled ? 0.5 : 1, borderBottom: '1px solid var(--miniapp-border-soft)' }}>
               <input type="checkbox" checked={isSelected || !!heldBySelf} disabled={isDisabled} onChange={() => toggle(m.user_id)} />
@@ -289,14 +297,15 @@ export function ClaimAwareMemberPicker({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 {inTarget || persistedAdded ? <StatusIcon kind="check" color="var(--miniapp-coral)" title={joinedViaInvite ? t('automation.joinedViaInvite') : t('automation.alreadyInGroup')} /> : null}
-                {processed && !inTarget && !persistedAdded ? <StatusIcon kind="error" color={m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)'} title={m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')} detail={m.processing_error || undefined} /> : null}
+                {effectiveProcessed && !inTarget && !persistedAdded ? <StatusIcon kind="error" color={m.processing_error ? 'var(--miniapp-clay)' : 'var(--miniapp-text-muted)'} title={m.processing_error ? t('automation.alreadyProcessedError', { error: m.processing_error }) : t('automation.alreadyProcessed')} detail={m.processing_error || undefined} /> : null}
                 {inRunningJob ? <StatusIcon kind="clock" color="#e67e22" title={t('automation.inRunningJob')} /> : null}
                 {invited && !joinedViaInvite ? <StatusIcon kind="mail" color={invitedByOther ? '#e67e22' : 'var(--miniapp-text-secondary)'} title={invitedByOther ? t('automation.invitationSentByOther') : t('automation.invitationSent')} /> : null}
                 {heldByOther ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.heldByOther')} /> : null}
                 {heldBySelf ? <StatusIcon kind="selected" color="var(--miniapp-coral)" title={t('automation.selectedByYou')} /> : null}
                 {m.role === 'admin' || m.role === 'creator' ? <StatusIcon kind="shield" color="var(--miniapp-clay)" title={m.role} /> : null}
                 {m.is_bot ? <StatusIcon kind="bot" color="var(--miniapp-text-muted)" title={t('campaigns.bot')} /> : null}
-                {m.privacy_restricted ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.privacyRestricted')} /> : null}
+                {retryable ? <StatusIcon kind="lock" color="var(--miniapp-coral)" title={t('automation.privacyRestrictedRetryable')} /> : null}
+                {!retryable && m.privacy_restricted ? <StatusIcon kind="lock" color="#e67e22" title={t('automation.privacyRestricted')} /> : null}
               </div>
             </label>
           )

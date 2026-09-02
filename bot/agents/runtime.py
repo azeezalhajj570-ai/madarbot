@@ -1860,17 +1860,44 @@ class BulkAddMembersRuntime:
                 # attempt made, regardless of outcome) and not re-offer them.
                 if session is not None:
                     op_status = "joined" if add_result.success else "failed"
-                    session.add(MemberOperation(
-                        tg_group_id=target_tg_group_id,
-                        tg_user_id=user_id,
-                        agent_id=agent_id_val,
-                        job_id=payload.get("job_id"),
-                        operation_type="direct_add",
-                        status=op_status,
-                        failure_reason=add_result.error_code if not add_result.success else None,
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc),
-                    ))
+                    # A member whose previous attempt failed (e.g.
+                    # USER_PRIVACY_RESTRICTED) may be re-offered for a retry (issue
+                    # #295). `member_operations` allows only one direct_add row per
+                    # (tg_group_id, tg_user_id), so UPDATE the existing row in place
+                    # rather than inserting a duplicate.
+                    existing_da_row = (
+                        await session.execute(
+                            select(MemberOperation).where(
+                                MemberOperation.tg_group_id == target_tg_group_id,
+                                MemberOperation.tg_user_id == user_id,
+                                MemberOperation.operation_type == "direct_add",
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if existing_da_row is not None:
+                        existing_da_row.status = op_status
+                        existing_da_row.failure_reason = (
+                            add_result.error_code if not add_result.success else None
+                        )
+                        existing_da_row.agent_id = agent_id_val
+                        existing_da_row.job_id = payload.get("job_id")
+                        existing_da_row.updated_at = datetime.now(timezone.utc)
+                    else:
+                        session.add(
+                            MemberOperation(
+                                tg_group_id=target_tg_group_id,
+                                tg_user_id=user_id,
+                                agent_id=agent_id_val,
+                                job_id=payload.get("job_id"),
+                                operation_type="direct_add",
+                                status=op_status,
+                                failure_reason=add_result.error_code
+                                if not add_result.success
+                                else None,
+                                created_at=datetime.now(timezone.utc),
+                                updated_at=datetime.now(timezone.utc),
+                            )
+                        )
                     try:
                         await session.commit()
                     except Exception:
