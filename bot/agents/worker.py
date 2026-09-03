@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
+from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 
 import dramatiq
 import structlog
 from dramatiq.middleware.current_message import CurrentMessage
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from bot.agents.agent_notification_service import AgentNotificationService
 from bot.agents.exceptions import (
@@ -21,13 +24,13 @@ from bot.agents.exceptions import (
 from bot.agents.jobs import (
     ADD_CONTACT_JOB_TYPE,
     GROUP_MEMBER_BROADCAST_JOB_TYPE,
-    JOB_STATUS_ABORTED,
     JOB_STATUS_COMPLETED,
     JOB_STATUS_ENQUEUE_FAILED,
     JOB_STATUS_FAILED,
     JOB_STATUS_PENDING,
     JOB_STATUS_QUEUED,
     JOB_STATUS_RUNNING,
+    JOB_STATUS_SCHEDULED,
     KNOWLEDGE_EXTRACTION_JOB_TYPE,
     MEMBER_ADD_JOB_TYPE,
     SCRAPER_FULL_GROUP_JOB_TYPE,
@@ -466,6 +469,67 @@ async def _set_job_state(
         return None
 
 
+# Max manual reschedules (flood/stop/partial) before a job is marked failed.
+# Kept conservative: bulk-add jobs legitimately wait out long Telegram flood
+# windows, but they must never loop without bound (the poison-queue bug).
+MAX_JOB_RESCHEDULES = 5
+
+
+def _reschedule_agent_job(
+    *, agent_id: int, job_id: int, delay_seconds: int, retries: int
+) -> bool:
+    """Re-enqueue an agent job after a bounded delay.
+
+    All retry/resume paths (AgentStopError, AgentFloodWaitError, partial
+    broadcast/send) must go through here so the job-level retry counter is
+    carried forward on the message and capped. Dramatiq's own retries use the
+    same options and are subject to the same ceiling. Returns True when the
+    job was rescheduled, False when the cap was hit (caller should fail it).
+    """
+    if retries >= MAX_JOB_RESCHEDULES:
+        logger.warning(
+            "agent_job_reschedule_cap_exceeded",
+            agent_id=agent_id,
+            job_id=job_id,
+            retries=retries,
+            cap=MAX_JOB_RESCHEDULES,
+        )
+        return False
+    execute_agent_job.send_with_options(
+        args=(agent_id, job_id),
+        delay=max(1, int(delay_seconds)) * 1000,
+        retries=retries + 1,
+        max_retries=MAX_JOB_RESCHEDULES,
+    )
+    return True
+
+
+async def _persist_job_resume_at(session, job_id: int, delay_seconds: int) -> None:
+    """Stamp the job payload with the resume horizon.
+
+    A job parked as PENDING with a delayed Dramatiq message must not be
+    re-dispatched by the reconcile loop while that delayed message is still
+    scheduled; otherwise duplicate copies pile up (the poison-queue bug).
+    """
+    from bot.agents.dispatch import RESUME_AT_KEY
+
+    try:
+        job_row = (
+            await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+        ).scalar_one_or_none()
+        if job_row is None:
+            return
+        updated_payload = dict(job_row.job_payload or {})
+        updated_payload[RESUME_AT_KEY] = (
+            datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+        ).isoformat()
+        job_row.job_payload = updated_payload
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.warning("agent_job_resume_at_persist_failed", job_id=job_id)
+
+
 async def _handle_send_lead_message(*, client, session, job: AgentJob) -> dict:
     payload = dict(job.job_payload or {})
     tg_user_id = int(payload.get("tg_user_id") or 0)
@@ -576,8 +640,14 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     message_options = message.options or {} if message is not None else {}
     retries = int(message_options.get("retries", 0))
     attempt = retries + 1
-    max_retries = message_options.get("max_retries")
-    final_attempt = max_retries is not None and retries >= int(max_retries)
+    # Dramatiq does not copy the actor's max_retries into message options; it
+    # resolves it from the actor at retry-decision time. Fall back to the
+    # actor default so `final_attempt` is True on the last allowed retry (the
+    # previous code never fired its terminal branches because this was None).
+    max_retries = message_options.get("max_retries") or execute_agent_job.options.get(
+        "max_retries", 3
+    )
+    final_attempt = retries >= int(max_retries)
     bound_logger = logger.bind(agent_id=agent_id, job_id=job_id, attempt=attempt)
     bound_logger.info("agent_job_started")
 
@@ -590,18 +660,40 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
     send_claimed_runtime = SendToClaimedMembersRuntime()
 
     async with _session_local_factory()() as session:
+        # Atomic claim: a job may be dispatched many times, but it may only be
+        # executed if it transitions out of an executable state exactly once.
+        # This refuses duplicate/ghost deliveries (e.g. a message retried after
+        # the reconcile loop already marked the job dispatch_stale/failed) by
+        # claiming the job with a guarded UPDATE and checking the row count.
+        claim_result = await session.execute(
+            update(AgentJob)
+            .where(
+                AgentJob.id == job_id,
+                AgentJob.status.in_(
+                    [
+                        JOB_STATUS_PENDING,
+                        JOB_STATUS_QUEUED,
+                        JOB_STATUS_ENQUEUE_FAILED,
+                        JOB_STATUS_SCHEDULED,
+                    ]
+                ),
+            )
+            .values(status=JOB_STATUS_RUNNING, updated_at=datetime.now(timezone.utc))
+        )
+        await session.commit()
+        if claim_result.rowcount == 0:
+            job = (
+                await session.execute(select(AgentJob).where(AgentJob.id == job_id))
+            ).scalar_one_or_none()
+            if job is None:
+                bound_logger.warning("agent_job_missing")
+                return
+            bound_logger.info("agent_job_skipped_not_claimable", status=job.status)
+            return
+
         job = (
             await session.execute(select(AgentJob).where(AgentJob.id == job_id))
-        ).scalar_one_or_none()
-        if job is None:
-            bound_logger.warning("agent_job_missing")
-            return
-        if job.status in {JOB_STATUS_COMPLETED, JOB_STATUS_ABORTED, JOB_STATUS_FAILED}:
-            bound_logger.info("agent_job_skipped", status=job.status)
-            return
-        if job.status in {JOB_STATUS_PENDING, JOB_STATUS_QUEUED, JOB_STATUS_ENQUEUE_FAILED}:
-            job.status = JOB_STATUS_RUNNING
-            await session.commit()
+        ).scalar_one()
 
         if job.job_type == KNOWLEDGE_EXTRACTION_JOB_TYPE:
             from bot.plugins.ai_pilot.system_config import load_ai_config
@@ -630,7 +722,42 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=str(exc))
             return
 
+        lease_held = False
+        lease_task = None
         try:
+            # Long-running session jobs (member_add, broadcast, send_claimed,
+            # scraping) must not run concurrently with the agent listener on the
+            # same Telegram auth key. Claim the cross-process lease first; if it
+            # is already held, wait briefly for it rather than racing the holder.
+            # A background task renews the lease while the job runs so a long
+            # bulk (with 30-minute gaps between members) does not let the lease
+            # expire mid-job and allow the listener to reconnect and kick us.
+            if job.job_type in {
+                MEMBER_ADD_JOB_TYPE,
+                GROUP_MEMBER_BROADCAST_JOB_TYPE,
+                SEND_TO_CLAIMED_MEMBERS_JOB_TYPE,
+                SCRAPER_FULL_GROUP_JOB_TYPE,
+                SCRAPER_MEMBERS_JOB_TYPE,
+            }:
+                for _attempt in range(6):
+                    if await session_manager.acquire_session_lease(
+                        agent_id, ttl_seconds=600
+                    ):
+                        lease_held = True
+                        break
+                    await asyncio.sleep(5)
+                if lease_held:
+
+                    async def _renew_lease() -> None:
+                        while True:
+                            await asyncio.sleep(120)
+                            if not lease_held:
+                                return
+                            await session_manager.renew_session_lease(
+                                agent_id, ttl_seconds=600
+                            )
+
+                    lease_task = asyncio.create_task(_renew_lease())
             client = await session_manager.get_client(agent_id)
             try:
                 agent = (
@@ -685,9 +812,19 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                             if final_attempt:
                                 await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=f"Max retries exhausted, last stop reason: {progress.get('stop_reason')}")
                                 return
-                            execute_agent_job.send_with_options(
-                                args=(agent_id, job_id), delay=delay_sec * 1000
-                            )
+                            if not _reschedule_agent_job(
+                                agent_id=agent_id,
+                                job_id=job_id,
+                                delay_seconds=delay_sec,
+                                retries=retries,
+                            ):
+                                await _set_job_state(
+                                    session,
+                                    job_id,
+                                    JOB_STATUS_FAILED,
+                                    error=f"Max reschedules exceeded, last stop reason: {progress.get('stop_reason')}",
+                                )
+                                return
                             bound_logger.info(
                                 "agent_broadcast_partial_rescheduled",
                                 agent_id=agent_id,
@@ -753,9 +890,19 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                                     error=f"Max retries exhausted, last stop reason: {progress.get('stop_reason')}",
                                 )
                                 return
-                            execute_agent_job.send_with_options(
-                                args=(agent_id, job_id), delay=delay_sec * 1000
-                            )
+                            if not _reschedule_agent_job(
+                                agent_id=agent_id,
+                                job_id=job_id,
+                                delay_seconds=delay_sec,
+                                retries=retries,
+                            ):
+                                await _set_job_state(
+                                    session,
+                                    job_id,
+                                    JOB_STATUS_FAILED,
+                                    error=f"Max reschedules exceeded, last stop reason: {progress.get('stop_reason')}",
+                                )
+                                return
                             bound_logger.info(
                                 "agent_send_claimed_partial_rescheduled",
                                 agent_id=agent_id,
@@ -869,6 +1016,14 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     return
             finally:
                 await client.disconnect()
+                if lease_task is not None:
+                    lease_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await lease_task
+                    lease_task = None
+                if lease_held:
+                    await session_manager.release_session_lease(agent_id)
+                    lease_held = False
         except AgentStopError as exc:
             # Job-level graceful stop (e.g. flood wait mid bulk-add): the
             # runtime already persisted the current progress into the exception.
@@ -899,6 +1054,7 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     job_id=job_id,
                     stop_reason=exc.stop_reason,
                 )
+            await _persist_job_resume_at(session, job_id, exc.delay)
             if final_attempt:
                 await _set_job_state(
                     session,
@@ -914,9 +1070,19 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                     delay=exc.delay,
                 )
                 return
-            execute_agent_job.send_with_options(
-                args=(agent_id, job_id), delay=exc.delay * 1000
-            )
+            if not _reschedule_agent_job(
+                agent_id=agent_id,
+                job_id=job_id,
+                delay_seconds=exc.delay,
+                retries=retries,
+            ):
+                await _set_job_state(
+                    session,
+                    job_id,
+                    JOB_STATUS_FAILED,
+                    error=f"{exc.stop_reason} for {exc.delay} seconds (reschedule cap exceeded)",
+                )
+                return
             bound_logger.warning(
                 "agent_job_stopped",
                 agent_id=agent_id,
@@ -959,10 +1125,20 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
                 JOB_STATUS_PENDING,
                 error=f"Flood wait for {exc.retry_after} seconds",
             )
+            await _persist_job_resume_at(session, job_id, exc.retry_after)
             bound_logger.warning("agent_job_flood_wait", retry_after=exc.retry_after)
-            execute_agent_job.send_with_options(
-                args=(agent_id, job_id), delay=exc.retry_after * 1000
-            )
+            if not _reschedule_agent_job(
+                agent_id=agent_id,
+                job_id=job_id,
+                delay_seconds=exc.retry_after,
+                retries=retries,
+            ):
+                await _set_job_state(
+                    session,
+                    job_id,
+                    JOB_STATUS_FAILED,
+                    error=f"Flood wait for {exc.retry_after} seconds (reschedule cap exceeded)",
+                )
             return
         except AgentSessionError as exc:
             if isinstance(exc, AgentSessionRevokedError):
@@ -984,11 +1160,53 @@ async def _execute_agent_job_impl(agent_id: int, job_id: int) -> None:
             )
             bound_logger.critical("agent_job_banned")
             return
+        except ConnectionError as exc:
+            # A mid-operation Telethon disconnect (e.g. the agent listener
+            # reconnecting and kicking this worker's shared-session connection)
+            # surfaces as ConnectionError("Cannot send requests while
+            # disconnected"). This is retryable, but only up to a hard
+            # boundary: once Dramatiq's own retries are exhausted we must stop
+            # re-enqueueing, or a single dead job floods the queue forever.
+            await session_manager.mark_healthy_or_clear(agent_id)
+            if final_attempt:
+                await _set_job_state(
+                    session,
+                    job_id,
+                    JOB_STATUS_FAILED,
+                    error=f"Telethon disconnected after max retries: {exc}",
+                )
+                bound_logger.warning(
+                    "agent_job_disconnect_final",
+                    agent_id=agent_id,
+                    job_id=job_id,
+                    error=str(exc),
+                )
+                return
+            bound_logger.warning(
+                "agent_job_disconnected_retrying",
+                agent_id=agent_id,
+                job_id=job_id,
+                error=str(exc),
+                retries=retries,
+            )
+            raise
         except Exception as exc:
             if final_attempt:
                 await _set_job_state(session, job_id, JOB_STATUS_FAILED, error=str(exc))
             bound_logger.exception("agent_job_failed")
             raise
+        finally:
+            # Safety net: if the lease was acquired but the inner try never ran
+            # its finally (e.g. get_client raised), release it here so the next
+            # worker/listener is not blocked until the TTL expires.
+            if lease_task is not None:
+                lease_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await lease_task
+                lease_task = None
+            if lease_held:
+                await session_manager.release_session_lease(agent_id)
+                lease_held = False
 
     bound_logger.info("agent_job_succeeded")
 

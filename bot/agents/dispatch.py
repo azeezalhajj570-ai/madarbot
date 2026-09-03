@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from dramatiq.message import Message
-from redis.exceptions import RedisError
-import structlog
-from sqlalchemy import select
-
 from datetime import datetime, timedelta, timezone
 
+import structlog
+from dramatiq.message import Message
+from redis.exceptions import RedisError
+from sqlalchemy import select
+
 from bot.agents.jobs import (
+    JOB_STATUS_ABORTED,
+    JOB_STATUS_COMPLETED,
     JOB_STATUS_DISPATCH_STALE,
     JOB_STATUS_ENQUEUE_FAILED,
     JOB_STATUS_FAILED,
@@ -21,10 +23,33 @@ from bot.db.models import AgentJob
 from bot.db.session import SessionLocal
 from bot.workers.app import redis_broker
 
-
 logger = structlog.get_logger(__name__)
 
 STALE_JOB_THRESHOLD_HOURS = 2
+
+# Payload marker: when a worker parks a job to resume after a flood/cooldown
+# (status PENDING + a delayed Dramatiq message already enqueued), it stamps
+# `_resume_at` so reconcile/dispatch do not treat the job as abandoned and
+# enqueue duplicate copies of it.
+RESUME_AT_KEY = "_resume_at"
+
+
+def _job_resume_at(payload: dict) -> datetime | None:
+    raw = (payload or {}).get(RESUME_AT_KEY)
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(str(raw))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+    except (ValueError, TypeError):
+        return None
+
+
+def _has_pending_resume(payload: dict, now: datetime) -> bool:
+    resume_at = _job_resume_at(payload)
+    return resume_at is not None and resume_at > now
 
 
 async def reconcile_stale_jobs(
@@ -51,14 +76,20 @@ async def reconcile_stale_jobs(
     failed_running: list[AgentJob] = []
 
     async with SessionLocal() as session:
-        # 1) Re-dispatch PENDING jobs that were never enqueued.
+        # 1) Re-dispatch PENDING jobs that were never enqueued. Jobs stamped
+        #    with a future _resume_at already have a delayed message enqueued
+        #    by the worker, so they must not be re-dispatched here.
         pending_result = await session.execute(
             select(AgentJob).where(
                 AgentJob.status == JOB_STATUS_PENDING,
                 AgentJob.updated_at < requeue_cutoff,
             )
         )
-        to_requeue = list(pending_result.scalars())
+        to_requeue = [
+            job
+            for job in pending_result.scalars()
+            if not _has_pending_resume(dict(job.job_payload or {}), now)
+        ]
 
         # 2) Mark genuinely stale queued/pending jobs that exceeded the threshold.
         stale_result = await session.execute(
@@ -68,7 +99,12 @@ async def reconcile_stale_jobs(
             )
         )
         requeue_ids = {job.id for job in to_requeue}
-        stale = [job for job in stale_result.scalars() if job.id not in requeue_ids]
+        stale = [
+            job
+            for job in stale_result.scalars()
+            if job.id not in requeue_ids
+            and not _has_pending_resume(dict(job.job_payload or {}), now)
+        ]
         target_status = JOB_STATUS_FAILED if mark_failed else JOB_STATUS_DISPATCH_STALE
         for job in stale:
             job.status = target_status
@@ -173,6 +209,29 @@ async def dispatch_agent_job(job_id: int) -> None:
         if job is None:
             logger.bind(job_id=job_id).warning("agent_job_missing_for_dispatch")
             return
+
+        # Never re-dispatch a job that has reached a terminal state or is
+        # already executing: the atomic claim in the worker is the final gate,
+        # but refusing here stops the duplicate-copy generation earlier.
+        terminal = {
+            JOB_STATUS_COMPLETED,
+            JOB_STATUS_ABORTED,
+            JOB_STATUS_FAILED,
+            JOB_STATUS_DISPATCH_STALE,
+        }
+        if job.status in terminal or job.status == JOB_STATUS_RUNNING:
+            logger.bind(
+                job_id=job_id, agent_id=job.agent_id, status=job.status
+            ).warning("agent_job_dispatch_skipped_terminal")
+            return
+
+        now = datetime.now(timezone.utc)
+        if _has_pending_resume(dict(job.job_payload or {}), now):
+            logger.bind(
+                job_id=job_id, agent_id=job.agent_id, status=job.status
+            ).info("agent_job_dispatch_skipped_pending_resume")
+            return
+
         try:
             redis_broker.enqueue(
                 Message(
