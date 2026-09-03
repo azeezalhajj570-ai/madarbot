@@ -803,11 +803,11 @@ async def webapp_agent_member_search(
 
 
 @router.post(
-    "/api/agents/{agent_id}/member-search",
+    "/api/agents/{agent_id}/member-search/narrow",
     dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 @router.post(
-    "/webapp/agents/{agent_id}/member-search",
+    "/webapp/agents/{agent_id}/member-search/narrow",
     dependencies=[Depends(require_any_boundary(["agents", "admin"]))],
 )
 async def webapp_agent_member_search_post(
