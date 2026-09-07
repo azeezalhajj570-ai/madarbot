@@ -79,6 +79,9 @@ class SessionManager:
     def _retry_key(self, agent_id: int) -> str:
         return f"agent:{agent_id}:retry_after"
 
+    def _lease_key(self, agent_id: int) -> str:
+        return f"agent:{agent_id}:session_lease"
+
     async def _get_redis(self):
         if self._redis is not None:
             return self._redis
@@ -283,13 +286,83 @@ class SessionManager:
             agent.phone_code_hash = None
             await session.commit()
 
+    async def mark_healthy_or_clear(self, agent_id: int) -> None:
+        """Clear a transient flood_wait/unknown marker after a disconnect.
+
+        A mid-operation Telethon disconnect (for example the agent listener
+        reconnecting over the same session and kicking this connection) should
+        not leave the agent stuck in flood_wait. The next attempt reconnects
+        and get_client() re-marks the session healthy on success.
+        """
+        state, _ = await self._get_state(agent_id)
+        if state in {"flood_wait", "unknown", "healthy"}:
+            await self._set_state(agent_id, "healthy")
+
+    async def acquire_session_lease(self, agent_id: int, ttl_seconds: int = 300) -> bool:
+        """Attempt to claim exclusive use of an agent's Telegram session.
+
+        The agent worker (bulk add/broadcast/send) and the agent listener run
+        in separate OS processes and build their own Telethon clients from the
+        same session string. Two live clients on one auth key kick each other,
+        which surfaces mid-operation as ``ConnectionError: Cannot send requests
+        while disconnected``. The lease is the cross-process coordination:
+        whoever holds ``agent:{id}:session_lease`` is the only process that may
+        keep a live connection.
+
+        The lease is best-effort (TTL-bounded, never blocking) and does not
+        replace the state machine — it only reduces concurrent same-session
+        connections. Returns True when this caller now holds the lease.
+        """
+        client = await self._get_redis()
+        try:
+            acquired = await client.set(
+                self._lease_key(agent_id), "1", ex=ttl_seconds, nx=True
+            )
+        except Exception:
+            logger.exception("agent_session_lease_acquire_failed", agent_id=agent_id)
+            return False
+        if acquired:
+            logger.debug("agent_session_lease_acquired", agent_id=agent_id, ttl=ttl_seconds)
+        return bool(acquired)
+
+    async def release_session_lease(self, agent_id: int) -> None:
+        """Release this process's session lease (best-effort)."""
+        client = await self._get_redis()
+        try:
+            await client.delete(self._lease_key(agent_id))
+            logger.debug("agent_session_lease_released", agent_id=agent_id)
+        except Exception:
+            logger.exception("agent_session_lease_release_failed", agent_id=agent_id)
+
+    async def renew_session_lease(self, agent_id: int, ttl_seconds: int = 600) -> None:
+        """Extend the TTL of a lease this caller already holds.
+
+        Only one long-running job runs per agent at a time (the atomic job
+        claim guarantees that), so extending the key this process created is
+        safe without an owner token. Best-effort: failures are logged and the
+        lease simply expires on its original TTL.
+        """
+        client = await self._get_redis()
+        try:
+            if await client.exists(self._lease_key(agent_id)):
+                await client.expire(self._lease_key(agent_id), ttl_seconds)
+        except Exception:
+            logger.exception("agent_session_lease_renew_failed", agent_id=agent_id)
+
+    async def session_lease_held(self, agent_id: int) -> bool:
+        client = await self._get_redis()
+        try:
+            return bool(await client.exists(self._lease_key(agent_id)))
+        except Exception:
+            return False
+
     async def get_session_state(
         self, agent_id: int
     ) -> dict[str, Any]:
         state, retry_after = await self._get_state(agent_id)
         expires_at = None
         if state == "flood_wait" and retry_after is not None:
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta, timezone
             expires_at = (datetime.now(timezone.utc) + timedelta(seconds=retry_after)).isoformat()
         return {
             "session_state": state,
@@ -323,7 +396,9 @@ class SessionManager:
         accessible: list[int] = []
         inaccessible: list[int] = []
         try:
-            from telethon.tl.types import InputPeerChannel  # noqa: F401  (runtime import in try-block)
+            from telethon.tl.types import (
+                InputPeerChannel,  # noqa: F401  (runtime import in try-block)
+            )
 
             for gid in group_ids:
                 try:

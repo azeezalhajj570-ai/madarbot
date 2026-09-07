@@ -1,21 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any
 
-import hashlib
 import structlog
 from sqlalchemy import desc, select
 
+from bot.agents.dispatch import dispatch_agent_job
 from bot.agents.exceptions import AgentBannedError, AgentSessionRevokedError
 from bot.agents.session import SessionManager
-from bot.agents.dispatch import dispatch_agent_job
 from bot.config import get_settings
-from bot.db.models import Agent, AgentBlacklistEntry, AgentJob, Group, GroupAdminRole, GroupSetting, SentBroadcastMessage
+from bot.db.models import (
+    Agent,
+    AgentBlacklistEntry,
+    AgentJob,
+    Group,
+    GroupAdminRole,
+    GroupSetting,
+    SentBroadcastMessage,
+)
 from bot.db.session import SessionLocal
 from bot.services.agent_lead_service import AgentLeadService
 from bot.services.group_service import GroupService, canonical_tg_group_id, upsert_group_member
@@ -23,7 +31,6 @@ from bot.services.scraper_service import ScraperService
 from bot.services.task_assignment_store import TASKS_SETTING_KEY
 from bot.services.task_service import TaskService
 from bot.workers.tasks import schedule_bot_message_delete, schedule_task_follow_up
-
 
 logger = structlog.get_logger(__name__)
 _URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.IGNORECASE)
@@ -169,6 +176,17 @@ class AgentListenerManager:
             connected_at = None
             try:
                 connected_at = asyncio.get_running_loop().time()
+                # If a worker currently holds the session lease (bulk add /
+                # broadcast running), do not start a competing connection that
+                # would kick the worker mid-operation. Wait out the lease before
+                # connecting.
+                if await self.session_manager.session_lease_held(agent_id):
+                    logger.info(
+                        "agent_listener_waiting_for_session_lease",
+                        agent_id=agent_id,
+                    )
+                    await self.sleep(10)
+                    continue
                 client = await self.session_manager.get_client(agent_id)
 
                 async def _handle(event) -> None:
