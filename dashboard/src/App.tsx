@@ -15,6 +15,7 @@ import AdminPromoCodesPage from './pages/admin/PromoCodesPage'
 import AdminAuditPage from './pages/admin/AuditPage'
 import AdminBulkAddPage from './pages/admin/BulkAddPage'
 import AdminAISettingsPage from './pages/admin/AISettingsPage'
+import AdminBackupSettingsPage from './pages/admin/BackupSettingsPage'
 import AdminAdmissionIntelligencePage from './pages/admin/AdmissionIntelligencePage'
 import AdminKnowledgePage from './pages/admin/KnowledgePage'
 import AgentsPage from './pages/AgentsPage'
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/admin/bulk-add" element={<GuardRoute path="/admin/bulk-add"><AdminBulkAddPage /></GuardRoute>} />
             <Route path="/admin/audit" element={<GuardRoute path="/admin/audit"><AdminAuditPage /></GuardRoute>} />
             <Route path="/admin/ai-settings" element={<GuardRoute path="/admin/ai-settings"><AdminAISettingsPage /></GuardRoute>} />
+            <Route path="/admin/backup" element={<GuardRoute path="/admin/backup"><AdminBackupSettingsPage /></GuardRoute>} />
             <Route path="/admin/knowledge" element={<GuardRoute path="/admin/knowledge"><AdminKnowledgePage /></GuardRoute>} />
             <Route path="/admin/admissions" element={<GuardRoute path="/admin/admissions"><AdminAdmissionIntelligencePage /></GuardRoute>} />
             <Route path="/admin/workspace" element={<GuardRoute path="/admin/workspace"><AdminWorkspacePage /></GuardRoute>} />

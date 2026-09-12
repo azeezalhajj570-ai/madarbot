@@ -33,6 +33,7 @@ from bot.dashboard.api.routers.mcp_tokens import router as mcp_tokens_router
 from bot.dashboard.api.routers.workspace import router as workspace_router
 from bot.dashboard.api.routers.legal import router as legal_router
 from bot.dashboard.api.routers.admissions import router as admissions_router
+from bot.dashboard.api.routers.backup import router as backup_router
 from bot.dashboard.api.routers.docs import router as docs_router
 from bot.dashboard.api.middleware.rate_limit import RateLimitMiddleware
 from bot.db.bootstrap import ensure_schema
@@ -109,6 +110,13 @@ async def lifespan(app: FastAPI):
         reconcile_task = asyncio.create_task(reconcile_loop())
         logger.info("reconcile_loop_task_created")
 
+    backup_task = None
+    if settings.backup_enabled:
+        from bot.services.db_backup_service import db_backup_loop
+
+        backup_task = asyncio.create_task(db_backup_loop())
+        logger.info("db_backup_loop_task_created")
+
     alert_task = None
     if settings.sentry_dsn:
         try:
@@ -147,6 +155,12 @@ async def lifespan(app: FastAPI):
         scheduler_task.cancel()
         try:
             await scheduler_task
+        except asyncio.CancelledError:
+            pass
+    if backup_task:
+        backup_task.cancel()
+        try:
+            await backup_task
         except asyncio.CancelledError:
             pass
     await shutdown_client_pool()
@@ -312,6 +326,7 @@ app.include_router(workspace_router)
 app.include_router(legal_router)
 app.include_router(docs_router)
 app.include_router(admissions_router)
+app.include_router(backup_router)
 
 if settings.mcp_enabled:
     from bot.dashboard.api.mcp_router import router as mcp_router

@@ -728,6 +728,33 @@ export async function testAIConfig(payload: { provider: string; api_key: string;
   return data
 }
 
+// ─── DB Backup ───────────────────────────────────────────────────────────────
+
+export async function fetchBackupConfig() {
+  const { data } = await api.get('/api/backup/config')
+  return data
+}
+
+export async function updateBackupConfig(payload: Record<string, string | boolean | number>) {
+  const { data } = await api.put('/api/backup/config', payload)
+  return data
+}
+
+export async function runBackupNow() {
+  const { data } = await api.post('/api/backup/run')
+  return data
+}
+
+export async function fetchBackupHistory() {
+  const { data } = await api.get('/api/backup/history')
+  return data
+}
+
+export async function getBackupDriveAuthUrl() {
+  const { data } = await api.post('/api/backup/drive/auth-url')
+  return data as { url: string; redirect_uri: string }
+}
+
 // ─── Knowledge ────────────────────────────────────────────────────────────────
 
 export async function fetchKnowledgeGroups() {

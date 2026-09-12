@@ -37,6 +37,9 @@ packages/node_modules
 logs/
 *.out
 
+# Database backups (runtime output)
+backups/
+
 # Database / cache
 *.db
 *.sqlite

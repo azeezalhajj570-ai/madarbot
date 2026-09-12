@@ -134,6 +134,26 @@ class Settings(BaseSettings):
     mcp_oauth_token_ttl_seconds: int = Field(default=31536000, alias="MCP_OAUTH_TOKEN_TTL_SECONDS")
     mcp_oauth_code_ttl_seconds: int = Field(default=600, alias="MCP_OAUTH_CODE_TTL_SECONDS")
 
+    backup_enabled: bool = Field(default=False, alias="BACKUP_ENABLED")
+    backup_dir: str = Field(default="backups", alias="BACKUP_DIR")
+    backup_keep_days: int = Field(default=7, alias="BACKUP_KEEP_DAYS")
+    backup_interval_hours: float = Field(default=24.0, alias="BACKUP_INTERVAL_HOURS")
+    gdrive_client_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_CLIENT_ID")
+    gdrive_client_secret: str | None = Field(default=None, alias="GOOGLE_DRIVE_CLIENT_SECRET")
+    gdrive_refresh_token: str | None = Field(default=None, alias="GOOGLE_DRIVE_REFRESH_TOKEN")
+    gdrive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
+    gdrive_token_endpoint: str = Field(
+        default="https://oauth2.googleapis.com/token", alias="GOOGLE_DRIVE_TOKEN_ENDPOINT"
+    )
+    gdrive_upload_endpoint: str = Field(
+        default="https://www.googleapis.com/upload/drive/v3/files",
+        alias="GOOGLE_DRIVE_UPLOAD_ENDPOINT",
+    )
+    gdrive_files_endpoint: str = Field(
+        default="https://www.googleapis.com/drive/v3/files",
+        alias="GOOGLE_DRIVE_FILES_ENDPOINT",
+    )
+
     FREE_PLAN_LIMITS: dict[str, int] = {
         "max_groups": 5,
         "max_scheduled_messages": 5,

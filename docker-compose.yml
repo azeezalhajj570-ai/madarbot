@@ -118,6 +118,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       DEFAULT_LANGUAGE: ar
     restart: unless-stopped
+    volumes:
+      - ./backups:/app/backups
     ports:
       - "127.0.0.1:8009:8080"
     networks:

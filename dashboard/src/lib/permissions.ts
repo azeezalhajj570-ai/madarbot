@@ -28,6 +28,7 @@ const GUARDS: Record<string, Role[]> = {
   '/admin/bulk-add': ['owner', 'admin'],
   '/admin/audit': ['owner', 'admin'],
   '/admin/ai-settings': ['owner', 'admin'],
+  '/admin/backup': ['owner', 'admin'],
   '/admin/knowledge': ['owner', 'admin'],
   '/admin/admissions': ['owner', 'admin'],
   '/admin/workspace': ['owner', 'admin'],
