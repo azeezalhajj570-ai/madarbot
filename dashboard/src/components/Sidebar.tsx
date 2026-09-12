@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Activity, Bot, Brain, BookOpen, Cpu, Crown, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge, UserCircle } from 'lucide-react'
+import { Activity, Bot, Brain, BookOpen, Cpu, Crown, Database, GraduationCap, HelpCircle, LayoutDashboard, LogOut, Monitor, Moon, ScrollText, Search, Settings, ShieldAlert, Shield, Sun, Ticket, UserPlus, Users, Heart, Briefcase, ClipboardList, Tag, FileText, Building2, Gauge, UserCircle } from 'lucide-react'
 
 import { radius, spacing, typeScale, uiVars } from '../../../shared/ui-system/tokens'
 import { clearAuth, getStoredUser } from '../lib/auth'
@@ -30,6 +30,7 @@ const ADMIN_NAV = [
   { to: '/admin/promo-codes', label: 'nav.admin.promocodes', icon: Tag },
   { to: '/admin/audit', label: 'nav.admin.audit', icon: FileText },
   { to: '/admin/ai-settings', label: 'nav.admin.ai', icon: Brain },
+  { to: '/admin/backup', label: 'nav.admin.backup', icon: Database },
   { to: '/admin/knowledge', label: 'nav.admin.knowledge', icon: BookOpen },
   { to: '/admin/profile', label: 'nav.admin.profile', icon: UserCircle },
   { to: '/admin/admissions', label: 'nav.admin.admission', icon: GraduationCap },

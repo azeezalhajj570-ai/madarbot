@@ -655,7 +655,7 @@ export default function AdminBulkAddPage() {
         </div>
       </Dialog>
 
-      <Dialog open={!!detailJob} title={`Job #${detailJob?.id} — Per-User Results`} onClose={() => setDetailJob(null)} style={{ width: 'min(90vw, 680px)' }}>
+      <Dialog open={!!detailJob} title={`Job #${detailJob?.id} — Per-User Results`} onClose={() => setDetailJob(null)}>
         {detailJob && (() => {
           const { details, successCount, failureCount, skipCount, inviteLinkCount } = extractJobStats(detailJob.job_payload)
           return <div>
