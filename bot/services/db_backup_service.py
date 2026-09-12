@@ -69,9 +69,7 @@ class BackupConfig:
 
     @property
     def gdrive_configured(self) -> bool:
-        return all(
-            [self.gdrive_client_id, self.gdrive_client_secret, self.gdrive_refresh_token]
-        )
+        return all([self.gdrive_client_id, self.gdrive_client_secret, self.gdrive_refresh_token])
 
     @property
     def should_upload_gdrive(self) -> bool:

@@ -143,7 +143,9 @@ async def test_gdrive_upload_skipped_when_storage_type_local(backup_session, mon
     upload_mock.assert_not_called()
 
 
-@pytest.mark.parametrize("secret_field", ["db_backup_gdrive_client_secret", "db_backup_gdrive_refresh_token"])
+@pytest.mark.parametrize(
+    "secret_field", ["db_backup_gdrive_client_secret", "db_backup_gdrive_refresh_token"]
+)
 async def test_public_config_masks_secret_fields(secret_field: str) -> None:
     out = _public_config({secret_field: "abc12345"})
     assert out[secret_field] == "****2345"
@@ -309,8 +311,16 @@ def _drive_time(days_ago: int) -> str:
 
 async def test_prune_gdrive_backups_deletes_only_expired_dumps(monkeypatch) -> None:
     files = [
-        {"id": "OLD1", "name": "madarbot_combot_20260101_000000.dump", "createdTime": _drive_time(30)},
-        {"id": "NEW1", "name": "madarbot_combot_20260102_000000.dump", "createdTime": _drive_time(1)},
+        {
+            "id": "OLD1",
+            "name": "madarbot_combot_20260101_000000.dump",
+            "createdTime": _drive_time(30),
+        },
+        {
+            "id": "NEW1",
+            "name": "madarbot_combot_20260102_000000.dump",
+            "createdTime": _drive_time(1),
+        },
         {"id": "OTHER", "name": "notes.txt", "createdTime": _drive_time(30)},
     ]
     calls: list[tuple[str, str, dict]] = []

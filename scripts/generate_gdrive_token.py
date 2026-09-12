@@ -104,8 +104,10 @@ def main() -> None:
     if not refresh:
         print("No refresh_token in response. Revoke access and run again with 'prompt=consent'.")
     else:
-        print("\nSUCCESS. Paste this into the dashboard backup settings "
-              "(field: Google Drive refresh token):")
+        print(
+            "\nSUCCESS. Paste this into the dashboard backup settings "
+            "(field: Google Drive refresh token):"
+        )
         print(refresh)
 
 
