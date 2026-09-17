@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 class AgentRateLimiter:
@@ -90,6 +90,19 @@ class AgentRateLimiter:
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return f"agent:{agent_id}:daily_contacts:{today}"
+
+    def seconds_until_hourly_reset(self) -> int:
+        """Seconds until the next hourly window (used for the resume delay)."""
+        now = int(time.time())
+        return max(1, 3600 - (now % 3600))
+
+    def seconds_until_daily_reset(self) -> int:
+        """Seconds until the next UTC midnight (used for the resume delay)."""
+        now = datetime.now(timezone.utc)
+        next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+            days=1
+        )
+        return max(1, int((next_midnight - now).total_seconds()))
 
     async def check_daily_limit(
         self, agent_id: int, max_per_day: int | None, user_id: int | None = None

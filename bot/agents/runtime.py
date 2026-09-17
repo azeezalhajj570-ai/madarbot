@@ -1548,12 +1548,17 @@ class BulkAddMembersRuntime:
                             "stop_reason": "cooldown",
                             "retry_after": int(cd_remaining),
                         }
-                        raise Exception(f"Agent cooldown: {cd_remaining}s")
+                        raise AgentStopError(
+                            stop_reason="cooldown",
+                            delay=int(cd_remaining),
+                            progress=payload["progress"],
+                        )
 
                 max_per_hour = agent_max_per_hour
                 if max_per_hour is not None and max_per_hour > 0:
-                    allowed, hour_count = await limiter.check_and_increment(agent_id_val, max_per_hour)
+                    allowed, _ = await limiter.check_and_increment(agent_id_val, max_per_hour)
                     if not allowed:
+                        delay = limiter.seconds_until_hourly_reset()
                         payload["progress"] = {
                             "total_count": total_count,
                             "success_count": success_count,
@@ -1563,13 +1568,19 @@ class BulkAddMembersRuntime:
                             "results": results,
                             "stopped_at": original_index,
                             "stop_reason": "hourly_limit",
+                            "retry_after": delay,
                         }
-                        raise Exception(f"Hourly limit reached ({hour_count}/{max_per_hour})")
+                        raise AgentStopError(
+                            stop_reason="hourly_limit",
+                            delay=delay,
+                            progress=payload["progress"],
+                        )
 
                 max_per_day = agent_max_per_day or 500
                 if max_per_day > 0:
-                    allowed, day_count = await limiter.check_daily_limit(agent_id_val, max_per_day)
+                    allowed, _ = await limiter.check_daily_limit(agent_id_val, max_per_day)
                     if not allowed:
+                        delay = limiter.seconds_until_daily_reset()
                         payload["progress"] = {
                             "total_count": total_count,
                             "success_count": success_count,
@@ -1579,8 +1590,13 @@ class BulkAddMembersRuntime:
                             "results": results,
                             "stopped_at": original_index,
                             "stop_reason": "daily_limit",
+                            "retry_after": delay,
                         }
-                        raise Exception(f"Daily limit reached ({day_count}/{max_per_day})")
+                        raise AgentStopError(
+                            stop_reason="daily_limit",
+                            delay=delay,
+                            progress=payload["progress"],
+                        )
 
                 min_delay = agent_min_delay
                 if min_delay is not None and min_delay > 0:

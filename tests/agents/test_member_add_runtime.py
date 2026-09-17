@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -47,12 +49,16 @@ class _FakeSession:
 
 
 class _FakeRedis:
-    def __init__(self) -> None:
-        self._store: dict[str, int] = {}
+    def __init__(self, store: dict[str, int] | None = None, ttl: int = -2) -> None:
+        self._store: dict[str, int] = dict(store or {})
+        self._ttl = ttl
 
     async def get(self, key):
         raw = self._store.get(key, 0)
         return str(raw) if raw else None
+
+    async def ttl(self, key) -> int:
+        return self._ttl
 
     async def incr(self, key):
         self._store[key] = self._store.get(key, 0) + 1
@@ -137,3 +143,104 @@ async def test_member_add_raises_agent_stop_error_on_flood(
     # Each result row carries its own attempt timestamp so task-log rows show
     # distinct times instead of the job's updated_at for every row.
     assert flood_entry["attempted_at"]
+
+
+async def test_member_add_raises_agent_stop_error_on_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "redis.asyncio.Redis.from_url", lambda url, **kw: _FakeRedis(ttl=600)
+    )
+
+    session = _FakeSession()
+    runtime = BulkAddMembersRuntime(sleep=lambda s: None)
+    agent = _make_agent()
+    agent.cooldown_minutes = 10
+
+    payload = {
+        "target_tg_group_id": -1004420422610,
+        "user_ids": [1726217833],
+        "source_tg_group_id": -1002024486812,
+        "interval_seconds": 1.0,
+        "job_id": 141,
+    }
+
+    with pytest.raises(AgentStopError) as exc_info:
+        await runtime.execute(client=object(), agent=agent, payload=payload, session=session)
+
+    assert exc_info.value.delay == 600
+    assert exc_info.value.stop_reason == "cooldown"
+
+    progress = exc_info.value.progress
+    assert progress["stop_reason"] == "cooldown"
+    assert progress["retry_after"] == 600
+    assert progress["stopped_at"] == 0
+    assert progress["results"] == []
+
+
+async def test_member_add_raises_agent_stop_error_on_hourly_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = int(time.time()) // 3600
+    store = {f"agent:14:window:{window}": 2}
+    monkeypatch.setattr(
+        "redis.asyncio.Redis.from_url", lambda url, **kw: _FakeRedis(store=store)
+    )
+
+    session = _FakeSession()
+    runtime = BulkAddMembersRuntime(sleep=lambda s: None)
+    agent = _make_agent()
+    agent.max_actions_per_hour = 2
+
+    payload = {
+        "target_tg_group_id": -1004420422610,
+        "user_ids": [1726217833],
+        "source_tg_group_id": -1002024486812,
+        "interval_seconds": 1.0,
+        "job_id": 142,
+    }
+
+    with pytest.raises(AgentStopError) as exc_info:
+        await runtime.execute(client=object(), agent=agent, payload=payload, session=session)
+
+    assert exc_info.value.stop_reason == "hourly_limit"
+    assert exc_info.value.delay > 0
+
+    progress = exc_info.value.progress
+    assert progress["stop_reason"] == "hourly_limit"
+    assert progress["retry_after"] == exc_info.value.delay
+    assert progress["stopped_at"] == 0
+
+
+async def test_member_add_raises_agent_stop_error_on_daily_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    store = {f"agent:14:daily:{today}": 2}
+    monkeypatch.setattr(
+        "redis.asyncio.Redis.from_url", lambda url, **kw: _FakeRedis(store=store)
+    )
+
+    session = _FakeSession()
+    runtime = BulkAddMembersRuntime(sleep=lambda s: None)
+    agent = _make_agent()
+    agent.max_messages_per_day = 2
+
+    payload = {
+        "target_tg_group_id": -1004420422610,
+        "user_ids": [1726217833],
+        "source_tg_group_id": -1002024486812,
+        "interval_seconds": 1.0,
+        "job_id": 143,
+    }
+
+    with pytest.raises(AgentStopError) as exc_info:
+        await runtime.execute(client=object(), agent=agent, payload=payload, session=session)
+
+    assert exc_info.value.stop_reason == "daily_limit"
+    assert exc_info.value.delay > 0
+
+    progress = exc_info.value.progress
+    assert progress["stop_reason"] == "daily_limit"
+    assert progress["retry_after"] == exc_info.value.delay
+    assert progress["stopped_at"] == 0
