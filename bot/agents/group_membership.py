@@ -47,6 +47,8 @@ ERROR_IS_BOT: Final = "IS_BOT"
 ERROR_VERIFICATION_FAILED: Final = "VERIFICATION_FAILED"
 ERROR_UNKNOWN: Final = "UNKNOWN"
 ERROR_NOT_ADMIN: Final = "NOT_ADMIN"
+ERROR_ACCOUNT_RESTRICTED: Final = "ACCOUNT_RESTRICTED"
+ERROR_ACCOUNT_NOT_IN_GROUP: Final = "ACCOUNT_NOT_IN_GROUP"
 ERROR_CHAT_MEMBER_ADD_FAILED: Final = "CHAT_MEMBER_ADD_FAILED"
 
 logger = structlog.get_logger(__name__)
@@ -106,6 +108,49 @@ def _failure(
         error_code=error_code,
         flood_wait_seconds=flood_wait_seconds,
     )
+
+
+def _rpc_failure(
+    exc: RPCError,
+    *,
+    group_id: int,
+    user_id: int,
+) -> AddUserResult:
+    """Map an untyped invite/add RPC error to a per-member failure result.
+
+    Telegram surfaces the same failure either as a typed exception (handled
+    directly by the call sites) or, when Telethon has no class for the code, as
+    a plain ``RPCError`` whose message carries the raw code — so both forms are
+    checked. Account-level failures stay distinct from a genuine permission
+    problem: an account that is restricted (``ACCOUNT_RESTRICTED``) or no longer
+    a participant (``ACCOUNT_NOT_IN_GROUP``) does not mean the group forbids its
+    members from adding, and conflating the three hid a de-synced agent behind
+    ``NOT_ADMIN`` in the activity logs (issue #301).
+    """
+    lowered = str(exc).lower()
+    if isinstance(exc, ChatWriteForbiddenError) or "forbidden" in lowered:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_ACCOUNT_RESTRICTED)
+    if isinstance(exc, UserNotParticipantError) or "not_participant" in lowered:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_ACCOUNT_NOT_IN_GROUP)
+    if isinstance(exc, ChatAdminRequiredError) or "admin" in lowered:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+    if isinstance(exc, UserAlreadyParticipantError) or "already_participant" in lowered:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USER_ALREADY_IN_GROUP)
+    if isinstance(exc, UserPrivacyRestrictedError) or "privacy_restricted" in lowered:
+        return _failure(
+            group_id=group_id, user_id=user_id, error_code=ERROR_USER_PRIVACY_RESTRICTED
+        )
+    flood_seconds = _parse_flood_seconds(exc)
+    if flood_seconds is not None:
+        return _failure(
+            group_id=group_id,
+            user_id=user_id,
+            error_code=ERROR_FLOOD_WAIT,
+            flood_wait_seconds=flood_seconds,
+        )
+    if "member_add_failed" in lowered:
+        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_CHAT_MEMBER_ADD_FAILED)
+    return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
 
 
 async def _resolve_group_from_dialogs(
@@ -233,8 +278,6 @@ async def add_user_to_group(
             error_code=ERROR_FLOOD_WAIT,
             flood_wait_seconds=int(exc.seconds),
         )
-    except (ChatAdminRequiredError, UserNotParticipantError):
-        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_USERBOT_NOT_IN_GROUP)
     except RPCError as exc:
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning("agent_add_user_to_group_rpc_error")
         if "admin" in str(exc).lower():
@@ -314,8 +357,26 @@ async def add_user_to_group(
             error_code=ERROR_FLOOD_WAIT,
             flood_wait_seconds=int(exc.seconds),
         )
-    except (ChatAdminRequiredError, ChatWriteForbiddenError, UserNotParticipantError):
+    except ChatAdminRequiredError:
+        # The agent account genuinely lacks the add/admin right in the group.
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
+    except ChatWriteForbiddenError:
+        # The agent account is restricted/muted (or otherwise forbidden from
+        # writing) in the group, e.g. a Telegram flag or de-synced membership.
+        return _failure(
+            group_id=group_id,
+            user_id=user_id,
+            error_code=ERROR_ACCOUNT_RESTRICTED,
+        )
+    except UserNotParticipantError:
+        # The agent account is not (or is no longer) a participant, so it
+        # cannot add anyone to the group. Distinct from "not admin" so the
+        # activity logs can flag the specific de-synced agent (issue #301).
+        return _failure(
+            group_id=group_id,
+            user_id=user_id,
+            error_code=ERROR_ACCOUNT_NOT_IN_GROUP,
+        )
     except (ValueError, TypeError):
         return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_PEER_NOT_FOUND)
     except RPCError as exc:
@@ -383,33 +444,22 @@ async def add_user_to_group(
                 )
                 bound_logger.info("agent_add_user_to_group_succeeded")
                 return AddUserResult(success=True)
-            except RPCError:
-                pass
+            except RPCError as retry_exc:
+                # The retry failed with its own Telegram error, which carries the
+                # real reason (e.g. the account lost its add rights). Reporting
+                # the stale-hash error that triggered the retry would mask it as
+                # UNKNOWN, so classify the retry error instead (issue #301).
+                logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(retry_exc)).warning(
+                    "agent_invite_retry_rpc_error"
+                )
+                return _rpc_failure(retry_exc, group_id=group_id, user_id=user_id)
             except (ValueError, KeyError):
                 pass
         # Any error here is a genuine failure (or the retry also failed).
         logger.bind(group_id=group_id, user_id=user_id, rpc_error=str(exc)).warning(
             "agent_invite_to_channel_rpc_error"
         )
-        message = str(exc)
-        lowered = message.lower()
-        if "admin" in lowered or "forbidden" in lowered:
-            return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_NOT_ADMIN)
-        flood_seconds = _parse_flood_seconds(exc)
-        if flood_seconds is not None:
-            return _failure(
-                group_id=group_id,
-                user_id=user_id,
-                error_code=ERROR_FLOOD_WAIT,
-                flood_wait_seconds=flood_seconds,
-            )
-        if "chat_member_add_failed" in lowered or "member_add_failed" in lowered:
-            return _failure(
-                group_id=group_id,
-                user_id=user_id,
-                error_code=ERROR_CHAT_MEMBER_ADD_FAILED,
-            )
-        return _failure(group_id=group_id, user_id=user_id, error_code=ERROR_UNKNOWN)
+        return _rpc_failure(exc, group_id=group_id, user_id=user_id)
 
     if verify:
         # Telegram membership does not propagate instantly after an invite, so a
