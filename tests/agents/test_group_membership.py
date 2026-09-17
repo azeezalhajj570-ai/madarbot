@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 from telethon.errors import (
+    ChatAdminRequiredError,
+    ChatWriteForbiddenError,
     FloodWaitError,
     RPCError,
     UserAlreadyParticipantError,
@@ -17,8 +20,11 @@ from telethon.tl.functions.messages import AddChatUserRequest
 from telethon.tl.types import Channel, Chat, ChatPhotoEmpty, MissingInvitee, User
 
 from bot.agents.group_membership import (
+    ERROR_ACCOUNT_NOT_IN_GROUP,
+    ERROR_ACCOUNT_RESTRICTED,
     ERROR_CHAT_MEMBER_ADD_FAILED,
     ERROR_FLOOD_WAIT,
+    ERROR_NOT_ADMIN,
     ERROR_PEER_NOT_FOUND,
     ERROR_UNKNOWN,
     ERROR_USER_ALREADY_IN_GROUP,
@@ -159,10 +165,15 @@ async def test_add_user_to_group_succeeds_for_legacy_group() -> None:
 
 
 @pytest.mark.asyncio
-async def test_add_user_to_group_returns_verification_failed_when_not_member() -> None:
+async def test_add_user_to_group_returns_verification_failed_when_not_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The membership check is retried three times; keep the test instant.
+    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
     client = AsyncMock()
     client.get_entity = AsyncMock(side_effect=[_build_user(77), _build_channel(1001)])
-    client.side_effect = [None, UserNotParticipantError(request=None)]
+    # The invite succeeds, then every membership check reports the user absent.
+    client.side_effect = [None] + [UserNotParticipantError(request=None)] * 3
 
     result = await add_user_to_group(client, -1001001, 77)
 
@@ -291,6 +302,108 @@ async def test_add_user_to_group_maps_chat_member_add_failed_to_distinct_code() 
 
     assert result.success is False
     assert result.error_code == ERROR_CHAT_MEMBER_ADD_FAILED
+
+
+# ─── Issue #301: distinguish account-level failures from true NOT_ADMIN ───────
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_chat_admin_required_to_not_admin() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(89), _build_channel(1012)])
+    client.side_effect = ChatAdminRequiredError(request=None)
+
+    result = await add_user_to_group(client, -1001012, 89)
+
+    assert result.success is False
+    assert result.error_code == ERROR_NOT_ADMIN
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_chat_write_forbidden_to_account_restricted() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(90), _build_channel(1013)])
+    client.side_effect = ChatWriteForbiddenError(request=None)
+
+    result = await add_user_to_group(client, -1001013, 90)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_user_not_participant_to_account_not_in_group() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(91), _build_channel(1014)])
+    client.side_effect = UserNotParticipantError(request=None)
+
+    result = await add_user_to_group(client, -1001014, 91)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_NOT_IN_GROUP
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_raw_write_forbidden_code_to_account_restricted() -> None:
+    # Telethon raises a plain RPCError carrying the raw code when it has no class
+    # for it, so the account-level codes must be recognised from the message too.
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(92), _build_channel(1015)])
+    client.side_effect = RPCError(
+        request=None,
+        message="RPCError 400: CHAT_WRITE_FORBIDDEN (caused by InviteToChannelRequest)",
+    )
+
+    result = await add_user_to_group(client, -1001015, 92)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_maps_raw_not_participant_code_to_account_not_in_group() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_user(93), _build_channel(1016)])
+    client.side_effect = RPCError(
+        request=None,
+        message="RPCError 400: USER_NOT_PARTICIPANT (caused by InviteToChannelRequest)",
+    )
+
+    result = await add_user_to_group(client, -1001016, 93)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_NOT_IN_GROUP
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_reports_account_restricted_when_retry_fails() -> None:
+    client = AsyncMock()
+    # get_entity resolves: group, then the retry re-resolves the user.
+    client.get_entity = AsyncMock(side_effect=[_build_channel(1017), _build_user(94)])
+    client.side_effect = [
+        _invalid_user_id_error(),
+        ChatWriteForbiddenError(request=None),
+    ]
+
+    result = await add_user_to_group(client, -1001017, 94, access_hash=999999999)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_group_reports_account_not_in_group_when_retry_fails() -> None:
+    client = AsyncMock()
+    client.get_entity = AsyncMock(side_effect=[_build_channel(1018), _build_user(95)])
+    client.side_effect = [
+        _invalid_user_id_error(),
+        UserNotParticipantError(request=None),
+    ]
+
+    result = await add_user_to_group(client, -1001018, 95, access_hash=999999999)
+
+    assert result.success is False
+    assert result.error_code == ERROR_ACCOUNT_NOT_IN_GROUP
 
 
 # ─── Stale access_hash retry ──────────────────────────────────────────────────

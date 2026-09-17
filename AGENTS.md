@@ -249,6 +249,15 @@ visibility and scraped-data ownership. Telegram remains the final authority:
 per-member failure; the group and its scraped members are never deleted or
 invalidated by a failed add. See `specs/020-bulk-add-by-non-admin/spec.md`.
 
+Account-level add failures are reported as their own per-member codes so the
+activity logs do not blame the group configuration: `CHAT_WRITE_FORBIDDEN` →
+`ERROR_ACCOUNT_RESTRICTED`, `USER_NOT_PARTICIPANT` →
+`ERROR_ACCOUNT_NOT_IN_GROUP`, and only `CHAT_ADMIN_REQUIRED` → `ERROR_NOT_ADMIN`
+(`bot/agents/group_membership.py:add_user_to_group`). The same mapping is
+applied when the stale-access-hash retry fails, so a de-synced agent that lost
+its add rights is distinguishable from a group that forbids members from
+adding instead of being logged as `UNKNOWN`.
+
 ## Send Messages to Claimed Members
 
 Send Messages to Group Members reuses the same member-claiming system as Bulk
