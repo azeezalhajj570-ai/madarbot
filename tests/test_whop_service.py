@@ -3,13 +3,17 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from bot.config import get_settings
+from bot.dashboard.api.main import app
 from bot.db.models import (
     SubscriptionRequest,
     SubscriptionStatus,
@@ -471,3 +475,101 @@ async def test_cancel_without_subscription_raises(db_session, whop_settings) -> 
     service = WhopService(db_session, client=FakeWhopClient())
     with pytest.raises(WhopError):
         await service.cancel_subscription(tg_user_id=999)
+
+
+# ─── webhook endpoint (HTTP) ─────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_rate_limit_redis():
+    """Drop pooled Redis connections between tests.
+
+    ``app.state.redis`` is created at import time and its pool binds to the loop
+    of whichever test first uses it. pytest-asyncio gives each test a fresh loop,
+    so the pool would later try to disconnect connections owned by a closed loop
+    ("Event loop is closed"). Closing it per test re-connects lazily instead.
+    """
+    yield
+    redis = getattr(app.state, "redis", None)
+    if redis is not None:
+        try:
+            await redis.aclose()
+        except Exception:  # noqa: BLE001 - best-effort teardown
+            pass
+
+
+@pytest_asyncio.fixture
+async def api_client(patch_db_dependencies, whop_settings) -> AsyncClient:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+def _post_headers(body: bytes, **overrides) -> dict[str, str]:
+    return {"content-type": "application/json", **_sign(body, **overrides)}
+
+
+@pytest.mark.asyncio
+async def test_webhook_endpoint_rejects_bad_signature(api_client: AsyncClient) -> None:
+    body = json.dumps({"type": "payment.succeeded", "data": {}}).encode()
+    response = await api_client.post(
+        "/api/webhooks/whop",
+        content=body,
+        headers={
+            "content-type": "application/json",
+            "webhook-id": "msg_bad",
+            "webhook-timestamp": str(int(time.time())),
+            "webhook-signature": "v1,not-a-real-signature",
+        },
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_webhook_endpoint_rejects_missing_headers(api_client: AsyncClient) -> None:
+    response = await api_client.post(
+        "/api/webhooks/whop", content=b"{}", headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_webhook_endpoint_fulfills_signed_delivery(
+    api_client: AsyncClient, db_session, whop_settings
+) -> None:
+    service = WhopService(db_session, client=FakeWhopClient())
+    order = await _pending_order(service, db_session)
+    period_end = datetime.now(timezone.utc) + timedelta(days=30)
+    body = json.dumps(
+        _payment_event(order, membership_id="memb_http", period_end=period_end)
+    ).encode()
+
+    response = await api_client.post(
+        "/api/webhooks/whop", content=body, headers=_post_headers(body)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "fulfilled"
+
+    await db_session.refresh(order)
+    assert order.status == "active"
+    subscription = await db_session.get(SubscriptionRequest, order.subscription_request_id)
+    assert subscription.status == SubscriptionStatus.APPROVED.value
+
+    # Replaying the same delivery must not grant twice.
+    replay = await api_client.post("/api/webhooks/whop", content=body, headers=_post_headers(body))
+    assert replay.status_code == 200
+    assert replay.json()["outcome"] == "duplicate"
+
+    count = len(
+        (
+            await db_session.execute(
+                select(SubscriptionRequest).where(
+                    SubscriptionRequest.tg_user_id == order.tg_user_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert count == 1
