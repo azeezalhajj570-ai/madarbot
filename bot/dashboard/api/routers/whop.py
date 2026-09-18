@@ -36,9 +36,19 @@ class WhopCheckoutRequest(BaseModel):
     plan: Literal["pro", "business"]
 
 
-def _agents_return_url() -> str:
+def _agents_return_url() -> str | None:
+    """Where Whop sends the buyer after checkout.
+
+    Whop rejects anything that is not absolute https, so never forward a
+    local/dev URL (the deployed .env still carries a localhost value for
+    AGENTS_WEBAPP_URL) — fall through to the first https candidate instead.
+    """
     settings = get_settings()
-    return settings.agents_webapp_url or settings.webapp_url or settings.dashboard_url or ""
+    for candidate in (settings.agents_webapp_url, settings.webapp_url, settings.dashboard_url):
+        value = (candidate or "").strip()
+        if value.startswith("https://"):
+            return value
+    return None
 
 
 def _order_payload(order: Any) -> dict[str, Any]:

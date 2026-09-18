@@ -137,6 +137,21 @@ def test_signature_rejects_missing_headers() -> None:
         verify_webhook_signature(raw_body=b"{}", headers={}, secret=WEBHOOK_SECRET)
 
 
+def test_return_url_never_forwards_a_local_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Whop rejects non-https redirects and the deployed .env carries a localhost value."""
+    from bot.dashboard.api.routers.whop import _agents_return_url
+
+    monkeypatch.setenv("AGENTS_WEBAPP_URL", "http://localhost:5175")
+    monkeypatch.setenv("WEBAPP_URL", "https://madar.azeez-tech.com/webapp")
+    get_settings.cache_clear()
+    assert _agents_return_url() == "https://madar.azeez-tech.com/webapp"
+
+    monkeypatch.setenv("WEBAPP_URL", "http://localhost:5175")
+    monkeypatch.setenv("DASHBOARD_URL", "http://localhost:5175/webapp")
+    get_settings.cache_clear()
+    assert _agents_return_url() is None
+
+
 def test_parse_datetime_accepts_utc_z_suffix() -> None:
     """Whop sends some timestamps with a trailing Z."""
     from bot.services.whop_service import _parse_datetime
