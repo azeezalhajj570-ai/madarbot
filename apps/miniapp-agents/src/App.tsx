@@ -399,8 +399,8 @@ function SubscriptionForm({
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { plan: 'pro', label: t('subscription.pro'), price: '$29.99', desc: t('subscription.priceMonthly'), days: 30 },
-            { plan: 'business', label: t('subscription.business'), price: '$79', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'pro', label: t('subscription.pro'), price: '$39.99', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'business', label: t('subscription.business'), price: '$79.99', desc: t('subscription.priceMonthly'), days: 30 },
           ].map((p) => (
             <button
               key={p.plan}
@@ -420,7 +420,7 @@ function SubscriptionForm({
             </button>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('subscription.trialNote')}</div>
+        <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('subscription.plansNote')}</div>
       </div>
 
       {!isActive && (
