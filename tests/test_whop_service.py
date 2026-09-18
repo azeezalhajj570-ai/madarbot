@@ -534,6 +534,44 @@ async def test_webhook_endpoint_rejects_missing_headers(api_client: AsyncClient)
 
 
 @pytest.mark.asyncio
+async def test_webhook_rejects_when_secret_missing(
+    api_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("WHOP_WEBHOOK_SECRET", "")
+    get_settings.cache_clear()
+    body = json.dumps({"type": "payment.succeeded", "data": {}}).encode()
+    response = await api_client.post(
+        "/api/webhooks/whop", content=body, headers=_post_headers(body)
+    )
+    assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_webhook_still_fulfills_while_sales_are_disabled(
+    api_client: AsyncClient, db_session, whop_settings, monkeypatch
+) -> None:
+    """Pausing new sales must not stop renewals/cancellations being honoured."""
+    monkeypatch.setenv("WHOP_ENABLED", "false")
+    get_settings.cache_clear()
+
+    service = WhopService(db_session, client=FakeWhopClient())
+    order = await _pending_order(service, db_session)
+    period_end = datetime.now(timezone.utc) + timedelta(days=30)
+    body = json.dumps(
+        _payment_event(order, membership_id="memb_off", period_end=period_end)
+    ).encode()
+
+    response = await api_client.post(
+        "/api/webhooks/whop", content=body, headers=_post_headers(body)
+    )
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "fulfilled"
+    await db_session.refresh(order)
+    assert order.status == "active"
+
+
+@pytest.mark.asyncio
 async def test_webhook_endpoint_fulfills_signed_delivery(
     api_client: AsyncClient, db_session, whop_settings
 ) -> None:

@@ -60,8 +60,11 @@ async def whop_webhook(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
     settings = get_settings()
-    if not settings.whop_enabled or not settings.whop_webhook_secret:
-        logger.warning("whop_webhook_received_but_disabled")
+    # Fulfillment is deliberately independent of WHOP_ENABLED: pausing new sales
+    # must not stop renewals and cancellations from being honoured, and Whop
+    # disables endpoints whose deliveries keep failing.
+    if not settings.whop_webhook_secret:
+        logger.warning("whop_webhook_received_without_secret")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Whop webhooks are not configured.",
