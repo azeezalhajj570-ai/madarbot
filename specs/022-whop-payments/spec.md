@@ -123,10 +123,12 @@ header         = webhook-signature: "v1,<signature> [v1,<signature> ...]"
 
 ## Operational notes
 
-- Nginx already proxies every path on `madar.hamedco.com` to the backend, so the
-  webhook URL needs no infra change.
+- Nginx already proxies every path on `madar.azeez-tech.com` to the backend on
+  `127.0.0.1:8009`, so the webhook URL needs no infra change. Note this is the
+  active host: `madar.hamedco.com` is not served from this box (`infra/nginx-madarbot.conf`
+  still carries blocks for it, but the running config does not).
 - Register the webhook in the Whop dashboard pointing at
-  `https://madar.hamedco.com/api/webhooks/whop` and subscribe to
+  `https://madar.azeez-tech.com/api/webhooks/whop` and subscribe to
   `payment.succeeded`, `payment.failed`, `payment.requires_action`,
   `membership.activated`, and `membership.deactivated`.
 - Memberships bought directly on the Whop product page (outside the mini app)
