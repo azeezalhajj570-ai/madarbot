@@ -137,6 +137,10 @@ interface SubscriptionStatusInfo {
   status: 'active' | 'inactive'
   plan: 'pro' | 'business' | null
   expires_at: string | null
+  provider?: 'whop' | null
+  trial_ends_at?: string | null
+  cancel_at_period_end?: boolean
+  order_status?: string | null
 }
 
 function Badge({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'success' | 'warning' }) {
@@ -173,6 +177,7 @@ function SubscriptionForm({
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'business' | null>(null)
+  const [awaitingPayment, setAwaitingPayment] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -213,42 +218,108 @@ function SubscriptionForm({
     }
   }
 
-  async function handleStripeCheckout(plan: 'pro' | 'business') {
+  async function handleWhopCheckout(plan: 'pro' | 'business') {
     if (checkoutPlan) return
     setCheckoutPlan(plan)
     setError(null)
     setSuccess(null)
     try {
-      const data = await agentsApi.createSubscriptionCheckout(plan, window.location.href, window.location.href)
+      const data = await agentsApi.createWhopCheckout(plan)
       if (!data.url) {
-        throw new Error('Checkout session was not created')
+        throw new Error(t('subscription.noCheckoutSession'))
       }
       const webapp = (window as any).Telegram?.WebApp
       if (webapp?.openLink) {
-        webapp.openLink(data.url)
+        webapp.openLink(data.url, { try_instant_view: false })
       } else {
         window.open(data.url, '_blank')
       }
+      setAwaitingPayment(true)
     } catch (err: any) {
-      setError(err.message || 'Failed to start Stripe checkout')
+      setError(err.message || t('subscription.failedCheckout'))
     } finally {
       setCheckoutPlan(null)
     }
   }
 
+  const applyStatus = useCallback((next: SubscriptionStatusInfo) => {
+    onRedeemed(next)
+    return next
+  }, [onRedeemed])
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      return applyStatus(await agentsApi.fetchSubscriptionStatus())
+    } catch {
+      return null
+    }
+  }, [applyStatus])
+
+  const reconcile = useCallback(async () => {
+    try {
+      await agentsApi.syncWhopSubscription()
+    } catch {
+      // The webhook may already have fulfilled it; the status read below decides.
+    }
+    return refreshStatus()
+  }, [refreshStatus])
+
+  const initialSyncDone = useRef(false)
+  useEffect(() => {
+    if (initialSyncDone.current) return
+    initialSyncDone.current = true
+    // Returning from a Whop checkout: pull the authoritative state once.
+    if (status?.status === 'inactive' && status?.provider === 'whop') {
+      void reconcile()
+    }
+  }, [status, reconcile])
+
+  useEffect(() => {
+    if (!awaitingPayment) return
+    const tick = async () => {
+      const next = await refreshStatus()
+      if (next?.status === 'active') setAwaitingPayment(false)
+    }
+    const interval = window.setInterval(() => void tick(), 5000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void reconcile().then((next) => {
+          if (next?.status === 'active') setAwaitingPayment(false)
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    const stopAfter = window.setTimeout(() => setAwaitingPayment(false), 5 * 60 * 1000)
+    return () => {
+      window.clearInterval(interval)
+      window.clearTimeout(stopAfter)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [awaitingPayment, refreshStatus, reconcile])
+
   const isActive = status?.status === 'active'
   const expiryDate = status?.expires_at ? new Date(status.expires_at) : null
   const isLifetime = isActive && !expiryDate
+  const trialEnd = status?.trial_ends_at ? new Date(status.trial_ends_at) : null
+  const isTrialing = isActive && !!trialEnd && trialEnd.getTime() > Date.now()
   const [cancelling, setCancelling] = useState(false)
 
   async function handleCancel() {
     if (!isActive || cancelling) return
     setCancelling(true)
+    setError(null)
     try {
-      await agentsApi.cancelSubscription()
-      onRedeemed({ status: 'inactive', plan: null, expires_at: null })
+      if (status?.provider === 'whop') {
+        // Whop keeps access until the period ends, so re-read instead of clearing.
+        const result = await agentsApi.cancelWhopSubscription()
+        setSuccess(result.message)
+        await refreshStatus()
+      } else {
+        await agentsApi.cancelSubscription()
+        onRedeemed({ status: 'inactive', plan: null, expires_at: null })
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to cancel subscription')
+      setError(err.message || t('subscription.failedCancel'))
     } finally {
       setCancelling(false)
     }
@@ -260,12 +331,24 @@ function SubscriptionForm({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 600 }}>{t('subscription.currentPlan')}</span>
           <Badge tone={isActive ? 'success' : 'neutral'}>
-            {isActive ? (isLifetime ? t('subscription.lifetime') : t('subscription.active')) : t('subscription.noActive')}
+            {isActive
+              ? (isTrialing ? t('subscription.trial') : isLifetime ? t('subscription.lifetime') : t('subscription.active'))
+              : t('subscription.noActive')}
           </Badge>
         </div>
+        {isActive && trialEnd && (
+          <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
+            {t('subscription.trialUntil')} {formatDate(trialEnd)}
+          </div>
+        )}
         {isActive && expiryDate && (
           <div style={{ fontSize: 13, color: 'var(--miniapp-text-muted)' }}>
             {t('subscription.validUntil')} {formatDate(expiryDate)} {formatTime(expiryDate)}
+          </div>
+        )}
+        {isActive && status?.cancel_at_period_end && (
+          <div style={{ fontSize: 12, color: 'var(--miniapp-ochre)' }}>
+            {t('subscription.cancelsAtPeriodEnd')}
           </div>
         )}
         {!isActive && (
@@ -301,6 +384,7 @@ function SubscriptionForm({
         />
         {error && <Note tone="warning">{error}</Note>}
         {success && <Note>{success}</Note>}
+        {awaitingPayment && <Note>{t('subscription.waitingForPayment')}</Note>}
         <Button onClick={() => void handleRedeem()} disabled={loading || !code.trim()}>
           {loading ? t('subscription.redeeming') : t('subscription.redeemButton')}
         </Button>
@@ -311,16 +395,16 @@ function SubscriptionForm({
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.upgradeOrExtend')}</div>
         )}
         {!isActive && (
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.payWithStripe')}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--miniapp-text)' }}>{t('subscription.payWithWhop')}</div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { plan: 'pro', label: t('subscription.pro'), price: '$29', desc: t('subscription.priceMonthly'), days: 30 },
-            { plan: 'business', label: t('subscription.business'), price: '$79', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'pro', label: t('subscription.pro'), price: '$39.99', desc: t('subscription.priceMonthly'), days: 30 },
+            { plan: 'business', label: t('subscription.business'), price: '$79.99', desc: t('subscription.priceMonthly'), days: 30 },
           ].map((p) => (
             <button
               key={p.plan}
-              onClick={() => void handleStripeCheckout(p.plan as 'pro' | 'business')}
+              onClick={() => void handleWhopCheckout(p.plan as 'pro' | 'business')}
               disabled={checkoutPlan !== null}
               style={{
                 padding: '12px', borderRadius: 12, border: '1px solid var(--miniapp-border)',
@@ -336,6 +420,7 @@ function SubscriptionForm({
             </button>
           ))}
         </div>
+        <div style={{ fontSize: 12, color: 'var(--miniapp-text-muted)' }}>{t('subscription.plansNote')}</div>
       </div>
 
       {!isActive && (

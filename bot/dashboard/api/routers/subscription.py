@@ -15,6 +15,7 @@ from bot.services.promotion_service import PromotionError, PromotionService
 from bot.services.subscription_service import SubscriptionService
 from bot.services.settings_service import SettingsService
 from bot.services.telegram_webapp_auth import TelegramWebAppIdentity
+from bot.services.whop_service import WhopService
 
 from ..dependencies import WorkspaceContext, get_identity, get_workspace_context
 from .auth_boundary import require_agents_boundary, require_any_boundary
@@ -81,14 +82,29 @@ async def webapp_subscription_status(
     stmt = stmt.order_by(SubscriptionRequest.id.desc()).limit(1)
     subscription = (await session.execute(stmt)).scalar_one_or_none()
 
+    order = await WhopService(session).get_latest_order(tg_user_id=identity.user_id)
+    whop_state = {
+        "provider": "whop" if order is not None else None,
+        "trial_ends_at": order.trial_end.isoformat() if order and order.trial_end else None,
+        "cancel_at_period_end": bool(order.cancel_at_period_end) if order else False,
+        "order_status": order.status if order else None,
+    }
+
     if not subscription:
-        return {"status": "inactive", "plan": None, "expires_at": None, "bot_kind": bot_kind}
+        return {
+            "status": "inactive",
+            "plan": None,
+            "expires_at": None,
+            "bot_kind": bot_kind,
+            **whop_state,
+        }
 
     return {
         "status": "active",
         "plan": subscription.plan,
         "bot_kind": subscription.bot_kind or bot_kind,
         "expires_at": subscription.expires_at.isoformat() if subscription.expires_at else None,
+        **whop_state,
     }
 
 

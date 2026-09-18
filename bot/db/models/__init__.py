@@ -91,6 +91,7 @@ from bot.db.models.summary import DailyGroupSummary, GroupMessageActivity, Group
 from bot.db.models.task import Task, TaskGroup, TaskRun
 from bot.db.models.tenant import TenantMembership, UserIdentity
 from bot.db.models.user import User
+from bot.db.models.whop import WhopOrder, WhopWebhookEvent
 from bot.db.models.workspace_invitation import WorkspaceInvitation
 
 
@@ -242,6 +243,7 @@ __all__ = [
     "UnansweredQuestionStatus",
     "User",
     "UserIdentity",
+    "WhopOrder",
+    "WhopWebhookEvent",
     "WorkspaceInvitation",
-    "Warning",
 ]
