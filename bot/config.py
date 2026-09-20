@@ -118,6 +118,18 @@ class Settings(BaseSettings):
     stripe_api_key: str | None = Field(default=None, alias="STRIPE_API_KEY")
     stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
     stripe_publishable_key: str | None = Field(default=None, alias="STRIPE_PUBLISHABLE_KEY")
+    whop_enabled: bool = Field(default=False, alias="WHOP_ENABLED")
+    whop_api_key: str | None = Field(default=None, alias="WHOP_API_KEY")
+    whop_webhook_secret: str | None = Field(default=None, alias="WHOP_WEBHOOK_SECRET")
+    whop_company_id: str | None = Field(default=None, alias="WHOP_COMPANY_ID")
+    whop_plan_id_pro: str | None = Field(default=None, alias="WHOP_PLAN_ID_PRO")
+    whop_plan_id_business: str | None = Field(default=None, alias="WHOP_PLAN_ID_BUSINESS")
+    whop_api_base_url: str = Field(
+        default="https://api.whop.com/api/v1", alias="WHOP_API_BASE_URL"
+    )
+    whop_checkout_base_url: str = Field(default="https://whop.com", alias="WHOP_CHECKOUT_BASE_URL")
+    whop_trial_days: int = Field(default=7, alias="WHOP_TRIAL_DAYS")
+    whop_renewal_days: int = Field(default=30, alias="WHOP_RENEWAL_DAYS")
     bot_owner_ids_raw: str = Field(default="", alias="BOT_OWNER_IDS")
     rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
     rate_limit_requests_per_minute: int = Field(default=100, alias="RATE_LIMIT_REQUESTS_PER_MINUTE")

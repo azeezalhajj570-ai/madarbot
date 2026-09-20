@@ -6,6 +6,7 @@ from .auth_boundary import router as auth_boundary_router
 from .faq import router as faq_router
 from .internal import router as internal_router
 from .members import router as members_router
+from .whop import router as whop_router
 
 __all__ = [
     "admin_automation_router",
@@ -16,4 +17,5 @@ __all__ = [
     "faq_router",
     "internal_router",
     "members_router",
+    "whop_router",
 ]

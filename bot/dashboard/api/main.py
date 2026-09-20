@@ -32,6 +32,7 @@ from bot.dashboard.api.routers.internal import router as internal_router
 from bot.dashboard.api.routers.mcp_tokens import router as mcp_tokens_router
 from bot.dashboard.api.routers.workspace import router as workspace_router
 from bot.dashboard.api.routers.legal import router as legal_router
+from bot.dashboard.api.routers.whop import router as whop_router
 from bot.dashboard.api.routers.admissions import router as admissions_router
 from bot.dashboard.api.routers.backup import router as backup_router
 from bot.dashboard.api.routers.docs import router as docs_router
@@ -327,6 +328,7 @@ app.include_router(legal_router)
 app.include_router(docs_router)
 app.include_router(admissions_router)
 app.include_router(backup_router)
+app.include_router(whop_router)
 
 if settings.mcp_enabled:
     from bot.dashboard.api.mcp_router import router as mcp_router

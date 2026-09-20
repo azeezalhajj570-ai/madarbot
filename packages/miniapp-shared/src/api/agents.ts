@@ -238,8 +238,18 @@ export async function deleteGroupTask(groupId: number, assignmentId: string) {
   return apiClient.delete(`/webapp/groups/${groupId}/tasks/${assignmentId}`)
 }
 
+export interface SubscriptionStatus {
+  status: 'active' | 'inactive'
+  plan: 'pro' | 'business' | null
+  expires_at: string | null
+  provider?: 'whop' | null
+  trial_ends_at?: string | null
+  cancel_at_period_end?: boolean
+  order_status?: string | null
+}
+
 export async function fetchSubscriptionStatus() {
-  return apiClient.get<{ status: 'active' | 'inactive'; plan: 'pro' | 'business' | null; expires_at: string | null }>(`${AGENTS_API_PREFIX}/subscription/status`)
+  return apiClient.get<SubscriptionStatus>(`${AGENTS_API_PREFIX}/subscription/status`)
 }
 
 export async function redeemPromoCode(code: string) {
@@ -252,6 +262,18 @@ export async function createSubscriptionCheckout(plan: 'pro' | 'business', succe
     success_url: successUrl,
     cancel_url: cancelUrl,
   })
+}
+
+export async function createWhopCheckout(plan: 'pro' | 'business') {
+  return apiClient.post<{ url: string; order_id: string; plan: 'pro' | 'business' }>(`${AGENTS_API_PREFIX}/subscription/checkout/whop`, { plan })
+}
+
+export async function syncWhopSubscription() {
+  return apiClient.post<{ status: string; order: { order_id: string; plan: string; status: string; current_period_end: string | null; trial_end: string | null; cancel_at_period_end: boolean } | null }>(`${AGENTS_API_PREFIX}/subscription/whop/sync`)
+}
+
+export async function cancelWhopSubscription() {
+  return apiClient.post<{ status: string; message: string }>(`${AGENTS_API_PREFIX}/subscription/whop/cancel`)
 }
 
 export async function cancelSubscription() {
