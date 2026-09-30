@@ -2018,6 +2018,18 @@ class AgentTaskRuntime:
         self.approval_service = approval_service
 
     async def execute(self, *, client, agent: Agent, job: AgentJob, session: Any) -> bool:
+        """Execute an event-triggered automation task.
+
+        Returns True when the job was handled, and False only when the payload
+        carries no task at all (a missing task_key or assignment_id). The worker
+        turns a False into a terminal "unhandled job type" failure, so no other
+        condition may return it.
+
+        Rate-limit conditions (agent cooldown, hourly action cap) raise
+        AgentStopError instead. The worker then parks the job as PENDING,
+        stamps `_resume_at`, and re-dispatches it once the delay has elapsed,
+        rather than recording a transient pause as a permanent failure.
+        """
         payload = dict(job.job_payload or {})
         task_key = payload.get("task_key")
         assignment_id = payload.get("assignment_id")
@@ -2053,7 +2065,7 @@ class AgentTaskRuntime:
                         logger.warning(
                             "agent_in_cooldown", agent_id=agent.id, remaining_seconds=remaining
                         )
-                        return False
+                        raise AgentStopError(stop_reason="cooldown", delay=int(remaining))
 
                 safety_enabled = getattr(agent, "safety_mode_enabled", True)
                 safety_until = getattr(agent, "safety_mode_until", None)
@@ -2080,6 +2092,7 @@ class AgentTaskRuntime:
                             limit=max_per_hour,
                             count=count,
                         )
+                        delay = limiter.seconds_until_hourly_reset()
                         cooldown_mins = getattr(agent, "cooldown_minutes", None)
                         if cooldown_mins is not None and cooldown_mins > 0:
                             await limiter.start_cooldown(agent.id, cooldown_mins)
@@ -2088,7 +2101,11 @@ class AgentTaskRuntime:
                                 agent_id=agent.id,
                                 cooldown_minutes=cooldown_mins,
                             )
-                        return False
+                            # Defer past the whole cooldown window: waking at the
+                            # hourly reset would land back inside the cooldown
+                            # and burn a slot of the capped re-dispatch budget.
+                            delay = max(delay, int(cooldown_mins) * 60)
+                        raise AgentStopError(stop_reason="hourly_limit", delay=delay)
 
                 min_delay = (
                     task_config.get("min_delay_seconds")

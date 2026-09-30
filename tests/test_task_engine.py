@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -7,7 +8,7 @@ import pytest
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import func, select
 
-from bot.agents.exceptions import AgentSessionError
+from bot.agents.exceptions import AgentSessionError, AgentStopError
 from bot.agents.runtime import AgentTaskRuntime, GroupMemberBroadcastRuntime, ScraperRuntime
 from bot.agents.worker import _execute_agent_job_impl, execute_agent_job
 from bot.automation.agent_task_store import AgentTaskStore
@@ -1060,6 +1061,141 @@ async def test_execute_agent_job_marks_successful_automation_task_completed(
     assert fake_session.commits == 2
     assert fake_client.disconnected is True
     assert notifications == [(job.id, "completed")]
+
+
+@pytest.mark.asyncio
+async def test_automation_task_rate_limit_parks_job_instead_of_failing_as_unhandled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (issue #306).
+
+    A cooldown / hourly-cap stop inside AgentTaskRuntime.execute used to return
+    False, which the worker reports as a terminal
+
+        last_error = "Unhandled job type: automation_task"
+
+    So every keyword reply arriving during a cooldown was marked failed *and*
+    never sent. The job must instead be parked as PENDING for re-dispatch.
+    """
+    agent = Agent(
+        id=18106,
+        group_id=1909,
+        telegram_user_id=18106,
+        external_account_id="agent-worker-cooldown",
+        status="active",
+        auth_state="active",
+        session_string="session-cooldown",
+        details={},
+    )
+    job = AgentJob(
+        id=2910,
+        agent_id=agent.id,
+        job_type="automation_task",
+        job_payload={
+            "task_key": "reply_message",
+            "assignment_id": "assignment-worker-cooldown",
+            "task_config": {"message_template": "ok"},
+            "event": {
+                "name": "message.received",
+                "group_id": agent.group_id,
+                "user_id": 1909,
+                "payload": {"chat_id": -1001909, "message_id": 45, "text": "hello"},
+            },
+        },
+        status="pending",
+    )
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.disconnected = False
+
+        async def disconnect(self) -> None:
+            self.disconnected = True
+
+    fake_client = FakeClient()
+
+    class FakeSessionManager:
+        async def get_client(self, agent_id: int):
+            assert agent_id == agent.id
+            return fake_client
+
+    class FakeAgentTaskRuntime:
+        def __init__(self, *, registry) -> None:
+            self.registry = registry
+
+        async def execute(self, *, client, agent, job, session) -> bool:
+            # What AgentTaskRuntime.execute now raises on an agent cooldown.
+            raise AgentStopError(stop_reason="cooldown", delay=600)
+
+    class FakeResult:
+        def __init__(self, item=None, rowcount: int = 1) -> None:
+            self.item = item
+            self.rowcount = rowcount
+
+        def scalar_one_or_none(self):
+            return self.item
+
+        def scalar_one(self):
+            return self.item
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.commits = 0
+
+        async def execute(self, stmt):
+            descriptions = getattr(stmt, "column_descriptions", None) or []
+            entity = descriptions[0].get("entity") if descriptions else None
+            if entity is AgentJob:
+                return FakeResult(item=job)
+            if entity is Agent:
+                return FakeResult(item=agent)
+            # The atomic claim is an UPDATE and carries no column descriptions;
+            # report one claimed row so execution proceeds.
+            return FakeResult()
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+    class FakeSessionContext:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        async def __aenter__(self) -> FakeSession:
+            return self.session
+
+        async def __aexit__(self, _exc_type, _exc, _tb) -> None:
+            return None
+
+    class FakeSessionFactory:
+        def __init__(self, session: FakeSession) -> None:
+            self.session = session
+
+        def __call__(self) -> FakeSessionContext:
+            return FakeSessionContext(self.session)
+
+    fake_session = FakeSession()
+    reschedules: list[tuple[int, int, int, int]] = []
+
+    def fake_reschedule_agent_job(
+        *, agent_id: int, job_id: int, delay_seconds: int, retries: int
+    ) -> bool:
+        reschedules.append((agent_id, job_id, delay_seconds, retries))
+        return True
+
+    monkeypatch.setattr("bot.agents.worker.SessionLocal", FakeSessionFactory(fake_session))
+    monkeypatch.setattr("bot.agents.worker.SessionManager", FakeSessionManager)
+    monkeypatch.setattr("bot.agents.worker.AgentTaskRuntime", FakeAgentTaskRuntime)
+    monkeypatch.setattr("bot.agents.worker._reschedule_agent_job", fake_reschedule_agent_job)
+    monkeypatch.setattr("bot.agents.worker._create_job_notification", AsyncMock())
+
+    await _execute_agent_job_impl(agent.id, job.id)
+
+    assert job.status == "pending"
+    assert job.job_payload["last_error"] == "cooldown for 600 seconds"
+    resume_at = datetime.fromisoformat(job.job_payload["_resume_at"])
+    assert resume_at > datetime.now(timezone.utc)
+    assert reschedules == [(agent.id, job.id, 600, 0)]
+    assert fake_client.disconnected is True
 
 
 @pytest.mark.asyncio
