@@ -103,9 +103,7 @@ async def test_cooldown_raises_agent_stop_error(
     agent = _make_agent(cooldown_minutes=1000)
 
     with pytest.raises(AgentStopError) as exc_info:
-        await _runtime().execute(
-            client=object(), agent=agent, job=_make_job(), session=None
-        )
+        await _runtime().execute(client=object(), agent=agent, job=_make_job(), session=None)
 
     assert exc_info.value.stop_reason == "cooldown"
     assert exc_info.value.delay == 46070
@@ -122,9 +120,7 @@ async def test_hourly_limit_raises_agent_stop_error(
     agent = _make_agent(max_actions_per_hour=2)
 
     with pytest.raises(AgentStopError) as exc_info:
-        await _runtime().execute(
-            client=object(), agent=agent, job=_make_job(), session=None
-        )
+        await _runtime().execute(client=object(), agent=agent, job=_make_job(), session=None)
 
     assert exc_info.value.stop_reason == "hourly_limit"
     assert 0 < exc_info.value.delay <= 3600
@@ -147,9 +143,7 @@ async def test_hourly_limit_defers_past_a_started_cooldown(
     agent = _make_agent(max_actions_per_hour=50, cooldown_minutes=1000)
 
     with pytest.raises(AgentStopError) as exc_info:
-        await _runtime().execute(
-            client=object(), agent=agent, job=_make_job(), session=None
-        )
+        await _runtime().execute(client=object(), agent=agent, job=_make_job(), session=None)
 
     assert exc_info.value.stop_reason == "hourly_limit"
     assert exc_info.value.delay == 1000 * 60
