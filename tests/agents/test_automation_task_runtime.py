@@ -98,9 +98,7 @@ async def test_cooldown_raises_agent_stop_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An agent in cooldown must defer the job, not report it as unhandled."""
-    monkeypatch.setattr(
-        "redis.asyncio.Redis.from_url", lambda url, **kw: _FakeRedis(ttl=46070)
-    )
+    monkeypatch.setattr("redis.asyncio.Redis.from_url", lambda url, **kw: _FakeRedis(ttl=46070))
 
     agent = _make_agent(cooldown_minutes=1000)
 

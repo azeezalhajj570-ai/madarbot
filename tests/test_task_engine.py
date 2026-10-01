@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -1193,7 +1193,7 @@ async def test_automation_task_rate_limit_parks_job_instead_of_failing_as_unhand
     assert job.status == "pending"
     assert job.job_payload["last_error"] == "cooldown for 600 seconds"
     resume_at = datetime.fromisoformat(job.job_payload["_resume_at"])
-    assert resume_at > datetime.now(timezone.utc)
+    assert resume_at > datetime.now(UTC)
     assert reschedules == [(agent.id, job.id, 600, 0)]
     assert fake_client.disconnected is True
 
